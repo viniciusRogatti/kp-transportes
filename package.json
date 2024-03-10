@@ -1,0 +1,65 @@
+{
+  "name": "kp-transportes",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@react-pdf/renderer": "^3.3.8",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/file-saver": "^2.0.7",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.53",
+    "@types/react": "^18.2.22",
+    "@types/react-dom": "^18.2.7",
+    "axios": "^1.5.1",
+    "buffer": "^6.0.3",
+    "date-fns": "^2.30.0",
+    "file-saver": "^2.0.5",
+    "react": "^18.2.0",
+    "react-app-rewired": "^2.2.1",
+    "react-datepicker": "^4.18.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.0.1",
+    "react-pdf": "^7.7.0",
+    "react-router-dom": "^6.16.0",
+    "react-scripts": "5.0.1",
+    "stream-browserify": "^3.0.0",
+    "styled-components": "^6.0.8",
+    "timers-browserify": "^2.0.12",
+    "typescript": "^4.9.5",
+    "web-vitals": "^2.1.4",
+    "xml2js": "^0.6.2"
+  },
+  "scripts": {
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@types/react-datepicker": "^4.15.0",
+    "@types/react-router": "^5.1.20",
+    "@types/xml2js": "^0.4.14",
+    "webpack-node-externals": "^3.0.0"
+  }
+}

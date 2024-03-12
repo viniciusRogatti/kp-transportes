@@ -4,7 +4,7 @@ import axios from "axios";
 import CardDanfes from "../components/CardDanfes";
 import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
-import { URL } from "../data";
+import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
 registerLocale('ptBR', ptBR);
@@ -20,7 +20,7 @@ function Invoices() {
       alert('Selecione duas datas');
     } else {
       try {
-        const url = `${URL}/danfes/date/?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}`;      
+        const url = `${API_URL}/danfes/date/?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}`;      
         const { data } = await axios.get(url);
         setDanfes(data);
         setStartDate(null);
@@ -40,7 +40,7 @@ function Invoices() {
     const isDuplicate = danfes.some((danfe) => danfe?.invoice_number === nf);
     if (!isDuplicate) {
       try {
-        const { data } = await axios.get(`${URL}/danfes/nf/${nf}`);
+        const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
         
         if (data) {
           setDanfes([...danfes, data]);

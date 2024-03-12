@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { IDanfe } from '../types/types';
 
 interface Product {
   Product: {
@@ -13,6 +14,7 @@ interface Product {
 interface ProductListPDFProps {
   products: Product[];
   driver: String;
+  danfes: IDanfe[] | [];
 }
 
 const styles = StyleSheet.create({
@@ -39,14 +41,32 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: 'bold',
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 5,
   },
 });
 
-const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver }) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      <View>
+const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver, danfes }) => (
+<Document>
+  <Page size="A4" style={styles.page}>
+    {danfes.map((danfe, index) => (
+        <View key={danfe.invoice_number}>
+          <Text style={styles.title}>{`${driver} Entrega nmr: ${index}`}</Text>
+          <Text style={{ fontSize: 14, fontWeight: 'bold' }}>NF: {danfe.invoice_number}</Text>
+          <Text>{danfe.Customer.name_or_legal_entity}</Text>
+          <Text>{danfe.Customer.city}</Text>
+          <Text style={{ fontSize: 12 }}>{danfe.invoice_date}</Text>
+          <Text style={{ textAlign: 'center' }}>Lista de produtos</Text>
+          {danfe.DanfeProducts.map((product) => (
+            <View key={product.Product.code} style={styles.listItem}>
+              <Text style={styles.columnValue}>{product.Product.code}</Text>
+              <Text style={styles.columnValue}>{product.Product.description}</Text>
+              <Text style={styles.columnValue}>{product.quantity}</Text>
+            </View>
+          ))}
+          <View style={{ marginBottom: 20 }} />
+        </View>
+    ))}
+    <View>
         <Text style={styles.title}>{driver}</Text>
         <View style={styles.listItem}>
           <Text style={styles.columnHeader}>Código do Produto</Text>
@@ -64,7 +84,7 @@ const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver }) => 
           </View>
         ))}
       </View>
-    </Page>
+  </Page>
   </Document>
 );
 

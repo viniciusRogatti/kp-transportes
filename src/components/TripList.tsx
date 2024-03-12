@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { ITrip } from '../types/types';
+import { IDanfe, ITrip } from '../types/types';
 import ProductListPDF from './ProductListPDF'; // Importe o componente ProductListPDF
 import { pdf } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
 import transformDate from '../utils/transformDate';
-import { URL } from '../data';
+import { API_URL } from '../data';
 import { CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
 
 interface TripListProps {
@@ -14,16 +13,28 @@ interface TripListProps {
 
 function TripList({ trip }: TripListProps) {
   const [products, setProducts] = useState<any[]>([]); // Estado para armazenar os produtos 
+  const [danfes, setDanfes] = useState<IDanfe[] | []>([]); //
 
   // Função para buscar os produtos de uma nota fiscal específica
   async function fetchProducts(invoiceNumber: string) {
     try {
-      const response = await axios.get(`${URL}/products/${invoiceNumber}`);
+      const response = await axios.get(`${API_URL}/products/${invoiceNumber}`);
       const productsData = response.data;
       // Adicionar produtos ao estado
       setProducts((prevProducts) => [...prevProducts, ...productsData]);
     } catch (error) {
       console.error('Erro ao buscar produtos:', error);
+    }
+  }
+
+  async function fetchDanfes(nf: string) {
+    try {
+      const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
+      if (data) {
+        setDanfes((prevDanfes) => [...prevDanfes, data]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar danfe:', error);
     }
   }
 
@@ -40,28 +51,42 @@ function TripList({ trip }: TripListProps) {
       return accumulator;
     }, []);
 
+    console.log('DANFES -->', danfes);
+    
     // Renderize o PDF
-    const pdfBlob = await pdf(<ProductListPDF products={groupedProducts} driver={trip.Driver.name} />).toBlob();
-    saveAs(pdfBlob, `${trip.Driver.name}_${trip.id}-${transformDate(trip.date)}`);
+    const pdfBlob = await pdf(<ProductListPDF danfes={danfes} products={groupedProducts} driver={trip.Driver.name} />).toBlob();
+  
+    // Criar um URL a partir do blob
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+  
+    // Abrir o URL em uma nova aba
+    window.open(pdfUrl, '_blank');
+  
+    // Não é mais necessário usar saveAs para fazer o download
   }
 
   // UseEffect para buscar os produtos quando o componente for montado
   useEffect(() => {
     trip.TripNotes.forEach((note) => {
         fetchProducts(note.invoice_number);
+        fetchDanfes(note.invoice_number);
       });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip]);
+
+  console.log('renderizando', danfes);
+  
 
   return (
 <CardTrips>
       <CardHeader>
         <LeftHeader>
-          <p>Motorista: {trip.Driver.name}</p>
-          <p>Carro: {trip.Car.model}</p>
+          <p>{trip.Driver.name}</p>
+          <p>{trip.Car.license_plate}</p>
         </LeftHeader>
         <RightHeader>
           <p>Data: {transformDate(trip.date)}</p>
-          <p style={{ fontWeight: 'bold' }}>Peso Bruto: {trip.gross_weight}</p>
+          <p style={{ fontWeight: 'bold' }}>Peso: {trip.gross_weight}</p>
         </RightHeader>
       </CardHeader>
 

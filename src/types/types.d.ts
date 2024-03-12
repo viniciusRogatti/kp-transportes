@@ -52,12 +52,13 @@ export interface IProduct {
   description: string,
   price: string,
   type: string,
+  quantity?: number,
   created_at: string,
   updated_at: string
 }
 
 export interface IDanfe {
-  "customer_id": string;
+  customer_id: string;
   invoice_number: string;
   barcode: string;
   invoice_date: string;

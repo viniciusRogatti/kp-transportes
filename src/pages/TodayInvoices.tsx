@@ -8,7 +8,7 @@ import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "
 import ScrollToTopButton from "../components/ScrollToTopButton";
 
 import { cities, routes } from "../data/danfes";
-import { URL } from "../data";
+import { API_URL } from "../data";
 import { Container } from "../style/incoives";
 
 function TodayInvoices() {
@@ -23,7 +23,7 @@ function TodayInvoices() {
 
   async function loadTodayData() {
     try {
-      const response = await axios.get(`${URL}/danfes`);
+      const response = await axios.get(`${API_URL}/danfes`);
       setDanfes(response.data);
       setDataDanfes(response.data);
       countNotesByRoute(response.data);

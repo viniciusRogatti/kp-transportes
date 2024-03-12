@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { IProduct } from "../types/types";
 import CardProducts from "../components/CardProducts";
 import axios from "axios";
-import { URL } from "../data";
+import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
 
@@ -15,7 +15,7 @@ function Products() {
 
   async function loadTodayData() {
     try {
-      const response = await axios.get(`${URL}/products`);
+      const response = await axios.get(`${API_URL}/products`);
       const data = response.data.sort((a: IProduct, b: IProduct) => a.description.localeCompare(b.description));
       setProduct(data);
     } catch (error) {

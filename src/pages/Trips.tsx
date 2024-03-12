@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ITrip } from "../types/types";
 import TripList from "../components/TripList";
 import ptBR from 'date-fns/locale/pt-BR';
-import { URL } from "../data";
+import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
@@ -20,8 +20,10 @@ function Trips() {
   }, []);
 
   const fetchTripsByDate = async (date: string) => {
-    const response = await fetch(`${URL}/trips/search/date/${date}`);
+    const response = await fetch(`${API_URL}/trips/search/date/${date}`);
+    
     const data = await response.json();
+    console.log('UÉ?', data);
     return data;
   };
 

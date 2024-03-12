@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { URL } from '../data';
+import { API_URL } from '../data';
 import Header from '../components/Header';
 import { Container } from '../style/incoives';
 
@@ -28,7 +28,7 @@ const FileUploadPage: React.FC = () => {
       try {
         console.log('chamadas');
         
-        await axios.post(`${URL}/upload`, formData, {
+        await axios.post(`${API_URL}/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },

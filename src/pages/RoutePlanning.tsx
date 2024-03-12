@@ -3,7 +3,7 @@ import axios from 'axios';
 import Header from '../components/Header';
 import { ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDanfeTrip, IDriver } from '../types/types';
-import { URL } from '../data';
+import { API_URL } from '../data';
 import { Container } from '../style/incoives';
 
 
@@ -19,8 +19,8 @@ function RoutePlanning() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const carsResponse = await axios.get(`${URL}/cars`);
-        const driversResponse = await axios.get(`${URL}/drivers`);
+        const carsResponse = await axios.get(`${API_URL}/cars`);
+        const driversResponse = await axios.get(`${API_URL}/drivers`);
         setCars(carsResponse.data);
         setDrivers(driversResponse.data);
       } catch (error) {

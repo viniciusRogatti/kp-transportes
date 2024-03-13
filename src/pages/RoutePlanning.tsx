@@ -1,7 +1,7 @@
 import React, { useEffect, useState, ChangeEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
-import { ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
+import { BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDanfeTrip, IDriver } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
@@ -66,10 +66,12 @@ function RoutePlanning() {
         console.log('Não foi possível buscar essa nota, verifique o código de barras digitado');
       }
     } else if (invoiceNumber) {
-      try {
-        const response = await axios.get(`${URL}/danfes/nf/${invoiceNumber}`);
+      try {  
+        
+        const response = await axios.get(`${API_URL}/danfes/nf/${invoiceNumber}`);
         const danfeData = response.data;
         
+    
         const newNote: IDanfeTrip = {
           customerName: danfeData.Customer.name_or_legal_entity,
           phone: danfeData.Customer.phone,
@@ -174,7 +176,7 @@ function RoutePlanning() {
       <Container>
         <TitleRoutePlanning>Roteirização</TitleRoutePlanning>
         <ContainerForm>
-          <div>
+          <BoxDriverVehicle>
             <label>Motorista:</label>
             <select onChange={handleDriverChange} value={selectedDriver || ''}>
               <option value="null">Selecione um motorista</option>
@@ -184,8 +186,6 @@ function RoutePlanning() {
                 </option>
               ))}
             </select>
-          </div>
-          <div>
             <label>Veículo:</label>
             <select onChange={handleCarChange} value={selectedCar || ''}>
               <option value={'null'}>Selecione um veículo</option>
@@ -195,14 +195,13 @@ function RoutePlanning() {
                 </option>
               ))}
             </select>
-          </div>
+          </BoxDriverVehicle>
           <div>
-            <label>Código de Barras:</label>
-            <input type="text" value={barcode} onChange={handleBarcodeChange} />
-          </div>
-          <div>
-            <label>NF da Nota:</label>
-            <input type="text" value={invoiceNumber} onChange={handleInvoiceNumberChange} />
+              <label>Selecione uma nota:</label>
+            <BoxSelectDanfe>
+              <input type="text" placeholder="Digite o código de barras" value={barcode} onChange={handleBarcodeChange} />
+              <input type="text" placeholder="Digite a NF" value={invoiceNumber} onChange={handleInvoiceNumberChange} />
+            </BoxSelectDanfe>
           </div>
 
           
@@ -211,24 +210,24 @@ function RoutePlanning() {
         </ContainerForm>
 
         <TripsContainer>
-          {sortedNotes.map((note) => (
-            <li key={note.nf}>
-              <h2>{note.nf}</h2>
-              <h3>{note.customerName} </h3>
-              <h4>{note.city} </h4>
-              <p>{note.grossWeight}</p>
-              <button onClick={() => removeNoteFromList(note.nf)}>Remover</button>
-              <button onClick={() => moveNoteUp(note.order)} disabled={note.order === 1}>
-                Mover para cima
-              </button>
-              <button
-                onClick={() => moveNoteDown(note.order)}
-                disabled={note.order === addedNotes.length}
-              >
-                Mover para baixo
-              </button>
-            </li>
-          ))}
+            {sortedNotes.map((note) => (
+              <li key={note.nf}>
+                <h2>{note.nf}</h2>
+                <h4>{note.customerName} </h4>
+                <h4>{note.city} </h4>
+                <p>{note.grossWeight}</p>
+                <button onClick={() => removeNoteFromList(note.nf)}>Remover</button>
+                <button onClick={() => moveNoteUp(note.order)} disabled={note.order === 1}>
+                  Mover para cima
+                </button>
+                <button
+                  onClick={() => moveNoteDown(note.order)}
+                  disabled={note.order === addedNotes.length}
+                >
+                  Mover para baixo
+                </button>
+              </li>
+            ))}
         </TripsContainer>
       </Container>
 

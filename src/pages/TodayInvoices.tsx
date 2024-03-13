@@ -84,9 +84,6 @@ function TodayInvoices() {
     }
   }
 
-  console.log('testando', routeCounts);
-  
-
   return (
     <ContainerTodayInvoices>
       <Header />

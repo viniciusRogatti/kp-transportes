@@ -7,10 +7,13 @@ import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
+import { FilterBar, NotesFound } from "../style/TodayInvoices";
+import { cities, routes } from "../data/danfes";
 registerLocale('ptBR', ptBR);
 
 function Invoices() {
   const [danfes, setDanfes] = useState<IDanfe[]>([]);
+  const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [nf, setNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -25,6 +28,7 @@ function Invoices() {
         setDanfes(data);
         setStartDate(null);
         setEndDate(null);
+        setDataDanfes(data);
       } catch (error) {
         console.log('Não foi possível encontrar notas com essas datas');
       }
@@ -61,6 +65,41 @@ function Invoices() {
       return `${year}-${month}-${day}`;
     }
   }
+
+  function filterByNf(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;    
+    const searchDanfe = dataDanfes.filter((danfe) => danfe.invoice_number.includes(value));
+    setDanfes(searchDanfe);
+  }
+
+  function filterByProductCode(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value.toLowerCase();
+    const searchDanfe = dataDanfes.filter((danfe) => danfe.DanfeProducts.some((product) => (
+      product.Product.code.toLowerCase().includes(value)
+    )) );
+    setDanfes(searchDanfe);
+  }
+
+  function filterByCustomerName(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value.toLocaleLowerCase();
+    const searchDanfe = dataDanfes.filter((danfe) => danfe.Customer.name_or_legal_entity.toLocaleLowerCase().includes(value));
+    setDanfes(searchDanfe);
+  }
+
+  function filterByCustomerCity(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value.toLocaleLowerCase();
+    const searchDanfe = dataDanfes.filter((danfe) => danfe.Customer.city.toLocaleLowerCase().includes(value));
+    setDanfes(searchDanfe);
+  }
+
+  function filterByRoute(e: any) {
+    const value = e.target.value
+    if (value === 'Todas') return setDanfes(dataDanfes);
+    else {
+      const searchDanfe = dataDanfes.filter((danfe) => cities[danfe.Customer.city] === value)
+      setDanfes(searchDanfe);
+    }
+  }
   
   return (
     <div>
@@ -69,8 +108,6 @@ function Invoices() {
         <div>
           <input value={nf} type="number" onChange={setFilter} placeholder="Digite a nf" />
           <button onClick={getDanfeByNf}>Pesquisar</button>
-        </div>
-        <div>
           <DatePicker
             selected={startDate}
             onChange={date => setStartDate(date)}
@@ -87,8 +124,26 @@ function Invoices() {
           />
           <button onClick={getDanfesByDate}>Buscar DANFEs</button>
         </div>
+
+        <FilterBar>
+          <input type="text" onChange={filterByNf} placeholder="Filtrar por NF" />
+          <input type="text" onChange={filterByProductCode} placeholder="Filtrar por produto" />
+          <input type="text" onChange={filterByCustomerName} placeholder="Filtrar por nome do cliente" />
+          <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
+          <div>
+            Rotas
+            <select onChange={filterByRoute}>
+              {routes.map((route, index) => (
+                <option value={route} key={`rota-${index}`}>
+                  {route}
+                </option>
+              ))}
+            </select>
+          </div>
+        </FilterBar>
+        <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
+        <CardDanfes danfes={danfes} />
       </Container>
-      <CardDanfes danfes={danfes} />
     </div>
   )
 };

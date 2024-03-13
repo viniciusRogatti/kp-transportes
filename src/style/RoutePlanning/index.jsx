@@ -13,7 +13,7 @@ export const ContainerForm = styled.div`
   align-items: center;
   justify-content: center;
   padding: 5px;
-  gap: 2px;
+  gap: 20px;
   
   button {
     width: 150px;
@@ -32,6 +32,7 @@ export const TripsContainer = styled.ul`
   flex-direction: column;
   margin-top: 24px;
   gap: 12px;
+  width: 100vw;
 
   li {
     display: flex;
@@ -39,5 +40,29 @@ export const TripsContainer = styled.ul`
     align-items: center;
     width: 80%;
     height: 140px;
+  }
+`;
+
+export const BoxDriverVehicle = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  justify-content: center;
+
+  select {
+    width: 11rem;
+  }
+`;
+
+export const BoxSelectDanfe = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  justify-content: center;
+  gap: 14px;
+
+  input {
+    width: 10rem;
+    padding: 2px 4px;
   }
 `;

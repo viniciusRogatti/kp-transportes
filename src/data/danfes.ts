@@ -36,7 +36,7 @@ export const cities: ICities = {
   "Limeira": "Rota Limeira",
   "Lindoia": "Rota Circuito 1",
   "Louveira": "Rota Valinhos",
-  "Mairipora": "Rota Bragança",
+  "Mairipora": "Rota Sorocaba 2",
   "Mogi-Guacu": "Rota Circuito 2",
   "Mogi-Mirim": "Rota Circuito 2",
   "Nova Odessa": "Rota Americana",

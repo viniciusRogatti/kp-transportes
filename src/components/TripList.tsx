@@ -51,8 +51,6 @@ function TripList({ trip }: TripListProps) {
       return accumulator;
     }, []);
 
-    console.log('DANFES -->', danfes);
-    
     // Renderize o PDF
     const pdfBlob = await pdf(<ProductListPDF danfes={danfes} products={groupedProducts} driver={trip.Driver.name} />).toBlob();
   
@@ -73,9 +71,6 @@ function TripList({ trip }: TripListProps) {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip]);
-
-  console.log('renderizando', danfes);
-  
 
   return (
 <CardTrips>

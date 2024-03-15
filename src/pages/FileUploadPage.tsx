@@ -26,8 +26,7 @@ const FileUploadPage: React.FC = () => {
       });
 
       try {
-        console.log('chamadas');
-        
+
         await axios.post(`${API_URL}/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',

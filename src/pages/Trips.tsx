@@ -7,6 +7,7 @@ import Header from "../components/Header";
 import { Container } from "../style/incoives";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
 import DatePicker from "react-datepicker";
+import axios from "axios";
 
 const { format } = require('date-fns');
 
@@ -19,20 +20,25 @@ function Trips() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchTripsByDate = async (date: string) => {
-    const response = await fetch(`${API_URL}/trips/search/date/${date}`);
-    
-    const data = await response.json();
-    console.log('UÉ?', data);
-    return data;
+  const fetchTripsByDate = async (date: string) => {  
+    try {
+      const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao buscar viagens do dia atual:', error);
+    }  
   };
 
   const loadTodayTrips = async () => {
-    const result = await fetchTripsByDate(format(new Date(), 'yyyy-MM-dd'));
-    setTrips(result);
+    const today = format(new Date(), 'dd-MM-yyyy');
+    
+    const result = await fetchTripsByDate(today);
+    if (result) {
+      setTrips(result);
+    }
   };
 
-  const handleDateChange = (date: Date | null) => {
+  const handleDateChange = (date: Date | null) => {    
     setSelectedDate(date);
   };
 
@@ -41,7 +47,9 @@ function Trips() {
       const formattedDate = selectedDate?.toISOString().split('T')[0];
       if (formattedDate) {
         const result = await fetchTripsByDate(formattedDate);        
-        setTrips(result);
+        if (result) {
+          setTrips(result);
+        }
       }  
 
     } catch (error) {

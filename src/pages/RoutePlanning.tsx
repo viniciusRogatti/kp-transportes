@@ -5,6 +5,7 @@ import { BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning
 import { ICar, IDanfeTrip, IDriver } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
+const {  formatToTimeZone } = require('date-fns-timezone');
 
 
 function RoutePlanning() {
@@ -107,11 +108,14 @@ function RoutePlanning() {
         console.log('Selecione um motorista, um veículo e adicione pelo menos uma nota antes de enviar a viagem.');
         return;
       }
+
+      const format = 'DD-MM-YYYY'
+      const today = formatToTimeZone(new Date(), format, { timeZone: "America/Sao_Paulo"});
   
       const tripData = {
         driver_id: selectedDriver,
         car_id: selectedCar,
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         gross_weight: total,
         tripNotes: sortedNotes.map((note) => ({
           invoice_number: note.nf,

@@ -49,7 +49,7 @@ function RoutePlanning() {
   const handleAddNote = async () => {
     if (barcode) {
       try {
-        const response = await axios.get(`${URL}/danfes/barcode/${barcode}`);
+        const response = await axios.get(`${API_URL}/danfes/barcode/${barcode}`);
         const danfeData = response.data;
         const newNote: IDanfeTrip = {
           customerName: danfeData.Customer.name_or_legal_entity,
@@ -121,7 +121,7 @@ function RoutePlanning() {
       };
       
       // Envia os dados da viagem para o backend
-      const response = await axios.post(`${URL}/trips/create`, tripData);
+      const response = await axios.post(`${API_URL}/trips/create`, tripData);
   
       console.log('Viagem enviada com sucesso:', response.data);
   

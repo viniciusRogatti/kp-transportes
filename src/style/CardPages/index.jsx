@@ -29,4 +29,17 @@ export const CardPageStyle = styled.div`
   }
 
 
+  @media (max-width: 768px) {
+    width: auto;
+    height: auto;
+    gap: 6px;
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+    p {
+    font-size: 8px;
+  }
+  }
+
 `;

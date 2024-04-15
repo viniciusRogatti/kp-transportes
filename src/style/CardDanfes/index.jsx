@@ -6,24 +6,27 @@ export const ContainerCards = styled.div`
   flex-wrap: wrap;
   justify-content: center;
   gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 `;
+
 
 export const CardsDanfe = styled.div`
   display: flex;
+  flex-direction: column;
   justify-content: start;
   align-items: center;
-  flex-direction: column;
-  width: 350px;
-  height: 400px;
+  width: 100%;
+  max-width: 350px;
+  height: 300px;
   border: solid 2px #2779a7;
   position: relative;
   padding: 2px 12px;
   background-color: #ecd16f;
   border-radius: 12px;
-  box-shadow:  4px 4px 20px #2779a7,
-  -4px -4px 15px #000000;
+  box-shadow: 4px 4px 20px #2779a7, -4px -4px 15px #000000;
 
-  p {
+  h4, p {
     font-size: 12px;
     position: relative;
   }
@@ -31,10 +34,19 @@ export const CardsDanfe = styled.div`
   h4 {
     text-overflow: ellipsis;
     white-space: nowrap;
-    overflow: hidden;   
-    max-width: 300px;
+    overflow: hidden;
+    max-width: 18.75rem;
   }
 
+  @media (max-width: 768px) {
+    flex-direction: column;
+    height: 250px;
+    width: 60%;
+
+    h4, p {
+    font-size: 8px;
+  }
+  }
 `;
 
 export const DescriptionColumns = styled.div`
@@ -42,6 +54,10 @@ export const DescriptionColumns = styled.div`
   justify-content: space-between;
   font-size: 12px;
   font-weight: bold;
+
+  @media (max-width: 768px) {
+    font-size: 10px;
+  }
 `;
 
 export const ContainerItems = styled.div`
@@ -55,6 +71,7 @@ export const ContainerItems = styled.div`
   gap: 14px;
   border: solid 1px black;
   border-radius: 8px;
+
 `;
 
 export const ListItems = styled.ul`
@@ -76,6 +93,10 @@ export const ListItems = styled.ul`
       max-width: 250px;
       font-weight: initial;
     }
+  }
+
+  @media (max-width: 768px) {
+    font-size: 8px;
   }
 `;
 
@@ -106,6 +127,22 @@ export const TitleCard = styled.div`
     font-size: large;
     font-weight: bold;
   }
+
+  h4, h1 {
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  @media (max-width: 768px) {
+    h4, h1 {
+      font-size: 12px;
+      font-weight: bold;
+    }
+    h1::before { 
+      content: 'NF ';
+      font-size: 12px;
+    }
+  }
 `;
 
 export const TotalQuantity = styled.div`
@@ -120,5 +157,12 @@ export const TotalQuantity = styled.div`
 
   ::before {
     content: 'Quantidade Total: ';
+  }
+
+  @media (max-width: 768px) {
+    p {
+    font-size: 12px;
+    font-weight: bold;
+  }
   }
 `;

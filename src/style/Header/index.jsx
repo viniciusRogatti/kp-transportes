@@ -15,6 +15,14 @@ export const HeaderStyle = styled.div`
     z-index: 1000;
     border-bottom: #ffffff solid 2px;
     gap: 8px;
+
+    @media (max-width: 768px) {
+      height: 140px;
+      border-bottom: #ffffff solid 2px;
+      h1 {
+        font-size: 20px;
+      }
+  }
 `;
 
 export const ContainerCards = styled.div`
@@ -32,5 +40,9 @@ export const ContainerCards = styled.div`
   &:hover {
     border: solid 2px #ECD06F;
   }
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
   }
 `;

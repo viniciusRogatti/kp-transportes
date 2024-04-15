@@ -10,13 +10,28 @@ import ScrollToTopButton from "../components/ScrollToTopButton";
 import { cities, routes } from "../data/danfes";
 import { API_URL } from "../data";
 import { Container } from "../style/incoives";
+import verifyToken from "../utils/verifyToken";
+import { useNavigate } from "react-router";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[] | []>([]);
   const [danfes, setDanfes] = useState<IDanfe[] | []>([]);
   const [routeCounts, setRouteCounts] = useState<{[key: string]: number}>({});
+  const navigate = useNavigate();
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } 
+    fetchToken();
     loadTodayData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

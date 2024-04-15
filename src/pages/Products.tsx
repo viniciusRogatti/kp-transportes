@@ -5,15 +5,32 @@ import axios from "axios";
 import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
+import verifyToken from "../utils/verifyToken";
+import { useNavigate } from "react-router";
 
 function Products() {
   const [products, setProduct] = useState<IProduct[] | []>([]);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
-    loadTodayData();
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } 
+    fetchToken();
+    loadProducts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadTodayData() {
+  async function loadProducts() {
     try {
       const response = await axios.get(`${API_URL}/products`);
       const data = response.data.sort((a: IProduct, b: IProduct) => a.description.localeCompare(b.description));

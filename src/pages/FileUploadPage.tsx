@@ -1,12 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../data';
 import Header from '../components/Header';
 import { Container } from '../style/incoives';
+import verifyToken from '../utils/verifyToken';
+import { useNavigate } from 'react-router';
 
 const FileUploadPage: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } 
+    fetchToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {

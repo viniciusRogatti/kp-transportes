@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IDanfe } from "../types/types";
 import axios from "axios";
 import CardDanfes from "../components/CardDanfes";
@@ -9,6 +9,8 @@ import Header from "../components/Header";
 import { Container } from "../style/incoives";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
+import { useNavigate } from "react-router";
+import verifyToken from "../utils/verifyToken";
 registerLocale('ptBR', ptBR);
 
 function Invoices() {
@@ -17,6 +19,23 @@ function Invoices() {
   const [nf, setNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } 
+    fetchToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   async function getDanfesByDate() {
     if (!startDate || !endDate ) {

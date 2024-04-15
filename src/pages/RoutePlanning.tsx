@@ -5,7 +5,9 @@ import { BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning
 import { ICar, IDanfeTrip, IDriver } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
-const {  formatToTimeZone } = require('date-fns-timezone');
+import  {  formatToTimeZone } from 'date-fns-timezone';
+import { useNavigate } from 'react-router';
+import verifyToken from '../utils/verifyToken';
 
 
 function RoutePlanning() {
@@ -16,20 +18,35 @@ function RoutePlanning() {
   const [barcode, setBarcode] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const carsResponse = await axios.get(`${API_URL}/cars`);
-        const driversResponse = await axios.get(`${API_URL}/drivers`);
-        setCars(carsResponse.data);
-        setDrivers(driversResponse.data);
-      } catch (error) {
-        console.error('Erro ao buscar dados:', error);
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
       }
-    };
+    } 
+    fetchToken();
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
+  const fetchData = async () => {
+    try {
+      const carsResponse = await axios.get(`${API_URL}/cars`);
+      const driversResponse = await axios.get(`${API_URL}/drivers`);
+      setCars(carsResponse.data);
+      setDrivers(driversResponse.data);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+  };
 
   const handleDriverChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setSelectedDriver(e.target.value);

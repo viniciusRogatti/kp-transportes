@@ -7,6 +7,7 @@ import RoutePlanning from './pages/RoutePlanning';
 import Trips from './pages/Trips';
 import Invoices from './pages/Invoices';
 import FileUploadPage from './pages/FileUploadPage';
+import Login from './pages/Login';
 
 
 
@@ -14,7 +15,8 @@ function App() {
   return (
     <div>
       <Routes>
-        <Route path="/" element={ <Home/> }/>
+        <Route path="/" element={ <Login/> }/>
+        <Route path="/home" element={ <Home/> }/>
         <Route path="/todayInvoices" element={ <TodayInvoices/> }/>
         <Route path="/invoices" element={ <Invoices/> }/>
         <Route path="/products" element={ <Products/> }/>

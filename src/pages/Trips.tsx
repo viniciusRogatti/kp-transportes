@@ -8,14 +8,29 @@ import { Container } from "../style/incoives";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
 import DatePicker from "react-datepicker";
 import axios from "axios";
+import { useNavigate } from "react-router";
+import verifyToken from "../utils/verifyToken";
 
 const { format } = require('date-fns');
 
 function Trips() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [trips, setTrips] = useState<ITrip[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    const fetchToken = async () => {
+      if (token) {
+        const isValidToken = await verifyToken(token);
+        if (!isValidToken) {
+          navigate('/');
+        }
+      } else {
+        navigate('/');
+      }
+    } 
+    fetchToken();
     loadTodayTrips();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

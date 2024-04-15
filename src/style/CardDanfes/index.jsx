@@ -18,7 +18,7 @@ export const CardsDanfe = styled.div`
   align-items: center;
   width: 100%;
   max-width: 350px;
-  height: 300px;
+  height: 400px;
   border: solid 2px #2779a7;
   position: relative;
   padding: 2px 12px;

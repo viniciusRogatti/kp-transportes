@@ -38,7 +38,7 @@ export const CardPageStyle = styled.div`
       height: 16px;
     }
     p {
-    font-size: 8px;
+    font-size: 6px;
   }
   }
 

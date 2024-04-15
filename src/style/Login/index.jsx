@@ -30,7 +30,7 @@ export const BoxLogin = styled.div`
 
 
   @media only screen and (max-width: 768px) {
-    background-image: url(${KpMobileImage}); /* Altera a imagem de fundo para dispositivos móveis */
+    background-image: url(${KpMobileImage});
   }
 `;
 
@@ -45,8 +45,8 @@ export const ButtonLogin = styled.button`
   text-transform: uppercase;
   color: #FFFFFF;
 
-  :disabled {
-    opacity: 0.3;
+  @media only screen and (max-width: 768px) {
+    width: 78%;
   }
 `;
 
@@ -62,6 +62,10 @@ export const InputLogin = styled.input`
 
   ::placeholder {
     color: #2779a7;
+  }
+
+  @media only screen and (max-width: 768px) {
+    width: 70%;
   }
 `;
 
@@ -85,5 +89,9 @@ export const BoxPassword = styled.div`
 
   input {
     width: 100%;
+  }
+
+  @media only screen and (max-width: 768px) {
+    width: 78%;
   }
 `;

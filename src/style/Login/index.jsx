@@ -75,7 +75,7 @@ export const InputLogin = styled.input`
   margin-bottom: 10px;
   padding-left: 20px;
   color: #2E2E3E;
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.5);
 
   ::placeholder {
     color: #2E2E3E;

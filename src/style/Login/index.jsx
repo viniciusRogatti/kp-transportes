@@ -19,7 +19,6 @@ export const BoxLogin = styled.div`
   justify-content: center;
   position: relative;
   margin-top: 20px;
-  background: #ECD06F;
   width: 80%;
   max-width: 700px;
   height: 60%;
@@ -76,6 +75,7 @@ export const InputLogin = styled.input`
   margin-bottom: 10px;
   padding-left: 20px;
   color: #2E2E3E;
+  background-color: transparent;
 
   ::placeholder {
     color: #2E2E3E;

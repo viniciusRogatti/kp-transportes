@@ -46,7 +46,7 @@ function Login() {
             id="username"
             value={ state.username }
             onChange={ onInputChange }
-            placeholder="Email"
+            placeholder="Username"
           />
           <BoxPassword>
             {!showPassword ? <FaEye onClick={ () => handleShowPassword() } /> : <FaEyeSlash onClick={ () => handleShowPassword() }/>}

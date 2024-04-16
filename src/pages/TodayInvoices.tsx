@@ -109,7 +109,7 @@ function TodayInvoices() {
           <input type="text" onChange={filterByCustomerName} placeholder="Filtrar por nome do cliente" />
           <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
           <div>
-            Rotas
+            Rotas:
             <select onChange={filterByRoute}>
               {routes.map((route, index) => (
                 <option value={route} key={`rota-${index}`}>

@@ -42,7 +42,7 @@ export const BoxSearch = styled.div`
     padding: 0.25rem;
     border: none;
     border-bottom-right-radius: 18px;
-    background: #ECD06F;
+    background: #ECF3FD;
     color: black;
   }
 

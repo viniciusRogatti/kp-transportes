@@ -14,7 +14,7 @@ export const CardPageStyle = styled.div`
   p {
     text-decoration: none;
     list-style: none;
-    color: black;
+    color: #ECF3FD;
   }
 
   svg {
@@ -24,7 +24,7 @@ export const CardPageStyle = styled.div`
     list-style: none;
     text-decoration: none;
     color: inherit;
-    fill:  #ECD06F;
+    fill:  #ECF3FD;
 
   }
 

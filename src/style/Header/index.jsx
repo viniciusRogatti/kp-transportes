@@ -5,8 +5,8 @@ export const HeaderStyle = styled.div`
     display: flex;
     width: 100vw;
     height: 180px;
-    background-color: #2779a7;
-    color: #ECD06F;
+    background-color: #2E2E3E;
+    color: #ECF3FD;
     align-items: center;
     justify-content: center;
     flex-direction: column;
@@ -35,10 +35,10 @@ export const ContainerCards = styled.div`
   a {
     text-decoration: none;
     gap: 2px;
-    border: solid 2px #2779a7;
     border-radius: 12px;
-  &:hover {
-    border: solid 2px #ECD06F;
+    border: solid 2px  #2E2E3E;
+    &:hover {
+    border: solid 2px #ECF3FD;
   }
   }
 

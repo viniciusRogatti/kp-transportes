@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import KpImage from '../../assets/images/KP.png';
+import KpImage from '../../assets/images/KP-TRANSPORTES.png';
 import KpMobileImage from '../../assets/images/KP-MOBILE.png';
 
 export const Container = styled.section`
@@ -9,6 +9,7 @@ export const Container = styled.section`
   justify-content: center;
   height: 100vh;
   width: 100vw;
+  background: #2E2E3E;
 `;
 
 export const BoxLogin = styled.div`
@@ -16,11 +17,12 @@ export const BoxLogin = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  position: relative;
   margin-top: 20px;
   background: #ECD06F;
-  width: 70%;
-  max-width: 600px;
-  height: 50%;
+  width: 80%;
+  max-width: 700px;
+  height: 60%;
   max-height: 400px;
   border-radius: 12px;
   background-image: url(${KpImage});
@@ -35,7 +37,7 @@ export const BoxLogin = styled.div`
 `;
 
 export const ButtonLogin = styled.button`
-  background: #2779a7;
+  background: #2E2E3E;
   border-radius: 5px;
   width: 44%;
   max-width: 300px;
@@ -44,9 +46,25 @@ export const ButtonLogin = styled.button`
   font-weight: bold;
   text-transform: uppercase;
   color: #FFFFFF;
+  border: solid 1px #ffff;
+  cursor: pointer;
 
   @media only screen and (max-width: 768px) {
     width: 78%;
+  }
+`;
+
+export const BoxInput = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  position: absolute;
+  bottom: 40px;
+
+  input {
+    background-color: transparent;
+    border: solid 1px #2E2E3E;
   }
 `;
 
@@ -54,14 +72,13 @@ export const InputLogin = styled.input`
   width: 40%;
   max-width: 300px;
   height: 40px;
-  border: 0.5px solid #2779a7;
   border-radius: 5px;
   margin-bottom: 10px;
   padding-left: 20px;
-  color: #2779a7;
+  color: #2E2E3E;
 
   ::placeholder {
-    color: #2779a7;
+    color: #2E2E3E;
   }
 
   @media only screen and (max-width: 768px) {

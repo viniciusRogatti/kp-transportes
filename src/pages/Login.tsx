@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FaEyeSlash, FaEye } from 'react-icons/fa';
-import { BoxLogin, Container, ButtonLogin, InputLogin, BoxPassword } from '../style/Login';
+import { BoxLogin, Container, ButtonLogin, InputLogin, BoxPassword, BoxInput } from '../style/Login';
 import axios from 'axios';
 import { API_URL } from '../data';
 import { useNavigate } from 'react-router-dom';
@@ -39,31 +39,33 @@ function Login() {
   return (
     <Container>
       <BoxLogin>
-        <InputLogin
-          type="text"
-          name="username"
-          id="username"
-          value={ state.username }
-          onChange={ onInputChange }
-          placeholder="Email"
-        />
-        <BoxPassword>
-          {!showPassword ? <FaEye onClick={ () => handleShowPassword() } /> : <FaEyeSlash onClick={ () => handleShowPassword() }/>}
+        <BoxInput>
           <InputLogin
-            type={ !showPassword ? 'password' : 'text' }
-            name="password"
-            id="password"
-            value={ state.password }
+            type="text"
+            name="username"
+            id="username"
+            value={ state.username }
             onChange={ onInputChange }
-            placeholder="Password"
+            placeholder="Email"
           />
-        </BoxPassword>
-        <ButtonLogin
-          type="button"
-          onClick={ handleEnter }
-        >
-          Enter
-        </ButtonLogin>
+          <BoxPassword>
+            {!showPassword ? <FaEye onClick={ () => handleShowPassword() } /> : <FaEyeSlash onClick={ () => handleShowPassword() }/>}
+            <InputLogin
+              type={ !showPassword ? 'password' : 'text' }
+              name="password"
+              id="password"
+              value={ state.password }
+              onChange={ onInputChange }
+              placeholder="Password"
+            />
+          </BoxPassword>
+          <ButtonLogin
+            type="button"
+            onClick={ handleEnter }
+          >
+            Enter
+          </ButtonLogin>
+        </BoxInput>
       </BoxLogin>
     </Container>
   );

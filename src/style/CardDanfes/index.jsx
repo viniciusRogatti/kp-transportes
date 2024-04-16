@@ -19,12 +19,12 @@ export const CardsDanfe = styled.div`
   width: 100%;
   max-width: 350px;
   height: 400px;
-  border: solid 2px #2779a7;
+  border: solid 2px #3251a5;
   position: relative;
   padding: 2px 12px;
-  background-color: #ecd16f;
+  background-color: #ecf3fd;
   border-radius: 12px;
-  box-shadow: 4px 4px 20px #2779a7, -4px -4px 15px #000000;
+  box-shadow: 2px 2px 20px #253050, -4px -4px 15px #000000;
 
   h4, p {
     font-size: 12px;

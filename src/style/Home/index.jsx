@@ -9,6 +9,6 @@ export const HomeStyle = styled.div`
   justify-content: start;
   width: 100vw;
   height: 100vh;
-  background: #26608f;
+  background: #2E2E3E;
 `;
 

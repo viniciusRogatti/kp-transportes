@@ -38,7 +38,7 @@ export const ContainerCards = styled.div`
     border-radius: 12px;
     border: solid 2px  #2E2E3E;
     &:hover {
-    border: solid 2px #ECF3FD;
+    border: solid 2px #256edb;
   }
   }
 

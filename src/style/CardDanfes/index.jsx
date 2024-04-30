@@ -25,6 +25,7 @@ export const CardsDanfe = styled.div`
   background-color: #ecf3fd;
   border-radius: 12px;
   box-shadow: 2px 2px 20px #253050, -4px -4px 15px #000000;
+  /* color: #000000; */
 
   h4, p {
     font-size: 12px;

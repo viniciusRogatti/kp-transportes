@@ -10,7 +10,10 @@ export const Container = styled.div`
   background: #2E2E3E;
   position: relative;
   margin-top: 200px;
-  color: #fefefe;
+
+  table {
+    color: #fefefe;
+  }
 
   th {
     padding: 10px;

@@ -71,6 +71,7 @@ export const cities: ICities = {
   "Sao Paulo": "Rota São Paulo",
   "Itarare": "Rota Itapetininga",
   "Santa Clara d&amp;apos;Oeste": "Rota Americana",
+  "Rio das Pedras": "Rota Piracicaba",
 }
 
 export const routes =  [

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import CameraComponent from '../components/CameraComponent';
 
 const CameraPage = () => {
   const [photo, setPhoto] = useState('');
@@ -45,7 +46,8 @@ const CameraPage = () => {
   return (
     <div>
       <h1>Tirar Foto</h1>
-      <button onClick={takePhoto}>Tirar Foto</button>
+      <CameraComponent />
+      {/* <button onClick={takePhoto}>Tirar Foto</button> */}
       {photo && <img src={photo} alt="Foto tirada" />}
       <form onSubmit={handleSubmit}>
         <label>

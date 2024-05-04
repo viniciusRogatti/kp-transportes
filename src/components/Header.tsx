@@ -40,7 +40,7 @@ function Header() {
             <ImAddressBook />
           </CardsPages>
         </Link>
-        <Link to='/trips'>
+        <Link to='/takePhoto'>
           <CardsPages pageNames="Trips">
             <ImTruck />
           </CardsPages>

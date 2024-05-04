@@ -8,7 +8,6 @@ import Trips from './pages/Trips';
 import Invoices from './pages/Invoices';
 import FileUploadPage from './pages/FileUploadPage';
 import Login from './pages/Login';
-import CameraPage from './pages/CameraPage';
 
 
 
@@ -25,7 +24,6 @@ function App() {
         <Route path="/customers" element={ <Customers/> }/>
         <Route path="/trips" element={ <Trips/> }/>
         <Route path="/uploadFiles" element={ <FileUploadPage/> }/>
-        <Route path="/takePhoto" element={ <CameraPage/> }/>
       </Routes>
     </div>
   );

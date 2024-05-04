@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import Webcam from 'react-webcam'; // ou import Webcam from 'react-webcam';
+import { Camera } from "react-camera-pro";
 
 const CameraComponent: React.FC = () => {
   const cameraRef = useRef<any>(null);
@@ -21,7 +21,7 @@ const CameraComponent: React.FC = () => {
 
   return (
     <div>
-      <Webcam ref={cameraRef} />
+      <Camera ref={cameraRef} errorMessages={{ /* Aqui você pode definir mensagens de erro personalizadas, se necessário */ }} />
       <button onClick={takePicture}>Tirar Foto</button>
     </div>
   );

@@ -8,7 +8,7 @@ import { Container } from '../style/incoives';
 import  {  formatToTimeZone } from 'date-fns-timezone';
 import { useNavigate } from 'react-router';
 import verifyToken from '../utils/verifyToken';
-
+import Popup from '../components/Popup';
 
 function RoutePlanning() {
   const [drivers, setDrivers] = useState<IDriver[]>([]);
@@ -18,6 +18,9 @@ function RoutePlanning() {
   const [barcode, setBarcode] = useState<string>('');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]);
+  const [showPopup, setShowPopup] = useState<boolean>(false);
+  const [titlePopup, setTitlePopup] = useState<string>('');
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -136,7 +139,7 @@ function RoutePlanning() {
         gross_weight: total,
         tripNotes: sortedNotes.map((note) => ({
           invoice_number: note.nf,
-          status: 'pending',
+          status: 'assigned',
           order: note.order,
         })),
       };
@@ -189,6 +192,11 @@ function RoutePlanning() {
     }
   };
 
+  const addDriverOrCar = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setShowPopup(true);
+    setTitlePopup(e.currentTarget.innerText);
+  }
+
   const sortedNotes = addedNotes.slice().sort((a, b) => a.order - b.order);
 
   return (
@@ -225,9 +233,13 @@ function RoutePlanning() {
             </BoxSelectDanfe>
           </div>
 
-          
-        <button onClick={handleAddNote}>Adicionar Nota</button>
-        <button onClick={sendTripsToBackend}>Enviar Viagem</button>
+        <div>
+          <button onClick={handleAddNote}>Adicionar Nota</button>
+          <button onClick={sendTripsToBackend}>Enviar Viagem</button>
+          <button onClick={addDriverOrCar}>Adicionar Motorista</button>
+          <button onClick={addDriverOrCar}>Adicionar Veículo</button>
+        </div>
+
         </ContainerForm>
 
         <TripsContainer>
@@ -250,6 +262,11 @@ function RoutePlanning() {
               </li>
             ))}
         </TripsContainer>
+
+        {showPopup && (
+          <Popup title={titlePopup} closePopup={ () => setShowPopup(false)} />
+        )}
+
       </Container>
 
     </ContainerRoutePlanning>

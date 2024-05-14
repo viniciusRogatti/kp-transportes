@@ -1,14 +1,17 @@
 import { useEffect, useState, ChangeEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
-import { BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
-import { ICar, IDanfeTrip, IDriver } from '../types/types';
+import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
+import { ICar, IDanfe, IDanfeTrip, IDriver, ITrip } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
 import  {  formatToTimeZone } from 'date-fns-timezone';
 import { useNavigate } from 'react-router';
 import verifyToken from '../utils/verifyToken';
 import Popup from '../components/Popup';
+import { format } from 'date-fns';
+
+
 
 function RoutePlanning() {
   const [drivers, setDrivers] = useState<IDriver[]>([]);
@@ -20,6 +23,7 @@ function RoutePlanning() {
   const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]);
   const [showPopup, setShowPopup] = useState<boolean>(false);
   const [titlePopup, setTitlePopup] = useState<string>('');
+  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
 
   const navigate = useNavigate();
 
@@ -39,11 +43,28 @@ function RoutePlanning() {
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const dataToDanfeTrip = (data: any) => {
+    const newNote: IDanfeTrip = {
+      customerName: data.Customer.name_or_legal_entity,
+      phone: data.Customer.phone,
+      nf: data.invoice_number,
+      city: data.Customer.city,
+      cnpj: data.Customer.cnpj_or_cpf,
+      order: addedNotes.length + 1,
+      grossWeight: data.gross_weight
+    };
+
+    return newNote;
+  };
   
   const fetchData = async () => {
     try {
+      const today = format(new Date(), 'dd-MM-yyyy');
       const carsResponse = await axios.get(`${API_URL}/cars`);
       const driversResponse = await axios.get(`${API_URL}/drivers`);
+      const response = await axios.get(`${API_URL}/trips/search/date/${today}`);
+      setTodayTrips(response.data)
       setCars(carsResponse.data);
       setDrivers(driversResponse.data);
     } catch (error) {
@@ -51,12 +72,45 @@ function RoutePlanning() {
     }
   };
 
-  const handleDriverChange = (e: ChangeEvent<HTMLSelectElement>) => {
+  const handleDriverChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     setSelectedDriver(e.target.value);
+    setAddedNotes([]);
+    if (todayTrips.length > 0) {
+      const tripsByDriver = todayTrips.filter((trip: ITrip) => trip.Driver.id === +e.target.value);
+      if (tripsByDriver.length > 0) {
+        const tripNotes = tripsByDriver[0]?.TripNotes;
+        let listTrips = [];
+        for (let i = 0; i < tripNotes.length; i++) {
+          const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
+          const data = response.data;
+          listTrips.push(dataToDanfeTrip(data));        
+        }
+          setAddedNotes(listTrips);
+          setSelectedCar(tripsByDriver[0].Car.id.toString());
+        }  
+    }
   };
 
-  const handleCarChange = (e: ChangeEvent<HTMLSelectElement>) => {
+  const handleCarChange =  async (e: ChangeEvent<HTMLSelectElement>) => {
+    setAddedNotes([]);
     setSelectedCar(e.target.value);
+    if (todayTrips.length > 0) {    
+
+      const tripsByCar = todayTrips.filter((trip: ITrip) => trip.Car.id === +e.target.value);
+      console.log(e.target.value, tripsByCar);
+        
+      if (tripsByCar.length > 0) {
+        const tripNotes = todayTrips[0]?.TripNotes;
+        let listTrips = [];
+        for (let i = 0; i < tripNotes.length; i++) {
+          const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
+          const data = response.data;
+          listTrips.push(dataToDanfeTrip(data));          
+        }
+        setAddedNotes(listTrips);
+        setSelectedDriver(tripsByCar[0].Driver.id.toString());        
+      }
+    }
   };
 
   const handleBarcodeChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -68,46 +122,30 @@ function RoutePlanning() {
   };
 
   const handleAddNote = async () => {
-    if (barcode) {
-      try {
-        const response = await axios.get(`${API_URL}/danfes/barcode/${barcode}`);
-        const danfeData = response.data;
-        const newNote: IDanfeTrip = {
-          customerName: danfeData.Customer.name_or_legal_entity,
-          phone: danfeData.Customer.phone,
-          nf: danfeData.invoice_number,
-          city: danfeData.Customer.city,
-          cnpj: danfeData.Customer.cnpj_or_cpf,
-          order: addedNotes.length + 1,
-          grossWeight: danfeData.gross_weight
-        };
+    try {
+      const route = barcode ? `/danfes/barcode/${barcode}` : `/danfes/nf/${invoiceNumber}`;
+      const response = await axios.get(`${API_URL}${route}`);
+      const danfeData = response.data;     
+      
+      if (danfeData.status !== 'pending' && danfeData.status !== 'redelivery') {
+        alert('Essa nota não pode ser roteirizada, verifique o status dela');
+        setBarcode('');
+        setInvoiceNumber('');
+        return;
+      } 
 
-        addNoteToList(newNote);
-      } catch (error) {
-        console.log('Não foi possível buscar essa nota, verifique o código de barras digitado');
+      if (addedNotes.some((note) => danfeData.invoice_number === note.nf)) {
+        alert('Esta nota já foi adicionada à viagem.');
+        setBarcode('');
+        setInvoiceNumber('');
+        return;
       }
-    } else if (invoiceNumber) {
-      try {  
-        
-        const response = await axios.get(`${API_URL}/danfes/nf/${invoiceNumber}`);
-        const danfeData = response.data;
-        
-    
-        const newNote: IDanfeTrip = {
-          customerName: danfeData.Customer.name_or_legal_entity,
-          phone: danfeData.Customer.phone,
-          nf: danfeData.invoice_number,
-          city: danfeData.Customer.city,
-          cnpj: danfeData.Customer.cnpj_or_cpf,
-          order: addedNotes.length + 1,
-          grossWeight: danfeData.gross_weight
-        };
 
-        addNoteToList(newNote);
-      } catch (error) {
-        console.log('Não foi possível buscar essa nota, verifique a NF digitada');
-      }
+      addNoteToList(dataToDanfeTrip(danfeData));
+    } catch (error) {
+      alert('Não foi possível buscar essa nota');
     }
+  
     setBarcode('');
     setInvoiceNumber('');
   };
@@ -125,12 +163,21 @@ function RoutePlanning() {
       
     try {
       if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
-        console.log('Selecione um motorista, um veículo e adicione pelo menos uma nota antes de enviar a viagem.');
+        alert('Selecione um motorista, um veículo e adicione pelo menos uma nota antes de enviar a viagem.');
         return;
       }
 
       const format = 'DD-MM-YYYY'
       const today = formatToTimeZone(new Date(), format, { timeZone: "America/Sao_Paulo"});
+
+      const dataUpdate = {
+        danfes: addedNotes.map((note) => ({
+          invoice_number: note.nf,
+          status: 'assigned', // Define o novo status aqui
+        })),
+      };      
+
+      await axios.put(`${API_URL}/danfes/update-status`, dataUpdate);
   
       const tripData = {
         driver_id: selectedDriver,
@@ -147,7 +194,7 @@ function RoutePlanning() {
       // Envia os dados da viagem para o backend
       const response = await axios.post(`${API_URL}/trips/create`, tripData);
   
-      console.log('Viagem enviada com sucesso:', response.data);
+      alert('Viagem enviada com sucesso');
   
       // Limpa os campos após o envio bem-sucedido
       setSelectedDriver('null');
@@ -233,12 +280,12 @@ function RoutePlanning() {
             </BoxSelectDanfe>
           </div>
 
-        <div>
+        <BoxButton>
           <button onClick={handleAddNote}>Adicionar Nota</button>
           <button onClick={sendTripsToBackend}>Enviar Viagem</button>
           <button onClick={addDriverOrCar}>Adicionar Motorista</button>
           <button onClick={addDriverOrCar}>Adicionar Veículo</button>
-        </div>
+        </BoxButton>
 
         </ContainerForm>
 

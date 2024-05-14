@@ -21,6 +21,21 @@ export const ContainerForm = styled.div`
   }
 `;
 
+export const BoxButton = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  width: 50%;
+  gap: 8px;
+  margin-top: 20px;
+
+  button {
+    width: 40%;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+  }
+`;
+
 export const TitleRoutePlanning = styled.h1`
   text-align: center;
   margin-top: 5px;

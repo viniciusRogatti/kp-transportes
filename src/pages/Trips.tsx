@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import DatePicker from "react-datepicker";
+import { useNavigate } from "react-router";
+import { format } from 'date-fns';
+
 import { ITrip } from "../types/types";
 import TripList from "../components/TripList";
 import ptBR from 'date-fns/locale/pt-BR';
@@ -6,12 +10,8 @@ import { API_URL } from "../data";
 import Header from "../components/Header";
 import { Container } from "../style/incoives";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
-import DatePicker from "react-datepicker";
 import axios from "axios";
-import { useNavigate } from "react-router";
 import verifyToken from "../utils/verifyToken";
-
-const { format } = require('date-fns');
 
 function Trips() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);

@@ -64,7 +64,7 @@ export const CardTrips = styled.div`
   padding: 2px 12px;
   background-color: #ecd16f;
   border-radius: 12px;
-  box-shadow:  4px 4px 20px #2779a7,
+  box-shadow:  4px 4px 20px #000000,
   -4px -4px 15px #000000;
 
   p {

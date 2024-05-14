@@ -73,7 +73,7 @@ function TripList({ trip }: TripListProps) {
   }, [trip]);
 
   return (
-<CardTrips>
+    <CardTrips>
       <CardHeader>
         <LeftHeader>
           <p>{trip.Driver.name}</p>

@@ -9,7 +9,7 @@ export const Container = styled.section`
   justify-content: center;
   height: 100vh;
   width: 100vw;
-  background: #2E2E3E;
+  background: #1F2B42;
 `;
 
 export const BoxLogin = styled.div`
@@ -36,7 +36,7 @@ export const BoxLogin = styled.div`
 `;
 
 export const ButtonLogin = styled.button`
-  background: #2E2E3E;
+  background: #1F2B42;
   border-radius: 5px;
   width: 44%;
   max-width: 300px;
@@ -63,7 +63,7 @@ export const BoxInput = styled.div`
 
   input {
     background-color: transparent;
-    border: solid 1px #2E2E3E;
+    border: solid 1px #1F2B42;
   }
 `;
 
@@ -74,11 +74,11 @@ export const InputLogin = styled.input`
   border-radius: 5px;
   margin-bottom: 10px;
   padding-left: 20px;
-  color: #2E2E3E;
+  color: #1F2B42;
   background-color: rgba(255, 255, 255, 0.5);
 
   ::placeholder {
-    color: #2E2E3E;
+    color: #1F2B42;
   }
 
   @media only screen and (max-width: 768px) {

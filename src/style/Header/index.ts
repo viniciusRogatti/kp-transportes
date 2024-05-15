@@ -5,20 +5,20 @@ export const HeaderStyle = styled.div`
     display: flex;
     width: 100vw;
     height: 180px;
-    background-color: #2E2E3E;
-    color: #ECF3FD;
+    background-color: #1F2B42;
+    color: #FEFEFE;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     position: fixed;
     top: 0;
     z-index: 1000;
-    border-bottom: #ffffff solid 2px;
+    border-bottom: #ACBCB7 solid 2px;
     gap: 8px;
 
     @media (max-width: 768px) {
       height: 140px;
-      border-bottom: #ffffff solid 2px;
+      border-bottom: #ACBCB7 solid 2px;
       h1 {
         font-size: 20px;
       }
@@ -36,10 +36,10 @@ export const ContainerCards = styled.div`
     text-decoration: none;
     gap: 2px;
     border-radius: 12px;
-    border: solid 2px  #2E2E3E;
+    border: solid 2px  #274862;
     &:hover {
-    border: solid 2px #256edb;
-  }
+      border: solid 2px #FEFEFE;
+    }
   }
 
   @media (max-width: 768px) {

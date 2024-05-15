@@ -12,7 +12,7 @@ export const ButtonScrollToTopStyle = styled.button<IButtonScrollToTopStyle>`
   font-size: 30px;
   padding: 10px;
   background-color: #ECF3FD;
-  color: #2E2E3E;
+  color: #1F2B42;
   border: solid 2px black;
   border-radius: 50%;
   cursor: pointer;

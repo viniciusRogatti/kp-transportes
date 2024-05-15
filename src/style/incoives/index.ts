@@ -7,12 +7,12 @@ export const Container = styled.div`
   align-items: center;
   width: 100vw;
   height: 100%;
-  background: #2E2E3E;
+  background: #1F2B42;
   position: relative;
   margin-top: 200px;
 
   table {
-    color: #fefefe;
+    color: #FEFEFE;
   }
 
   th {

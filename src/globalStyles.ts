@@ -12,7 +12,7 @@ body{
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background: #2E2E3E;
+  background: #1F2B42;
 }
 `;
 

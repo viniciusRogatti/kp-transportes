@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import { Container } from '../style/incoives';
 import verifyToken from '../utils/verifyToken';
 import { useNavigate } from 'react-router';
+import { BoxInput } from '../style/FileUploadPage';
 
 const FileUploadPage: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -71,10 +72,13 @@ const FileUploadPage: React.FC = () => {
     <div>
       <Header />
       <Container>
-        <input type="file" onChange={handleFileChange} multiple accept=".xml" />
-        <button onClick={handleUpload} disabled={uploading}>
-          Enviar Arquivos .xml
-        </button>
+        <BoxInput>
+          <input type="file" id="fileInput"  className="inputfile" onChange={handleFileChange} multiple accept=".xml" />
+          <label htmlFor="fileInput" className="custom-file-upload">Escolha um arquivo</label>
+          <button onClick={handleUpload} disabled={uploading}>
+            Enviar Arquivos .xml
+          </button>
+        </BoxInput>
       </Container>
     </div>
   );

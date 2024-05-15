@@ -14,6 +14,7 @@ export const ContainerForm = styled.div`
   justify-content: center;
   padding: 5px;
   gap: 20px;
+  color: #FEFEFE;
   
   button {
     width: 150px;
@@ -39,6 +40,7 @@ export const BoxButton = styled.div`
 export const TitleRoutePlanning = styled.h1`
   text-align: center;
   margin-top: 5px;
+  color: #FEFEFE;
 `;
 
 export const TripsContainer = styled.ul`

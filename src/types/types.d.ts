@@ -23,6 +23,7 @@ export interface ITripNote {
   invoice_number: string;
   status: string;
   order: number;
+  city: string;
 }
 
 
@@ -39,10 +40,8 @@ export interface ICar {
 
 export interface IDanfeTrip {
   customerName: string;
-  phone: string | null;
   nf: string;
   city: string;
-  cnpj: string;
   order: number;
   grossWeight: string;
 }

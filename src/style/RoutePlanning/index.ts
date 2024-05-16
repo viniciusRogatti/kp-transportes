@@ -27,7 +27,7 @@ export const BoxButton = styled.div`
   flex-wrap: wrap;
   width: 50%;
   gap: 8px;
-  margin-top: 20px;
+  margin-top: 18px;
 
   button {
     width: 40%;
@@ -68,6 +68,10 @@ export const BoxDriverVehicle = styled.div`
 
   select {
     width: 11rem;
+    padding: 4px;
+    border: none;
+    border-radius: 4px;
+    background: #FEFEFE;
   }
 `;
 
@@ -80,6 +84,8 @@ export const BoxSelectDanfe = styled.div`
 
   input {
     width: 10rem;
-    padding: 2px 4px;
+    padding: 6px;
+    border: none;
+    border-radius: 4px;
   }
 `;

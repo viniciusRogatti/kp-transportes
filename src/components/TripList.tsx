@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
 import { IDanfe, ITrip } from '../types/types';
 import ProductListPDF from './ProductListPDF'; // Importe o componente ProductListPDF
@@ -40,7 +40,12 @@ function TripList({ trip }: TripListProps) {
 
   // Função para lidar com o clique no botão "Imprimir Lista de Produtos"
   async function handlePrintProductsList() {
-    // Agrupar produtos pelo código do produto e calcular a quantidade total de cada produto
+    
+    trip.TripNotes.forEach((note) => {
+      fetchProducts(note.invoice_number);
+      fetchDanfes(note.invoice_number);
+    });
+
     const groupedProducts = products.reduce((accumulator: any, product) => {
       const existingProduct = accumulator.find((p: any) => p.Product.code === product.Product.code);
       if (existingProduct) {
@@ -63,15 +68,6 @@ function TripList({ trip }: TripListProps) {
     // Não é mais necessário usar saveAs para fazer o download
   }
 
-  // UseEffect para buscar os produtos quando o componente for montado
-  useEffect(() => {
-    trip.TripNotes.forEach((note) => {
-        fetchProducts(note.invoice_number);
-        fetchDanfes(note.invoice_number);
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trip]);
-
   return (
     <CardTrips>
       <CardHeader>
@@ -82,6 +78,7 @@ function TripList({ trip }: TripListProps) {
         <RightHeader>
           <p>Data: {transformDate(trip.date)}</p>
           <p style={{ fontWeight: 'bold' }}>Peso: {trip.gross_weight}</p>
+          <p>{`${trip.TripNotes.length} Notas`}</p>
         </RightHeader>
       </CardHeader>
 

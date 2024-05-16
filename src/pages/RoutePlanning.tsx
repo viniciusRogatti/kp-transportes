@@ -2,7 +2,7 @@ import { useEffect, useState, ChangeEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
 import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
-import { ICar, IDanfe, IDanfeTrip, IDriver, ITrip } from '../types/types';
+import { ICar, IDanfeTrip, IDriver, ITrip } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
 import  {  formatToTimeZone } from 'date-fns-timezone';
@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router';
 import verifyToken from '../utils/verifyToken';
 import Popup from '../components/Popup';
 import { format } from 'date-fns';
+import { TruckLoader } from '../style/Loaders';
 
 
 
@@ -24,6 +25,7 @@ function RoutePlanning() {
   const [showPopup, setShowPopup] = useState<boolean>(false);
   const [titlePopup, setTitlePopup] = useState<string>('');
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const navigate = useNavigate();
 
@@ -47,10 +49,8 @@ function RoutePlanning() {
   const dataToDanfeTrip = (data: any) => {
     const newNote: IDanfeTrip = {
       customerName: data.Customer.name_or_legal_entity,
-      phone: data.Customer.phone,
       nf: data.invoice_number,
       city: data.Customer.city,
-      cnpj: data.Customer.cnpj_or_cpf,
       order: addedNotes.length + 1,
       grossWeight: data.gross_weight
     };
@@ -60,6 +60,7 @@ function RoutePlanning() {
   
   const fetchData = async () => {
     try {
+      setIsLoading(true);
       const today = format(new Date(), 'dd-MM-yyyy');
       const carsResponse = await axios.get(`${API_URL}/cars`);
       const driversResponse = await axios.get(`${API_URL}/drivers`);
@@ -67,50 +68,40 @@ function RoutePlanning() {
       setTodayTrips(response.data)
       setCars(carsResponse.data);
       setDrivers(driversResponse.data);
+      setIsLoading(false);
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
     }
   };
 
-  const handleDriverChange = async (e: ChangeEvent<HTMLSelectElement>) => {
-    setSelectedDriver(e.target.value);
+  const handleChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    const key = e.target.id === 'driver' ? 'Driver' : 'Car';
+    if (key === 'Driver') {
+      setSelectedDriver(e.target.value);
+    } else setSelectedCar(e.target.value);
+    
     setAddedNotes([]);
     if (todayTrips.length > 0) {
-      const tripsByDriver = todayTrips.filter((trip: ITrip) => trip.Driver.id === +e.target.value);
+      setIsLoading(true);
+      const tripsByDriver = todayTrips.filter((trip: ITrip) => trip[key].id === +e.target.value);
       if (tripsByDriver.length > 0) {
         const tripNotes = tripsByDriver[0]?.TripNotes;
         let listTrips = [];
+
         for (let i = 0; i < tripNotes.length; i++) {
           const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
           const data = response.data;
           listTrips.push(dataToDanfeTrip(data));        
         }
-          setAddedNotes(listTrips);
-          setSelectedCar(tripsByDriver[0].Car.id.toString());
+          if (key === 'Driver') {
+            setAddedNotes(listTrips);
+            setSelectedCar(tripsByDriver[0].Car.id.toString());
+          } else {
+            setAddedNotes(listTrips);
+            setSelectedDriver(tripsByDriver[0].Driver.id.toString());  
+          }
         }  
-    }
-  };
-
-  const handleCarChange =  async (e: ChangeEvent<HTMLSelectElement>) => {
-    setAddedNotes([]);
-    setSelectedCar(e.target.value);
-    if (todayTrips.length > 0) {    
-
-      const tripsByCar = todayTrips.filter((trip: ITrip) => trip.Car.id === +e.target.value);
-      console.log(e.target.value, tripsByCar);
-        
-      if (tripsByCar.length > 0) {
-        const tripNotes = todayTrips[0]?.TripNotes;
-        let listTrips = [];
-        for (let i = 0; i < tripNotes.length; i++) {
-          const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
-          const data = response.data;
-          listTrips.push(dataToDanfeTrip(data));          
-        }
-        setAddedNotes(listTrips);
-        setSelectedDriver(tripsByCar[0].Driver.id.toString());        
-      }
-    }
+    } setIsLoading(false)
   };
 
   const handleBarcodeChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -123,9 +114,11 @@ function RoutePlanning() {
 
   const handleAddNote = async () => {
     try {
+      setIsLoading(true);
       const route = barcode ? `/danfes/barcode/${barcode}` : `/danfes/nf/${invoiceNumber}`;
       const response = await axios.get(`${API_URL}${route}`);
-      const danfeData = response.data;     
+      const danfeData = response.data;
+      setIsLoading(false);
       
       if (danfeData.status !== 'pending' && danfeData.status !== 'redelivery') {
         alert('Essa nota não pode ser roteirizada, verifique o status dela');
@@ -175,8 +168,8 @@ function RoutePlanning() {
           invoice_number: note.nf,
           status: 'assigned', // Define o novo status aqui
         })),
-      };      
-
+      };
+      setIsLoading(true);
       await axios.put(`${API_URL}/danfes/update-status`, dataUpdate);
   
       const tripData = {
@@ -192,7 +185,8 @@ function RoutePlanning() {
       };
       
       // Envia os dados da viagem para o backend
-      const response = await axios.post(`${API_URL}/trips/create`, tripData);
+      await axios.post(`${API_URL}/trips/create`, tripData);
+      setIsLoading(false);
   
       alert('Viagem enviada com sucesso');
   
@@ -251,10 +245,14 @@ function RoutePlanning() {
       <Header />
       <Container>
         <TitleRoutePlanning>Roteirização</TitleRoutePlanning>
-        <ContainerForm>
+        { isLoading ? (
+          <TruckLoader />
+        ): (
+          <>
+            <ContainerForm>
           <BoxDriverVehicle>
             <label>Motorista:</label>
-            <select onChange={handleDriverChange} value={selectedDriver || ''}>
+            <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
               <option value="null">Selecione um motorista</option>
               {drivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>
@@ -263,8 +261,8 @@ function RoutePlanning() {
               ))}
             </select>
             <label>Veículo:</label>
-            <select onChange={handleCarChange} value={selectedCar || ''}>
-              <option value={'null'}>Selecione um veículo</option>
+            <select id="car" onChange={handleChange} value={selectedCar || ''}>
+              <option  value={'null'}>Selecione um veículo</option>
               {cars.map((car) => (
                 <option key={car.id} value={car.id}>
                   {car.model} - {car.license_plate}
@@ -290,25 +288,28 @@ function RoutePlanning() {
         </ContainerForm>
 
         <TripsContainer>
-            {sortedNotes.map((note) => (
-              <li key={note.nf}>
-                <h2>{note.nf}</h2>
-                <h4>{note.customerName} </h4>
-                <h4>{note.city} </h4>
-                <p>{note.grossWeight}</p>
-                <button onClick={() => removeNoteFromList(note.nf)}>Remover</button>
-                <button onClick={() => moveNoteUp(note.order)} disabled={note.order === 1}>
-                  Mover para cima
-                </button>
-                <button
-                  onClick={() => moveNoteDown(note.order)}
-                  disabled={note.order === addedNotes.length}
-                >
-                  Mover para baixo
-                </button>
-              </li>
-            ))}
+          
+            { sortedNotes.map((note) => (
+                <li key={note.nf}>
+                  <h2>{note.nf}</h2>
+                  <h4>{note.customerName} </h4>
+                  <h4>{note.city} </h4>
+                  <p>{note.grossWeight}</p>
+                  <button onClick={() => removeNoteFromList(note.nf)}>Remover</button>
+                  <button onClick={() => moveNoteUp(note.order)} disabled={note.order === 1}>
+                    Mover para cima
+                  </button>
+                  <button
+                    onClick={() => moveNoteDown(note.order)}
+                    disabled={note.order === addedNotes.length}
+                  >
+                    Mover para baixo
+                  </button>
+                </li>))
+            }
         </TripsContainer>
+          </>
+        )}
 
         {showPopup && (
           <Popup title={titlePopup} closePopup={ () => setShowPopup(false)} />

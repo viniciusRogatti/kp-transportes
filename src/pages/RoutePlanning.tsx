@@ -1,7 +1,7 @@
 import { useEffect, useState, ChangeEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
-import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
+import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDanfeTrip, IDriver, ITrip } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/incoives';
@@ -11,8 +11,8 @@ import verifyToken from '../utils/verifyToken';
 import Popup from '../components/Popup';
 import { format } from 'date-fns';
 import { TruckLoader } from '../style/Loaders';
-
-
+import { FaArrowRightLong, FaArrowLeftLong } from "react-icons/fa6";
+import { AnimatePresence } from "framer-motion";
 
 function RoutePlanning() {
   const [drivers, setDrivers] = useState<IDriver[]>([]);
@@ -46,15 +46,16 @@ function RoutePlanning() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const dataToDanfeTrip = (data: any) => {
+  const dataToDanfeTrip = (data: any, lengthNote?: number) => {
     const newNote: IDanfeTrip = {
       customerName: data.Customer.name_or_legal_entity,
       nf: data.invoice_number,
       city: data.Customer.city,
-      order: addedNotes.length + 1,
+      order: lengthNote ? lengthNote : addedNotes.length + 1,
       grossWeight: data.gross_weight
     };
-
+    console.log(lengthNote);
+    
     return newNote;
   };
   
@@ -85,19 +86,16 @@ function RoutePlanning() {
       setIsLoading(true);
       const tripsByDriver = todayTrips.filter((trip: ITrip) => trip[key].id === +e.target.value);
       if (tripsByDriver.length > 0) {
-        const tripNotes = tripsByDriver[0]?.TripNotes;
-        let listTrips = [];
+        const tripNotes = tripsByDriver[0]?.TripNotes;        
 
         for (let i = 0; i < tripNotes.length; i++) {
           const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
           const data = response.data;
-          listTrips.push(dataToDanfeTrip(data));        
+          setAddedNotes((prevNotes) => [...prevNotes, dataToDanfeTrip(data, i + 1)]);
         }
           if (key === 'Driver') {
-            setAddedNotes(listTrips);
             setSelectedCar(tripsByDriver[0].Car.id.toString());
           } else {
-            setAddedNotes(listTrips);
             setSelectedDriver(tripsByDriver[0].Driver.id.toString());  
           }
         }  
@@ -198,7 +196,7 @@ function RoutePlanning() {
       console.error('Erro ao enviar a viagem:', error);
     }
   };
-  
+    
   const moveNoteUp = (order: number) => {
     const updatedNotes = [...addedNotes]; // Cria uma cópia do array para garantir imutabilidade
   
@@ -287,26 +285,39 @@ function RoutePlanning() {
 
         </ContainerForm>
 
-        <TripsContainer>
-          
+        <TripsContainer layout>
+          <AnimatePresence>
             { sortedNotes.map((note) => (
-                <li key={note.nf}>
+                <CardsTripsNotes
+                  key={note.nf}
+                  layout
+                  transition={{ duration: 5 }}
+                >
                   <h2>{note.nf}</h2>
-                  <h4>{note.customerName} </h4>
-                  <h4>{note.city} </h4>
-                  <p>{note.grossWeight}</p>
-                  <button onClick={() => removeNoteFromList(note.nf)}>Remover</button>
-                  <button onClick={() => moveNoteUp(note.order)} disabled={note.order === 1}>
-                    Mover para cima
+                  <h4>{note.customerName}</h4>
+                  <h4>{note.city}</h4>
+                  <p>{`${note.grossWeight} Kg`}</p>
+                  <button 
+                    onClick={() => removeNoteFromList(note.nf)}
+                    className="btn-remove"
+                  >Remover</button>
+                  <button 
+                    onClick={() => moveNoteUp(note.order)} 
+                    disabled={note.order === 1}
+                    className="btn-left"
+                  >
+                    <FaArrowLeftLong />
                   </button>
                   <button
                     onClick={() => moveNoteDown(note.order)}
                     disabled={note.order === addedNotes.length}
+                    className="btn-right"
                   >
-                    Mover para baixo
+                  <FaArrowRightLong />
                   </button>
-                </li>))
+                </CardsTripsNotes>))
             }
+          </AnimatePresence>
         </TripsContainer>
           </>
         )}

@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { motion } from "framer-motion";
 
 export const ContainerRoutePlanning = styled.div`
   display: flex;
@@ -43,20 +44,71 @@ export const TitleRoutePlanning = styled.h1`
   color: #FEFEFE;
 `;
 
-export const TripsContainer = styled.ul`
+export const TripsContainer = styled(motion.ul)`
   display: flex;
   align-items: center;
-  flex-direction: column;
-  margin-top: 24px;
-  gap: 12px;
-  width: 100vw;
+  justify-content: center;
+  gap: 20px;
+  width: 95%;
+  flex-wrap: wrap;
+  transition: all 0.5s ease;
 
-  li {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 80%;
-    height: 140px;
+  .move-left {
+    transform: translateX(-25%);
+  }
+
+  .move-right {
+    transform: translateX(25%);
+  }
+`;
+
+export const CardsTripsNotes = styled(motion.li)`
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 20%;
+  height: 200px;
+  margin-top: 20px;
+  border: solid 2px  #274862;
+  border-radius: 12px;
+  background: #FEFEFE;
+  box-shadow: 4px 2px 12px #000000;
+  transition: transform 0.5s ease;
+
+  h4 {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 95%;
+  }
+
+  button {
+    position: absolute;
+    border: none;
+    width: fit-content;
+    height: 20px;
+    background: transparent;
+
+    &.btn-left {
+      left: 12px;
+      bottom: 8px;
+    }
+
+    &.btn-right {
+      right: 12px;
+      bottom: 8px;
+    }
+
+    &.btn-remove {
+      bottom: 8px;
+    }
+
+    svg {
+      width: 24px;
+      height: 24px;
+    }
   }
 `;
 

@@ -44,6 +44,7 @@ export interface IDanfeTrip {
   city: string;
   order: number;
   grossWeight: string;
+  animationClass?: string;
 }
 
 export interface IProduct {

@@ -291,16 +291,21 @@ function RoutePlanning() {
                 <CardsTripsNotes
                   key={note.nf}
                   layout
-                  transition={{ duration: 5 }}
+                  initial={{ opacity: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: [1, 0.5] }}
+                  whileInView={{ opacity: 1}}
+                  transition={{ duration: 1 }}
                 >
                   <h2>{note.nf}</h2>
                   <h4>{note.customerName}</h4>
-                  <h4>{note.city}</h4>
+                  <h3>{note.city}</h3>
                   <p>{`${note.grossWeight} Kg`}</p>
                   <button 
                     onClick={() => removeNoteFromList(note.nf)}
                     className="btn-remove"
-                  >Remover</button>
+                  >
+                    Remover
+                  </button>
                   <button 
                     onClick={() => moveNoteUp(note.order)} 
                     disabled={note.order === 1}

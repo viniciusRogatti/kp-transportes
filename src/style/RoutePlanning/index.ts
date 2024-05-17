@@ -75,7 +75,19 @@ export const CardsTripsNotes = styled(motion.li)`
   border-radius: 12px;
   background: #FEFEFE;
   box-shadow: 4px 2px 12px #000000;
-  transition: transform 0.5s ease;
+
+  h2 {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+  }
+
+  p {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    font-weight: bold;
+  }
 
   h4 {
     text-overflow: ellipsis;
@@ -103,6 +115,8 @@ export const CardsTripsNotes = styled(motion.li)`
 
     &.btn-remove {
       bottom: 8px;
+      font-weight: bold;
+      text-transform: capitalize;
     }
 
     svg {

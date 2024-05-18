@@ -1,4 +1,5 @@
 function transformDate(dateString: string): string {
+  
   // Divide a string da data em partes separadas
   const parts = dateString.split('-');
 

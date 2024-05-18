@@ -12,6 +12,7 @@ import { Container } from "../style/incoives";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
 import axios from "axios";
 import verifyToken from "../utils/verifyToken";
+import transformDate from "../utils/transformDate";
 
 function Trips() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -37,7 +38,9 @@ function Trips() {
 
   const fetchTripsByDate = async (date: string) => {  
     try {
+      console.log(date);
       const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
+      
       return response.data;
     } catch (error) {
       console.error('Erro ao buscar viagens do dia atual:', error);
@@ -53,15 +56,16 @@ function Trips() {
     }
   };
 
-  const handleDateChange = (date: Date | null) => {    
+  const handleDateChange = (date: any) => {    
     setSelectedDate(date);
   };
 
   const handleSearch = async () => {
     try {  
-      const formattedDate = selectedDate?.toISOString().split('T')[0];
-      if (formattedDate) {
-        const result = await fetchTripsByDate(formattedDate);        
+      const dateToString = selectedDate?.toISOString().split('T')[0];
+      if (dateToString) {
+        const date = transformDate(dateToString);        
+        const result = await fetchTripsByDate(date);        
         if (result) {
           setTrips(result);
         }

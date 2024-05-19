@@ -67,6 +67,7 @@ export const CardTrips = styled.div`
   border-radius: 12px;
   box-shadow:  4px 4px 20px #000000,
   -4px -4px 15px #000000;
+  color: #000;
 
   p {
     font-size: 12px;
@@ -78,19 +79,6 @@ export const CardTrips = styled.div`
     white-space: nowrap;
     overflow: hidden;   
     max-width: 300px;
-  }
-
-  button {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    border: none;
-    padding: 8px 4px;
-    border-radius: 4px;
-    width: 100%;
-    cursor: pointer;
-    background: #798EA7;
-    color: #FEFEFE;
   }
 `;
 
@@ -162,3 +150,23 @@ export const TripNoteItem = styled.li`
   }
 `;
 
+
+export const BoxButton = styled.div`
+  display: flex;  
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  justify-content: space-between;
+
+  button {
+    background: #798EA7;
+    border: none;
+    padding: 8px 4px;
+    border-radius: 4px;
+    color: #FEFEFE;
+    width: 45%;
+    cursor: pointer;
+    margin: 8px;
+  }
+`;

@@ -4,7 +4,7 @@ import CardProducts from "../components/CardProducts";
 import axios from "axios";
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container } from "../style/incoives";
+import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 

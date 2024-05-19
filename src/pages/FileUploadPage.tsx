@@ -2,14 +2,18 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../data';
 import Header from '../components/Header';
-import { Container } from '../style/incoives';
+import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { useNavigate } from 'react-router';
-import { BoxInput } from '../style/FileUploadPage';
+import { BoxInput, BoxMessage } from '../style/FileUploadPage';
+import { IUploadResponse } from '../types/types';
+import { Loading } from '../style/Loaders';
 
 const FileUploadPage: React.FC = () => {
+  const [fileCountMessage, setFileCountMessage] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [logMessages, setLogMessages] = useState<string[]>([]); // Novo estado para armazenar as mensagens de log
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,16 +27,20 @@ const FileUploadPage: React.FC = () => {
       } else {
         navigate('/');
       }
-    } 
+    };
     fetchToken();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
+      setLogMessages([]);
       const files = event.target.files;
       const xmlFiles = Array.from(files).filter(file => file.name.endsWith('.xml'));
       setSelectedFiles(xmlFiles);
+      setFileCountMessage(`${xmlFiles.length} arquivo(s) selecionado(s).`);
+    } else {
+      setFileCountMessage('');
     }
   };
 
@@ -46,13 +54,21 @@ const FileUploadPage: React.FC = () => {
       });
 
       try {
-
-        await axios.post(`${API_URL}/upload`, formData, {
+        const response = await axios.post<IUploadResponse>(`${API_URL}/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
         });
+        
         console.log('Arquivos enviados com sucesso!');
+        setLogMessages(response.data.details.map(detail => detail.message));
+        const successMessage = response.data.details[0].message;
+        if (successMessage.includes('XMLs processadas com sucesso!')) {
+          setFileCountMessage(successMessage);
+        } else {
+          setFileCountMessage('Nenhum arquivo foi salvo');
+        }
+
       } catch (error) {
         console.error('Erro ao enviar arquivos:', error);
       } finally {
@@ -72,16 +88,30 @@ const FileUploadPage: React.FC = () => {
     <div>
       <Header />
       <Container>
-        <BoxInput>
-          <input type="file" id="fileInput"  className="inputfile" onChange={handleFileChange} multiple accept=".xml" />
-          <label htmlFor="fileInput" className="custom-file-upload">Escolha um arquivo</label>
-          <button onClick={handleUpload} disabled={uploading}>
-            Enviar Arquivos .xml
-          </button>
-        </BoxInput>
+        {uploading ? (
+          <Loading />
+        ) : (
+          <>
+            <BoxInput>
+              <input type="file" id="fileInput" className="inputfile" onChange={handleFileChange} multiple accept=".xml" />
+              <label htmlFor="fileInput" className="custom-file-upload">Escolha um arquivo</label>
+              <button onClick={handleUpload} disabled={uploading}>
+                Enviar Arquivos .xml
+              </button>
+            </BoxInput>
+            <BoxMessage>
+              <h4>{fileCountMessage}</h4>
+              <div>
+                {logMessages.map((msg, index) => (
+                  <p key={index}>{msg}</p>
+                ))}
+              </div>  
+            </BoxMessage>
+          </>
+        )}
       </Container>
     </div>
-  );
+  );  
 };
 
 export default FileUploadPage;

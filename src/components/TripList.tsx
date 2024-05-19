@@ -1,52 +1,44 @@
-import { useState } from 'react';
 import axios from 'axios';
-import { IDanfe, ITrip } from '../types/types';
-import ProductListPDF from './ProductListPDF'; // Importe o componente ProductListPDF
+import { ITrip } from '../types/types';
+import ProductListPDF from './ProductListPDF';
 import { pdf } from '@react-pdf/renderer';
 import transformDate from '../utils/transformDate';
 import { API_URL } from '../data';
-import { CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
+import { BoxButton, CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
 
 interface TripListProps {
   trip: ITrip;
+  setIsPrinting: (param: boolean) => void;
 }
 
-function TripList({ trip }: TripListProps) {
-  const [products, setProducts] = useState<any[]>([]); // Estado para armazenar os produtos 
-  const [danfes, setDanfes] = useState<IDanfe[] | []>([]); //
-
-  // Função para buscar os produtos de uma nota fiscal específica
-  async function fetchProducts(invoiceNumber: string) {
-    try {
-      const response = await axios.get(`${API_URL}/products/${invoiceNumber}`);
-      const productsData = response.data;
-      // Adicionar produtos ao estado
-      setProducts((prevProducts) => [...prevProducts, ...productsData]);
-    } catch (error) {
-      console.error('Erro ao buscar produtos:', error);
-    }
-  }
+function TripList({ trip, setIsPrinting }: TripListProps) {
 
   async function fetchDanfes(nf: string) {
     try {
       const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
-      if (data) {
-        setDanfes((prevDanfes) => [...prevDanfes, data]);
-      }
+      console.log(`Fetched danfe for NF: ${nf}`, data); // Debugging log
+      return data;
     } catch (error) {
       console.error('Erro ao buscar danfe:', error);
+      return null;
     }
   }
 
-  // Função para lidar com o clique no botão "Imprimir Lista de Produtos"
-  async function handlePrintProductsList() {
-    
-    trip.TripNotes.forEach((note) => {
-      fetchProducts(note.invoice_number);
-      fetchDanfes(note.invoice_number);
-    });
+  async function handleFetchData() {
+    const danfeData = await Promise.all(trip.TripNotes.map(note => fetchDanfes(note.invoice_number)));
 
-    const groupedProducts = products.reduce((accumulator: any, product) => {
+    const validDanfes = danfeData.filter(data => data !== null);
+    const allProducts = validDanfes.flatMap(data => data.DanfeProducts);
+
+    return { validDanfes, allProducts };
+  }
+
+  async function handlePrintProductsList() {
+    setIsPrinting(true);
+
+    const { allProducts } = await handleFetchData();
+
+    const groupedProducts = allProducts.reduce((accumulator: any, product) => {
       const existingProduct = accumulator.find((p: any) => p.Product.code === product.Product.code);
       if (existingProduct) {
         existingProduct.quantity += product.quantity;
@@ -56,16 +48,35 @@ function TripList({ trip }: TripListProps) {
       return accumulator;
     }, []);
 
-    // Renderize o PDF
-    const pdfBlob = await pdf(<ProductListPDF danfes={danfes} products={groupedProducts} driver={trip.Driver.name} />).toBlob();
-  
-    // Criar um URL a partir do blob
+    console.log(`Grouped Products: ${groupedProducts}`);
+
+    const pdfBlob = await pdf(
+      <ProductListPDF products={groupedProducts} driver={trip.Driver.name} />
+    ).toBlob();
+
     const pdfUrl = URL.createObjectURL(pdfBlob);
-  
-    // Abrir o URL em uma nova aba
-    window.open(pdfUrl, '_blank');
-  
-    // Não é mais necessário usar saveAs para fazer o download
+
+    setTimeout(() => {
+      window.open(pdfUrl, '_blank');
+      setIsPrinting(false);
+    }, 3000);
+  }
+
+  async function handlePrintDanfes() {
+    setIsPrinting(true);
+
+    const { validDanfes } = await handleFetchData();
+
+    const pdfBlob = await pdf(
+      <ProductListPDF danfes={validDanfes} driver={trip.Driver.name} />
+    ).toBlob();
+
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+
+    setTimeout(() => {
+      window.open(pdfUrl, '_blank');
+      setIsPrinting(false);
+    }, 3000);
   }
 
   return (
@@ -94,7 +105,10 @@ function TripList({ trip }: TripListProps) {
         </TripNotesList>
       </TripNotesContainer>
 
-      <button onClick={handlePrintProductsList}>Imprimir Lista De Produtos</button>
+      <BoxButton>
+        <button onClick={handlePrintProductsList}>Imprimir Lista De Produtos</button>
+        <button onClick={handlePrintDanfes}>Imprimir Lista De Entregas</button>
+      </BoxButton>
     </CardTrips>
   );
 }

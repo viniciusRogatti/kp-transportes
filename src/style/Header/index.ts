@@ -5,7 +5,7 @@ export const HeaderStyle = styled.div`
     display: flex;
     width: 100vw;
     height: 180px;
-    background-color: #1F2B42;
+    background-color: #001428;
     color: #FEFEFE;
     align-items: center;
     justify-content: center;

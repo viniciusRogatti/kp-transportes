@@ -26,15 +26,41 @@ export const ContainerForm = styled.div`
 export const BoxButton = styled.div`
   display: flex;
   flex-wrap: wrap;
-  width: 50%;
-  gap: 8px;
-  margin-top: 18px;
+  width: fit-content;
+  gap: 12px;
+  margin-top: 10px;
+  justify-content: center;
 
   button {
     width: 40%;
     border-radius: 4px;
     border: none;
     cursor: pointer;
+
+
+    &.btn-add-danfe {
+      background: #000025;
+      border: solid 2px #FEFEFE;
+      color: #FEFEFE;
+    }
+    
+    &.btn-submit {
+      background: #091944;
+      border: solid 2px #FEFEFE;
+      color: #FEFEFE;
+    }
+    
+    &.btn-add-driver {
+      background: #0e2653;
+      border: solid 2px #FEFEFE;
+      color: #FEFEFE;
+    }
+    
+    &.btn-add-car {
+      background: #123262;
+      border: solid 2px #FEFEFE;
+      color: #FEFEFE;
+    }
   }
 `;
 
@@ -78,8 +104,8 @@ export const CardsTripsNotes = styled(motion.li)`
 
   h2 {
     position: absolute;
-    top: 8px;
-    left: 12px;
+    top: 20px;
+    left: 30%;
   }
 
   p {
@@ -91,9 +117,26 @@ export const CardsTripsNotes = styled(motion.li)`
 
   h4 {
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: wrap;
     overflow: hidden;
-    max-width: 95%;
+    text-align: center;
+    max-width: 93%;
+    font-size: 12px;
+  }
+
+  h5 {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    font-size: 22px;
+    padding: 8px 14px;
+    border-radius: 50%;
+    border: solid 1px #000000;
+  }
+
+  h3 {
+    margin-top: 8px;
+    color: #001428;
   }
 
   button {

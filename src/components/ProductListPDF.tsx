@@ -12,9 +12,9 @@ interface Product {
 }
 
 interface ProductListPDFProps {
-  products: Product[];
+  products?: Product[];
   driver: String;
-  danfes: IDanfe[] | [];
+  danfes?: IDanfe[];
 }
 
 const styles = StyleSheet.create({
@@ -46,45 +46,51 @@ const styles = StyleSheet.create({
 });
 
 const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver, danfes }) => (
-<Document>
-  <Page size="A4" style={styles.page}>
-    {danfes.map((danfe, index) => (
-        <View key={danfe.invoice_number}>
-          <Text style={styles.title}>{`${driver} Entrega nmr: ${index}`}</Text>
-          <Text style={{ fontSize: 14, fontWeight: 'bold' }}>NF: {danfe.invoice_number}</Text>
-          <Text>{danfe.Customer.name_or_legal_entity}</Text>
-          <Text>{danfe.Customer.city}</Text>
-          <Text style={{ fontSize: 12 }}>{danfe.invoice_date}</Text>
-          <Text style={{ textAlign: 'center' }}>Lista de produtos</Text>
-          {danfe.DanfeProducts.map((product) => (
-            <View key={product.Product.code} style={styles.listItem}>
-              <Text style={styles.columnValue}>{product.Product.code}</Text>
-              <Text style={styles.columnValue}>{product.Product.description}</Text>
-              <Text style={styles.columnValue}>{product.quantity}</Text>
-            </View>
-          ))}
-          <View style={{ marginBottom: 20 }} />
-        </View>
-    ))}
-    <View>
-        <Text style={styles.title}>{driver}</Text>
-        <View style={styles.listItem}>
-          <Text style={styles.columnHeader}>Código do Produto</Text>
-          <Text style={styles.columnHeader}>Descrição do Produto</Text>
-          <Text style={styles.columnHeader}>Quantidade</Text>
-        </View>
-        {products.map((product, index) => (
-          <View key={index}>
-            <View style={styles.listItem}>
-              <Text style={styles.columnValue}>{product.Product.code}</Text>
-              <Text style={styles.columnValue}>{product.Product.description}</Text>
-              <Text style={styles.columnValue}>{product.quantity}</Text>
-            </View>
-            {index !== products.length - 1 && <View style={{ borderBottomWidth: 1, borderBottomColor: '#000000', marginBottom: 5 }} />}
+  <Document>
+    <Page size="A4" style={styles.page}>
+      {danfes && danfes.length > 0 ? (
+        danfes.map((danfe, index) => (
+          <View key={danfe.invoice_number}>
+            <Text style={styles.title}>{`${driver} Entrega nmr: ${index + 1}`}</Text>
+            <Text style={{ fontSize: 14, fontWeight: 'bold' }}>NF: {danfe.invoice_number}</Text>
+            <Text>{danfe.Customer.name_or_legal_entity}</Text>
+            <Text>{danfe.Customer.city}</Text>
+            <Text style={{ fontSize: 12 }}>{danfe.invoice_date}</Text>
+            <Text style={{ textAlign: 'center' }}>Lista de produtos</Text>
+            {danfe.DanfeProducts.map((product) => (
+              <View key={product.Product.code} style={styles.listItem}>
+                <Text style={styles.columnValue}>{product.Product.code}</Text>
+                <Text style={styles.columnValue}>{product.Product.description}</Text>
+                <Text style={styles.columnValue}>{product.quantity}</Text>
+              </View>
+            ))}
+            <View style={{ marginBottom: 20 }} />
           </View>
-        ))}
-      </View>
-  </Page>
+        ))
+      ) : (
+        <>
+          <Text style={styles.title}>{driver}</Text>
+          <View style={styles.listItem}>
+            <Text style={styles.columnHeader}>Código do Produto</Text>
+            <Text style={styles.columnHeader}>Descrição do Produto</Text>
+            <Text style={styles.columnHeader}>Quantidade</Text>
+          </View>
+          {products &&
+            products.map((product, index) => (
+              <View key={index}>
+                <View style={styles.listItem}>
+                  <Text style={styles.columnValue}>{product.Product.code}</Text>
+                  <Text style={styles.columnValue}>{product.Product.description}</Text>
+                  <Text style={styles.columnValue}>{product.quantity}</Text>
+                </View>
+                {index !== products.length - 1 && (
+                  <View style={{ borderBottomWidth: 1, borderBottomColor: '#000000', marginBottom: 5 }} />
+                )}
+              </View>
+            ))}
+        </>
+      )}
+    </Page>
   </Document>
 );
 

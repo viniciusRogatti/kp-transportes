@@ -7,9 +7,10 @@ export const Container = styled.div`
   align-items: center;
   width: 100vw;
   height: 100%;
-  background: #1F2B42;
+  background: #001428;
   position: relative;
   margin-top: 200px;
+  color: #FEFEFE;
 
   table {
     color: #FEFEFE;

@@ -1,11 +1,11 @@
-import { useEffect, useState, ChangeEvent } from 'react';
+import { useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
 import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDanfeTrip, IDriver, ITrip } from '../types/types';
 import { API_URL } from '../data';
-import { Container } from '../style/incoives';
-import  {  formatToTimeZone } from 'date-fns-timezone';
+import { Container } from '../style/invoices';
+import { formatToTimeZone } from 'date-fns-timezone';
 import { useNavigate } from 'react-router';
 import verifyToken from '../utils/verifyToken';
 import Popup from '../components/Popup';
@@ -40,7 +40,7 @@ function RoutePlanning() {
       } else {
         navigate('/');
       }
-    } 
+    }
     fetchToken();
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,11 +54,16 @@ function RoutePlanning() {
       order: lengthNote ? lengthNote : addedNotes.length + 1,
       grossWeight: data.gross_weight
     };
-    console.log(lengthNote);
-    
     return newNote;
   };
-  
+
+  const handleEnterPress = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAddNote();
+    }
+  };
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -66,7 +71,7 @@ function RoutePlanning() {
       const carsResponse = await axios.get(`${API_URL}/cars`);
       const driversResponse = await axios.get(`${API_URL}/drivers`);
       const response = await axios.get(`${API_URL}/trips/search/date/${today}`);
-      setTodayTrips(response.data)
+      setTodayTrips(response.data);
       setCars(carsResponse.data);
       setDrivers(driversResponse.data);
       setIsLoading(false);
@@ -93,13 +98,14 @@ function RoutePlanning() {
           const data = response.data;
           setAddedNotes((prevNotes) => [...prevNotes, dataToDanfeTrip(data, i + 1)]);
         }
-          if (key === 'Driver') {
-            setSelectedCar(tripsByDriver[0].Car.id.toString());
-          } else {
-            setSelectedDriver(tripsByDriver[0].Driver.id.toString());  
-          }
-        }  
-    } setIsLoading(false)
+        if (key === 'Driver') {
+          setSelectedCar(tripsByDriver[0].Car.id.toString());
+        } else {
+          setSelectedDriver(tripsByDriver[0].Driver.id.toString());  
+        }
+      }
+    }
+    setIsLoading(false);
   };
 
   const handleBarcodeChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -111,6 +117,11 @@ function RoutePlanning() {
   };
 
   const handleAddNote = async () => {
+    if (selectedDriver === 'null' || selectedCar === 'null') {
+      alert('Selecione um motorista e um veículo antes de adicionar uma nota!');
+      return;
+    }
+    
     try {
       setIsLoading(true);
       const route = barcode ? `/danfes/barcode/${barcode}` : `/danfes/nf/${invoiceNumber}`;
@@ -158,8 +169,8 @@ function RoutePlanning() {
         return;
       }
 
-      const format = 'DD-MM-YYYY'
-      const today = formatToTimeZone(new Date(), format, { timeZone: "America/Sao_Paulo"});
+      const format = 'DD-MM-YYYY';
+      const today = formatToTimeZone(new Date(), format, { timeZone: "America/Sao_Paulo" });
 
       const dataUpdate = {
         danfes: addedNotes.map((note) => ({
@@ -177,8 +188,11 @@ function RoutePlanning() {
         gross_weight: total,
         tripNotes: sortedNotes.map((note) => ({
           invoice_number: note.nf,
+          city: note.city,
+          customer_name: note.customerName,
           status: 'assigned',
           order: note.order,
+          gross_weight: note.grossWeight
         })),
       };
       
@@ -248,91 +262,101 @@ function RoutePlanning() {
         ): (
           <>
             <ContainerForm>
-          <BoxDriverVehicle>
-            <label>Motorista:</label>
-            <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
-              <option value="null">Selecione um motorista</option>
-              {drivers.map((driver) => (
-                <option key={driver.id} value={driver.id}>
-                  {driver.name}
-                </option>
-              ))}
-            </select>
-            <label>Veículo:</label>
-            <select id="car" onChange={handleChange} value={selectedCar || ''}>
-              <option  value={'null'}>Selecione um veículo</option>
-              {cars.map((car) => (
-                <option key={car.id} value={car.id}>
-                  {car.model} - {car.license_plate}
-                </option>
-              ))}
-            </select>
-          </BoxDriverVehicle>
-          <div>
-              <label>Selecione uma nota:</label>
-            <BoxSelectDanfe>
-              <input type="text" placeholder="Digite o código de barras" value={barcode} onChange={handleBarcodeChange} />
-              <input type="text" placeholder="Digite a NF" value={invoiceNumber} onChange={handleInvoiceNumberChange} />
-            </BoxSelectDanfe>
-          </div>
+              <BoxDriverVehicle>
+                <label>Motorista:</label>
+                <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
+                  <option value="null">Selecione um motorista</option>
+                  {drivers.map((driver) => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </option>
+                  ))}
+                </select>
+                <label>Veículo:</label>
+                <select id="car" onChange={handleChange} value={selectedCar || ''}>
+                  <option  value={'null'}>Selecione um veículo</option>
+                  {cars.map((car) => (
+                    <option key={car.id} value={car.id}>
+                      {car.model} - {car.license_plate}
+                    </option>
+                  ))}
+                </select>
+              </BoxDriverVehicle>
+              <div>
+                <label>Selecione uma nota:</label>
+                <BoxSelectDanfe>
+                  <input 
+                    type="text" 
+                    onKeyDown={handleEnterPress} 
+                    placeholder="Digite o código de barras" 
+                    value={barcode} 
+                    onChange={handleBarcodeChange} 
+                  />
+                  <input 
+                    type="text" 
+                    onKeyDown={handleEnterPress} 
+                    placeholder="Digite a NF" 
+                    value={invoiceNumber} 
+                    onChange={handleInvoiceNumberChange} 
+                  />
+                </BoxSelectDanfe>
+              </div>
 
-        <BoxButton>
-          <button onClick={handleAddNote}>Adicionar Nota</button>
-          <button onClick={sendTripsToBackend}>Enviar Viagem</button>
-          <button onClick={addDriverOrCar}>Adicionar Motorista</button>
-          <button onClick={addDriverOrCar}>Adicionar Veículo</button>
-        </BoxButton>
+              <BoxButton>
+                <button className="btn-submit" onClick={sendTripsToBackend}>Enviar Viagem</button>
+                <button className="btn-add-driver" onClick={addDriverOrCar}>Adicionar Motorista</button>
+                <button className="btn-add-danfe" onClick={handleAddNote}>Adicionar Nota</button>
+                <button className="btn-add-car" onClick={addDriverOrCar}>Adicionar Veículo</button>
+              </BoxButton>
+            </ContainerForm>
 
-        </ContainerForm>
-
-        <TripsContainer layout>
-          <AnimatePresence>
-            { sortedNotes.map((note) => (
-                <CardsTripsNotes
-                  key={note.nf}
-                  layout
-                  initial={{ opacity: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: [1, 0.5] }}
-                  whileInView={{ opacity: 1}}
-                  transition={{ duration: 1 }}
-                >
-                  <h2>{note.nf}</h2>
-                  <h4>{note.customerName}</h4>
-                  <h3>{note.city}</h3>
-                  <p>{`${note.grossWeight} Kg`}</p>
-                  <button 
-                    onClick={() => removeNoteFromList(note.nf)}
-                    className="btn-remove"
+            <TripsContainer layout>
+              <AnimatePresence>
+                {sortedNotes.map((note) => (
+                  <CardsTripsNotes
+                    key={note.nf}
+                    layout
+                    initial={{ opacity: 0, scale: 1 }}
+                    exit={{ opacity: 0, scale: [1, 0.5] }}
+                    whileInView={{ opacity: 1 }}
+                    transition={{ duration: 1 }}
                   >
-                    Remover
-                  </button>
-                  <button 
-                    onClick={() => moveNoteUp(note.order)} 
-                    disabled={note.order === 1}
-                    className="btn-left"
-                  >
-                    <FaArrowLeftLong />
-                  </button>
-                  <button
-                    onClick={() => moveNoteDown(note.order)}
-                    disabled={note.order === addedNotes.length}
-                    className="btn-right"
-                  >
-                  <FaArrowRightLong />
-                  </button>
-                </CardsTripsNotes>))
-            }
-          </AnimatePresence>
-        </TripsContainer>
+                    <h5>{note.order}</h5>
+                    <h2>{note.nf}</h2>
+                    <h4>{note.customerName}</h4>
+                    <h3>{note.city}</h3>
+                    <p>{`${note.grossWeight} Kg`}</p>
+                    <button 
+                      onClick={() => removeNoteFromList(note.nf)}
+                      className="btn-remove"
+                    >
+                      Remover
+                    </button>
+                    <button 
+                      onClick={() => moveNoteUp(note.order)} 
+                      disabled={note.order === 1}
+                      className="btn-left"
+                    >
+                      <FaArrowLeftLong />
+                    </button>
+                    <button
+                      onClick={() => moveNoteDown(note.order)}
+                      disabled={note.order === addedNotes.length}
+                      className="btn-right"
+                    >
+                      <FaArrowRightLong />
+                    </button>
+                  </CardsTripsNotes>
+                ))}
+              </AnimatePresence>
+            </TripsContainer>
           </>
         )}
 
         {showPopup && (
           <Popup title={titlePopup} closePopup={ () => setShowPopup(false)} />
         )}
-
       </Container>
-
     </ContainerRoutePlanning>
   );
 }

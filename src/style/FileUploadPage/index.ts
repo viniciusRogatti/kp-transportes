@@ -29,3 +29,8 @@ export const BoxInput = styled.div`
     color: #000;
   }
 `;
+
+export const BoxMessage = styled.div`
+  padding: 12px;
+  color: #fefefe;
+`;

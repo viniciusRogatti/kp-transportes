@@ -9,14 +9,13 @@ import ScrollToTopButton from "../components/ScrollToTopButton";
 
 import { cities, routes } from "../data/danfes";
 import { API_URL } from "../data";
-import { Container } from "../style/incoives";
+import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[] | []>([]);
   const [danfes, setDanfes] = useState<IDanfe[] | []>([]);
-  const [routeCounts, setRouteCounts] = useState<{[key: string]: number}>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,27 +40,9 @@ function TodayInvoices() {
       const response = await axios.get(`${API_URL}/danfes`);
       setDanfes(response.data);
       setDataDanfes(response.data);
-      countNotesByRoute(response.data);
     } catch (error) {
       console.error('Erro ao buscar notas do dia atual:', error);
     }
-  }
-
-  function countNotesByRoute(danfes: IDanfe[]) {
-    const counts: {[key: string]: number} = {};
-
-    danfes.forEach(danfe => {
-      const city = danfe.Customer.city;
-      const route = cities[city] || 'Sem rota';
-
-      if (route === 'Sem rota') {
-        alert(`Cidade sem rota ${city}`)
-      }
-      
-      counts[route] = (counts[route] || 0) + 1;
-    });
-
-    setRouteCounts(counts);
   }
 
   function filterByNf(e: React.ChangeEvent<HTMLInputElement>) {
@@ -123,11 +104,6 @@ function TodayInvoices() {
           <p>Nenhuma nota lançada para hoje!</p>
         ) : (
           <ContainerDanfes>
-            {/* <div>
-              {routes.map((route, index) => route !== "Todas" && (
-                <p key={`id-route-${index}`}>{`${route}: ${routeCounts[route]}`}</p>
-              ))}
-            </div> */}
             <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
             <CardDanfes danfes={danfes} />
           </ContainerDanfes>

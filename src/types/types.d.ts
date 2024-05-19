@@ -18,6 +18,13 @@ export interface ITrip {
   TripNotes: ITripNote[];
 }
 
+export interface IUploadResponse {
+  message: string;
+  successful: number;
+  failed: number;
+  details: Array<{ success: boolean; message: string }>;
+}
+
 export interface ITripNote {
   id: number;
   invoice_number: string;
@@ -53,8 +60,8 @@ export interface IProduct {
   price: string,
   type: string,
   quantity?: number,
-  created_at: string,
-  updated_at: string
+  created_at?: string,
+  updated_at?: string
 }
 
 export interface IDanfe {

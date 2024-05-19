@@ -6,7 +6,7 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container } from "../style/incoives";
+import { Container } from "../style/invoices";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
 import { useNavigate } from "react-router";

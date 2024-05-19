@@ -8,16 +8,18 @@ import TripList from "../components/TripList";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container } from "../style/incoives";
+import { Container } from "../style/invoices";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
 import axios from "axios";
 import verifyToken from "../utils/verifyToken";
 import transformDate from "../utils/transformDate";
+import { LoaderPrinting } from '../style/Loaders';
 
 function Trips() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [trips, setTrips] = useState<ITrip[]>([]);
   const navigate = useNavigate();
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -38,7 +40,6 @@ function Trips() {
 
   const fetchTripsByDate = async (date: string) => {  
     try {
-      console.log(date);
       const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
       
       return response.data;
@@ -75,28 +76,40 @@ function Trips() {
       console.error("Erro ao buscar viagens:", error);
     }
   };
-  
+
+  const setPrinting = (param: boolean) => {
+    setIsPrinting(param);
+  }
+
   return (
     <div>
       <Header />
       <Container>
-        <ContainerInputs>
-          <p>Procurar viagem</p>
-          <BoxSearch>
-            <DatePicker 
-              selected={selectedDate} 
-              onChange={handleDateChange}
-              dateFormat="dd/MM/yyyy"
-              locale={ptBR}       
-            />
-            <button onClick={handleSearch}>Buscar</button>
-          </BoxSearch>
-        </ContainerInputs>
-        <ContainerTrips>
-          { trips?.length > 0 && (
-            trips.map((trip, index) => <TripList key={index} trip={trip} />)
-          )}
-        </ContainerTrips>
+        {isPrinting ? (
+          <LoaderPrinting />
+        ) : (
+          <>
+            <ContainerInputs>
+              <p>Procurar viagem</p>
+              <BoxSearch>
+                <DatePicker 
+                  selected={selectedDate} 
+                  onChange={handleDateChange}
+                  dateFormat="dd/MM/yyyy"
+                  locale={ptBR}       
+                />
+                <button onClick={handleSearch}>Buscar</button>
+              </BoxSearch>
+            </ContainerInputs>
+            <ContainerTrips>
+              {trips?.length > 0 && (
+                trips.map((trip, index) => (
+                  <TripList key={index} trip={trip} setIsPrinting={setPrinting} />
+                ))
+              )}
+            </ContainerTrips>
+          </>
+        )}
       </Container>
     </div>
   );

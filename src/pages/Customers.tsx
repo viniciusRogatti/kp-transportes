@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import Header from "../components/Header"
-import { Container } from "../style/incoives"
+import { Container } from "../style/invoices"
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 

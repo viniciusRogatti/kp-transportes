@@ -18,7 +18,7 @@ export const PopupContainer = styled.div`
   top: 20%;
   width: 60%;
   height: 50%;
-  background: #1F2B42;
+  background: #001428;
   backdrop-filter: blur(8px);
   z-index: 999;
 

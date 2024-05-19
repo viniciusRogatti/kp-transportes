@@ -1,7 +1,7 @@
 import { useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
-import { BoxButton, BoxDriverVehicle, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
+import { BoxButton, BoxDriverVehicle, BoxInfo, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDanfeTrip, IDriver, ITrip } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
@@ -15,17 +15,18 @@ import { FaArrowRightLong, FaArrowLeftLong } from "react-icons/fa6";
 import { AnimatePresence } from "framer-motion";
 
 function RoutePlanning() {
-  const [drivers, setDrivers] = useState<IDriver[]>([]);
-  const [cars, setCars] = useState<ICar[]>([]);
-  const [selectedDriver, setSelectedDriver] = useState<string>('null');
-  const [selectedCar, setSelectedCar] = useState<string>('null');
-  const [barcode, setBarcode] = useState<string>('');
-  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
-  const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]);
-  const [showPopup, setShowPopup] = useState<boolean>(false);
-  const [titlePopup, setTitlePopup] = useState<string>('');
-  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [drivers, setDrivers] = useState<IDriver[]>([]); // estado para agrupar os motoristas
+  const [cars, setCars] = useState<ICar[]>([]); // estados para agrupar os carros
+  const [selectedDriver, setSelectedDriver] = useState<string>('null'); // estado para guardar o motorista selecionado
+  const [selectedCar, setSelectedCar] = useState<string>('null'); // estado para guardar o carro selecionado
+  const [barcode, setBarcode] = useState<string>(''); // estado para guardar o código de barras
+  const [invoiceNumber, setInvoiceNumber] = useState<string>(''); // estado para guardar a nf
+  const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]); // estado para guardar as notas selecionadas
+  const [showPopup, setShowPopup] = useState<boolean>(false); // estado para controlar quando o  popUp aparece
+  const [titlePopup, setTitlePopup] = useState<string>(''); // estado para deixar o titulo do popUp dinâmico 
+  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]); // estado para guardar as notas do dia se existir
+  const [isLoading, setIsLoading] = useState<boolean>(false); // estado para controlar se a pagina está carregando
+  const [countWeight, setCountWeight] = useState<number>(0);
 
   const navigate = useNavigate();
 
@@ -88,9 +89,11 @@ function RoutePlanning() {
     
     setAddedNotes([]);
     if (todayTrips.length > 0) {
+      setCountWeight(0);
       setIsLoading(true);
       const tripsByDriver = todayTrips.filter((trip: ITrip) => trip[key].id === +e.target.value);
       if (tripsByDriver.length > 0) {
+        setCountWeight(+tripsByDriver[0].gross_weight);   
         const tripNotes = tripsByDriver[0]?.TripNotes;        
 
         for (let i = 0; i < tripNotes.length; i++) {
@@ -144,6 +147,7 @@ function RoutePlanning() {
       }
 
       addNoteToList(dataToDanfeTrip(danfeData));
+      setCountWeight((prev) => prev += +danfeData.gross_weight);
     } catch (error) {
       alert('Não foi possível buscar essa nota');
     }
@@ -175,7 +179,7 @@ function RoutePlanning() {
       const dataUpdate = {
         danfes: addedNotes.map((note) => ({
           invoice_number: note.nf,
-          status: 'assigned', // Define o novo status aqui
+          status: 'assigned',
         })),
       };
       setIsLoading(true);
@@ -229,7 +233,7 @@ function RoutePlanning() {
   };
   
   const moveNoteDown = (order: number) => {
-    const updatedNotes = [...addedNotes]; // Cria uma cópia do array para garantir imutabilidade
+    const updatedNotes = [...addedNotes]; // Criando uma cópia do array para garantir imutabilidade
   
     const followingNoteIndex = updatedNotes.findIndex((note) => note.order === order + 1);
     const selectedNoteIndex = updatedNotes.findIndex((note) => note.order === order);
@@ -241,7 +245,7 @@ function RoutePlanning() {
         updatedNotes[followingNoteIndex].order,
       ];
   
-      setAddedNotes(updatedNotes); // Atualiza o estado com o novo array
+      setAddedNotes(updatedNotes);
     }
   };
 
@@ -310,6 +314,10 @@ function RoutePlanning() {
               </BoxButton>
             </ContainerForm>
 
+            <BoxInfo>
+              <p>{`Peso total: `}<span>{countWeight.toFixed(2)}</span></p>
+              <p><span>{sortedNotes.length}</span>{` nota(s) adicionada(s)`}</p>
+            </BoxInfo>
             <TripsContainer layout>
               <AnimatePresence>
                 {sortedNotes.map((note) => (

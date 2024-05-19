@@ -40,27 +40,65 @@ export const BoxButton = styled.div`
 
     &.btn-add-danfe {
       background: #000025;
-      border: solid 2px #FEFEFE;
+      border: solid 2px #22b6c1;
       color: #FEFEFE;
+      opacity: 0.7;
+
+      &:hover  {
+        opacity: 1;
+      }
     }
     
     &.btn-submit {
       background: #091944;
-      border: solid 2px #FEFEFE;
+      border: solid 2px #22b6c1;
       color: #FEFEFE;
+      opacity: 0.7;
+
+      &:hover  {
+        opacity: 1;
+      }
     }
     
     &.btn-add-driver {
       background: #0e2653;
-      border: solid 2px #FEFEFE;
+      border: solid 2px #22b6c1;
       color: #FEFEFE;
+      opacity: 0.7;
+
+      &:hover  {
+        opacity: 1;
+      }
     }
     
     &.btn-add-car {
       background: #123262;
-      border: solid 2px #FEFEFE;
+      border: solid 2px #22b6c1;
       color: #FEFEFE;
+      opacity: 0.7;
+
+      &:hover  {
+        opacity: 1;
+      }
     }
+  }
+`;
+
+export const BoxInfo = styled.div`
+  display: flex;
+  padding: 8px;
+  width: 66%;
+  gap: 70px;
+  justify-content: start;
+  align-items: center;
+  
+  p {
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  span {
+    color: #22b6c1;
   }
 `;
 
@@ -101,6 +139,7 @@ export const CardsTripsNotes = styled(motion.li)`
   border-radius: 12px;
   background: #FEFEFE;
   box-shadow: 4px 2px 12px #000000;
+  color: #000000;
 
   h2 {
     position: absolute;

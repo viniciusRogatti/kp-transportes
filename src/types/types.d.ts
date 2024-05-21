@@ -31,6 +31,7 @@ export interface ITripNote {
   status: string;
   order: number;
   city: string;
+  customer_name?: string;
 }
 
 

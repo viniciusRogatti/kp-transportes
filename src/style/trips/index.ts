@@ -3,10 +3,10 @@ import styled from "styled-components";
 export const ContainerTrips = styled.div`
   margin-top: 40px;
   display: flex;
-  width: 100%;
+  width: 90%;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 20px;
+  gap: 10px;
+  justify-content: start;
 `;
 
 export const ContainerInputs = styled.div`
@@ -60,7 +60,7 @@ export const CardTrips = styled.div`
   align-items: center;
   flex-direction: column;
   width: 250px;
-  height: 300px;
+  height: 320px;
   border: solid 2px #000;
   padding: 2px 12px;
   background-color: #FEFEFE;
@@ -135,18 +135,31 @@ export const TripNotesList = styled.ul`
 `;
 
 export const TripNoteItem = styled.li`
-  width: auto;
+  position: relative;
+  width: 38%;
+  height: 70px;
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
   position: relative;
 
   p {
+    position: absolute;
+    top: 35%;
     font-size: 10px;
   }
 
+  h5{
+    position: absolute;
+    font-size: 16px;
+    bottom: 4px;
+    right: 8px;
+  }
+
   h4 {
-    font-size: 14px;
+    position: absolute;
+    font-size: 16px;
+    top: 2px;
   }
 `;
 

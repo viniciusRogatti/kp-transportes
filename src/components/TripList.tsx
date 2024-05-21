@@ -97,9 +97,9 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
         <TripNotesList>
           {trip.TripNotes.map((note) => (
             <TripNoteItem key={`${note.invoice_number}-${note.order}`}>
-              <h4>NF: {note.invoice_number}</h4>
-              <p>STATUS: {note.status}</p>
-              <p>ORDEM: {note.order}</p>
+              <h5>{note.order}</h5>
+              <h4>{note.invoice_number}</h4>
+              <p>{note.customer_name}</p>
             </TripNoteItem>
           ))}
         </TripNotesList>

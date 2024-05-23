@@ -1,4 +1,4 @@
-import { useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
+import { useEffect, useState, ChangeEvent, KeyboardEvent, useRef } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
 import { BoxButton, BoxDriverVehicle, BoxInfo, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
@@ -31,6 +31,10 @@ function RoutePlanning() {
   const [tripToUpdate, setTripToUpdate] = useState<ITrip | null>(null);
 
   const navigate = useNavigate();
+
+  // Criação das referências
+  const barcodeRef = useRef<HTMLInputElement>(null);
+  const invoiceNumberRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -126,6 +130,7 @@ function RoutePlanning() {
       const route = barcode ? `/danfes/barcode/${barcode}` : `/danfes/nf/${invoiceNumber}`;
       const response = await axios.get(`${API_URL}${route}`);
       const danfeData = response.data;
+
       setIsLoading(false);
       
       if (danfeData.status !== 'pending' && danfeData.status !== 'redelivery') {
@@ -159,6 +164,13 @@ function RoutePlanning() {
   
     setBarcode('');
     setInvoiceNumber('');
+
+    if (barcode) {
+      barcodeRef.current?.focus();
+    } else {
+      invoiceNumberRef.current?.focus();
+    }
+    
   };
 
   const addNoteToList = (note: ITripNote) => {
@@ -184,6 +196,8 @@ function RoutePlanning() {
         console.log(error);
       }
       setIsLoading(false);
+    } else {
+      setAddedNotes(addedNotes.filter(note => note.invoice_number !== nf));
     }
   };
 
@@ -298,106 +312,107 @@ function RoutePlanning() {
       <Header />
       <Container>
         <TitleRoutePlanning>Roteirização</TitleRoutePlanning>
-        { isLoading ? (
-          <TruckLoader />
-        ): (
-          <>
-            <ContainerForm>
-              <BoxDriverVehicle>
-                <label>Motorista:</label>
-                <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
-                  <option value="null">Selecione um motorista</option>
-                  {drivers.map((driver) => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.name}
-                    </option>
-                  ))}
-                </select>
-                <label>Veículo:</label>
-                <select id="car" onChange={handleChange} value={selectedCar || ''}>
-                  <option value={'null'}>Selecione um veículo</option>
-                  {cars.map((car) => (
-                    <option key={car.id} value={car.id}>
-                      {car.model} - {car.license_plate}
-                    </option>
-                  ))}
-                </select>
-              </BoxDriverVehicle>
-              <div>
-                <label>Selecione uma nota:</label>
-                <BoxSelectDanfe>
-                  <input 
-                    type="text" 
-                    onKeyDown={handleEnterPress} 
-                    placeholder="Digite o código de barras" 
-                    value={barcode} 
-                    onChange={handleBarcodeChange} 
-                  />
-                  <input 
-                    type="text" 
-                    onKeyDown={handleEnterPress} 
-                    placeholder="Digite a NF" 
-                    value={invoiceNumber} 
-                    onChange={handleInvoiceNumberChange} 
-                  />
-                </BoxSelectDanfe>
-              </div>
-
-              <BoxButton>
-                <button className="btn-submit" onClick={sendTripsToBackend}>{isUpdating ? 'Atualizar Viagem' : 'Enviar Viagem'}</button>
-                <button className="btn-add-driver" onClick={addDriverOrCar}>Adicionar Motorista</button>
-                <button className="btn-add-danfe" onClick={handleAddNote}>Adicionar Nota</button>
-                <button className="btn-add-car" onClick={addDriverOrCar}>Adicionar Veículo</button>
-              </BoxButton>
-            </ContainerForm>
-
-            <BoxInfo>
-              <p>{`Peso total: `}<span>{countWeight.toFixed(2)}</span></p>
-              <p><span>{sortedNotes.length}</span>{` nota(s) adicionada(s)`}</p>
-            </BoxInfo>
-            <TripsContainer layout>
-              <AnimatePresence>
-                {sortedNotes.map((note) => (
-                  <CardsTripsNotes
-                    key={note.invoice_number}
-                    layout
-                    initial={{ opacity: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: [1, 0.5] }}
-                    whileInView={{ opacity: 1 }}
-                    transition={{ duration: 1 }}
-                  >
-                    <h5>{note.order}</h5>
-                    <h2>{note.invoice_number}</h2>
-                    <h4>{note.customer_name}</h4>
-                    <h3>{note.city}</h3>
-                    <p>{`${note.gross_weight} Kg`}</p>
-                    <button 
-                      onClick={() => removeNoteFromList(note.invoice_number, note.id)}
-                      className="btn-remove"
-                    >
-                      Remover
-                    </button>
-                    <button 
-                      onClick={() => moveNoteUp(note.order)} 
-                      disabled={note.order === 1}
-                      className="btn-left"
-                    >
-                      <FaArrowLeftLong />
-                    </button>
-                    <button
-                      onClick={() => moveNoteDown(note.order)}
-                      disabled={note.order === addedNotes.length}
-                      className="btn-right"
-                    >
-                      <FaArrowRightLong />
-                    </button>
-                  </CardsTripsNotes>
+          <ContainerForm>
+            <BoxDriverVehicle>
+              <label>Motorista:</label>
+              <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
+                <option value="null">Selecione um motorista</option>
+                {drivers.map((driver) => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.name}
+                  </option>
                 ))}
-              </AnimatePresence>
-            </TripsContainer>
-          </>
-        )}
+              </select>
+              <label>Veículo:</label>
+              <select id="car" onChange={handleChange} value={selectedCar || ''}>
+                <option value={'null'}>Selecione um veículo</option>
+                {cars.map((car) => (
+                  <option key={car.id} value={car.id}>
+                    {car.model} - {car.license_plate}
+                  </option>
+                ))}
+              </select>
+            </BoxDriverVehicle>
+            <div>
+              <label>Selecione uma nota:</label>
+              <BoxSelectDanfe>
+                <input 
+                  type="text" 
+                  ref={barcodeRef}
+                  onKeyDown={handleEnterPress} 
+                  placeholder="Digite o código de barras" 
+                  value={barcode} 
+                  onChange={handleBarcodeChange} 
+                />
+                <input 
+                  type="text" 
+                  ref={invoiceNumberRef}
+                  onKeyDown={handleEnterPress} 
+                  placeholder="Digite a NF" 
+                  value={invoiceNumber} 
+                  onChange={handleInvoiceNumberChange} 
+                />
+              </BoxSelectDanfe>
+            </div>
 
+            <BoxButton>
+              <button className="btn-submit" onClick={sendTripsToBackend}>{isUpdating ? 'Atualizar Viagem' : 'Enviar Viagem'}</button>
+              <button className="btn-add-driver" onClick={addDriverOrCar}>Adicionar Motorista</button>
+              <button className="btn-add-danfe" onClick={handleAddNote}>Adicionar Nota</button>
+              <button className="btn-add-car" onClick={addDriverOrCar}>Adicionar Veículo</button>
+            </BoxButton>
+          </ContainerForm>
+
+          { isLoading ? (
+            <TruckLoader />
+          ) : (
+            <>
+              <BoxInfo>
+                <p>{`Peso total: `}<span>{countWeight.toFixed(2)}</span></p>
+                <p><span>{sortedNotes.length}</span>{` nota(s) adicionada(s)`}</p>
+              </BoxInfo>
+              <TripsContainer layout>
+                <AnimatePresence>
+                  {sortedNotes.map((note) => (
+                    <CardsTripsNotes
+                      key={note.invoice_number}
+                      layout
+                      initial={{ opacity: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: [1, 0.5] }}
+                      whileInView={{ opacity: 1 }}
+                      transition={{ duration: 1 }}
+                    >
+                      <h5>{note.order}</h5>
+                      <h2>{note.invoice_number}</h2>
+                      <h4>{note.customer_name}</h4>
+                      <h3>{note.city}</h3>
+                      <p>{`${note.gross_weight} Kg`}</p>
+                      <button 
+                        onClick={() => removeNoteFromList(note.invoice_number, note.id)}
+                        className="btn-remove"
+                      >
+                        Remover
+                      </button>
+                      <button 
+                        onClick={() => moveNoteUp(note.order)} 
+                        disabled={note.order === 1}
+                        className="btn-left"
+                      >
+                        <FaArrowLeftLong />
+                      </button>
+                      <button
+                        onClick={() => moveNoteDown(note.order)}
+                        disabled={note.order === addedNotes.length}
+                        className="btn-right"
+                      >
+                        <FaArrowRightLong />
+                      </button>
+                    </CardsTripsNotes>
+                  ))}
+                </AnimatePresence>
+              </TripsContainer>
+            </>
+          )}
         {showPopup && (
           <Popup 
             title={titlePopup} 

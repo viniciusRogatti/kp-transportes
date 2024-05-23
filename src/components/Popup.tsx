@@ -6,9 +6,10 @@ import { Overlay, PopupContainer, PopupContent, InputBox, ButtonBox } from '../s
 interface IPopup {
   title: string;
   closePopup: () => void;
+  onAdd: (data: any) => void;
 };
 
-function Popup({ title, closePopup }: IPopup) {
+function Popup({ title, closePopup, onAdd }: IPopup) {
   const [value, setValue] = useState<string>('');
   const [plate, setPlate] = useState<string>('');
 
@@ -41,11 +42,15 @@ function Popup({ title, closePopup }: IPopup) {
         }
       } else data = { name: value };
 
-    const route = title === 'Adicionar Motorista' ? 'drivers' : 'cars';
-    await axios.post(`${API_URL}/${route}/create`, data);
-    alert(`${title === 'Adicionar Motorista' ? 'Motorista' : 'Carro'} Adicionado com sucesso!`);
-    setPlate('');
-    setValue('');
+      const route = title === 'Adicionar Motorista' ? 'drivers' : 'cars';
+      const response = await axios.post(`${API_URL}/${route}/create`, data);
+      
+      alert(`${title === 'Adicionar Motorista' ? 'Motorista' : 'Carro'} Adicionado com sucesso!`);
+      
+      setPlate('');
+      setValue('');
+      onAdd(response.data); // Callback to return the created data
+      closePopup();
       
     } catch (error) {
       console.log(`Erro ao ${title}`, error);      
@@ -78,4 +83,4 @@ function Popup({ title, closePopup }: IPopup) {
   )
 }
 
-export default Popup
+export default Popup;

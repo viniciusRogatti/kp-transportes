@@ -2,7 +2,7 @@ import { useEffect, useState, ChangeEvent, KeyboardEvent } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
 import { BoxButton, BoxDriverVehicle, BoxInfo, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
-import { ICar, IDanfeTrip, IDriver, ITrip } from '../types/types';
+import { ICar, IDriver, ITrip, ITripNote } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import { formatToTimeZone } from 'date-fns-timezone';
@@ -15,18 +15,20 @@ import { FaArrowRightLong, FaArrowLeftLong } from "react-icons/fa6";
 import { AnimatePresence } from "framer-motion";
 
 function RoutePlanning() {
-  const [drivers, setDrivers] = useState<IDriver[]>([]); // estado para agrupar os motoristas
-  const [cars, setCars] = useState<ICar[]>([]); // estados para agrupar os carros
-  const [selectedDriver, setSelectedDriver] = useState<string>('null'); // estado para guardar o motorista selecionado
-  const [selectedCar, setSelectedCar] = useState<string>('null'); // estado para guardar o carro selecionado
-  const [barcode, setBarcode] = useState<string>(''); // estado para guardar o código de barras
-  const [invoiceNumber, setInvoiceNumber] = useState<string>(''); // estado para guardar a nf
-  const [addedNotes, setAddedNotes] = useState<IDanfeTrip[]>([]); // estado para guardar as notas selecionadas
-  const [showPopup, setShowPopup] = useState<boolean>(false); // estado para controlar quando o  popUp aparece
-  const [titlePopup, setTitlePopup] = useState<string>(''); // estado para deixar o titulo do popUp dinâmico 
-  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]); // estado para guardar as notas do dia se existir
-  const [isLoading, setIsLoading] = useState<boolean>(false); // estado para controlar se a pagina está carregando
+  const [drivers, setDrivers] = useState<IDriver[]>([]);
+  const [cars, setCars] = useState<ICar[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<string>('null');
+  const [selectedCar, setSelectedCar] = useState<string>('null');
+  const [barcode, setBarcode] = useState<string>('');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [addedNotes, setAddedNotes] = useState<ITripNote[]>([]);
+  const [showPopup, setShowPopup] = useState<boolean>(false);
+  const [titlePopup, setTitlePopup] = useState<string>('');
+  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [countWeight, setCountWeight] = useState<number>(0);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [tripToUpdate, setTripToUpdate] = useState<ITrip | null>(null);
 
   const navigate = useNavigate();
 
@@ -41,22 +43,11 @@ function RoutePlanning() {
       } else {
         navigate('/');
       }
-    }
+    };
     fetchToken();
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const dataToDanfeTrip = (data: any, lengthNote?: number) => {
-    const newNote: IDanfeTrip = {
-      customerName: data.Customer.name_or_legal_entity,
-      nf: data.invoice_number,
-      city: data.Customer.city,
-      order: lengthNote ? lengthNote : addedNotes.length + 1,
-      grossWeight: data.gross_weight
-    };
-    return newNote;
-  };
 
   const handleEnterPress = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
@@ -91,21 +82,26 @@ function RoutePlanning() {
     if (todayTrips.length > 0) {
       setCountWeight(0);
       setIsLoading(true);
-      const tripsByDriver = todayTrips.filter((trip: ITrip) => trip[key].id === +e.target.value);
-      if (tripsByDriver.length > 0) {
-        setCountWeight(+tripsByDriver[0].gross_weight);   
-        const tripNotes = tripsByDriver[0]?.TripNotes;        
+      const tripsByDriverOrCar = todayTrips.filter((trip: ITrip) => trip[key].id === +e.target.value && 
+        !trip.TripNotes.every(note => ['returned', 'cancelled', 'delivered'].includes(note.status)));
+      
+      if (tripsByDriverOrCar.length > 0) {
+        const trip = tripsByDriverOrCar[0];
+        setTripToUpdate(trip);
+        setIsUpdating(true);
+        setCountWeight(+trip.gross_weight);   
+        const tripNotes = trip.TripNotes.filter(note => !['returned', 'cancelled', 'delivered'].includes(note.status));
+        
+        setAddedNotes(tripNotes);        
 
-        for (let i = 0; i < tripNotes.length; i++) {
-          const response = await axios.get(`${API_URL}/danfes/nf/${tripNotes[i].invoice_number}`);
-          const data = response.data;
-          setAddedNotes((prevNotes) => [...prevNotes, dataToDanfeTrip(data, i + 1)]);
-        }
         if (key === 'Driver') {
-          setSelectedCar(tripsByDriver[0].Car.id.toString());
+          setSelectedCar(trip.Car.id.toString());
         } else {
-          setSelectedDriver(tripsByDriver[0].Driver.id.toString());  
+          setSelectedDriver(trip.Driver.id.toString());  
         }
+      } else {
+        setIsUpdating(false);
+        setTripToUpdate(null);
       }
     }
     setIsLoading(false);
@@ -139,14 +135,23 @@ function RoutePlanning() {
         return;
       } 
 
-      if (addedNotes.some((note) => danfeData.invoice_number === note.nf)) {
+      if (addedNotes.some((note) => danfeData.invoice_number === note.invoice_number)) {
         alert('Esta nota já foi adicionada à viagem.');
         setBarcode('');
         setInvoiceNumber('');
         return;
       }
 
-      addNoteToList(dataToDanfeTrip(danfeData));
+      const newNote: ITripNote = {
+        customer_name: danfeData.Customer.name_or_legal_entity,
+        invoice_number: danfeData.invoice_number,
+        city: danfeData.Customer.city,
+        order: addedNotes.length + 1,
+        gross_weight: danfeData.gross_weight,
+        status: "pending",
+      };
+
+      addNoteToList(newNote);
       setCountWeight((prev) => prev += +danfeData.gross_weight);
     } catch (error) {
       alert('Não foi possível buscar essa nota');
@@ -156,17 +161,35 @@ function RoutePlanning() {
     setInvoiceNumber('');
   };
 
-  const addNoteToList = (note: IDanfeTrip) => {
+  const addNoteToList = (note: ITripNote) => {
     setAddedNotes((prevNotes) => [...prevNotes, note]);
   };
 
-  const removeNoteFromList = (nf: string) => {
-    setAddedNotes((prevNotes) => prevNotes.filter((note) => note.nf !== nf));
+  const removeNoteFromList = async (nf: string, noteId: any) => {
+    
+    if (tripToUpdate) {
+      setIsLoading(true);
+      
+      try {
+        const response = await axios.put(`${API_URL}/trips/remove-note/${tripToUpdate?.id}`, { noteId });
+        const dataUpdate = {
+          danfes: [{
+            invoice_number: nf,
+            status: 'pending',
+          }]
+        };
+        await axios.put(`${API_URL}/danfes/update-status`, dataUpdate);
+        if (response.data) setAddedNotes(addedNotes.filter(note => note.invoice_number !== nf));
+      } catch (error) {
+        console.log(error);
+      }
+      setIsLoading(false);
+    }
   };
 
   const sendTripsToBackend = async () => {
-    const total = addedNotes.reduce((accumulator, note) => accumulator + +note.grossWeight, 0);
-      
+    const total = addedNotes.reduce((accumulator, note) => accumulator + +note.gross_weight, 0);
+    
     try {
       if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
         alert('Selecione um motorista, um veículo e adicione pelo menos uma nota antes de enviar a viagem.');
@@ -178,73 +201,79 @@ function RoutePlanning() {
 
       const dataUpdate = {
         danfes: addedNotes.map((note) => ({
-          invoice_number: note.nf,
+          invoice_number: note.invoice_number,
           status: 'assigned',
         })),
       };
       setIsLoading(true);
       await axios.put(`${API_URL}/danfes/update-status`, dataUpdate);
-  
+
       const tripData = {
         driver_id: selectedDriver,
         car_id: selectedCar,
         date: today,
         gross_weight: total,
-        tripNotes: sortedNotes.map((note) => ({
-          invoice_number: note.nf,
-          city: note.city,
-          customer_name: note.customerName,
+        tripNotes: sortedNotes.map(({invoice_number, city, customer_name, order, gross_weight}) => ({
+          invoice_number,
+          city,
+          customer_name,
           status: 'assigned',
-          order: note.order,
-          gross_weight: note.grossWeight
+          order,
+          gross_weight,
         })),
       };
+
       
-      // Envia os dados da viagem para o backend
       await axios.post(`${API_URL}/trips/create`, tripData);
+      
+      if (isUpdating && tripToUpdate) {
+        await axios.delete(`${API_URL}/trips/delete/${tripToUpdate.id}`);
+        const response = await axios.get(`${API_URL}/trips/search/date/${today}`);
+        setTodayTrips(response.data);
+      }
+      
       setIsLoading(false);
-  
-      alert('Viagem enviada com sucesso');
-  
-      // Limpa os campos após o envio bem-sucedido
+
+      alert(`${isUpdating && tripToUpdate ? 'Viagem Atualizada com sucesso!' : 'Viagem Criada com sucesso!'}`);
+
       setSelectedDriver('null');
       setSelectedCar('null');
       setAddedNotes([]);
+      setIsUpdating(false);
+      setTripToUpdate(null);
     } catch (error) {
       console.error('Erro ao enviar a viagem:', error);
     }
   };
-    
+
   const moveNoteUp = (order: number) => {
-    const updatedNotes = [...addedNotes]; // Cria uma cópia do array para garantir imutabilidade
-  
+    const updatedNotes = [...addedNotes];
+
     const precedingNoteIndex = updatedNotes.findIndex((note) => note.order === order - 1);
     const selectedNoteIndex = updatedNotes.findIndex((note) => note.order === order);
-  
+
     if (precedingNoteIndex !== -1 && selectedNoteIndex !== -1) {
-      // Trocando as ordens dos dois elementos
       [updatedNotes[precedingNoteIndex].order, updatedNotes[selectedNoteIndex].order] = [
         updatedNotes[selectedNoteIndex].order,
         updatedNotes[precedingNoteIndex].order,
       ];
 
-      setAddedNotes(updatedNotes); // Atualiza o estado com o novo array
+      setAddedNotes(updatedNotes);
     }
   };
-  
+
   const moveNoteDown = (order: number) => {
-    const updatedNotes = [...addedNotes]; // Criando uma cópia do array para garantir imutabilidade
-  
+    const updatedNotes = [...addedNotes];
+
     const followingNoteIndex = updatedNotes.findIndex((note) => note.order === order + 1);
     const selectedNoteIndex = updatedNotes.findIndex((note) => note.order === order);
-  
+
     if (followingNoteIndex !== -1 && selectedNoteIndex !== -1) {
-      // Trocando as ordens dos dois elementos
       [updatedNotes[followingNoteIndex].order, updatedNotes[selectedNoteIndex].order] = [
         updatedNotes[selectedNoteIndex].order,
         updatedNotes[followingNoteIndex].order,
       ];
-  
+
       setAddedNotes(updatedNotes);
     }
   };
@@ -252,7 +281,15 @@ function RoutePlanning() {
   const addDriverOrCar = (e: React.MouseEvent<HTMLButtonElement>) => {
     setShowPopup(true);
     setTitlePopup(e.currentTarget.innerText);
-  }
+  };
+
+  const handleAddNewDriverOrCar = (data: any) => {
+    if (titlePopup === 'Adicionar Motorista') {
+      setDrivers([...drivers, data]);
+    } else {
+      setCars([...cars, data]);
+    }
+  };
 
   const sortedNotes = addedNotes.slice().sort((a, b) => a.order - b.order);
 
@@ -278,7 +315,7 @@ function RoutePlanning() {
                 </select>
                 <label>Veículo:</label>
                 <select id="car" onChange={handleChange} value={selectedCar || ''}>
-                  <option  value={'null'}>Selecione um veículo</option>
+                  <option value={'null'}>Selecione um veículo</option>
                   {cars.map((car) => (
                     <option key={car.id} value={car.id}>
                       {car.model} - {car.license_plate}
@@ -307,7 +344,7 @@ function RoutePlanning() {
               </div>
 
               <BoxButton>
-                <button className="btn-submit" onClick={sendTripsToBackend}>Enviar Viagem</button>
+                <button className="btn-submit" onClick={sendTripsToBackend}>{isUpdating ? 'Atualizar Viagem' : 'Enviar Viagem'}</button>
                 <button className="btn-add-driver" onClick={addDriverOrCar}>Adicionar Motorista</button>
                 <button className="btn-add-danfe" onClick={handleAddNote}>Adicionar Nota</button>
                 <button className="btn-add-car" onClick={addDriverOrCar}>Adicionar Veículo</button>
@@ -322,7 +359,7 @@ function RoutePlanning() {
               <AnimatePresence>
                 {sortedNotes.map((note) => (
                   <CardsTripsNotes
-                    key={note.nf}
+                    key={note.invoice_number}
                     layout
                     initial={{ opacity: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: [1, 0.5] }}
@@ -330,12 +367,12 @@ function RoutePlanning() {
                     transition={{ duration: 1 }}
                   >
                     <h5>{note.order}</h5>
-                    <h2>{note.nf}</h2>
-                    <h4>{note.customerName}</h4>
+                    <h2>{note.invoice_number}</h2>
+                    <h4>{note.customer_name}</h4>
                     <h3>{note.city}</h3>
-                    <p>{`${note.grossWeight} Kg`}</p>
+                    <p>{`${note.gross_weight} Kg`}</p>
                     <button 
-                      onClick={() => removeNoteFromList(note.nf)}
+                      onClick={() => removeNoteFromList(note.invoice_number, note.id)}
                       className="btn-remove"
                     >
                       Remover
@@ -362,7 +399,11 @@ function RoutePlanning() {
         )}
 
         {showPopup && (
-          <Popup title={titlePopup} closePopup={ () => setShowPopup(false)} />
+          <Popup 
+            title={titlePopup} 
+            closePopup={() => setShowPopup(false)}
+            onAdd={handleAddNewDriverOrCar}          
+          />
         )}
       </Container>
     </ContainerRoutePlanning>

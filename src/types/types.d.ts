@@ -26,12 +26,13 @@ export interface IUploadResponse {
 }
 
 export interface ITripNote {
-  id: number;
+  id?: number;
   invoice_number: string;
   status: string;
   order: number;
   city: string;
   customer_name?: string;
+  gross_weight: string;
 }
 
 

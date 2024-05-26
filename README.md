@@ -1,46 +1,73 @@
-# Getting Started with Create React App
+# Sistema de Gestão de Transportadora
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Descrição do Sistema
+O sistema desenvolvido tem como objetivo gerenciar operações de uma transportadora, facilitando a leitura e processamento de arquivos XML de notas fiscais (DANFEs), e fornecendo ferramentas para a roteirização de entregas, gestão de veículos e motoristas, e monitoramento de viagens e produtos.
 
-## Available Scripts
+### Funcionalidades Principais
 
-In the project directory, you can run:
+1. Leitura de Arquivos XML
+   - 📄 Leitura e extração de informações de arquivos XML de notas fiscais.
+   - 📊 Armazenamento dos dados extraídos nas tabelas do banco de dados: `Customer`, `Danfe`, `Product`, `DanfeProduct`.
 
-### `npm start`
+2. Página de Notas do Dia
+   - 📅 Exibição das notas fiscais recebidas no dia atual.
+   - 🔍 Filtros disponíveis: Nome do Cliente, Cidade, Número da NF, Produto e Rota.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+3. Pesquisa de Notas
+   - 🔎 Pesquisa de notas por número de NF ou período de data.
+   - 📂 Filtros adicionais: Nome do Cliente, Cidade, Número da NF, Produto e Rota.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+4. Página de Roteirização
+   - 🚚 Seleção de motorista e veículo para adicionar notas à viagem.
+   - 📦 Adição de notas via número da NF ou código de barras.
+   - 📊 Gerenciamento de motoristas (`Driver`) e veículos (`Car`).
 
-### `npm test`
+5. Página de Viagens (Trips)
+   - 📅 Exibição das viagens realizadas na data atual.
+   - 📅 Seleção de data para visualizar viagens de outros dias.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+6. Página de Produtos
+   - 🛍️ Exibição de todos os produtos cadastrados no banco de dados.
 
-### `npm run build`
+7. Página de Clientes
+   - 👥 Exibição de todos os clientes cadastrados no banco de dados.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+8. Página de Relatórios para Usuários Master
+   - 📊 Visualização das viagens de um motorista em um período selecionado.
+   - 💸 Agregação de valores por viagem conforme a região.
+   - 💵 Inserção de gastos com pedágios e geração de relatório em PDF.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Estrutura do Banco de Dados
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Tabelas Principais
+- **Customer:** Armazena dados dos clientes.
+- **Danfe:** Armazena dados das notas fiscais.
+- **Product:** Armazena dados dos produtos.
+- **DanfeProduct:** Tabela intermediária que liga produtos às notas.
+- **Car:** Armazena dados dos veículos.
+- **Driver:** Armazena dados dos motoristas.
+- **Trips:** Armazena dados das viagens.
+- **TripNotes:** Armazena dados das notas das viagens.
 
-### `npm run eject`
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## Como Usar o Sistema
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+1. **Carregamento de XML:**
+   - Faça o upload dos arquivos XML para importar dados de notas fiscais.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+2. **Gerenciamento de Notas:**
+   - Acesse a página de notas do dia para visualizar e filtrar notas.
+   - Use a página de pesquisa para encontrar notas específicas.
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+3. **Roteirização:**
+   - Selecione um motorista e um veículo.
+   - Adicione notas às viagens utilizando NF ou código de barras.
 
-## Learn More
+4. **Monitoramento de Viagens:**
+   - Visualize as viagens do dia ou selecione uma data específica.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+5. **Gestão de Produtos e Clientes:**
+   - Navegue nas páginas de produtos e clientes para visualizar todos os registros.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+6. **Relatórios Master:**
+   - Utilize a página de relatórios para gerar relatórios detalhados das viagens e gastos de motoristas.

@@ -3,19 +3,22 @@ import CardDanfes from "../components/CardDanfes";
 import Header from "../components/Header";
 import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
-import { IDanfe } from "../types/types";
+import { IDanfe, IDanfeProduct, IGroupedProduct } from "../types/types";
 import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "../style/TodayInvoices";
 import ScrollToTopButton from "../components/ScrollToTopButton";
-
+import TodayProductList from "../components/TodayProductList";
 import { cities, routes } from "../data/danfes";
 import { API_URL } from "../data";
 import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
+import { pdf } from "@react-pdf/renderer";
+import { LoaderPrinting } from "../style/Loaders";
 
 function TodayInvoices() {
-  const [dataDanfes, setDataDanfes] = useState<IDanfe[] | []>([]);
-  const [danfes, setDanfes] = useState<IDanfe[] | []>([]);
+  const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
+  const [danfes, setDanfes] = useState<IDanfe[]>([]);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,7 +58,7 @@ function TodayInvoices() {
     const value = e.target.value.toLowerCase();
     const searchDanfe = dataDanfes.filter((danfe) => danfe.DanfeProducts.some((product) => (
       product.Product.code.toLowerCase().includes(value)
-    )) );
+    )));
     setDanfes(searchDanfe);
   }
 
@@ -71,13 +74,45 @@ function TodayInvoices() {
     setDanfes(searchDanfe);
   }
 
-  function filterByRoute(e: any) {
-    const value = e.target.value
+  function filterByRoute(e: React.ChangeEvent<HTMLSelectElement>) {
+    const value = e.target.value;
     if (value === 'Todas') return setDanfes(dataDanfes);
     else {
-      const searchDanfe = dataDanfes.filter((danfe) => cities[danfe.Customer.city] === value)
+      const searchDanfe = dataDanfes.filter((danfe) => cities[danfe.Customer.city] === value);
       setDanfes(searchDanfe);
     }
+  }
+
+  function getGroupedProducts(dataDanfes: IDanfe[]): IGroupedProduct[] {
+    const allProducts = dataDanfes.flatMap(danfe => danfe.DanfeProducts);
+    const groupedProducts = allProducts.reduce((accumulator: IGroupedProduct[], product: IDanfeProduct) => {
+      const existingProduct = accumulator.find(p => p.Product.code === product.Product.code);
+      if (existingProduct) {
+        existingProduct.quantity += product.quantity;
+      } else {
+        accumulator.push({
+          quantity: product.quantity,
+          Product: product.Product
+        });
+      }
+      return accumulator;
+    }, []);
+  
+    // Ordenar os produtos por quantidade em ordem decrescente
+    return groupedProducts.sort((a, b) => b.quantity - a.quantity);
+  }
+
+  const groupedProducts = getGroupedProducts(dataDanfes);
+
+  async function openPDFInNewTab() {
+    setIsPrinting(true);
+    const blob = await pdf(<TodayProductList products={groupedProducts} />).toBlob();
+    const url = URL.createObjectURL(blob);
+    
+    setTimeout(() => {
+      window.open(url);
+      setIsPrinting(false);
+    }, 3000);
   }
 
   return (
@@ -98,20 +133,27 @@ function TodayInvoices() {
                 </option>
               ))}
             </select>
+            { danfes.length > 0 && <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button>}
           </div>
         </FilterBar>
         {danfes.length === 0 ? (
           <p>Nenhuma nota lançada para hoje!</p>
         ) : (
-          <ContainerDanfes>
-            <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
-            <CardDanfes danfes={danfes} />
+          <ContainerDanfes> 
+            { isPrinting ? (
+              <LoaderPrinting />
+            ) : (
+              <>
+                <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
+                <CardDanfes danfes={danfes} />
+              </>
+            )}
           </ContainerDanfes>
         )}
         <ScrollToTopButton />
       </Container>
     </ContainerTodayInvoices>
-  )
+  );
 }
 
 export default TodayInvoices;

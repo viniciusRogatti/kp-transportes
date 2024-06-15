@@ -104,3 +104,8 @@ export interface IDanfeProduct {
 interface ICities {
   [key: string]: string;
 }
+
+export interface IGroupedProduct {
+  quantity: number;
+  Product: IProduct;
+}

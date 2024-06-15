@@ -48,8 +48,6 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
       return accumulator;
     }, []);
 
-    console.log(`Grouped Products: ${groupedProducts}`);
-
     const pdfBlob = await pdf(
       <ProductListPDF products={groupedProducts} driver={trip.Driver.name} />
     ).toBlob();

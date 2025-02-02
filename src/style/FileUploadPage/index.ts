@@ -27,6 +27,7 @@ export const BoxInput = styled.div`
   button {
     padding: 6px 12px;
     color: #000;
+    cursor: pointer;
   }
 `;
 

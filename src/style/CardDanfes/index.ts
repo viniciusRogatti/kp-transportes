@@ -27,9 +27,13 @@ export const CardsDanfe = styled.div`
   box-shadow: 4px 2px 12px #000000;
   color: #000000;
 
-  h4, p {
+  h4 {
     font-size: 12px;
     position: relative;
+  }
+
+  p { 
+    font-size: 10px;
   }
 
   h4 {

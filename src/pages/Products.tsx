@@ -7,9 +7,11 @@ import Header from "../components/Header";
 import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
+import { ProductsLoader } from "../style/Loaders";
 
 function Products() {
   const [products, setProduct] = useState<IProduct[] | []>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const navigate = useNavigate();
 
@@ -32,9 +34,13 @@ function Products() {
 
   async function loadProducts() {
     try {
+      setIsLoading(true);
       const response = await axios.get(`${API_URL}/products`);
       const data = response.data.sort((a: IProduct, b: IProduct) => a.description.localeCompare(b.description));
       setProduct(data);
+      setTimeout(()=> {
+        setIsLoading(false);
+      }, 2000)
     } catch (error) {
       console.error('Erro ao buscar os produtos:', error);
     }
@@ -45,6 +51,7 @@ function Products() {
     <div>
       <Header />
       <Container>
+      {isLoading ? (<ProductsLoader />) : (
         <table>
           <thead>
             <tr>
@@ -58,6 +65,7 @@ function Products() {
             { products.map((product) => <CardProducts product={product} />)}
           </tbody>
         </table>
+      )}
       </Container>
     </div>
 

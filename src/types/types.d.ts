@@ -103,9 +103,21 @@ export interface IDanfeProduct {
 
 interface ICities {
   [key: string]: string;
-}
+};
 
 export interface IGroupedProduct {
   quantity: number;
   Product: IProduct;
+};
+
+export interface IMapIcon {
+  className: string;
+  html: string;
+  iconSize: [number, number];
+};
+
+export interface IMapLocation {
+  id: number;
+  lat: number;
+  lng: number;
 }

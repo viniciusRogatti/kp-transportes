@@ -8,21 +8,23 @@ import { ImTruck } from "react-icons/im";
 import { ImUpload2 } from "react-icons/im";
 import { ImBooks } from "react-icons/im";
 import { ImDisplay } from "react-icons/im";
+import { AiOutlineFileSearch } from "react-icons/ai";
+
 
 function Header() {
   return (
     <HeaderStyle>
       <h1>KP TRANSPORTES</h1>
-      <ContainerCards>
-        <Link to='/todayInvoices'>
-          
+      <ContainerCards >
+        <Link to='/todayInvoices' title="Notas do dia" >
+
           <CardsPages pageNames="Notas do dia">
             <ImCalendar />
           </CardsPages>
         </Link>
         <Link to='/invoices'>
           <CardsPages pageNames="Pesquisar Notas">
-            <ImSearch />
+            <AiOutlineFileSearch />
           </CardsPages>
         </Link>
         <Link to='/products'>
@@ -50,6 +52,16 @@ function Header() {
             <ImUpload2 />
           </CardsPages>
         </Link>
+        <Link to='/map'>
+          <CardsPages pageNames="Map">
+            <ImUpload2 />
+          </CardsPages>
+        </Link>
+        {/* <Link to='/freightCalculate'>
+          <CardsPages pageNames="FreightCalculate">
+            <ImUpload2 />
+          </CardsPages>
+        </Link> */}
       </ContainerCards>
     </HeaderStyle>
   )

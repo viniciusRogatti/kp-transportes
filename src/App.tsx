@@ -8,6 +8,8 @@ import Trips from './pages/Trips';
 import Invoices from './pages/Invoices';
 import FileUploadPage from './pages/FileUploadPage';
 import Login from './pages/Login';
+import Map from './pages/Map';
+// import FreightSummary from './pages/FreightCalculation';
 
 
 
@@ -15,15 +17,17 @@ function App() {
   return (
     <div>
       <Routes>
-        <Route path="/" element={ <Login/> }/>
-        <Route path="/home" element={ <Home/> }/>
-        <Route path="/todayInvoices" element={ <TodayInvoices/> }/>
-        <Route path="/invoices" element={ <Invoices/> }/>
-        <Route path="/products" element={ <Products/> }/>
-        <Route path="/routePlanning" element={ <RoutePlanning/> }/>
-        <Route path="/customers" element={ <Customers/> }/>
-        <Route path="/trips" element={ <Trips/> }/>
-        <Route path="/uploadFiles" element={ <FileUploadPage/> }/>
+        <Route path="/" element={<Login />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/todayInvoices" element={<TodayInvoices />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/routePlanning" element={<RoutePlanning />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/trips" element={<Trips />} />
+        <Route path="/uploadFiles" element={<FileUploadPage />} />
+        {/* <Route path="/map" element={<Map />} /> */}
+        {/* <Route path="/freightCalculate" element={ <FreightSummary/> }/> */}
       </Routes>
     </div>
   );

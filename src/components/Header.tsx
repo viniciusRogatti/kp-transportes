@@ -52,11 +52,11 @@ function Header() {
             <ImUpload2 />
           </CardsPages>
         </Link>
-        <Link to='/map'>
+        {/* <Link to='/map'>
           <CardsPages pageNames="Map">
             <ImUpload2 />
           </CardsPages>
-        </Link>
+        </Link> */}
         {/* <Link to='/freightCalculate'>
           <CardsPages pageNames="FreightCalculate">
             <ImUpload2 />

@@ -5,21 +5,42 @@ export const ContainerRoutePlanning = styled.div`
   display: flex;
   flex-direction: column;
   position: relative;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100dvh;
 `;
 
 export const ContainerForm = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 5px;
-  gap: 20px;
-  color: #FEFEFE;
-  
-  button {
-    width: 150px;
-    padding: 8px 4px;
+  padding: var(--space-3);
+  gap: var(--space-5);
+  color: var(--color-text);
+  width: min(100%, 1100px);
+  flex-wrap: wrap;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+`;
+
+export const FormColumns = styled.div`
+  display: grid;
+  width: 100%;
+  gap: var(--space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+`;
+
+export const FormColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+
+  label {
+    font-size: 0.9rem;
   }
 `;
 
@@ -27,68 +48,77 @@ export const BoxButton = styled.div`
   display: flex;
   flex-wrap: wrap;
   width: fit-content;
-  gap: 12px;
-  margin-top: 10px;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
   justify-content: center;
 
-  button {
-    width: 40%;
-    border-radius: 4px;
-    border: none;
-    cursor: pointer;
+  @media (max-width: 768px) {
+    width: 100%;
+    order: 3;
+  }
+`;
 
+export const ActionButton = styled.button<{ $tone: "primary" | "secondary" | "tertiary" | "quaternary" }>`
+  width: 40%;
+  border-radius: 4px;
+  border: 1px solid var(--color-accent);
+  cursor: pointer;
+  color: var(--color-text);
+  opacity: 0.8;
+  padding: 6px 10px;
 
-    &.btn-add-danfe {
-      background: #000025;
-      border: solid 2px #22b6c1;
-      color: #FEFEFE;
-      opacity: 0.7;
+  background: ${({ $tone }) => {
+    if ($tone === "primary") return "#1a3b66";
+    if ($tone === "secondary") return "#123263";
+    if ($tone === "tertiary") return "linear-gradient(135deg, #27c6b3 0%, #19a293 100%)";
+    return "#123263";
+  }};
+  border-color: ${({ $tone }) => ($tone === "tertiary" ? "transparent" : "var(--color-accent)")};
+  color: ${({ $tone }) => ($tone === "tertiary" ? "#04131e" : "var(--color-text)")};
 
-      &:hover  {
-        opacity: 1;
-      }
+  &:hover {
+    opacity: 1;
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+`;
+
+export const ActionsRow = styled.div`
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+
+  ${ActionButton} {
+    width: 32%;
+  }
+
+  @media (max-width: 768px) {
+    ${ActionButton} {
+      width: 100%;
     }
-    
-    &.btn-submit {
-      background: #091944;
-      border: solid 2px #22b6c1;
-      color: #FEFEFE;
-      opacity: 0.7;
+  }
+`;
 
-      &:hover  {
-        opacity: 1;
-      }
-    }
-    
-    &.btn-add-driver {
-      background: #0e2653;
-      border: solid 2px #22b6c1;
-      color: #FEFEFE;
-      opacity: 0.7;
+export const SubmitRow = styled.div`
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  margin-top: var(--space-3);
 
-      &:hover  {
-        opacity: 1;
-      }
-    }
-    
-    &.btn-add-car {
-      background: #123262;
-      border: solid 2px #22b6c1;
-      color: #FEFEFE;
-      opacity: 0.7;
-
-      &:hover  {
-        opacity: 1;
-      }
-    }
+  ${ActionButton} {
+    width: min(100%, 360px);
   }
 `;
 
 export const BoxInfo = styled.div`
   display: flex;
-  padding: 8px;
+  padding: var(--space-3);
   width: 66%;
-  gap: 70px;
+  gap: var(--space-7);
   justify-content: start;
   align-items: center;
   
@@ -98,21 +128,21 @@ export const BoxInfo = styled.div`
   }
 
   span {
-    color: #22b6c1;
+    color: var(--color-accent);
   }
 `;
 
 export const TitleRoutePlanning = styled.h1`
   text-align: center;
-  margin-top: 5px;
-  color: #FEFEFE;
+  margin-top: var(--space-2);
+  color: var(--color-text);
 `;
 
 export const TripsContainer = styled(motion.ul)`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: var(--space-5);
   width: 95%;
   flex-wrap: wrap;
   transition: all 0.5s ease;
@@ -132,14 +162,15 @@ export const CardsTripsNotes = styled(motion.li)`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 20%;
+  flex: 1 1 240px;
+  max-width: 320px;
   height: 200px;
-  margin-top: 20px;
-  border: solid 2px  #274862;
-  border-radius: 12px;
-  background: #FEFEFE;
-  box-shadow: 4px 2px 12px #000000;
-  color: #000000;
+  margin-top: var(--space-5);
+  border: 1px solid rgba(12, 39, 60, 0.2);
+  border-radius: var(--radius-3);
+  background: var(--color-card);
+  box-shadow: var(--shadow-1);
+  color: #0b1b2a;
 
   h2 {
     position: absolute;
@@ -174,37 +205,31 @@ export const CardsTripsNotes = styled(motion.li)`
   }
 
   h3 {
-    margin-top: 8px;
-    color: #001428;
+    margin-top: var(--space-2);
+    color: #0b1b2a;
   }
 
-  button {
-    position: absolute;
-    border: none;
-    width: fit-content;
-    height: 20px;
-    background: transparent;
+`;
 
-    &.btn-left {
-      left: 12px;
-      bottom: 8px;
-    }
+export const CardActionButton = styled.button<{ $variant: "left" | "right" | "remove" }>`
+  position: absolute;
+  border: none;
+  width: fit-content;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
 
-    &.btn-right {
-      right: 12px;
-      bottom: 8px;
-    }
+  ${({ $variant }) => {
+    if ($variant === "left") return "left: 12px; bottom: 8px;";
+    if ($variant === "right") return "right: 12px; bottom: 8px;";
+    return "bottom: 8px;";
+  }}
 
-    &.btn-remove {
-      bottom: 8px;
-      font-weight: bold;
-      text-transform: capitalize;
-    }
+  ${({ $variant }) => ($variant === "remove" ? "font-weight: bold; text-transform: capitalize;" : "")}
 
-    svg {
-      width: 24px;
-      height: 24px;
-    }
+  svg {
+    width: 24px;
+    height: 24px;
   }
 `;
 
@@ -213,14 +238,17 @@ export const BoxDriverVehicle = styled.div`
   flex-direction: column;
   align-items: start;
   justify-content: center;
+  width: 100%;
+  gap: var(--space-2);
 
   select {
-    width: 11rem;
-    padding: 4px;
+    width: 100%;
+    padding: 6px;
     border: none;
-    border-radius: 4px;
-    background: #FEFEFE;
+    border-radius: var(--radius-1);
+    background: #ffffff;
   }
+
 `;
 
 export const BoxSelectDanfe = styled.div`
@@ -228,12 +256,21 @@ export const BoxSelectDanfe = styled.div`
   flex-direction: column;
   align-items: start;
   justify-content: center;
-  gap: 14px;
+  gap: var(--space-2);
+  width: 100%;
 
   input {
-    width: 10rem;
+    width: 100%;
     padding: 6px;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-1);
   }
+
+`;
+
+export const FieldGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
 `;

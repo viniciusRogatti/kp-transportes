@@ -1,7 +1,7 @@
 import { useEffect, useState, ChangeEvent, KeyboardEvent, useRef } from 'react';
 import axios from 'axios';
 import Header from '../components/Header';
-import { BoxButton, BoxDriverVehicle, BoxInfo, BoxSelectDanfe, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
+import { ActionButton, ActionsRow, BoxButton, BoxDriverVehicle, BoxInfo, BoxSelectDanfe, CardActionButton, CardsTripsNotes, ContainerForm, ContainerRoutePlanning, FieldGroup, FormColumn, FormColumns, SubmitRow, TitleRoutePlanning, TripsContainer } from '../style/RoutePlanning';
 import { ICar, IDriver, ITrip, ITripNote } from '../types/types';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
@@ -313,53 +313,67 @@ function RoutePlanning() {
       <Container>
         <TitleRoutePlanning>Roteirização</TitleRoutePlanning>
           <ContainerForm>
-            <BoxDriverVehicle>
-              <label>Motorista:</label>
-              <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
-                <option value="null">Selecione um motorista</option>
-                {drivers.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.name}
-                  </option>
-                ))}
-              </select>
-              <label>Veículo:</label>
-              <select id="car" onChange={handleChange} value={selectedCar || ''}>
-                <option value={'null'}>Selecione um veículo</option>
-                {cars.map((car) => (
-                  <option key={car.id} value={car.id}>
-                    {car.model} - {car.license_plate}
-                  </option>
-                ))}
-              </select>
-            </BoxDriverVehicle>
-            <div>
-              <label>Selecione uma nota:</label>
-              <BoxSelectDanfe>
-                <input 
-                  type="text" 
-                  ref={barcodeRef}
-                  onKeyDown={handleEnterPress} 
-                  placeholder="Digite o código de barras" 
-                  value={barcode} 
-                  onChange={handleBarcodeChange} 
-                />
-                <input 
-                  type="text" 
-                  ref={invoiceNumberRef}
-                  onKeyDown={handleEnterPress} 
-                  placeholder="Digite a NF" 
-                  value={invoiceNumber} 
-                  onChange={handleInvoiceNumberChange} 
-                />
-              </BoxSelectDanfe>
-            </div>
+            <FormColumns>
+              <FormColumn>
+                <BoxDriverVehicle>
+                  <FieldGroup>
+                    <label>Motorista:</label>
+                    <select id="driver" onChange={handleChange} value={selectedDriver || ''}>
+                      <option value="null">Selecione um motorista</option>
+                      {drivers.map((driver) => (
+                        <option key={driver.id} value={driver.id}>
+                          {driver.name}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldGroup>
+                  <FieldGroup>
+                    <label>Veículo:</label>
+                    <select id="car" onChange={handleChange} value={selectedCar || ''}>
+                      <option value={'null'}>Selecione um veículo</option>
+                      {cars.map((car) => (
+                        <option key={car.id} value={car.id}>
+                          {car.model} - {car.license_plate}
+                        </option>
+                      ))}
+                    </select>
+                  </FieldGroup>
+                </BoxDriverVehicle>
+              </FormColumn>
+              <FormColumn>
+                <label>Selecione uma nota:</label>
+                <BoxSelectDanfe>
+                  <input 
+                    type="text" 
+                    ref={barcodeRef}
+                    onKeyDown={handleEnterPress} 
+                    placeholder="Digite o código de barras" 
+                    value={barcode} 
+                    onChange={handleBarcodeChange} 
+                  />
+                  <input 
+                    type="text" 
+                    ref={invoiceNumberRef}
+                    onKeyDown={handleEnterPress} 
+                    placeholder="Digite a NF" 
+                    value={invoiceNumber} 
+                    onChange={handleInvoiceNumberChange} 
+                  />
+                </BoxSelectDanfe>
+              </FormColumn>
+            </FormColumns>
 
             <BoxButton>
-              <button className="btn-submit" onClick={sendTripsToBackend}>{isUpdating ? 'Atualizar Viagem' : 'Enviar Viagem'}</button>
-              <button className="btn-add-driver" onClick={addDriverOrCar}>Adicionar Motorista</button>
-              <button className="btn-add-danfe" onClick={handleAddNote}>Adicionar Nota</button>
-              <button className="btn-add-car" onClick={addDriverOrCar}>Adicionar Veículo</button>
+              <ActionsRow>
+                <ActionButton $tone="secondary" onClick={addDriverOrCar}>Adicionar Motorista</ActionButton>
+                <ActionButton $tone="secondary" onClick={addDriverOrCar}>Adicionar Veículo</ActionButton>
+                <ActionButton $tone="tertiary" onClick={handleAddNote}>Adicionar Nota</ActionButton>
+              </ActionsRow>
+              <SubmitRow>
+                <ActionButton $tone="primary" onClick={sendTripsToBackend}>
+                  {isUpdating ? 'Atualizar Viagem' : 'Enviar Viagem'}
+                </ActionButton>
+              </SubmitRow>
             </BoxButton>
           </ContainerForm>
 
@@ -387,26 +401,26 @@ function RoutePlanning() {
                       <h4>{note.customer_name}</h4>
                       <h3>{note.city}</h3>
                       <p>{`${note.gross_weight} Kg`}</p>
-                      <button 
+                      <CardActionButton
                         onClick={() => removeNoteFromList(note.invoice_number, note.id)}
-                        className="btn-remove"
+                        $variant="remove"
                       >
                         Remover
-                      </button>
-                      <button 
+                      </CardActionButton>
+                      <CardActionButton
                         onClick={() => moveNoteUp(note.order)} 
                         disabled={note.order === 1}
-                        className="btn-left"
+                        $variant="left"
                       >
                         <FaArrowLeftLong />
-                      </button>
-                      <button
+                      </CardActionButton>
+                      <CardActionButton
                         onClick={() => moveNoteDown(note.order)}
                         disabled={note.order === addedNotes.length}
-                        className="btn-right"
+                        $variant="right"
                       >
                         <FaArrowRightLong />
-                      </button>
+                      </CardActionButton>
                     </CardsTripsNotes>
                   ))}
                 </AnimatePresence>

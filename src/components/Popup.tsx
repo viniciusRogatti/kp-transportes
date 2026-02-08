@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../data';
-import { Overlay, PopupContainer, PopupContent, InputBox, ButtonBox } from '../style/Popup';
+import { Overlay, PopupContainer, PopupContent, InputBox, ButtonBox, PopupButton } from '../style/Popup';
 
 interface IPopup {
   title: string;
@@ -74,8 +74,8 @@ function Popup({ title, closePopup, onAdd }: IPopup) {
               </InputBox>
             )}
           <ButtonBox>
-            <button onClick={handleSubmit}>Adicionar</button>
-            <button className="close" onClick={closePopup}>Fechar</button>
+            <PopupButton onClick={handleSubmit}>Adicionar</PopupButton>
+            <PopupButton $tone="danger" onClick={closePopup}>Fechar</PopupButton>
           </ButtonBox>
         </PopupContent>
       </PopupContainer>

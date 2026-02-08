@@ -7,9 +7,10 @@ export const Container = styled.section`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  width: 100vw;
-  background: #001428;
+  min-height: 100dvh;
+  width: 100%;
+  background: transparent;
+  padding: var(--space-6) var(--space-4);
 `;
 
 export const BoxLogin = styled.div`
@@ -18,16 +19,16 @@ export const BoxLogin = styled.div`
   align-items: center;
   justify-content: center;
   position: relative;
-  margin-top: 20px;
-  width: 80%;
+  margin-top: var(--space-5);
+  width: min(90%, 720px);
   max-width: 700px;
-  height: 60%;
+  min-height: 360px;
   max-height: 400px;
-  border-radius: 12px;
+  border-radius: var(--radius-3);
   background-image: url(${KpImage});
   background-size: cover;
-  box-shadow:  2px 2px 14px #000000d7,
-  -4px -4px 20px #000000bd;
+  background-position: center;
+  box-shadow: var(--shadow-1);
 
 
   @media only screen and (max-width: 768px) {
@@ -36,17 +37,23 @@ export const BoxLogin = styled.div`
 `;
 
 export const ButtonLogin = styled.button`
-  background: #001428;
-  border-radius: 5px;
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+  border-radius: var(--radius-2);
   width: 44%;
   max-width: 300px;
   height: 40px;
   border: none;
   font-weight: bold;
   text-transform: uppercase;
-  color: #FFFFFF;
-  border: solid 1px #ffff;
+  color: #04131e;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+  }
 
   @media only screen and (max-width: 768px) {
     width: 78%;
@@ -71,14 +78,15 @@ export const InputLogin = styled.input`
   width: 40%;
   max-width: 300px;
   height: 40px;
-  border-radius: 5px;
-  margin-bottom: 10px;
+  border-radius: var(--radius-2);
+  margin-bottom: var(--space-2);
   padding-left: 20px;
-  color: #001428;
-  background-color: rgba(255, 255, 255, 0.5);
+  color: #0b1b2a;
+  background-color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(10, 26, 41, 0.2);
 
   ::placeholder {
-    color: #001428;
+    color: #0b1b2a;
   }
 
   @media only screen and (max-width: 768px) {

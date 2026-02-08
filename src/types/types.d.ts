@@ -121,3 +121,14 @@ export interface IMapLocation {
   lat: number;
   lng: number;
 }
+
+export interface ICustomer {
+  name_or_legal_entity: string;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  neighborhood: string | null;
+  cnpj_or_cpf: string;
+}

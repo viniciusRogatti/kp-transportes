@@ -4,7 +4,7 @@ import CardProducts from "../components/CardProducts";
 import axios from "axios";
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container } from "../style/invoices";
+import { Container, FilterBar, FilterInput } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 import { ProductsLoader } from "../style/Loaders";
@@ -12,6 +12,8 @@ import { ProductsLoader } from "../style/Loaders";
 function Products() {
   const [products, setProduct] = useState<IProduct[] | []>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [codeFilter, setCodeFilter] = useState("");
+  const [descriptionFilter, setDescriptionFilter] = useState("");
 
   const navigate = useNavigate();
 
@@ -46,25 +48,51 @@ function Products() {
     }
   }
 
+  const filteredProducts = products.filter((product) => {
+    const matchesCode = product.code
+      .toString()
+      .toLowerCase()
+      .includes(codeFilter.trim().toLowerCase());
+    const matchesDescription = product.description
+      .toLowerCase()
+      .includes(descriptionFilter.trim().toLowerCase());
+    return matchesCode && matchesDescription;
+  });
 
   return (
     <div>
       <Header />
       <Container>
       {isLoading ? (<ProductsLoader />) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Preço</th>
-              <th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody>
-            { products.map((product) => <CardProducts product={product} />)}
-          </tbody>
-        </table>
+        <>
+          <FilterBar>
+            <FilterInput
+              type="text"
+              value={codeFilter}
+              onChange={(event) => setCodeFilter(event.target.value)}
+              placeholder="Filtrar por codigo"
+            />
+            <FilterInput
+              type="text"
+              value={descriptionFilter}
+              onChange={(event) => setDescriptionFilter(event.target.value)}
+              placeholder="Filtrar por descricao"
+            />
+          </FilterBar>
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Preço</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              { filteredProducts.map((product) => <CardProducts product={product} />)}
+            </tbody>
+          </table>
+        </>
       )}
       </Container>
     </div>

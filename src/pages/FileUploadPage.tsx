@@ -5,7 +5,7 @@ import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { useNavigate } from 'react-router';
-import { BoxInput, BoxMessage } from '../style/FileUploadPage';
+import { BoxInput, BoxMessage, HiddenFileInput, FileUploadLabel, UploadButton } from '../style/FileUploadPage';
 import { IUploadResponse } from '../types/types';
 import { Loading } from '../style/Loaders';
 
@@ -93,11 +93,11 @@ const FileUploadPage: React.FC = () => {
         ) : (
           <>
             <BoxInput>
-              <input type="file" id="fileInput" className="inputfile" onChange={handleFileChange} multiple accept=".xml" />
-              <label htmlFor="fileInput" className="custom-file-upload">Escolha um arquivo</label>
-              <button onClick={handleUpload} disabled={uploading}>
+              <HiddenFileInput type="file" id="fileInput" onChange={handleFileChange} multiple accept=".xml" />
+              <FileUploadLabel htmlFor="fileInput">Escolha um arquivo</FileUploadLabel>
+              <UploadButton onClick={handleUpload} disabled={uploading}>
                 Enviar Arquivos .xml
-              </button>
+              </UploadButton>
             </BoxInput>
             <BoxMessage>
               <h4>{fileCountMessage}</h4>

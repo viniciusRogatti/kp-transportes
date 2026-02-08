@@ -5,7 +5,7 @@ export const ContainerCards = styled.div`
   width: 100%;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 20px;
+  gap: var(--space-5);
   max-width: 1200px;
   margin: 0 auto;
 `;
@@ -17,15 +17,15 @@ export const CardsDanfe = styled.div`
   justify-content: start;
   align-items: center;
   width: 100%;
-  max-width: 350px;
-  height: 400px;
-  border: solid 2px #0B3142;
+  max-width: 360px;
+  min-height: 360px;
+  border: 1px solid rgba(12, 39, 60, 0.2);
   position: relative;
-  padding: 2px 12px;
-  background-color: #FEFEFE;
-  border-radius: 12px;
-  box-shadow: 4px 2px 12px #000000;
-  color: #000000;
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-card);
+  border-radius: var(--radius-3);
+  box-shadow: var(--shadow-1);
+  color: #0b1b2a;
 
   h4 {
     font-size: 12px;
@@ -45,12 +45,13 @@ export const CardsDanfe = styled.div`
 
   @media (max-width: 768px) {
     flex-direction: column;
-    height: 250px;
-    width: 60%;
+    min-height: 280px;
+    width: 100%;
+    max-width: 420px;
 
     h4, p {
-    font-size: 8px;
-  }
+      font-size: 0.7rem;
+    }
   }
 `;
 
@@ -69,13 +70,13 @@ export const ContainerItems = styled.div`
   display: flex;
   flex-direction: column;
   overflow-Y: auto;
-  margin-top: 10px;
+  margin-top: var(--space-3);
   max-height: 60%;
-  width: 95%;
-  padding: 8px 4px;
-  gap: 14px;
-  border: solid 1px black;
-  border-radius: 8px;
+  width: 100%;
+  padding: var(--space-3);
+  gap: var(--space-3);
+  border: 1px solid rgba(12, 39, 60, 0.2);
+  border-radius: var(--radius-2);
 
 `;
 
@@ -84,10 +85,10 @@ export const ListItems = styled.ul`
   align-items: center;
   justify-content: space-between;
   list-style: none;
-  border-bottom: solid 1px black;  
+  border-bottom: 1px solid rgba(12, 39, 60, 0.2);
   font-size: 14px;
   font-weight: bold;
-  gap: 4px;
+  gap: var(--space-2);
 
   li {
 
@@ -101,7 +102,7 @@ export const ListItems = styled.ul`
   }
 
   @media (max-width: 768px) {
-    font-size: 8px;
+    font-size: 0.7rem;
   }
 `;
 
@@ -128,7 +129,7 @@ export const TitleCard = styled.div`
     margin: 0;
     top: 8px;
     right: 4px;
-    color: black;
+    color: #0b1b2a;
     font-size: large;
     font-weight: bold;
   }
@@ -166,8 +167,8 @@ export const TotalQuantity = styled.div`
 
   @media (max-width: 768px) {
     p {
-    font-size: 12px;
-    font-weight: bold;
-  }
+      font-size: 12px;
+      font-weight: bold;
+    }
   }
 `;

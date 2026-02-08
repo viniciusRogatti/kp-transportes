@@ -64,23 +64,19 @@ export const ButtonBox = styled.div`
   justify-content: space-between;
   width: 52%;
   margin-top: 16px;
-  
-  button {
-    width: 48%;
-    padding: 8px;
-    border-radius: 8px;
-    border: solid 2px #fff;
-    background-color: green;
-    font-weight: bold;
-    color: #FFFF;
+`;
 
-    &:hover {
-      border: solid 2px #256edb;
-    }
+export const PopupButton = styled.button<{ $tone?: "primary" | "danger" }>`
+  width: 48%;
+  padding: 8px;
+  border-radius: 8px;
+  border: solid 2px #fff;
+  font-weight: bold;
+  cursor: pointer;
+  background-color: ${({ $tone }) => ($tone === "danger" ? "#d93025" : "#1a7f37")};
+  color: ${({ $tone }) => ($tone === "danger" ? "#0b0b0b" : "#ffff")};
 
-    &.close {
-      background-color: red;
-      color: #000;
-    }
+  &:hover {
+    border: solid 2px #256edb;
   }
 `;

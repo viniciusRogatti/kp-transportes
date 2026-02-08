@@ -4,48 +4,70 @@ export const ContainerTodayInvoices = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  background-color: #001428;
+  min-height: 100dvh;
+  background-color: transparent;
   position: relative;
 `;
 
 export const FilterBar = styled.div`
-  display: flex;
-  align-items: center;
+  display: grid;
+  align-items: end;
   justify-content: center;
-  flex-direction: row;
-  flex-wrap: wrap;
   width: 100%;
-  height: 2.5rem;
-  gap: 0.75rem;
-  color: #ECF3FD;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  color: var(--color-text);
+  margin-bottom: var(--space-6);
 
   input {
-    height: 0.875rem;
-    width: 10rem;
-    border-radius: 4px;
-    border: solid 1px black;
-    padding: 6px 8px;
+    height: 2.5rem;
+    width: 100%;
+    border-radius: var(--radius-1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.5rem 0.75rem;
+    background: rgba(11, 27, 42, 0.6);
+    color: var(--color-text);
+  }
+
+  input::placeholder {
+    color: var(--color-muted);
   }
 
   select {
-    margin: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(11, 27, 42, 0.6);
+    color: var(--color-text);
+  }
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  button {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+    color: #04131e;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.2);
   }
 
   @media (max-width: 768px) {
-    flex-direction: column;
-    margin-bottom: 30px;
-    gap: 0;
-    flex-wrap: nowrap;
-
-    input {
-    height: 0.475rem;
-    width: 10rem;
-    border-radius: 4px;
-    border: solid 1px black;
-    padding: 6px 8px;
-  }
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
   }
 `;
 
@@ -58,8 +80,8 @@ export const ContainerDanfes = styled.div`
 `;
 
 export const NotesFound = styled.span`
-  color: #ECF3FD;
-  font-size: 22px;
-  font-weight: 500;
-  margin: 0.625rem;
+  color: var(--color-text);
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  font-weight: 600;
+  margin: var(--space-3);
 `;

@@ -1,54 +1,56 @@
 import styled from "styled-components";
 
 export const ContainerTrips = styled.div`
-  margin-top: 40px;
+  margin-top: var(--space-5);
   display: flex;
-  width: 90%;
+  width: 100%;
   flex-wrap: wrap;
-  gap: 10px;
-  justify-content: start;
+  gap: var(--space-4);
+  justify-content: center;
 `;
 
 export const ContainerInputs = styled.div`
   display: flex;
-  width: 200px;
+  width: 100%;
+  max-width: 260px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  color: #fefefe;
+  color: var(--color-text);
 
 `
 export const BoxSearch = styled.div`
   display: flex;
   position: relative;
-  width: 180px;
-  gap: 2px;
+  width: 100%;
+  gap: var(--space-1);
 
   input {
     margin: 0;
     position: absolute;
     top: 0;
     left: 0;
-    padding: 0.25rem;
+    padding: 0.5rem 0.75rem;
     border: none;
-    border-radius: 2px;
-    border-bottom-right-radius: 18px;
+    border-radius: var(--radius-2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(11, 27, 42, 0.6);
+    color: var(--color-text);
   }
 
   & > button {
     position: absolute;
-    top: 0.900rem;
-    border-radius: 2px;
+    top: 2.4rem;
+    border-radius: var(--radius-1);
     right: 0;
-    padding: 0.25rem;
+    padding: 0.4rem 0.6rem;
     border: none;
-    border-bottom-right-radius: 18px;
-    background: #ECF3FD;
-    color: black;
+    background: var(--color-accent);
+    color: #04131e;
   }
 
   span {
-    color: black;
+    color: #04131e;
     border-color: black !important;
   }
 `;
@@ -59,15 +61,14 @@ export const CardTrips = styled.div`
   justify-content: start;
   align-items: center;
   flex-direction: column;
-  width: 250px;
-  height: 320px;
-  border: solid 2px #000;
-  padding: 2px 12px;
-  background-color: #FEFEFE;
-  border-radius: 12px;
-  box-shadow:  4px 4px 20px #000000,
-  -4px -4px 15px #000000;
-  color: #000;
+  width: min(320px, 100%);
+  min-height: 320px;
+  border: 1px solid rgba(12, 39, 60, 0.2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-card);
+  border-radius: var(--radius-3);
+  box-shadow: var(--shadow-1);
+  color: #0b1b2a;
 
   p {
     font-size: 12px;
@@ -88,7 +89,7 @@ export const CardHeader = styled.div`
   align-items: center;
   position: relative;
   width: 100%;
-  padding: 16px;
+  padding: var(--space-4);
 `;
 export const LeftHeader = styled.div`
   top: 6px;
@@ -136,11 +137,11 @@ export const TripNotesList = styled.ul`
 
 export const TripNoteItem = styled.li`
   position: relative;
-  width: 38%;
+  width: 100%;
   height: 70px;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: var(--space-2);
+  border: 1px solid rgba(12, 39, 60, 0.2);
+  border-radius: var(--radius-1);
   position: relative;
 
   p {
@@ -173,13 +174,13 @@ export const BoxButton = styled.div`
   justify-content: space-between;
 
   button {
-    background: #798EA7;
+    background: #1d3952;
     border: none;
-    padding: 8px 4px;
-    border-radius: 4px;
-    color: #FEFEFE;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-1);
+    color: var(--color-text);
     width: 45%;
     cursor: pointer;
-    margin: 8px;
+    margin: var(--space-2);
   }
 `;

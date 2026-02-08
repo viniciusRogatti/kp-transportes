@@ -6,7 +6,7 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container } from "../style/invoices";
+import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchButton, SearchRow } from "../style/invoices";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
 import { useNavigate } from "react-router";
@@ -124,25 +124,37 @@ function Invoices() {
     <div>
       <Header />
       <Container>
-        <div>
-          <input value={nf} type="number" onChange={setFilter} placeholder="Digite a nf" />
-          <button onClick={getDanfeByNf}>Pesquisar</button>
-          <DatePicker
-            selected={startDate}
-            onChange={date => setStartDate(date)}
-            placeholderText="Data de início"
-            dateFormat="yyyy-MM-dd"
-            locale="ptBR"
-          />
-          <DatePicker
-            selected={endDate}
-            onChange={date => setEndDate(date)}
-            placeholderText="Data de fim"
-            dateFormat="yyyy-MM-dd"
-            locale="ptBR"
-          />
-          <button onClick={getDanfesByDate}>Buscar DANFEs</button>
-        </div>
+        <SearchBar>
+          <SearchRow>
+            <input value={nf} type="number" onChange={setFilter} placeholder="Digite a nf" />
+            <SearchButton onClick={getDanfeByNf}>Pesquisar</SearchButton>
+          </SearchRow>
+          <DateRow>
+            <DateGroup>
+              <DatePicker
+                selected={startDate}
+                onChange={date => setStartDate(date)}
+                placeholderText="Data de início"
+                dateFormat="yyyy-MM-dd"
+                locale="ptBR"
+                popperPlacement="bottom-start"
+                withPortal
+              />
+              <DatePicker
+                selected={endDate}
+                onChange={date => setEndDate(date)}
+                placeholderText="Data de fim"
+                dateFormat="yyyy-MM-dd"
+                locale="ptBR"
+                popperPlacement="bottom-start"
+                withPortal
+              />
+            </DateGroup>
+            <DateAction>
+              <SearchButton onClick={getDanfesByDate}>Buscar</SearchButton>
+            </DateAction>
+          </DateRow>
+        </SearchBar>
 
         <FilterBar>
           <input type="text" onChange={filterByNf} placeholder="Filtrar por NF" />

@@ -98,3 +98,99 @@ export const FilterInput = styled.input`
     transform: translateY(-1px);
   }
 `;
+
+export const SearchBar = styled.div`
+  display: grid;
+  width: min(100%, 1100px);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+
+  input,
+  .react-datepicker-wrapper input {
+    height: 2.5rem;
+    width: 100%;
+    border-radius: var(--radius-1);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.5rem 0.75rem;
+    background: rgba(11, 27, 42, 0.6);
+    color: var(--color-text);
+  }
+
+  input::placeholder,
+  .react-datepicker-wrapper input::placeholder {
+    color: var(--color-muted);
+  }
+
+  .react-datepicker-wrapper {
+    position: relative;
+  }
+
+  .react-datepicker-popper {
+    z-index: 2000;
+    position: absolute !important;
+  }
+
+  .react-datepicker {
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-2);
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    gap: var(--space-2);
+  }
+`;
+
+export const SearchButton = styled.button`
+  height: 2.5rem;
+  border-radius: var(--radius-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+  color: #04131e;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.2);
+  }
+`;
+
+export const SearchRow = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-2);
+  width: 100%;
+`;
+
+export const DateRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+  width: 100%;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 2fr 1fr;
+    align-items: stretch;
+  }
+`;
+
+export const DateGroup = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+  width: 100%;
+`;
+
+export const DateAction = styled.div`
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+
+  ${SearchButton} {
+    width: 100%;
+    height: 100%;
+  }
+`;

@@ -3,12 +3,12 @@ import CardsPages from "../components/CardsPages";
 import { Link } from 'react-router-dom';
 import { ImCalendar } from "react-icons/im";
 import { ImAddressBook } from "react-icons/im";
-import { ImSearch } from "react-icons/im";
 import { ImTruck } from "react-icons/im";
 import { ImUpload2 } from "react-icons/im";
 import { ImBooks } from "react-icons/im";
 import { ImDisplay } from "react-icons/im";
 import { AiOutlineFileSearch } from "react-icons/ai";
+import { MdOutlineReportProblem } from "react-icons/md";
 import { useState } from "react";
 import { HiMenu } from "react-icons/hi";
 
@@ -56,6 +56,11 @@ function Header() {
         <Link to='/trips'>
           <CardsPages pageNames="Trips">
             <ImTruck />
+          </CardsPages>
+        </Link>
+        <Link to='/returns-occurrences'>
+          <CardsPages pageNames="Devolucoes/Ocorrencias">
+            <MdOutlineReportProblem />
           </CardsPages>
         </Link>
         <Link to='/uploadFiles'>
@@ -106,6 +111,11 @@ function Header() {
           <Link to='/trips' onClick={closeMenu}>
             <CardsPages pageNames="Trips">
               <ImTruck />
+            </CardsPages>
+          </Link>
+          <Link to='/returns-occurrences' onClick={closeMenu}>
+            <CardsPages pageNames="Devolucoes/Ocorrencias">
+              <MdOutlineReportProblem />
             </CardsPages>
           </Link>
           <Link to='/uploadFiles' onClick={closeMenu}>

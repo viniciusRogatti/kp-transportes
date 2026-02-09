@@ -12,6 +12,7 @@ const GlobalStyle = createGlobalStyle`
   --color-accent: #27c6b3;
   --color-accent-strong: #19a293;
   --color-border: #21415a;
+  --color-text-accent: #ffba2b;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -74,6 +75,16 @@ input,
 select,
 textarea {
   font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 a {

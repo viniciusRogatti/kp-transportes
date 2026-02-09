@@ -41,6 +41,60 @@ export interface IDriver {
   name: string;
 }
 
+export interface IInvoiceReturnItem {
+  id?: number;
+  product_id: string;
+  product_description: string;
+  quantity: number;
+}
+
+export interface IInvoiceReturn {
+  id: number;
+  invoice_number: string;
+  return_type: 'total' | 'partial';
+  driver_id: number;
+  vehicle_plate: string;
+  return_date: string;
+  batch_code?: string;
+  batch_status?: 'open' | 'closed';
+  Driver?: {
+    id: number;
+    name: string;
+  };
+  items: IInvoiceReturnItem[];
+}
+
+export interface IReturnBatch {
+  batch_code: string;
+  batch_status: 'open' | 'closed';
+  driver_id: number;
+  vehicle_plate: string;
+  return_date: string;
+  Driver?: {
+    id: number;
+    name: string;
+  };
+  notes: IInvoiceReturn[];
+  aggregated_items: IInvoiceReturnItem[];
+}
+
+export interface IOccurrence {
+  id: number;
+  invoice_number: string;
+  product_id: string | null;
+  product_description: string | null;
+  quantity: number | null;
+  description: string;
+  status: 'pending' | 'resolved';
+  reported_by_driver_id: number | null;
+  resolved_at: string | null;
+  created_at: string;
+  reportedByDriver?: {
+    id: number;
+    name: string;
+  };
+}
+
 export interface ICar {
   id: string;
   model: string;

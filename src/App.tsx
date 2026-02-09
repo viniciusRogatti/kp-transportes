@@ -8,6 +8,7 @@ import Trips from './pages/Trips';
 import Invoices from './pages/Invoices';
 import FileUploadPage from './pages/FileUploadPage';
 import Login from './pages/Login';
+import ReturnsOccurrences from './pages/ReturnsOccurrences';
 // import FreightSummary from './pages/FreightCalculation';
 
 
@@ -25,6 +26,7 @@ function App() {
         <Route path="/customers" element={<Customers />} />
         <Route path="/trips" element={<Trips />} />
         <Route path="/uploadFiles" element={<FileUploadPage />} />
+        <Route path="/returns-occurrences" element={<ReturnsOccurrences />} />
       </Routes>
     </div>
   );

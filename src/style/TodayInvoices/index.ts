@@ -1,4 +1,16 @@
 import styled from "styled-components";
+import { keyframes } from "styled-components";
+
+const notesPulse = keyframes`
+  0% {
+    opacity: 0.72;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
 
 export const ContainerTodayInvoices = styled.div`
   display: flex;
@@ -66,8 +78,16 @@ export const FilterBar = styled.div`
   }
 
   @media (max-width: 768px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-2);
+
+    div {
+      grid-column: 1 / -1;
+    }
+
+    .route-filter {
+      display: none;
+    }
   }
 `;
 
@@ -84,4 +104,5 @@ export const NotesFound = styled.span`
   font-size: clamp(1rem, 1.8vw, 1.4rem);
   font-weight: 600;
   margin: var(--space-3);
+  animation: ${notesPulse} 0.45s ease-out;
 `;

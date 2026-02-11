@@ -54,10 +54,11 @@ function TodayInvoices() {
     setDanfes(searchDanfe);
   }
 
-  function filterByProductCode(e: React.ChangeEvent<HTMLInputElement>) {
+  function filterByProduct(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value.toLowerCase();
     const searchDanfe = dataDanfes.filter((danfe) => danfe.DanfeProducts.some((product) => (
       product.Product.code.toLowerCase().includes(value)
+      || product.Product.description.toLowerCase().includes(value)
     )));
     setDanfes(searchDanfe);
   }
@@ -115,16 +116,18 @@ function TodayInvoices() {
     }, 3000);
   }
 
+  const notesSignature = `${danfes.length}-${danfes[0]?.barcode ?? 'none'}-${danfes[danfes.length - 1]?.barcode ?? 'none'}`;
+
   return (
     <ContainerTodayInvoices>
       <Header />
       <Container>
         <FilterBar>
           <input type="text" onChange={filterByNf} placeholder="Filtrar por NF" />
-          <input type="text" onChange={filterByProductCode} placeholder="Filtrar por produto" />
+          <input type="text" onChange={filterByProduct} placeholder="Filtrar produto (cód. ou descrição)" />
           <input type="text" onChange={filterByCustomerName} placeholder="Filtrar por nome do cliente" />
           <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
-          <div>
+          <div className="route-filter">
             Rotas:
             <select onChange={filterByRoute}>
               {routes.map((route, index) => (
@@ -133,8 +136,8 @@ function TodayInvoices() {
                 </option>
               ))}
             </select>
-            { danfes.length > 0 && <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button>}
           </div>
+          { danfes.length > 0 && <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button>}
         </FilterBar>
         {danfes.length === 0 ? (
           <p>Nenhuma nota lançada para hoje!</p>
@@ -144,8 +147,8 @@ function TodayInvoices() {
               <LoaderPrinting />
             ) : (
               <>
-                <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
-                <CardDanfes danfes={danfes} />
+                <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
+                <CardDanfes danfes={danfes} animationKey={notesSignature} />
               </>
             )}
           </ContainerDanfes>

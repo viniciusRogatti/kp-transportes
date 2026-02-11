@@ -91,10 +91,11 @@ function Invoices() {
     setDanfes(searchDanfe);
   }
 
-  function filterByProductCode(e: React.ChangeEvent<HTMLInputElement>) {
+  function filterByProduct(e: React.ChangeEvent<HTMLInputElement>) {
     const value = e.target.value.toLowerCase();
     const searchDanfe = dataDanfes.filter((danfe) => danfe.DanfeProducts.some((product) => (
       product.Product.code.toLowerCase().includes(value)
+      || product.Product.description.toLowerCase().includes(value)
     )) );
     setDanfes(searchDanfe);
   }
@@ -119,6 +120,8 @@ function Invoices() {
       setDanfes(searchDanfe);
     }
   }
+
+  const notesSignature = `${danfes.length}-${danfes[0]?.barcode ?? 'none'}-${danfes[danfes.length - 1]?.barcode ?? 'none'}`;
   
   return (
     <div>
@@ -138,6 +141,7 @@ function Invoices() {
                 dateFormat="yyyy-MM-dd"
                 locale="ptBR"
                 popperPlacement="bottom-start"
+                className="date-picker-input"
                 withPortal
               />
               <DatePicker
@@ -147,6 +151,7 @@ function Invoices() {
                 dateFormat="yyyy-MM-dd"
                 locale="ptBR"
                 popperPlacement="bottom-start"
+                className="date-picker-input"
                 withPortal
               />
             </DateGroup>
@@ -158,10 +163,10 @@ function Invoices() {
 
         <FilterBar>
           <input type="text" onChange={filterByNf} placeholder="Filtrar por NF" />
-          <input type="text" onChange={filterByProductCode} placeholder="Filtrar por produto" />
+          <input type="text" onChange={filterByProduct} placeholder="Filtrar produto (cód. ou descrição)" />
           <input type="text" onChange={filterByCustomerName} placeholder="Filtrar por nome do cliente" />
           <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
-          <div>
+          <div className="route-filter">
             Rotas
             <select onChange={filterByRoute}>
               {routes.map((route, index) => (
@@ -172,8 +177,8 @@ function Invoices() {
             </select>
           </div>
         </FilterBar>
-        <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
-        <CardDanfes danfes={danfes} />
+        <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
+        <CardDanfes danfes={danfes} animationKey={notesSignature} />
       </Container>
     </div>
   )

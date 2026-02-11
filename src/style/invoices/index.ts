@@ -100,9 +100,10 @@ export const FilterInput = styled.input`
 `;
 
 export const SearchBar = styled.div`
-  display: grid;
+  display: flex;
+  align-items: end;
+  flex-wrap: nowrap;
   width: min(100%, 1100px);
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 
@@ -115,6 +116,14 @@ export const SearchBar = styled.div`
     padding: 0.5rem 0.75rem;
     background: rgba(11, 27, 42, 0.6);
     color: var(--color-text);
+  }
+
+  .date-picker-input {
+    padding-right: 2.2rem !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239eb7ca' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 15px;
   }
 
   input::placeholder,
@@ -138,7 +147,15 @@ export const SearchBar = styled.div`
 
   @media (max-width: 768px) {
     width: 100%;
+    flex-direction: column;
     gap: var(--space-2);
+
+    input,
+    .react-datepicker-wrapper input {
+      height: 2.25rem;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.88rem;
+    }
   }
 `;
 
@@ -156,41 +173,70 @@ export const SearchButton = styled.button`
     transform: translateY(-1px);
     box-shadow: 0 10px 18px rgba(0, 0, 0, 0.2);
   }
+
+  @media (max-width: 768px) {
+    height: 2.25rem;
+    font-size: 0.86rem;
+    padding: 0 0.6rem;
+  }
 `;
 
 export const SearchRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: minmax(150px, 180px) 130px;
   gap: var(--space-2);
-  width: 100%;
+  width: auto;
+  align-items: stretch;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) 108px;
+  }
 `;
 
 export const DateRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 130px;
   gap: var(--space-2);
-  width: 100%;
+  width: auto;
+  align-items: stretch;
 
   @media (max-width: 768px) {
-    grid-template-columns: 2fr 1fr;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) 108px;
     align-items: stretch;
   }
 `;
 
 export const DateGroup = styled.div`
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(150px, 170px));
   gap: var(--space-2);
-  width: 100%;
+  width: auto;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
 `;
 
 export const DateAction = styled.div`
   display: flex;
   align-items: stretch;
-  width: 100%;
+  width: auto;
 
   ${SearchButton} {
-    width: 100%;
+    width: min(130px, 100%);
     height: 100%;
+  }
+
+  @media (max-width: 768px) {
+    width: 100%;
+    min-width: 108px;
+
+    ${SearchButton} {
+      width: 100%;
+    }
   }
 `;

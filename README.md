@@ -1,73 +1,113 @@
-# Sistema de Gestão de Transportadora
+# KP Transportes - Frontend
 
-## Descrição do Sistema
-O sistema desenvolvido tem como objetivo gerenciar operações de uma transportadora, facilitando a leitura e processamento de arquivos XML de notas fiscais (DANFEs), e fornecendo ferramentas para a roteirização de entregas, gestão de veículos e motoristas, e monitoramento de viagens e produtos.
+Aplicacao web para operacao de transporte e distribuicao: importacao de DANFEs, pesquisa e filtragem de notas, roteirizacao de viagens e controle de devolucoes/ocorrencias.
 
-### Funcionalidades Principais
+## Stack
+- React 18 + TypeScript
+- React Router DOM
+- Styled Components
+- Axios
+- React Datepicker
+- Framer Motion (animacoes pontuais)
+- React PDF Renderer (geracao/abertura de PDFs)
 
-1. Leitura de Arquivos XML
-   - 📄 Leitura e extração de informações de arquivos XML de notas fiscais.
-   - 📊 Armazenamento dos dados extraídos nas tabelas do banco de dados: `Customer`, `Danfe`, `Product`, `DanfeProduct`.
+## Funcionalidades
 
-2. Página de Notas do Dia
-   - 📅 Exibição das notas fiscais recebidas no dia atual.
-   - 🔍 Filtros disponíveis: Nome do Cliente, Cidade, Número da NF, Produto e Rota.
+### 1) Autenticacao
+- Tela de login com validacao de token.
+- Redirecionamento para `/` quando token e invalido ou ausente.
 
-3. Pesquisa de Notas
-   - 🔎 Pesquisa de notas por número de NF ou período de data.
-   - 📂 Filtros adicionais: Nome do Cliente, Cidade, Número da NF, Produto e Rota.
+### 2) Upload de XML (DANFEs)
+- Importacao de XMLs para alimentar dados de clientes, produtos e notas.
 
-4. Página de Roteirização
-   - 🚚 Seleção de motorista e veículo para adicionar notas à viagem.
-   - 📦 Adição de notas via número da NF ou código de barras.
-   - 📊 Gerenciamento de motoristas (`Driver`) e veículos (`Car`).
+### 3) Notas do dia (`/todayInvoices`)
+- Lista de DANFEs do dia.
+- Filtros por:
+  - NF
+  - Produto (codigo ou descricao)
+  - Nome do cliente
+  - Cidade
+  - Rota (oculto no mobile)
+- Abertura de lista de produtos em PDF.
 
-5. Página de Viagens (Trips)
-   - 📅 Exibição das viagens realizadas na data atual.
-   - 📅 Seleção de data para visualizar viagens de outros dias.
+### 4) Pesquisar notas (`/invoices`)
+- Busca por NF pontual.
+- Busca por periodo (data inicio/data fim).
+- Filtros por:
+  - NF
+  - Produto (codigo ou descricao)
+  - Nome do cliente
+  - Cidade
+  - Rota (oculto no mobile)
+- Layout responsivo com foco em usabilidade no celular.
 
-6. Página de Produtos
-   - 🛍️ Exibição de todos os produtos cadastrados no banco de dados.
+### 5) Roteirizacao (`/routePlanning`)
+- Selecao de motorista e veiculo.
+- Adicao de nota por NF ou codigo de barras.
+- Reordenacao e remocao de notas da viagem.
+- Persistencia da viagem e atualizacao de status das notas.
 
-7. Página de Clientes
-   - 👥 Exibição de todos os clientes cadastrados no banco de dados.
+### 6) Viagens (`/trips`)
+- Consulta de viagens por data.
+- Visualizacao e exportacao de informacoes da roteirizacao.
 
-8. Página de Relatórios para Usuários Master
-   - 📊 Visualização das viagens de um motorista em um período selecionado.
-   - 💸 Agregação de valores por viagem conforme a região.
-   - 💵 Inserção de gastos com pedágios e geração de relatório em PDF.
+### 7) Devolucoes e Ocorrencias (`/returns-occurrences`)
+- Fluxo de devolucao total/parcial por NF.
+- Criacao e gestao de lotes de devolucao.
+- Geracao de PDF de comprovante/lote.
+- Registro de ocorrencias (com ou sem produto).
+- Resolucao de ocorrencias pendentes.
 
-## Estrutura do Banco de Dados
+### 8) Cadastros e consultas
+- Produtos (`/products`)
+- Clientes (`/customers`)
+- Home operacional com indicadores e pendencias (`/home`)
 
-### Tabelas Principais
-- **Customer:** Armazena dados dos clientes.
-- **Danfe:** Armazena dados das notas fiscais.
-- **Product:** Armazena dados dos produtos.
-- **DanfeProduct:** Tabela intermediária que liga produtos às notas.
-- **Car:** Armazena dados dos veículos.
-- **Driver:** Armazena dados dos motoristas.
-- **Trips:** Armazena dados das viagens.
-- **TripNotes:** Armazena dados das notas das viagens.
+## Rotas da aplicacao
+- `/` login
+- `/home`
+- `/todayInvoices`
+- `/invoices`
+- `/routePlanning`
+- `/trips`
+- `/returns-occurrences`
+- `/uploadFiles`
+- `/products`
+- `/customers`
 
+## Estrutura de dados utilizada (resumo)
+As entidades principais consumidas no frontend sao:
+- `Customer`
+- `Danfe`
+- `DanfeProduct`
+- `Product`
+- `Driver`
+- `Car`
+- `Trips`
+- `TripNotes`
+- `InvoiceReturn` / `InvoiceReturnItem`
+- `Occurrence`
 
-## Como Usar o Sistema
+## Execucao local
+```bash
+npm install
+npm start
+```
 
-1. **Carregamento de XML:**
-   - Faça o upload dos arquivos XML para importar dados de notas fiscais.
+Aplicacao local: `http://localhost:3000`
 
-2. **Gerenciamento de Notas:**
-   - Acesse a página de notas do dia para visualizar e filtrar notas.
-   - Use a página de pesquisa para encontrar notas específicas.
+## Build e deploy
+```bash
+npm run build
+npm run deploy
+```
 
-3. **Roteirização:**
-   - Selecione um motorista e um veículo.
-   - Adicione notas às viagens utilizando NF ou código de barras.
+Observacoes:
+- O projeto usa `HashRouter` para evitar erro `404` em hospedagem estatica.
+- `homepage` no `package.json` aponta para o path de publicacao em GitHub Pages.
 
-4. **Monitoramento de Viagens:**
-   - Visualize as viagens do dia ou selecione uma data específica.
-
-5. **Gestão de Produtos e Clientes:**
-   - Navegue nas páginas de produtos e clientes para visualizar todos os registros.
-
-6. **Relatórios Master:**
-   - Utilize a página de relatórios para gerar relatórios detalhados das viagens e gastos de motoristas.
+## Scripts
+- `npm start`: ambiente de desenvolvimento
+- `npm run build`: build de producao
+- `npm test`: testes
+- `npm run deploy`: publica build no GitHub Pages

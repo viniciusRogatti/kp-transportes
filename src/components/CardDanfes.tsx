@@ -3,11 +3,12 @@ import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ListIte
 
 interface CardDanfesProps {
   danfes: IDanfe[];
+  animationKey?: string;
 }
 
-function CardDanfes({ danfes } : CardDanfesProps) {
+function CardDanfes({ danfes, animationKey } : CardDanfesProps) {
   return (
-    <ContainerCards>
+    <ContainerCards key={animationKey}>
       { danfes.map((danfe) => (
         <CardsDanfe key={danfe.barcode}>
           <TitleCard>

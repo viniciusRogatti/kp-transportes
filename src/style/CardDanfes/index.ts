@@ -1,4 +1,26 @@
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
+
+const listFadeIn = keyframes`
+  from {
+    opacity: 0.72;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`;
+
+const cardReveal = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+`;
 
 export const ContainerCards = styled.div`
   display: flex;
@@ -8,6 +30,7 @@ export const ContainerCards = styled.div`
   gap: var(--space-5);
   max-width: 1200px;
   margin: 0 auto;
+  animation: ${listFadeIn} 0.22s ease-out;
 `;
 
 
@@ -26,6 +49,13 @@ export const CardsDanfe = styled.div`
   border-radius: var(--radius-3);
   box-shadow: var(--shadow-1);
   color: #0b1b2a;
+  animation: ${cardReveal} 0.3s ease-out both;
+
+  &:nth-child(2) { animation-delay: 0.03s; }
+  &:nth-child(3) { animation-delay: 0.06s; }
+  &:nth-child(4) { animation-delay: 0.09s; }
+  &:nth-child(5) { animation-delay: 0.12s; }
+  &:nth-child(6) { animation-delay: 0.15s; }
 
   h4 {
     font-size: 12px;

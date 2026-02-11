@@ -11,6 +11,7 @@ import { AiOutlineFileSearch } from "react-icons/ai";
 import { MdOutlineReportProblem } from "react-icons/md";
 import { useState } from "react";
 import { HiMenu } from "react-icons/hi";
+import { ImHome } from "react-icons/im";
 
 
 function Header() {
@@ -27,6 +28,11 @@ function Header() {
         <HiMenu />
       </MobileMenuButton>
       <ContainerCards >
+        <Link to='/home' title="Home" >
+          <CardsPages pageNames="Home">
+            <ImHome />
+          </CardsPages>
+        </Link>
         <Link to='/todayInvoices' title="Notas do dia" >
 
           <CardsPages pageNames="Notas do dia">
@@ -83,6 +89,11 @@ function Header() {
       <MobileMenuPanel $open={isOpen} aria-hidden={!isOpen}>
         <h2>Menu</h2>
         <nav>
+          <Link to='/home' onClick={closeMenu}>
+            <CardsPages pageNames="Home">
+              <ImHome />
+            </CardsPages>
+          </Link>
           <Link to='/todayInvoices' onClick={closeMenu}>
             <CardsPages pageNames="Notas do dia">
               <ImCalendar />

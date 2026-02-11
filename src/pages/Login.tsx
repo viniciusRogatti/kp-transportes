@@ -50,9 +50,15 @@ function Login() {
       const response = await axios.post(`${API_URL}/login`, state);
       if (response) {
         const token = response.data.token;
+        const permission = response.data?.data?.permission;
         const isValidToken = await verifyToken(token);
         if (isValidToken) {
           localStorage.setItem('token', token);
+          if (permission) {
+            localStorage.setItem('user_permission', permission);
+          } else {
+            localStorage.removeItem('user_permission');
+          }
           navigate('/home');
           return;
         }

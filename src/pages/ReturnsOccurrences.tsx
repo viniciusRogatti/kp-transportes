@@ -11,41 +11,62 @@ import {
   Actions,
   BoxDescription,
   Card,
+  CardHeaderRow,
+  BatchActionsRow,
+  BatchItemContent,
   Grid,
   HighlightButton,
   InfoText,
   InlineText,
+  ListHeaderRow,
   List,
   ModalCard,
   ModalOverlay,
+  OccurrenceActionsLeft,
+  OccurrenceActionsRight,
+  OccurrenceActionsRow,
+  OccurrenceItemContent,
   PageContainer,
   ReturnSearchRow,
+  SaveBatchButton,
   SingleColumn,
   Tabs,
   TabsRow,
   TopActionBar,
   TwoColumns,
 } from '../style/returnsOccurrences';
-import { ICar, IDanfe, IDriver, IInvoiceReturnItem, IOccurrence, IReturnBatch } from '../types/types';
+import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence, IProduct, IReturnBatch } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 
 function ReturnsOccurrences() {
   const navigate = useNavigate();
   const getTodayDate = () => new Date().toISOString().split('T')[0];
+  const getReturnPdfFileName = (dateValue: string) => {
+    const [year, month, day] = String(dateValue || '').split('-');
+    if (!year || !month || !day) {
+      return 'DEVOLUCAO-KP.pdf';
+    }
+
+    return `DEVOLUCAO-KP-${day}-${month}-${year}.pdf`;
+  };
 
   const [activeTab, setActiveTab] = useState<'returns' | 'occurrences'>('returns');
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [cars, setCars] = useState<ICar[]>([]);
+  const [products, setProducts] = useState<IProduct[]>([]);
 
   const [returnNf, setReturnNf] = useState('');
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
-  const [returnType, setReturnType] = useState<'total' | 'partial'>('total');
+  const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra'>('total');
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialQuantity, setPartialQuantity] = useState<number>(1);
   const [partialItems, setPartialItems] = useState<IInvoiceReturnItem[]>([]);
+  const [leftoverProductCode, setLeftoverProductCode] = useState('');
+  const [leftoverQuantity, setLeftoverQuantity] = useState<number>(1);
+  const [leftoverProductType, setLeftoverProductType] = useState('');
   const [draftNotes, setDraftNotes] = useState<Array<{
     invoice_number: string;
-    return_type: 'total' | 'partial';
+    return_type: 'total' | 'partial' | 'sobra';
     items: IInvoiceReturnItem[];
   }>>([]);
   const [returnDriverId, setReturnDriverId] = useState('');
@@ -55,6 +76,7 @@ function ReturnsOccurrences() {
   const [batchesDate, setBatchesDate] = useState(getTodayDate());
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
+  const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
   const [isBatchSearchOpen, setIsBatchSearchOpen] = useState(false);
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
@@ -68,10 +90,65 @@ function ReturnsOccurrences() {
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
   const [occurrenceStartDate, setOccurrenceStartDate] = useState('');
   const [occurrenceEndDate, setOccurrenceEndDate] = useState('');
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyModalTitle, setHistoryModalTitle] = useState('');
+  const [userPermission, setUserPermission] = useState('');
+  const [historyEntries, setHistoryEntries] = useState<Array<{
+    id: number;
+    action: string;
+    actor_user_id: number | null;
+    actor_username: string | null;
+    created_at: string;
+  }>>([]);
 
   const selectedBatch = useMemo(() => (
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
   ), [returnBatches, selectedBatchCode]);
+  const isAdminUser = userPermission === 'admin';
+
+  useEffect(() => {
+    if (!selectedBatch) {
+      setBatchDraftNotes([]);
+      return;
+    }
+
+    setBatchDraftNotes(selectedBatch.notes);
+  }, [selectedBatch]);
+
+  const selectedBatchHasUnsavedChanges = useMemo(() => {
+    if (!selectedBatch) {
+      return false;
+    }
+
+    const originalInvoices = selectedBatch.notes.map((note) => note.invoice_number).sort();
+    const draftInvoices = batchDraftNotes.map((note) => note.invoice_number).sort();
+
+    if (originalInvoices.length !== draftInvoices.length) {
+      return true;
+    }
+
+    return originalInvoices.some((invoiceNumber, index) => invoiceNumber !== draftInvoices[index]);
+  }, [selectedBatch, batchDraftNotes]);
+
+  const selectedBatchAggregatedPreview = useMemo(() => {
+    if (!selectedBatch) {
+      return [];
+    }
+
+    return batchDraftNotes
+      .flatMap((note) => note.items || [])
+      .reduce((acc: IInvoiceReturnItem[], item) => {
+        const existing = acc.find((savedItem) => savedItem.product_id === item.product_id);
+
+        if (existing) {
+          existing.quantity += Number(item.quantity);
+        } else {
+          acc.push({ ...item, quantity: Number(item.quantity) });
+        }
+
+        return acc;
+      }, []);
+  }, [selectedBatch, batchDraftNotes]);
 
   const draftAggregatedItems = useMemo(() => {
     const allItems = draftNotes.flatMap((note) => note.items);
@@ -111,9 +188,42 @@ function ReturnsOccurrences() {
     : 0;
   const selectedPartialRemainingQty = Math.max(0, selectedPartialMaxQty - selectedPartialAlreadyAddedQty);
   const selectedPartialStep = isSelectedPartialProductKg ? 0.1 : 1;
+  const selectedLeftoverProduct = useMemo(() => (
+    products.find((product) => product.code === leftoverProductCode) || null
+  ), [products, leftoverProductCode]);
+  const leftoverTypeOptions = useMemo(() => {
+    const productTypes = products.map((product) => String(product.type || '').trim().toUpperCase()).filter(Boolean);
+    const defaults = ['KG', 'CX', 'UN', 'PCT'];
+    return Array.from(new Set([...productTypes, ...defaults]));
+  }, [products]);
+  const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra') => {
+    if (value === 'total') return 'Total';
+    if (value === 'partial') return 'Parcial';
+    return 'Sobra';
+  };
+  const getNoteDisplayLabel = (note: { invoice_number: string; return_type: 'total' | 'partial' | 'sobra' }) => {
+    if (note.return_type === 'sobra') {
+      return note.invoice_number.replace(/^SOBRA-/, 'Sobra ');
+    }
+
+    return `NF ${note.invoice_number}`;
+  };
+
+  useEffect(() => {
+    if (!leftoverProductCode) {
+      setLeftoverProductType('');
+      return;
+    }
+
+    if (selectedLeftoverProduct?.type) {
+      setLeftoverProductType(String(selectedLeftoverProduct.type).toUpperCase());
+    }
+  }, [leftoverProductCode, selectedLeftoverProduct]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    const storedPermission = localStorage.getItem('user_permission') || '';
+    setUserPermission(storedPermission);
 
     const validateAndLoad = async () => {
       if (!token) {
@@ -123,11 +233,13 @@ function ReturnsOccurrences() {
 
       const isValidToken = await verifyToken(token);
       if (!isValidToken) {
+        delete axios.defaults.headers.common.Authorization;
         navigate('/');
         return;
       }
 
-      await Promise.all([loadDrivers(), loadCars(), loadOccurrences(), loadReturnBatches()]);
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+      await Promise.all([loadDrivers(), loadCars(), loadProducts(), loadOccurrences(), loadReturnBatches()]);
     };
 
     validateAndLoad();
@@ -149,6 +261,15 @@ function ReturnsOccurrences() {
       setCars(data);
     } catch (error) {
       console.error('Erro ao carregar veiculos:', error);
+    }
+  }
+
+  async function loadProducts() {
+    try {
+      const { data } = await axios.get(`${API_URL}/products`);
+      setProducts(data);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
     }
   }
 
@@ -203,6 +324,11 @@ function ReturnsOccurrences() {
   }
 
   async function handleSearchReturnNf() {
+    if (returnType === 'sobra') {
+      alert('Para sobra, informe codigo, quantidade e tipo do produto.');
+      return;
+    }
+
     if (!returnNf.trim()) {
       alert('Digite a NF para buscar.');
       return;
@@ -303,6 +429,33 @@ function ReturnsOccurrences() {
   }
 
   function getCurrentNoteItems() {
+    if (returnType === 'sobra') {
+      const normalizedCode = leftoverProductCode.trim().toUpperCase();
+      const normalizedType = leftoverProductType.trim().toUpperCase();
+
+      if (!normalizedCode) {
+        alert('Informe o codigo do produto da sobra.');
+        return [];
+      }
+
+      if (!leftoverQuantity || Number(leftoverQuantity) <= 0) {
+        alert('Informe uma quantidade valida para sobra.');
+        return [];
+      }
+
+      if (!normalizedType) {
+        alert('Selecione o tipo do produto da sobra.');
+        return [];
+      }
+
+      return [{
+        product_id: normalizedCode,
+        product_description: selectedLeftoverProduct?.description || `Sobra de produto ${normalizedCode}`,
+        product_type: normalizedType,
+        quantity: Math.round(Number(leftoverQuantity) * 1000) / 1000,
+      }];
+    }
+
     if (!returnDanfe) {
       return [];
     }
@@ -329,52 +482,66 @@ function ReturnsOccurrences() {
   }
 
   async function handleAddNf() {
-    if (!returnDanfe) {
+    if (returnType !== 'sobra' && !returnDanfe) {
       alert('Busque uma NF para adicionar na lista.');
       return;
     }
 
     const noteItems = getCurrentNoteItems();
     if (!noteItems.length) {
-      alert('Adicione ao menos um item na devolucao parcial.');
+      if (returnType === 'partial') {
+        alert('Adicione ao menos um item na devolucao parcial.');
+      }
       return;
     }
 
+    const noteInvoiceNumber = returnType === 'sobra'
+      ? `SOBRA-${noteItems[0].product_id}`
+      : String(returnDanfe?.invoice_number);
+
     if (selectedBatch) {
-      const existsInBatch = selectedBatch.notes.some((note) => note.invoice_number === returnDanfe.invoice_number);
+      const existsInBatch = batchDraftNotes.some((note) => note.invoice_number === noteInvoiceNumber);
       if (existsInBatch) {
-        alert('Essa NF ja existe no lote selecionado.');
+        alert(returnType === 'sobra'
+          ? 'Essa sobra ja existe no lote selecionado.'
+          : 'Essa NF ja existe no lote selecionado.');
         return;
       }
 
-      try {
-        await axios.post(`${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`, {
-          invoice_number: returnDanfe.invoice_number,
+      setBatchDraftNotes((previous) => ([
+        ...previous,
+        {
+          id: -(Date.now()),
+          invoice_number: noteInvoiceNumber,
           return_type: returnType,
+          driver_id: Number(selectedBatch.driver_id),
+          vehicle_plate: selectedBatch.vehicle_plate,
+          return_date: selectedBatch.return_date,
+          batch_code: selectedBatch.batch_code,
+          batch_status: selectedBatch.batch_status,
           items: noteItems,
-        });
+        },
+      ]));
 
-        alert('NF adicionada no lote com sucesso.');
-        await loadReturnBatches();
-        clearNfBuilder();
-      } catch (error) {
-        console.error(error);
-        alert('Erro ao adicionar NF no lote.');
-      }
-
+      alert(returnType === 'sobra'
+        ? 'Sobra adicionada na edicao do lote. Clique em "Salvar lote" para persistir.'
+        : 'NF adicionada na edicao do lote. Clique em "Salvar lote" para persistir.');
+      clearNfBuilder();
       return;
     }
 
-    const existsInDraft = draftNotes.some((note) => note.invoice_number === returnDanfe.invoice_number);
+    const existsInDraft = draftNotes.some((note) => note.invoice_number === noteInvoiceNumber);
     if (existsInDraft) {
-      alert('Essa NF ja esta na lista atual.');
+      alert(returnType === 'sobra'
+        ? 'Essa sobra ja esta na lista atual.'
+        : 'Essa NF ja esta na lista atual.');
       return;
     }
 
     setDraftNotes((previous) => ([
       ...previous,
       {
-        invoice_number: returnDanfe.invoice_number,
+        invoice_number: noteInvoiceNumber,
         return_type: returnType,
         items: noteItems,
       },
@@ -390,6 +557,9 @@ function ReturnsOccurrences() {
     setPartialItems([]);
     setPartialProductCode('');
     setPartialQuantity(1);
+    setLeftoverProductCode('');
+    setLeftoverQuantity(1);
+    setLeftoverProductType('');
   }
 
   function removeDraftNf(invoiceNumber: string) {
@@ -479,7 +649,9 @@ function ReturnsOccurrences() {
         />
       ).toBlob();
 
-      const url = URL.createObjectURL(pdfBlob);
+      const fileName = getReturnPdfFileName(returnDate);
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfFile);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
 
@@ -496,13 +668,42 @@ function ReturnsOccurrences() {
     }
   }
 
-  async function handleRemoveNoteFromBatch(noteId: number) {
+  function handleRemoveNoteFromBatch(noteId: number) {
+    setBatchDraftNotes((previous) => previous.filter((note) => note.id !== noteId));
+  }
+
+  async function handleSaveBatch() {
+    if (!selectedBatch) {
+      return;
+    }
+
+    const originalNotes = selectedBatch.notes;
+    const draftInvoices = new Set(batchDraftNotes.map((note) => note.invoice_number));
+    const originalInvoices = new Set(originalNotes.map((note) => note.invoice_number));
+
+    const notesToAdd = batchDraftNotes.filter((note) => !originalInvoices.has(note.invoice_number));
+    const notesToRemove = originalNotes.filter((note) => !draftInvoices.has(note.invoice_number));
+
+    if (!notesToAdd.length && !notesToRemove.length) {
+      alert('Nenhuma alteracao para salvar no lote.');
+      return;
+    }
+
     try {
-      await axios.delete(`${API_URL}/returns/notes/${noteId}`);
+      await Promise.all(notesToRemove.map((note) => axios.delete(`${API_URL}/returns/notes/${note.id}`)));
+      await Promise.all(notesToAdd.map((note) => (
+        axios.post(`${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`, {
+          invoice_number: note.invoice_number,
+          return_type: note.return_type,
+          items: note.items,
+        })
+      )));
+
+      alert('Lote salvo com sucesso.');
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
-      alert('Erro ao remover NF do lote.');
+      alert('Erro ao salvar alteracoes do lote.');
     }
   }
 
@@ -609,12 +810,64 @@ function ReturnsOccurrences() {
         />
       ).toBlob();
 
-      const url = URL.createObjectURL(pdfBlob);
+      const fileName = getReturnPdfFileName(batch.return_date);
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      const url = URL.createObjectURL(pdfFile);
       window.open(url, '_blank');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       console.error(error);
       alert('Erro ao abrir PDF do lote.');
+    }
+  }
+
+  async function handleViewOccurrenceHistory(id: number) {
+    if (!isAdminUser) {
+      alert('Somente usuarios admin podem visualizar o historico.');
+      return;
+    }
+
+    try {
+      const { data } = await axios.get(`${API_URL}/occurrences/${id}/history`);
+      setHistoryModalTitle(`Historico da ocorrencia #${id}`);
+      setHistoryEntries(data);
+      setHistoryModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao carregar historico da ocorrencia.');
+    }
+  }
+
+  async function handleDeleteOccurrence(id: number) {
+    const confirmed = window.confirm('Deseja realmente excluir esta ocorrencia? O historico sera preservado.');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_URL}/occurrences/${id}`);
+      await loadOccurrences();
+      alert('Ocorrencia excluida com sucesso.');
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao excluir ocorrencia.');
+    }
+  }
+
+  async function handleViewBatchHistory(batchCode: string) {
+    if (!isAdminUser) {
+      alert('Somente usuarios admin podem visualizar o historico.');
+      return;
+    }
+
+    try {
+      const { data } = await axios.get(`${API_URL}/returns/batches/${batchCode}/history`);
+      setHistoryModalTitle(`Historico do lote ${batchCode}`);
+      setHistoryEntries(data);
+      setHistoryModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao carregar historico do lote.');
     }
   }
 
@@ -668,7 +921,7 @@ function ReturnsOccurrences() {
                       Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
                     </InlineText>
                   ) : (
-                    <InlineText>Busque NF, escolha total/parcial e adicione na lista.</InlineText>
+                    <InlineText>Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
                   )}
 
                 </BoxDescription>
@@ -698,16 +951,26 @@ function ReturnsOccurrences() {
                     />
                     Parcial
                   </label>
-                  <button onClick={handleSearchReturnNf} type="button">Buscar NF</button>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={returnType === 'sobra'}
+                      onChange={() => setReturnType('sobra')}
+                    />
+                    Sobra
+                  </label>
+                  <button onClick={handleSearchReturnNf} type="button">Buscar</button>
                 </ReturnSearchRow>
 
-                {returnDanfe && (
+                {(returnDanfe || returnType === 'sobra') && (
                   <>
-                    <InfoText style={{ marginTop: '12px' }}>
-                      NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
-                    </InfoText>
+                    {returnDanfe && returnType !== 'sobra' && (
+                      <InfoText style={{ marginTop: '12px' }}>
+                        NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
+                      </InfoText>
+                    )}
 
-                    {returnType === 'partial' && (
+                    {returnType === 'partial' && returnDanfe && (
                       <>
                         <Grid style={{ marginTop: '12px' }}>
                           <div>
@@ -766,7 +1029,7 @@ function ReturnsOccurrences() {
                       </>
                     )}
 
-                    {!!partialItems.length && returnType === 'partial' && (
+                    {!!partialItems.length && returnType === 'partial' && returnDanfe && (
                       <List>
                         {partialItems.map((item, index) => (
                           <li key={`${item.product_id}-${index}`}>
@@ -781,25 +1044,84 @@ function ReturnsOccurrences() {
                       </List>
                     )}
 
+                    {returnType === 'sobra' && (
+                      <Grid style={{ marginTop: '12px' }}>
+                        <div>
+                          <InlineText>Codigo do produto</InlineText>
+                          <input
+                            type="text"
+                            list="products-codes-list"
+                            value={leftoverProductCode}
+                            onChange={(event) => setLeftoverProductCode(event.target.value)}
+                            placeholder="Ex.: 12345"
+                          />
+                          <datalist id="products-codes-list">
+                            {products.map((product) => (
+                              <option key={`leftover-code-${product.code}`} value={product.code}>
+                                {product.description}
+                              </option>
+                            ))}
+                          </datalist>
+                        </div>
+                        <div>
+                          <InlineText>Quantidade</InlineText>
+                          <input
+                            type="number"
+                            min={0.1}
+                            step={0.1}
+                            value={leftoverQuantity}
+                            onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
+                          />
+                        </div>
+                        <div>
+                          <InlineText>Tipo</InlineText>
+                          <select
+                            value={leftoverProductType}
+                            onChange={(event) => setLeftoverProductType(event.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {leftoverTypeOptions.map((typeOption) => (
+                              <option key={`leftover-type-${typeOption}`} value={typeOption}>
+                                {typeOption}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </Grid>
+                    )}
+
                     <Actions style={{ marginTop: '12px' }}>
                       <button className="primary" onClick={handleAddNf} type="button">
-                        {selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista'}
+                        {returnType === 'sobra'
+                          ? (selectedBatch ? 'Adicionar sobra no lote' : 'Adicionar sobra na lista')
+                          : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
                       </button>
                     </Actions>
                   </>
                 )}
 
-                <h2 style={{ marginTop: '18px' }}>Lista de NFs</h2>
+                <ListHeaderRow>
+                  <h2 style={{ marginTop: '18px' }}>Lista de NFs</h2>
+                  {selectedBatch && (
+                    <SaveBatchButton
+                      onClick={handleSaveBatch}
+                      disabled={!selectedBatchHasUnsavedChanges}
+                      type="button"
+                    >
+                      Salvar lote
+                    </SaveBatchButton>
+                  )}
+                </ListHeaderRow>
                 {selectedBatch ? (
-                  !selectedBatch.notes.length ? (
+                  !batchDraftNotes.length ? (
                     <InlineText>Nenhuma NF no lote selecionado.</InlineText>
                   ) : (
                     <List>
-                      {selectedBatch.notes.map((note) => (
+                      {batchDraftNotes.map((note) => (
                         <li key={note.id}>
                           <span>
-                            <strong>NF {note.invoice_number}</strong>
-                            {` | Tipo: ${note.return_type === 'total' ? 'Total' : 'Parcial'}`}
+                            <strong>{getNoteDisplayLabel(note)}</strong>
+                            {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                             {` | Itens: ${note.items?.length || 0}`}
                           </span>
                           <Actions>
@@ -819,8 +1141,8 @@ function ReturnsOccurrences() {
                       {draftNotes.map((note) => (
                         <li key={note.invoice_number}>
                           <span>
-                            <strong>NF {note.invoice_number}</strong>
-                            {` | Tipo: ${note.return_type === 'total' ? 'Total' : 'Parcial'}`}
+                            <strong>{getNoteDisplayLabel(note)}</strong>
+                            {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                             {` | Itens: ${note.items.length}`}
                           </span>
                           <Actions>
@@ -834,13 +1156,13 @@ function ReturnsOccurrences() {
                   )
                 )}
 
-                {selectedBatch && !!selectedBatch.aggregated_items?.length && (
+                {selectedBatch && !!selectedBatchAggregatedPreview.length && (
                   <>
                     <InlineText style={{ marginTop: '12px' }}>
                       Pre-visualizacao dos produtos consolidados do lote:
                     </InlineText>
                     <List>
-                      {selectedBatch.aggregated_items.map((item) => (
+                      {selectedBatchAggregatedPreview.map((item) => (
                         <li key={`batch-item-${item.product_id}`}>
                           <span>
                             <strong>{item.product_id}</strong> - {item.product_description} | Qtd total: {item.quantity}
@@ -853,7 +1175,7 @@ function ReturnsOccurrences() {
 
                 {!selectedBatch && (
                   <>
-                    <Grid style={{ marginTop: '12px' }}>
+                    <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                       <div>
                         <InlineText>Motorista</InlineText>
                         <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
@@ -874,7 +1196,7 @@ function ReturnsOccurrences() {
                           ))}
                         </select>
                       </div>
-                      <div>
+                      <div style={{ gridColumn: '1 / -1' }}>
                         <InlineText>Data da devolucao</InlineText>
                         <input
                           type="date"
@@ -916,21 +1238,28 @@ function ReturnsOccurrences() {
                   <List>
                     {returnBatches.map((batch) => (
                       <li key={batch.batch_code}>
-                        <span>
-                          <strong>{batch.batch_code}</strong>
-                          {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
-                          {` | Placa: ${batch.vehicle_plate}`}
-                          {` | Data: ${batch.return_date}`}
-                          {` | NFs: ${batch.notes.length}`}
-                        </span>
-                        <Actions>
-                          <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
-                            Abrir PDF
-                          </button>
-                          <button className="primary" onClick={() => setSelectedBatchCode(batch.batch_code)} type="button">
-                            Editar lote
-                          </button>
-                        </Actions>
+                        <BatchItemContent>
+                          <span>
+                            <strong>{batch.batch_code}</strong>
+                            {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
+                            {` | Placa: ${batch.vehicle_plate}`}
+                            {` | Data: ${batch.return_date}`}
+                            {` | NFs: ${batch.notes.length}`}
+                          </span>
+                          <BatchActionsRow>
+                            <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
+                              Abrir PDF
+                            </button>
+                            {isAdminUser && (
+                              <button className="secondary" onClick={() => handleViewBatchHistory(batch.batch_code)} type="button">
+                                Historico
+                              </button>
+                            )}
+                            <button className="primary" onClick={() => setSelectedBatchCode(batch.batch_code)} type="button">
+                              Editar lote
+                            </button>
+                          </BatchActionsRow>
+                        </BatchItemContent>
                       </li>
                     ))}
                   </List>
@@ -971,8 +1300,11 @@ function ReturnsOccurrences() {
           {activeTab === 'occurrences' && (
             <TwoColumns>
               <Card>
-                <h2>Registrar Ocorrencia</h2>
-                <Grid>
+                <CardHeaderRow>
+                  <h2>Registrar Ocorrencia</h2>
+                  <button className="secondary" onClick={handleSearchOccurrenceNf} type="button">Buscar NF</button>
+                </CardHeaderRow>
+                <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                   <div>
                     <InlineText>NF</InlineText>
                     <input
@@ -995,10 +1327,6 @@ function ReturnsOccurrences() {
                     </select>
                   </div>
                 </Grid>
-
-                <Actions style={{ marginTop: '12px' }}>
-                  <button className="secondary" onClick={handleSearchOccurrenceNf} type="button">Buscar NF</button>
-                </Actions>
 
                 {occurrenceDanfe && (
                   <>
@@ -1051,8 +1379,11 @@ function ReturnsOccurrences() {
               </Card>
 
               <Card>
-                <h2>Ocorrencias Cadastradas</h2>
-                <Grid>
+                <CardHeaderRow>
+                  <h2>Ocorrencias Cadastradas</h2>
+                  <button className="secondary" onClick={loadOccurrences} type="button">Atualizar lista</button>
+                </CardHeaderRow>
+                <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                   <div>
                     <InlineText>Status</InlineText>
                     <select
@@ -1090,42 +1421,92 @@ function ReturnsOccurrences() {
                   </div>
                 </Grid>
 
-                <Actions style={{ marginTop: '12px' }}>
-                  <button className="secondary" onClick={loadOccurrences} type="button">Atualizar lista</button>
-                </Actions>
-
                 {!occurrences.length ? (
                   <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia encontrada.</InlineText>
                 ) : (
                   <List>
                     {occurrences.map((occurrence) => (
                       <li key={occurrence.id}>
-                        <span>
-                          <strong>NF {occurrence.invoice_number}</strong> | {occurrence.product_id || 'Sem produto'}
-                          {occurrence.quantity ? ` | Qtd: ${occurrence.quantity}` : ''}
-                          {' | '}
-                          {occurrence.description}
-                          {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
-                          {' | Status: '}
-                          <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
-                        </span>
-                        {occurrence.status === 'pending' && (
-                          <Actions>
-                            <button
-                              className="primary"
-                              onClick={() => handleResolveOccurrence(occurrence.id)}
-                              type="button"
-                            >
-                              Marcar resolvida
-                            </button>
-                          </Actions>
-                        )}
+                        <OccurrenceItemContent>
+                          <span>
+                            <strong>NF {occurrence.invoice_number}</strong> | {occurrence.product_id || 'Sem produto'}
+                            {occurrence.quantity ? ` | Qtd: ${occurrence.quantity}` : ''}
+                            {' | '}
+                            {occurrence.description}
+                            {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
+                            {' | Status: '}
+                            <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
+                          </span>
+
+                          <OccurrenceActionsRow>
+                            <OccurrenceActionsLeft>
+                              {occurrence.status === 'pending' && (
+                                <button
+                                  className="primary"
+                                  onClick={() => handleResolveOccurrence(occurrence.id)}
+                                  type="button"
+                                >
+                                  Marcar resolvida
+                                </button>
+                              )}
+                            </OccurrenceActionsLeft>
+
+                            <OccurrenceActionsRight>
+                              {isAdminUser && (
+                                <button
+                                  className="secondary"
+                                  onClick={() => handleViewOccurrenceHistory(occurrence.id)}
+                                  type="button"
+                                >
+                                  Historico
+                                </button>
+                              )}
+                              <button
+                                className="danger"
+                                onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                type="button"
+                              >
+                                Excluir
+                              </button>
+                            </OccurrenceActionsRight>
+                          </OccurrenceActionsRow>
+                        </OccurrenceItemContent>
                       </li>
                     ))}
                   </List>
                 )}
               </Card>
             </TwoColumns>
+          )}
+
+          {historyModalOpen && (
+            <>
+              <ModalOverlay onClick={() => setHistoryModalOpen(false)} />
+              <ModalCard>
+                <h3>{historyModalTitle}</h3>
+                {!historyEntries.length ? (
+                  <InlineText>Nenhum evento de historico encontrado.</InlineText>
+                ) : (
+                  <List>
+                    {historyEntries.map((entry) => (
+                      <li key={entry.id}>
+                        <span>
+                          <strong>{entry.action}</strong>
+                          {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
+                          {` | Data: ${new Date(entry.created_at).toLocaleString('pt-BR')}`}
+                        </span>
+                      </li>
+                    ))}
+                  </List>
+                )}
+
+                <Actions style={{ marginTop: '12px' }}>
+                  <button className="secondary" onClick={() => setHistoryModalOpen(false)} type="button">
+                    Fechar
+                  </button>
+                </Actions>
+              </ModalCard>
+            </>
           )}
         </PageContainer>
       </Container>

@@ -45,13 +45,14 @@ export interface IInvoiceReturnItem {
   id?: number;
   product_id: string;
   product_description: string;
+  product_type?: string | null;
   quantity: number;
 }
 
 export interface IInvoiceReturn {
   id: number;
   invoice_number: string;
-  return_type: 'total' | 'partial';
+  return_type: 'total' | 'partial' | 'sobra';
   driver_id: number;
   vehicle_plate: string;
   return_date: string;

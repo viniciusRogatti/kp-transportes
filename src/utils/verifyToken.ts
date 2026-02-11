@@ -14,9 +14,11 @@ const verifyToken = async (token: string) => {
     }
 
     localStorage.removeItem('token');
+    localStorage.removeItem('user_permission');
     return false;
   } catch (error) {
     localStorage.removeItem('token');
+    localStorage.removeItem('user_permission');
     return false;
   }
 };

@@ -10,23 +10,51 @@ export const PageContainer = styled.div`
 export const Tabs = styled.div`
   display: flex;
   gap: var(--space-2);
-  width: min(500px, 100%);
+  width: 100%;
+  padding: 6px 0;
+  border-radius: var(--radius-2);
+  background: transparent;
 
   button {
     flex: 1;
     height: 2.5rem;
     border-radius: var(--radius-2);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background: rgba(11, 27, 42, 0.75);
-    color: var(--color-text);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(180deg, rgba(15, 33, 49, 0.95) 0%, rgba(10, 24, 37, 0.95) 100%);
+    color: rgba(226, 242, 255, 0.96);
     cursor: pointer;
     font-weight: 600;
+    transform: translateY(-2px);
+    box-shadow:
+      0 6px 12px rgba(0, 0, 0, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition:
+      transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      box-shadow 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      background 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      border-color 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+      color 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+  }
+
+  button:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 2px 8px rgba(0, 0, 0, 0.32),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   }
 
   button.active {
-    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
-    color: #04131e;
-    border-color: transparent;
+    background: rgba(8, 21, 33, 0.98);
+    color: var(--color-text);
+    border-color: rgba(255, 255, 255, 0.09);
+    transform: translateY(1px);
+    box-shadow:
+      inset 0 2px 6px rgba(0, 0, 0, 0.34),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   }
 `;
 
@@ -48,6 +76,7 @@ export const Grid = styled.div`
   select,
   textarea {
     width: 100%;
+    min-width: 0;
     border-radius: var(--radius-1);
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0.6rem 0.75rem;
@@ -117,9 +146,12 @@ export const ReturnSearchRow = styled.div`
   display: flex;
   gap: var(--space-3);
   align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
 
   input[type='number'] {
-    width: max-content;
+    width: 130px;
+    min-width: 0;
     border-radius: var(--radius-1);
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0.6rem 0.75rem;
@@ -133,7 +165,7 @@ export const ReturnSearchRow = styled.div`
     justify-content: center;
     gap: 0.5rem;
     color: var(--color-text);
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     white-space: nowrap;
     line-height: 1;
   }
@@ -176,8 +208,25 @@ export const ReturnSearchRow = styled.div`
   }
 
   @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    gap: var(--space-2);
+    align-items: center;
+    overflow-x: auto;
+    padding-bottom: 2px;
+
+    input[type='number'] {
+      width: 96px;
+      padding: 0.55rem 0.6rem;
+    }
+
+    button {
+      padding: 0.55rem 0.9rem;
+      white-space: nowrap;
+    }
+
+    label {
+      font-size: 0.85rem;
+      gap: 0.35rem;
+    }
   }
 `;
 
@@ -192,11 +241,157 @@ export const List = styled.ul`
     display: flex;
     justify-content: space-between;
     align-items: center;
+    min-width: 0;
     gap: var(--space-3);
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: var(--radius-1);
     padding: var(--space-2) var(--space-3);
     background: rgba(5, 14, 22, 0.5);
+  }
+
+  li > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+`;
+
+export const OccurrenceItemContent = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+`;
+
+export const OccurrenceActionsRow = styled.div`
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-2);
+`;
+
+export const OccurrenceActionsLeft = styled.div`
+  display: flex;
+  gap: var(--space-2);
+
+  button {
+    border: none;
+    border-radius: var(--radius-2);
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .primary {
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+    color: #04131e;
+  }
+`;
+
+export const OccurrenceActionsRight = styled.div`
+  display: flex;
+  gap: var(--space-2);
+
+  button {
+    border: none;
+    border-radius: var(--radius-2);
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .secondary {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text);
+  }
+
+  .danger {
+    background: #f05e5e;
+    color: #fff;
+  }
+`;
+
+export const BatchItemContent = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+`;
+
+export const BatchActionsRow = styled.div`
+  width: 100%;
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+
+  button {
+    border: none;
+    border-radius: var(--radius-2);
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .primary {
+    background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-strong) 100%);
+    color: #04131e;
+  }
+
+  .secondary {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text);
+  }
+`;
+
+export const ListHeaderRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-2);
+  margin-top: 18px;
+
+  h2 {
+    margin-bottom: 0;
+  }
+`;
+
+export const CardHeaderRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+
+  h2 {
+    margin-bottom: 0;
+  }
+
+  button {
+    border: none;
+    border-radius: var(--radius-2);
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .secondary {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--color-text);
+  }
+`;
+
+export const SaveBatchButton = styled.button`
+  border: none;
+  border-radius: var(--radius-2);
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #3ecf6d 0%, #23a455 100%);
+  color: #062611;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 `;
 

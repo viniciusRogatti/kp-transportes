@@ -11,8 +11,6 @@ import Login from './pages/Login';
 import ReturnsOccurrences from './pages/ReturnsOccurrences';
 // import FreightSummary from './pages/FreightCalculation';
 
-
-
 function App() {
   return (
     <div>
@@ -27,6 +25,7 @@ function App() {
         <Route path="/trips" element={<Trips />} />
         <Route path="/uploadFiles" element={<FileUploadPage />} />
         <Route path="/returns-occurrences" element={<ReturnsOccurrences />} />
+        <Route path="*" element={<Login />} />
       </Routes>
     </div>
   );

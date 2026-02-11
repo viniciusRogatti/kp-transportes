@@ -8,10 +8,8 @@ const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
-const basename = process.env.NODE_ENV === 'production' ? '/kp-transportes' : undefined;
-
 root.render(
-  <HashRouter basename={basename}>
+  <HashRouter>
     <GlobalStyle />
     <App />
   </HashRouter>

@@ -57,10 +57,6 @@ const styles = StyleSheet.create({
   colCode: {
     width: '14%',
   },
-  colType: {
-    width: '12%',
-    textAlign: 'center',
-  },
   colDescription: {
     width: '54%',
     maxLines: 1,
@@ -68,6 +64,10 @@ const styles = StyleSheet.create({
   colQty: {
     width: '20%',
     textAlign: 'right',
+  },
+  colType: {
+    width: '12%',
+    textAlign: 'center',
   },
   signatureBox: {
     position: 'absolute',
@@ -129,16 +129,16 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
         <Text style={styles.sectionTitle}>Produtos consolidados</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.colCode}>Codigo</Text>
-          <Text style={styles.colType}>Tipo</Text>
           <Text style={styles.colDescription}>Descricao</Text>
           <Text style={styles.colQty}>Quantidade</Text>
+          <Text style={styles.colType}>Tipo</Text>
         </View>
         {items.map((item, index) => (
           <View style={styles.tableRow} key={`${item.product_id}-${normalizeProductType(item.product_type)}-${index}`}>
             <Text style={styles.colCode}>{item.product_id}</Text>
-            <Text style={styles.colType}>{normalizeProductType(item.product_type) || '-'}</Text>
             <Text style={styles.colDescription}>{truncateText(item.product_description, 62)}</Text>
             <Text style={styles.colQty}>{item.quantity}</Text>
+            <Text style={styles.colType}>{normalizeProductType(item.product_type) || '-'}</Text>
           </View>
         ))}
 

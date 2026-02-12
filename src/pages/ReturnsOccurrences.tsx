@@ -67,10 +67,33 @@ function ReturnsOccurrences() {
   const getReturnPdfFileName = (dateValue: string) => {
     const [year, month, day] = String(dateValue || '').split('-');
     if (!year || !month || !day) {
-      return 'DEVOLUCAO-KP.pdf';
+      return 'DEVOLUCOES-KPTRANSPORTES.pdf';
     }
 
-    return `DEVOLUCAO-KP-${day}-${month}-${year}.pdf`;
+    return `DEVOLUCOES-KPTRANSPORTES-${day}${month}${year}.pdf`;
+  };
+  const openPdfInNewTab = (pdfBlob: Blob, fileName: string) => {
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const title = fileName.replace(/\.pdf$/i, '');
+    const newTab = window.open('', '_blank');
+
+    if (!newTab) {
+      window.open(pdfUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
+      return;
+    }
+
+    newTab.document.title = title;
+    newTab.document.body.style.margin = '0';
+    newTab.document.body.innerHTML = `
+      <iframe
+        src="${pdfUrl}"
+        title="${title}"
+        style="border:0;width:100vw;height:100vh;"
+      ></iframe>
+    `;
+
+    setTimeout(() => URL.revokeObjectURL(pdfUrl), 60_000);
   };
 
   const [activeTab, setActiveTab] = useState<'returns' | 'occurrences'>('returns');
@@ -213,6 +236,25 @@ function ReturnsOccurrences() {
     const productTypes = products.map((product) => String(product.type || '').trim().toUpperCase()).filter(Boolean);
     return Array.from(new Set([...productTypes, ...DEFAULT_RETURN_UNIT_TYPES]));
   }, [products]);
+  const productTypeByCode = useMemo(() => products.reduce((acc, product) => {
+    const normalizedCode = String(product.code || '').trim().toUpperCase();
+    const normalizedType = normalizeProductType(product.type);
+
+    if (normalizedCode && normalizedType) {
+      acc[normalizedCode] = normalizedType;
+    }
+
+    return acc;
+  }, {} as Record<string, string>), [products]);
+  const fillMissingTypeForPdf = (items: IInvoiceReturnItem[]) => items.map((item) => {
+    const directType = normalizeProductType(item.product_type);
+    if (directType) {
+      return { ...item, product_type: directType };
+    }
+
+    const catalogType = productTypeByCode[String(item.product_id || '').trim().toUpperCase()];
+    return { ...item, product_type: catalogType || 'UN' };
+  });
   const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra') => {
     if (value === 'total') return 'Total';
     if (value === 'partial') return 'Parcial';
@@ -684,6 +726,7 @@ function ReturnsOccurrences() {
       }
 
       const driverName = drivers.find((driver) => String(driver.id) === String(returnDriverId))?.name || 'Motorista';
+      const pdfItems = fillMissingTypeForPdf(draftAggregatedItems);
 
       const pdfBlob = await pdf(
         <ReturnReceiptPDF
@@ -695,15 +738,12 @@ function ReturnsOccurrences() {
             invoice_number: note.invoice_number,
             return_type: note.return_type,
           }))}
-          items={draftAggregatedItems}
+          items={pdfItems}
         />
       ).toBlob();
 
       const fileName = getReturnPdfFileName(returnDate);
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdfFile);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      openPdfInNewTab(pdfBlob, fileName);
 
       if (createdWithLegacyRoute) {
         alert('Devolucao concluida com sucesso. Observacao: backend em modo legado (sem lote).');
@@ -829,6 +869,7 @@ function ReturnsOccurrences() {
       const aggregatedItems = batch.aggregated_items?.length
         ? groupItemsByProductAndType(batch.aggregated_items)
         : groupItemsByProductAndType(batch.notes.flatMap((note) => note.items || []));
+      const pdfItems = fillMissingTypeForPdf(aggregatedItems);
 
       const driverName = batch.Driver?.name
         || drivers.find((driver) => String(driver.id) === String(batch.driver_id))?.name
@@ -844,15 +885,12 @@ function ReturnsOccurrences() {
             invoice_number: note.invoice_number,
             return_type: note.return_type,
           }))}
-          items={aggregatedItems}
+          items={pdfItems}
         />
       ).toBlob();
 
       const fileName = getReturnPdfFileName(batch.return_date);
-      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
-      const url = URL.createObjectURL(pdfFile);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      openPdfInNewTab(pdfBlob, fileName);
     } catch (error) {
       console.error(error);
       alert('Erro ao abrir PDF do lote.');

@@ -38,6 +38,29 @@ import {
 import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence, IProduct, IReturnBatch } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 
+const DEFAULT_RETURN_UNIT_TYPES = ['KG', 'CX', 'UN', 'PCT'];
+
+const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
+const getReturnItemKey = (item: Pick<IInvoiceReturnItem, 'product_id' | 'product_type'>) => (
+  `${item.product_id}::${normalizeProductType(item.product_type)}`
+);
+const groupItemsByProductAndType = (items: IInvoiceReturnItem[]) => items.reduce((acc: IInvoiceReturnItem[], item) => {
+  const key = getReturnItemKey(item);
+  const existing = acc.find((savedItem) => getReturnItemKey(savedItem) === key);
+
+  if (existing) {
+    existing.quantity += Number(item.quantity);
+  } else {
+    acc.push({
+      ...item,
+      product_type: normalizeProductType(item.product_type) || null,
+      quantity: Number(item.quantity),
+    });
+  }
+
+  return acc;
+}, []);
+
 function ReturnsOccurrences() {
   const navigate = useNavigate();
   const getTodayDate = () => new Date().toISOString().split('T')[0];
@@ -59,6 +82,7 @@ function ReturnsOccurrences() {
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
   const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra'>('total');
   const [partialProductCode, setPartialProductCode] = useState('');
+  const [partialProductType, setPartialProductType] = useState('');
   const [partialQuantity, setPartialQuantity] = useState<number>(1);
   const [partialItems, setPartialItems] = useState<IInvoiceReturnItem[]>([]);
   const [leftoverProductCode, setLeftoverProductCode] = useState('');
@@ -135,55 +159,49 @@ function ReturnsOccurrences() {
       return [];
     }
 
-    return batchDraftNotes
-      .flatMap((note) => note.items || [])
-      .reduce((acc: IInvoiceReturnItem[], item) => {
-        const existing = acc.find((savedItem) => savedItem.product_id === item.product_id);
-
-        if (existing) {
-          existing.quantity += Number(item.quantity);
-        } else {
-          acc.push({ ...item, quantity: Number(item.quantity) });
-        }
-
-        return acc;
-      }, []);
+    return groupItemsByProductAndType(
+      batchDraftNotes.flatMap((note) => note.items || [])
+    );
   }, [selectedBatch, batchDraftNotes]);
 
   const draftAggregatedItems = useMemo(() => {
     const allItems = draftNotes.flatMap((note) => note.items);
-
-    return allItems.reduce((acc: IInvoiceReturnItem[], item) => {
-      const existing = acc.find((savedItem) => savedItem.product_id === item.product_id);
-
-      if (existing) {
-        existing.quantity += Number(item.quantity);
-      } else {
-        acc.push({ ...item, quantity: Number(item.quantity) });
-      }
-
-      return acc;
-    }, []);
+    return groupItemsByProductAndType(allItems);
   }, [draftNotes]);
 
   const selectedPartialDanfeProduct = useMemo(() => (
     returnDanfe?.DanfeProducts.find((item) => item.Product.code === partialProductCode) || null
   ), [returnDanfe, partialProductCode]);
 
-  const isSelectedPartialProductKg = useMemo(() => {
+  const selectedPartialTypeOptions = useMemo(() => {
     if (!selectedPartialDanfeProduct) {
+      return DEFAULT_RETURN_UNIT_TYPES;
+    }
+
+    const fromDanfe = [
+      normalizeProductType(selectedPartialDanfeProduct.type),
+      normalizeProductType(selectedPartialDanfeProduct.Product.type),
+    ].filter(Boolean);
+
+    return Array.from(new Set([...fromDanfe, ...DEFAULT_RETURN_UNIT_TYPES]));
+  }, [selectedPartialDanfeProduct]);
+
+  const isSelectedPartialProductKg = useMemo(() => {
+    if (!selectedPartialDanfeProduct || !partialProductType) {
       return false;
     }
 
-    const combinedType = `${selectedPartialDanfeProduct.type || ''} ${selectedPartialDanfeProduct.Product.type || ''}`.toLowerCase();
-    return combinedType.includes('kg');
-  }, [selectedPartialDanfeProduct]);
+    return normalizeProductType(partialProductType).includes('KG');
+  }, [selectedPartialDanfeProduct, partialProductType]);
 
   const selectedPartialMinQty = isSelectedPartialProductKg ? 0.1 : 1;
   const selectedPartialMaxQty = selectedPartialDanfeProduct ? Number(selectedPartialDanfeProduct.quantity) : 0;
-  const selectedPartialAlreadyAddedQty = partialProductCode
+  const selectedPartialAlreadyAddedQty = partialProductCode && partialProductType
     ? partialItems
-      .filter((item) => item.product_id === partialProductCode)
+      .filter((item) => (
+        item.product_id === partialProductCode
+        && normalizeProductType(item.product_type) === normalizeProductType(partialProductType)
+      ))
       .reduce((sum, item) => sum + Number(item.quantity), 0)
     : 0;
   const selectedPartialRemainingQty = Math.max(0, selectedPartialMaxQty - selectedPartialAlreadyAddedQty);
@@ -193,8 +211,7 @@ function ReturnsOccurrences() {
   ), [products, leftoverProductCode]);
   const leftoverTypeOptions = useMemo(() => {
     const productTypes = products.map((product) => String(product.type || '').trim().toUpperCase()).filter(Boolean);
-    const defaults = ['KG', 'CX', 'UN', 'PCT'];
-    return Array.from(new Set([...productTypes, ...defaults]));
+    return Array.from(new Set([...productTypes, ...DEFAULT_RETURN_UNIT_TYPES]));
   }, [products]);
   const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra') => {
     if (value === 'total') return 'Total';
@@ -208,6 +225,28 @@ function ReturnsOccurrences() {
 
     return `NF ${note.invoice_number}`;
   };
+
+  useEffect(() => {
+    if (!partialProductCode || !selectedPartialDanfeProduct) {
+      setPartialProductType('');
+      return;
+    }
+
+    const defaultType = normalizeProductType(selectedPartialDanfeProduct.type)
+      || normalizeProductType(selectedPartialDanfeProduct.Product.type)
+      || DEFAULT_RETURN_UNIT_TYPES[0];
+
+    setPartialProductType(defaultType);
+  }, [partialProductCode, selectedPartialDanfeProduct]);
+
+  useEffect(() => {
+    if (!partialProductCode || !partialProductType) {
+      setPartialQuantity(1);
+      return;
+    }
+
+    setPartialQuantity(normalizeProductType(partialProductType).includes('KG') ? 0.1 : 1);
+  }, [partialProductCode, partialProductType]);
 
   useEffect(() => {
     if (!leftoverProductCode) {
@@ -345,6 +384,7 @@ function ReturnsOccurrences() {
       setReturnDanfe(data);
       setPartialItems([]);
       setPartialProductCode('');
+      setPartialProductType('');
       setPartialQuantity(1);
     } catch (error) {
       console.error(error);
@@ -363,6 +403,11 @@ function ReturnsOccurrences() {
       return;
     }
 
+    if (!partialProductType) {
+      alert('Selecione o tipo da devolucao (CX, PCT, KG, UN).');
+      return;
+    }
+
     if (!partialQuantity || partialQuantity <= 0) {
       alert('Digite uma quantidade valida.');
       return;
@@ -374,11 +419,15 @@ function ReturnsOccurrences() {
       return;
     }
 
-    const isKg = `${foundProduct.type || ''} ${foundProduct.Product.type || ''}`.toLowerCase().includes('kg');
+    const normalizedType = normalizeProductType(partialProductType);
+    const isKg = normalizedType.includes('KG');
     const minAllowed = isKg ? 0.1 : 1;
     const maxAllowed = Number(foundProduct.quantity);
     const existingQty = partialItems
-      .filter((item) => item.product_id === foundProduct.Product.code)
+      .filter((item) => (
+        item.product_id === foundProduct.Product.code
+        && normalizeProductType(item.product_type) === normalizedType
+      ))
       .reduce((sum, item) => sum + Number(item.quantity), 0);
 
     if (!isKg && !Number.isInteger(partialQuantity)) {
@@ -402,13 +451,17 @@ function ReturnsOccurrences() {
     }
 
     setPartialItems((previous) => {
-      const existingItem = previous.find((item) => item.product_id === foundProduct.Product.code);
+      const existingItem = previous.find((item) => (
+        item.product_id === foundProduct.Product.code
+        && normalizeProductType(item.product_type) === normalizedType
+      ));
       if (!existingItem) {
         return [
           ...previous,
           {
             product_id: foundProduct.Product.code,
             product_description: foundProduct.Product.description,
+            product_type: normalizedType,
             quantity: normalizedQuantity,
           },
         ];
@@ -416,6 +469,7 @@ function ReturnsOccurrences() {
 
       return previous.map((item) => (
         item.product_id === foundProduct.Product.code
+          && normalizeProductType(item.product_type) === normalizedType
           ? { ...item, quantity: Number(item.quantity) + normalizedQuantity }
           : item
       ));
@@ -424,8 +478,12 @@ function ReturnsOccurrences() {
     setPartialQuantity(minAllowed);
   }
 
-  function removePartialItem(productId: string) {
-    setPartialItems((previous) => previous.filter((item) => item.product_id !== productId));
+  function removePartialItem(productId: string, productType?: string | null) {
+    const normalizedType = normalizeProductType(productType);
+    setPartialItems((previous) => previous.filter((item) => !(
+      item.product_id === productId
+      && normalizeProductType(item.product_type) === normalizedType
+    )));
   }
 
   function getCurrentNoteItems() {
@@ -464,21 +522,12 @@ function ReturnsOccurrences() {
       return returnDanfe.DanfeProducts.map((item) => ({
         product_id: item.Product.code,
         product_description: item.Product.description,
+        product_type: normalizeProductType(item.type) || normalizeProductType(item.Product.type) || null,
         quantity: Number(item.quantity),
       }));
     }
 
-    return partialItems.reduce((acc: IInvoiceReturnItem[], item) => {
-      const existing = acc.find((savedItem) => savedItem.product_id === item.product_id);
-
-      if (existing) {
-        existing.quantity += Number(item.quantity);
-      } else {
-        acc.push({ ...item, quantity: Number(item.quantity) });
-      }
-
-      return acc;
-    }, []);
+    return groupItemsByProductAndType(partialItems);
   }
 
   async function handleAddNf() {
@@ -556,6 +605,7 @@ function ReturnsOccurrences() {
     setReturnType('total');
     setPartialItems([]);
     setPartialProductCode('');
+    setPartialProductType('');
     setPartialQuantity(1);
     setLeftoverProductCode('');
     setLeftoverQuantity(1);
@@ -777,20 +827,8 @@ function ReturnsOccurrences() {
   async function handleOpenBatchPdf(batch: IReturnBatch) {
     try {
       const aggregatedItems = batch.aggregated_items?.length
-        ? batch.aggregated_items
-        : batch.notes
-          .flatMap((note) => note.items || [])
-          .reduce((acc: IInvoiceReturnItem[], item) => {
-            const existing = acc.find((savedItem) => savedItem.product_id === item.product_id);
-
-            if (existing) {
-              existing.quantity += Number(item.quantity);
-            } else {
-              acc.push({ ...item, quantity: Number(item.quantity) });
-            }
-
-            return acc;
-          }, []);
+        ? groupItemsByProductAndType(batch.aggregated_items)
+        : groupItemsByProductAndType(batch.notes.flatMap((note) => note.items || []));
 
       const driverName = batch.Driver?.name
         || drivers.find((driver) => String(driver.id) === String(batch.driver_id))?.name
@@ -980,21 +1018,27 @@ function ReturnsOccurrences() {
                               onChange={(event) => {
                                 const nextProductCode = event.target.value;
                                 setPartialProductCode(nextProductCode);
-
-                                if (!returnDanfe || !nextProductCode) {
-                                  setPartialQuantity(1);
-                                  return;
-                                }
-
-                                const nextProduct = returnDanfe.DanfeProducts.find((item) => item.Product.code === nextProductCode);
-                                const nextIsKg = `${nextProduct?.type || ''} ${nextProduct?.Product.type || ''}`.toLowerCase().includes('kg');
-                                setPartialQuantity(nextIsKg ? 0.1 : 1);
                               }}
                             >
                               <option value="">Selecione</option>
                               {returnDanfe.DanfeProducts.map((item) => (
                                 <option key={item.Product.code} value={item.Product.code}>
                                   {item.Product.code} - {item.Product.description}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <InlineText>Tipo</InlineText>
+                            <select
+                              value={partialProductType}
+                              onChange={(event) => setPartialProductType(event.target.value)}
+                              disabled={!partialProductCode}
+                            >
+                              <option value="">Selecione</option>
+                              {selectedPartialTypeOptions.map((typeOption) => (
+                                <option key={`partial-type-${typeOption}`} value={typeOption}>
+                                  {typeOption}
                                 </option>
                               ))}
                             </select>
@@ -1011,7 +1055,7 @@ function ReturnsOccurrences() {
                             />
                             {!!partialProductCode && (
                               <InfoText>
-                                Limite da NF: {selectedPartialMaxQty} | Restante para adicionar: {selectedPartialRemainingQty}
+                                Limite da NF para o tipo selecionado: {selectedPartialMaxQty} | Restante para adicionar: {selectedPartialRemainingQty}
                               </InfoText>
                             )}
                           </div>
@@ -1020,7 +1064,7 @@ function ReturnsOccurrences() {
                           <button
                             className="secondary"
                             onClick={addPartialItem}
-                            disabled={!partialProductCode || selectedPartialRemainingQty <= 0}
+                            disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                             type="button"
                           >
                             Adicionar item parcial
@@ -1032,12 +1076,13 @@ function ReturnsOccurrences() {
                     {!!partialItems.length && returnType === 'partial' && returnDanfe && (
                       <List>
                         {partialItems.map((item, index) => (
-                          <li key={`${item.product_id}-${index}`}>
+                          <li key={`${getReturnItemKey(item)}-${index}`}>
                             <span>
-                              <strong>{item.product_id}</strong> - {item.product_description} | Qtd: {item.quantity}
+                              <strong>{item.product_id}</strong> - {item.product_description}
+                              {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
                             </span>
                             <Actions>
-                              <button className="danger" onClick={() => removePartialItem(item.product_id)} type="button">Remover</button>
+                              <button className="danger" onClick={() => removePartialItem(item.product_id, item.product_type)} type="button">Remover</button>
                             </Actions>
                           </li>
                         ))}
@@ -1163,9 +1208,10 @@ function ReturnsOccurrences() {
                     </InlineText>
                     <List>
                       {selectedBatchAggregatedPreview.map((item) => (
-                        <li key={`batch-item-${item.product_id}`}>
+                        <li key={`batch-item-${getReturnItemKey(item)}`}>
                           <span>
-                            <strong>{item.product_id}</strong> - {item.product_description} | Qtd total: {item.quantity}
+                            <strong>{item.product_id}</strong> - {item.product_description}
+                            {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
                           </span>
                         </li>
                       ))}
@@ -1213,9 +1259,10 @@ function ReturnsOccurrences() {
                         </InlineText>
                         <List>
                           {draftAggregatedItems.map((item) => (
-                            <li key={`draft-item-${item.product_id}`}>
+                            <li key={`draft-item-${getReturnItemKey(item)}`}>
                               <span>
-                                <strong>{item.product_id}</strong> - {item.product_description} | Qtd total: {item.quantity}
+                                <strong>{item.product_id}</strong> - {item.product_description}
+                                {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
                               </span>
                             </li>
                           ))}

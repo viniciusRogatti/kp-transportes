@@ -55,10 +55,14 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   colCode: {
-    width: '16%',
+    width: '14%',
+  },
+  colType: {
+    width: '12%',
+    textAlign: 'center',
   },
   colDescription: {
-    width: '64%',
+    width: '54%',
     maxLines: 1,
   },
   colQty: {
@@ -84,6 +88,8 @@ function truncateText(value: string | null | undefined, max = 64) {
   if (value.length <= max) return value;
   return value.slice(0, max);
 }
+
+const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
 
 const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
   batchCode,
@@ -123,12 +129,14 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
         <Text style={styles.sectionTitle}>Produtos consolidados</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.colCode}>Codigo</Text>
+          <Text style={styles.colType}>Tipo</Text>
           <Text style={styles.colDescription}>Descricao</Text>
           <Text style={styles.colQty}>Quantidade</Text>
         </View>
         {items.map((item, index) => (
-          <View style={styles.tableRow} key={`${item.product_id}-${index}`}>
+          <View style={styles.tableRow} key={`${item.product_id}-${normalizeProductType(item.product_type)}-${index}`}>
             <Text style={styles.colCode}>{item.product_id}</Text>
+            <Text style={styles.colType}>{normalizeProductType(item.product_type) || '-'}</Text>
             <Text style={styles.colDescription}>{truncateText(item.product_description, 62)}</Text>
             <Text style={styles.colQty}>{item.quantity}</Text>
           </View>

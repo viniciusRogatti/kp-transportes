@@ -4,7 +4,7 @@ import { IInvoiceReturnItem } from '../types/types';
 
 interface BatchNote {
   invoice_number: string;
-  return_type: 'total' | 'partial' | 'sobra';
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
 }
 
 interface ReturnReceiptPDFProps {
@@ -109,6 +109,11 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
     .map((note) => note.invoice_number)
     .join(', ');
 
+  const collectNfs = notes
+    .filter((note) => note.return_type === 'coleta')
+    .map((note) => note.invoice_number)
+    .join(', ');
+
   const leftoverEntries = notes
     .filter((note) => note.return_type === 'sobra')
     .map((note) => note.invoice_number)
@@ -123,8 +128,9 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
         <Text style={styles.sectionTitle}>NFs devolvidas:</Text>
         {!!totalNfs && <Text style={styles.compactRow}>total: {totalNfs}</Text>}
         {!!partialNfs && <Text style={styles.compactRow}>parcial: {partialNfs}</Text>}
+        {!!collectNfs && <Text style={styles.compactRow}>coleta: {collectNfs}</Text>}
         {!!leftoverEntries && <Text style={styles.compactRow}>sobra: {leftoverEntries}</Text>}
-        {!totalNfs && !partialNfs && !leftoverEntries && <Text style={styles.compactRow}>Nenhuma NF no lote.</Text>}
+        {!totalNfs && !partialNfs && !collectNfs && !leftoverEntries && <Text style={styles.compactRow}>Nenhuma NF no lote.</Text>}
 
         <Text style={styles.sectionTitle}>Produtos consolidados</Text>
         <View style={styles.tableHeader}>

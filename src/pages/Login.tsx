@@ -59,7 +59,7 @@ function Login() {
           } else {
             localStorage.removeItem('user_permission');
           }
-          navigate('/home');
+          navigate(permission === 'control_tower' ? '/control-tower/coletas' : '/home');
           return;
         }
       }

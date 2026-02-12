@@ -73,7 +73,8 @@ function ReturnsOccurrences() {
     return `DEVOLUCOES-KPTRANSPORTES-${day}${month}${year}.pdf`;
   };
   const openPdfInNewTab = (pdfBlob: Blob, fileName: string) => {
-    const pdfUrl = URL.createObjectURL(pdfBlob);
+    const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+    const pdfUrl = URL.createObjectURL(pdfFile);
     const title = fileName.replace(/\.pdf$/i, '');
     const newTab = window.open('', '_blank');
 
@@ -86,10 +87,20 @@ function ReturnsOccurrences() {
     newTab.document.title = title;
     newTab.document.body.style.margin = '0';
     newTab.document.body.innerHTML = `
+      <div style="padding:8px 12px;border-bottom:1px solid #ddd;font-family:Arial,sans-serif;display:flex;gap:12px;align-items:center;">
+        <strong style="font-size:13px;">${fileName}</strong>
+        <a
+          href="${pdfUrl}"
+          download="${fileName}"
+          style="font-size:13px;color:#0b57d0;text-decoration:none;"
+        >
+          Baixar PDF
+        </a>
+      </div>
       <iframe
         src="${pdfUrl}"
         title="${title}"
-        style="border:0;width:100vw;height:100vh;"
+        style="border:0;width:100vw;height:calc(100vh - 42px);"
       ></iframe>
     `;
 
@@ -103,7 +114,7 @@ function ReturnsOccurrences() {
 
   const [returnNf, setReturnNf] = useState('');
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
-  const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra'>('total');
+  const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra' | 'coleta'>('total');
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialProductType, setPartialProductType] = useState('');
   const [partialQuantity, setPartialQuantity] = useState<number>(1);
@@ -113,7 +124,7 @@ function ReturnsOccurrences() {
   const [leftoverProductType, setLeftoverProductType] = useState('');
   const [draftNotes, setDraftNotes] = useState<Array<{
     invoice_number: string;
-    return_type: 'total' | 'partial' | 'sobra';
+    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
     items: IInvoiceReturnItem[];
   }>>([]);
   const [returnDriverId, setReturnDriverId] = useState('');
@@ -255,12 +266,13 @@ function ReturnsOccurrences() {
     const catalogType = productTypeByCode[String(item.product_id || '').trim().toUpperCase()];
     return { ...item, product_type: catalogType || 'UN' };
   });
-  const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra') => {
+  const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra' | 'coleta') => {
     if (value === 'total') return 'Total';
     if (value === 'partial') return 'Parcial';
+    if (value === 'coleta') return 'Coleta';
     return 'Sobra';
   };
-  const getNoteDisplayLabel = (note: { invoice_number: string; return_type: 'total' | 'partial' | 'sobra' }) => {
+  const getNoteDisplayLabel = (note: { invoice_number: string; return_type: 'total' | 'partial' | 'sobra' | 'coleta' }) => {
     if (note.return_type === 'sobra') {
       return note.invoice_number.replace(/^SOBRA-/, 'Sobra ');
     }
@@ -580,8 +592,8 @@ function ReturnsOccurrences() {
 
     const noteItems = getCurrentNoteItems();
     if (!noteItems.length) {
-      if (returnType === 'partial') {
-        alert('Adicione ao menos um item na devolucao parcial.');
+      if (returnType === 'partial' || returnType === 'coleta') {
+        alert(`Adicione ao menos um item na devolucao ${returnType === 'coleta' ? 'de coleta' : 'parcial'}.`);
       }
       return;
     }
@@ -1030,6 +1042,14 @@ function ReturnsOccurrences() {
                   <label>
                     <input
                       type="checkbox"
+                      checked={returnType === 'coleta'}
+                      onChange={() => setReturnType('coleta')}
+                    />
+                    Coleta
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
                       checked={returnType === 'sobra'}
                       onChange={() => setReturnType('sobra')}
                     />
@@ -1046,7 +1066,7 @@ function ReturnsOccurrences() {
                       </InfoText>
                     )}
 
-                    {returnType === 'partial' && returnDanfe && (
+                    {(returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
                       <>
                         <Grid style={{ marginTop: '12px' }}>
                           <div>
@@ -1105,13 +1125,13 @@ function ReturnsOccurrences() {
                             disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                             type="button"
                           >
-                            Adicionar item parcial
+                            {returnType === 'coleta' ? 'Adicionar item de coleta' : 'Adicionar item parcial'}
                           </button>
                         </Actions>
                       </>
                     )}
 
-                    {!!partialItems.length && returnType === 'partial' && returnDanfe && (
+                    {!!partialItems.length && (returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
                       <List>
                         {partialItems.map((item, index) => (
                           <li key={`${getReturnItemKey(item)}-${index}`}>

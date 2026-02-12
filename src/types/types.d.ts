@@ -52,7 +52,7 @@ export interface IInvoiceReturnItem {
 export interface IInvoiceReturn {
   id: number;
   invoice_number: string;
-  return_type: 'total' | 'partial' | 'sobra';
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
   driver_id: number;
   vehicle_plate: string;
   return_date: string;
@@ -100,6 +100,93 @@ export interface ICar {
   id: string;
   model: string;
   license_plate: string;
+}
+
+export interface ICollectionRequest {
+  id: number;
+  invoice_number: string | null;
+  customer_name: string;
+  city: string;
+  product_id: string | null;
+  product_description: string;
+  product_type: string | null;
+  quantity: number;
+  requested_by_company: string;
+  notes: string | null;
+  status: 'pending' | 'completed' | 'cancelled';
+  requested_by_user_id: number | null;
+  completed_by_user_id: number | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  requestedByUser?: {
+    id: number;
+    username: string;
+    permission: string;
+  };
+  completedByUser?: {
+    id: number;
+    username: string;
+    permission: string;
+  };
+}
+
+export interface ICollectionDashboard {
+  metrics: {
+    pending_count: number;
+    total_requests: number;
+    completed_count: number;
+  };
+  pending: ICollectionRequest[];
+  latest_completed: ICollectionRequest[];
+  top_clients: Array<{
+    customer_name: string;
+    requests: number;
+  }>;
+  top_products: Array<{
+    product_description: string;
+    requests: number;
+    quantity: number;
+  }>;
+}
+
+export interface IControlTowerReturnItem {
+  product_id: string;
+  product_description: string;
+  product_type: string | null;
+  quantity: number;
+}
+
+export interface IControlTowerReturn {
+  id: number;
+  invoice_number: string;
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  driver_id: number;
+  vehicle_plate: string;
+  return_date: string;
+  batch_code: string;
+  batch_status: 'open' | 'closed';
+  created_at: string;
+  customer_name: string;
+  city: string;
+  items: IControlTowerReturnItem[];
+}
+
+export interface IControlTowerReturnsDashboard {
+  metrics: {
+    total_returns: number;
+    latest_count: number;
+  };
+  latest_returns: IControlTowerReturn[];
+  top_customers: Array<{
+    customer_name: string;
+    returns: number;
+  }>;
+  top_products: Array<{
+    product_id: string;
+    product_description: string;
+    quantity: number;
+  }>;
 }
 
 export interface IDanfeTrip {

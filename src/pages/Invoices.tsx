@@ -11,6 +11,7 @@ import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
 import { useNavigate } from "react-router";
 import verifyToken from "../utils/verifyToken";
+import { useSearchParams } from "react-router-dom";
 registerLocale('ptBR', ptBR);
 
 function Invoices() {
@@ -20,6 +21,7 @@ function Invoices() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -55,15 +57,18 @@ function Invoices() {
   }
 
   function setFilter(e: React.ChangeEvent<HTMLInputElement>) {
-    const value = e.target.value.toLocaleLowerCase();
+    const value = e.target.value;
     setNf(value)
   };
 
   async function getDanfeByNf () {
-    const isDuplicate = danfes.some((danfe) => danfe?.invoice_number === nf);
+    const normalizedNf = nf.trim();
+    if (!normalizedNf) return;
+
+    const isDuplicate = danfes.some((danfe) => danfe?.invoice_number === normalizedNf);
     if (!isDuplicate) {
       try {
-        const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
+        const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
         
         if (data) {
           setDanfes([...danfes, data]);
@@ -75,6 +80,26 @@ function Invoices() {
     }
     setNf('');
   };
+
+  useEffect(() => {
+    const queryNf = searchParams.get('nf')?.trim();
+    if (!queryNf) return;
+
+    setNf(queryNf);
+
+    const fetchQueryNf = async () => {
+      try {
+        const { data } = await axios.get(`${API_URL}/danfes/nf/${queryNf}`);
+        if (!data) return;
+        setDanfes([data]);
+        setDataDanfes([data]);
+      } catch (error) {
+        console.log('Algo deu errado ao tentar buscar essa nf');
+      }
+    };
+
+    fetchQueryNf();
+  }, [searchParams]);
 
   function formatDate(date: Date | null) {
     if (date) {
@@ -132,7 +157,7 @@ function Invoices() {
             <input value={nf} type="number" onChange={setFilter} placeholder="Digite a nf" />
             <SearchButton onClick={getDanfeByNf}>Pesquisar</SearchButton>
           </SearchRow>
-          <DateRow>
+          <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-1">
             <DateGroup>
               <DatePicker
                 selected={startDate}
@@ -155,8 +180,19 @@ function Invoices() {
                 withPortal
               />
             </DateGroup>
-            <DateAction>
-              <SearchButton onClick={getDanfesByDate}>Buscar</SearchButton>
+            <DateAction className="justify-end gap-2 max-[768px]:justify-stretch">
+              <SearchButton className="max-[768px]:flex-1" onClick={getDanfesByDate}>Buscar</SearchButton>
+              <select
+                onChange={filterByRoute}
+                className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:min-w-0 max-[768px]:flex-1"
+                defaultValue="Todas"
+              >
+                {routes.map((route, index) => (
+                  <option value={route} key={`rota-${index}`}>
+                    {route}
+                  </option>
+                ))}
+              </select>
             </DateAction>
           </DateRow>
         </SearchBar>
@@ -166,16 +202,6 @@ function Invoices() {
           <input type="text" onChange={filterByProduct} placeholder="Filtrar produto (cód. ou descrição)" />
           <input type="text" onChange={filterByCustomerName} placeholder="Filtrar por nome do cliente" />
           <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
-          <div className="route-filter">
-            Rotas
-            <select onChange={filterByRoute}>
-              {routes.map((route, index) => (
-                <option value={route} key={`rota-${index}`}>
-                  {route}
-                </option>
-              ))}
-            </select>
-          </div>
         </FilterBar>
         <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
         <CardDanfes danfes={danfes} animationKey={notesSignature} />

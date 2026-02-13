@@ -64,18 +64,23 @@ function Popup({ title, closePopup, onAdd }: IPopup) {
         <PopupContent>
           <h2>{title}</h2>
           <InputBox>
-            {title === 'Adicionar Motorista' ? 'Digite o nome do motorista' : 'Digite o modelo do Veículo'}
-            <input type="text" value={ value } onChange={onInputChange} />
+            {title === 'Adicionar Motorista' ? 'Nome do motorista' : 'Modelo do veículo'}
+            <input
+              type="text"
+              value={value}
+              onChange={onInputChange}
+              placeholder={title === 'Adicionar Motorista' ? 'Ex.: João Silva' : 'Ex.: Iveco Tector'}
+            />
           </InputBox>
           { title === 'Adicionar Veículo' && (
               <InputBox>
-                Digite a placa do Veículo
-                <input type="text" value={ plate } onChange={changeLicensePlate} />
+                Placa do veículo
+                <input type="text" value={plate} onChange={changeLicensePlate} placeholder="Ex.: ABC1D23" />
               </InputBox>
             )}
           <ButtonBox>
-            <PopupButton onClick={handleSubmit}>Adicionar</PopupButton>
-            <PopupButton $tone="danger" onClick={closePopup}>Fechar</PopupButton>
+            <PopupButton type="button" onClick={handleSubmit}>Adicionar</PopupButton>
+            <PopupButton type="button" $tone="danger" onClick={closePopup}>Fechar</PopupButton>
           </ButtonBox>
         </PopupContent>
       </PopupContainer>

@@ -6,6 +6,7 @@ export interface ITrip {
   updated_at: string;
   date: string;
   gross_weight: number;
+  run_number?: number;
   Driver: {
     id: number;
     name: string;
@@ -47,6 +48,8 @@ export interface IInvoiceReturnItem {
   product_description: string;
   product_type?: string | null;
   quantity: number;
+  unit_price?: number | string;
+  total_price?: number | string;
 }
 
 export interface IInvoiceReturn {
@@ -111,6 +114,8 @@ export interface ICollectionRequest {
   product_description: string;
   product_type: string | null;
   quantity: number;
+  unit_price?: number | string;
+  total_price?: number | string;
   requested_by_company: string;
   notes: string | null;
   status: 'pending' | 'completed' | 'cancelled';
@@ -155,6 +160,8 @@ export interface IControlTowerReturnItem {
   product_description: string;
   product_type: string | null;
   quantity: number;
+  unit_price?: number;
+  total_price?: number;
 }
 
 export interface IControlTowerReturn {
@@ -212,6 +219,7 @@ export interface IDanfe {
   customer_id: string;
   invoice_number: string;
   barcode: string;
+  load_number?: string | null;
   invoice_date: string;
   departure_time: string;
   total_quantity: number;
@@ -231,7 +239,7 @@ export interface IDanfe {
 }
 
 export interface IDanfeProduct {
-  quantity: number;
+  quantity: number | string;
   price: string;
   total_price: string;
   type: string;

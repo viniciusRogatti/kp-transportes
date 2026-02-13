@@ -190,7 +190,7 @@ function ReturnsOccurrences() {
       next.set('tab', resolved);
       setSearchParams(next, { replace: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -999,7 +999,7 @@ function ReturnsOccurrences() {
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
                   ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
                   : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
-                }`}
+                  }`}
                 onClick={() => setTab('returns')}
                 type="button"
               >
@@ -1009,7 +1009,7 @@ function ReturnsOccurrences() {
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'occurrences'
                   ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
                   : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
-                }`}
+                  }`}
                 onClick={() => setTab('occurrences')}
                 type="button"
               >
@@ -1026,597 +1026,597 @@ function ReturnsOccurrences() {
           <section className="-mt-px w-full rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             {activeTab === 'returns' && (
               <SingleColumn>
-              {selectedBatch && (
-                <TopActionBar>
-                  <button className="secondary" onClick={handleCreateNewBatch} type="button">
-                    Criar novo lote
-                  </button>
-                  <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
-                    Abrir PDF
-                  </button>
-                </TopActionBar>
-              )}
+                {selectedBatch && (
+                  <TopActionBar>
+                    <button className="secondary" onClick={handleCreateNewBatch} type="button">
+                      Criar novo lote
+                    </button>
+                    <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
+                      Abrir PDF
+                    </button>
+                  </TopActionBar>
+                )}
 
-              <Card>
-                <BoxDescription>
-                  <h2>{selectedBatch ? `Editando lote ${selectedBatch.batch_code}` : 'Nova devolucao (lista de NFs)'}</h2>
-                  {selectedBatch ? (
-                    <InlineText>
-                      Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
-                    </InlineText>
-                  ) : (
-                    <InlineText>Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
-                  )}
-
-                </BoxDescription>
-                <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
-                <ReturnSearchRow>
-
-                  <input
-                    type="number"
-                    value={returnNf}
-                    onChange={(event) => setReturnNf(event.target.value)}
-                    placeholder="Digite a NF"
-                  />
-
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={returnType === 'total'}
-                      onChange={() => setReturnType('total')}
-                    />
-                    Total
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={returnType === 'partial'}
-                      onChange={() => setReturnType('partial')}
-                    />
-                    Parcial
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={returnType === 'coleta'}
-                      onChange={() => setReturnType('coleta')}
-                    />
-                    Coleta
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={returnType === 'sobra'}
-                      onChange={() => setReturnType('sobra')}
-                    />
-                    Sobra
-                  </label>
-                  <button onClick={handleSearchReturnNf} type="button">Buscar</button>
-                </ReturnSearchRow>
-
-                {(returnDanfe || returnType === 'sobra') && (
-                  <>
-                    {returnDanfe && returnType !== 'sobra' && (
-                      <InfoText style={{ marginTop: '12px' }}>
-                        NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
-                      </InfoText>
+                <Card>
+                  <BoxDescription>
+                    <h2>{selectedBatch ? `Editando lote ${selectedBatch.batch_code}` : 'Nova devolucao (lista de NFs)'}</h2>
+                    {selectedBatch ? (
+                      <InlineText>
+                        Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
+                      </InlineText>
+                    ) : (
+                      <InlineText>Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
                     )}
 
-                    {(returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
-                      <>
+                  </BoxDescription>
+                  <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
+                  <ReturnSearchRow>
+
+                    <input
+                      type="number"
+                      value={returnNf}
+                      onChange={(event) => setReturnNf(event.target.value)}
+                      placeholder="Digite a NF"
+                    />
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={returnType === 'total'}
+                        onChange={() => setReturnType('total')}
+                      />
+                      Total
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={returnType === 'partial'}
+                        onChange={() => setReturnType('partial')}
+                      />
+                      Parcial
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={returnType === 'coleta'}
+                        onChange={() => setReturnType('coleta')}
+                      />
+                      Coleta
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={returnType === 'sobra'}
+                        onChange={() => setReturnType('sobra')}
+                      />
+                      Sobra
+                    </label>
+                    <button onClick={handleSearchReturnNf} type="button">Buscar</button>
+                  </ReturnSearchRow>
+
+                  {(returnDanfe || returnType === 'sobra') && (
+                    <>
+                      {returnDanfe && returnType !== 'sobra' && (
+                        <InfoText style={{ marginTop: '12px' }}>
+                          NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
+                        </InfoText>
+                      )}
+
+                      {(returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
+                        <>
+                          <Grid style={{ marginTop: '12px' }}>
+                            <div>
+                              <InlineText>Produto</InlineText>
+                              <select
+                                value={partialProductCode}
+                                onChange={(event) => {
+                                  const nextProductCode = event.target.value;
+                                  setPartialProductCode(nextProductCode);
+                                }}
+                              >
+                                <option value="">Selecione</option>
+                                {returnDanfe.DanfeProducts.map((item) => (
+                                  <option key={item.Product.code} value={item.Product.code}>
+                                    {item.Product.code} - {item.Product.description}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <InlineText>Tipo</InlineText>
+                              <select
+                                value={partialProductType}
+                                onChange={(event) => setPartialProductType(event.target.value)}
+                                disabled={!partialProductCode}
+                              >
+                                <option value="">Selecione</option>
+                                {selectedPartialTypeOptions.map((typeOption) => (
+                                  <option key={`partial-type-${typeOption}`} value={typeOption}>
+                                    {typeOption}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <InlineText>Quantidade</InlineText>
+                              <input
+                                type="number"
+                                min={selectedPartialMinQty}
+                                max={selectedPartialRemainingQty || undefined}
+                                step={selectedPartialStep}
+                                value={partialQuantity}
+                                onChange={(event) => setPartialQuantity(Number(event.target.value))}
+                              />
+                              {!!partialProductCode && (
+                                <InfoText>
+                                  Limite da NF para o tipo selecionado: {selectedPartialMaxQty} | Restante para adicionar: {selectedPartialRemainingQty}
+                                </InfoText>
+                              )}
+                            </div>
+                          </Grid>
+                          <Actions style={{ marginTop: '12px' }}>
+                            <button
+                              className="secondary"
+                              onClick={addPartialItem}
+                              disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
+                              type="button"
+                            >
+                              {returnType === 'coleta' ? 'Adicionar item de coleta' : 'Adicionar item parcial'}
+                            </button>
+                          </Actions>
+                        </>
+                      )}
+
+                      {!!partialItems.length && (returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
+                        <List>
+                          {partialItems.map((item, index) => (
+                            <li key={`${getReturnItemKey(item)}-${index}`}>
+                              <span>
+                                <strong>{item.product_id}</strong> - {item.product_description}
+                                {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
+                              </span>
+                              <Actions>
+                                <button className="danger" onClick={() => removePartialItem(item.product_id, item.product_type)} type="button">Remover</button>
+                              </Actions>
+                            </li>
+                          ))}
+                        </List>
+                      )}
+
+                      {returnType === 'sobra' && (
                         <Grid style={{ marginTop: '12px' }}>
                           <div>
-                            <InlineText>Produto</InlineText>
-                            <select
-                              value={partialProductCode}
-                              onChange={(event) => {
-                                const nextProductCode = event.target.value;
-                                setPartialProductCode(nextProductCode);
-                              }}
-                            >
-                              <option value="">Selecione</option>
-                              {returnDanfe.DanfeProducts.map((item) => (
-                                <option key={item.Product.code} value={item.Product.code}>
-                                  {item.Product.code} - {item.Product.description}
+                            <InlineText>Codigo do produto</InlineText>
+                            <input
+                              type="text"
+                              list="products-codes-list"
+                              value={leftoverProductCode}
+                              onChange={(event) => setLeftoverProductCode(event.target.value)}
+                              placeholder="Ex.: 12345"
+                            />
+                            <datalist id="products-codes-list">
+                              {products.map((product) => (
+                                <option key={`leftover-code-${product.code}`} value={product.code}>
+                                  {product.description}
                                 </option>
                               ))}
-                            </select>
-                          </div>
-                          <div>
-                            <InlineText>Tipo</InlineText>
-                            <select
-                              value={partialProductType}
-                              onChange={(event) => setPartialProductType(event.target.value)}
-                              disabled={!partialProductCode}
-                            >
-                              <option value="">Selecione</option>
-                              {selectedPartialTypeOptions.map((typeOption) => (
-                                <option key={`partial-type-${typeOption}`} value={typeOption}>
-                                  {typeOption}
-                                </option>
-                              ))}
-                            </select>
+                            </datalist>
                           </div>
                           <div>
                             <InlineText>Quantidade</InlineText>
                             <input
                               type="number"
-                              min={selectedPartialMinQty}
-                              max={selectedPartialRemainingQty || undefined}
-                              step={selectedPartialStep}
-                              value={partialQuantity}
-                              onChange={(event) => setPartialQuantity(Number(event.target.value))}
+                              min={0.1}
+                              step={0.1}
+                              value={leftoverQuantity}
+                              onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
                             />
-                            {!!partialProductCode && (
-                              <InfoText>
-                                Limite da NF para o tipo selecionado: {selectedPartialMaxQty} | Restante para adicionar: {selectedPartialRemainingQty}
-                              </InfoText>
-                            )}
+                          </div>
+                          <div>
+                            <InlineText>Tipo</InlineText>
+                            <select
+                              value={leftoverProductType}
+                              onChange={(event) => setLeftoverProductType(event.target.value)}
+                            >
+                              <option value="">Selecione</option>
+                              {leftoverTypeOptions.map((typeOption) => (
+                                <option key={`leftover-type-${typeOption}`} value={typeOption}>
+                                  {typeOption}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </Grid>
-                        <Actions style={{ marginTop: '12px' }}>
-                          <button
-                            className="secondary"
-                            onClick={addPartialItem}
-                            disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
-                            type="button"
-                          >
-                            {returnType === 'coleta' ? 'Adicionar item de coleta' : 'Adicionar item parcial'}
-                          </button>
-                        </Actions>
-                      </>
-                    )}
+                      )}
 
-                    {!!partialItems.length && (returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
+                      <Actions style={{ marginTop: '12px' }}>
+                        <button className="primary" onClick={handleAddNf} type="button">
+                          {returnType === 'sobra'
+                            ? (selectedBatch ? 'Adicionar sobra no lote' : 'Adicionar sobra na lista')
+                            : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
+                        </button>
+                      </Actions>
+                    </>
+                  )}
+
+                  <ListHeaderRow>
+                    <h2 style={{ marginTop: '18px' }}>Lista de NFs</h2>
+                    {selectedBatch && (
+                      <SaveBatchButton
+                        onClick={handleSaveBatch}
+                        disabled={!selectedBatchHasUnsavedChanges}
+                        type="button"
+                      >
+                        Salvar lote
+                      </SaveBatchButton>
+                    )}
+                  </ListHeaderRow>
+                  {selectedBatch ? (
+                    !batchDraftNotes.length ? (
+                      <InlineText>Nenhuma NF no lote selecionado.</InlineText>
+                    ) : (
                       <List>
-                        {partialItems.map((item, index) => (
-                          <li key={`${getReturnItemKey(item)}-${index}`}>
+                        {batchDraftNotes.map((note) => (
+                          <li key={note.id}>
                             <span>
-                              <strong>{item.product_id}</strong> - {item.product_description}
-                              {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
+                              <strong>{getNoteDisplayLabel(note)}</strong>
+                              {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
+                              {` | Itens: ${note.items?.length || 0}`}
                             </span>
                             <Actions>
-                              <button className="danger" onClick={() => removePartialItem(item.product_id, item.product_type)} type="button">Remover</button>
+                              <button className="danger" onClick={() => handleRemoveNoteFromBatch(note.id)} type="button">
+                                Remover NF
+                              </button>
                             </Actions>
                           </li>
                         ))}
                       </List>
-                    )}
+                    )
+                  ) : (
+                    !draftNotes.length ? (
+                      <InlineText>Nenhuma NF adicionada ainda.</InlineText>
+                    ) : (
+                      <List>
+                        {draftNotes.map((note) => (
+                          <li key={note.invoice_number}>
+                            <span>
+                              <strong>{getNoteDisplayLabel(note)}</strong>
+                              {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
+                              {` | Itens: ${note.items.length}`}
+                            </span>
+                            <Actions>
+                              <button className="danger" onClick={() => removeDraftNf(note.invoice_number)} type="button">
+                                Remover NF
+                              </button>
+                            </Actions>
+                          </li>
+                        ))}
+                      </List>
+                    )
+                  )}
 
-                    {returnType === 'sobra' && (
-                      <Grid style={{ marginTop: '12px' }}>
+                  {selectedBatch && !!selectedBatchAggregatedPreview.length && (
+                    <>
+                      <InlineText style={{ marginTop: '12px' }}>
+                        Pre-visualizacao dos produtos consolidados do lote:
+                      </InlineText>
+                      <List>
+                        {selectedBatchAggregatedPreview.map((item) => (
+                          <li key={`batch-item-${getReturnItemKey(item)}`}>
+                            <span>
+                              <strong>{item.product_id}</strong> - {item.product_description}
+                              {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
+                            </span>
+                          </li>
+                        ))}
+                      </List>
+                    </>
+                  )}
+
+                  {!selectedBatch && (
+                    <>
+                      <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                         <div>
-                          <InlineText>Codigo do produto</InlineText>
-                          <input
-                            type="text"
-                            list="products-codes-list"
-                            value={leftoverProductCode}
-                            onChange={(event) => setLeftoverProductCode(event.target.value)}
-                            placeholder="Ex.: 12345"
-                          />
-                          <datalist id="products-codes-list">
-                            {products.map((product) => (
-                              <option key={`leftover-code-${product.code}`} value={product.code}>
-                                {product.description}
-                              </option>
-                            ))}
-                          </datalist>
-                        </div>
-                        <div>
-                          <InlineText>Quantidade</InlineText>
-                          <input
-                            type="number"
-                            min={0.1}
-                            step={0.1}
-                            value={leftoverQuantity}
-                            onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
-                          />
-                        </div>
-                        <div>
-                          <InlineText>Tipo</InlineText>
-                          <select
-                            value={leftoverProductType}
-                            onChange={(event) => setLeftoverProductType(event.target.value)}
-                          >
+                          <InlineText>Motorista</InlineText>
+                          <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
                             <option value="">Selecione</option>
-                            {leftoverTypeOptions.map((typeOption) => (
-                              <option key={`leftover-type-${typeOption}`} value={typeOption}>
-                                {typeOption}
+                            {drivers.map((driver) => (
+                              <option key={driver.id} value={driver.id}>{driver.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <InlineText>Veiculo / Placa</InlineText>
+                          <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
+                            <option value="">Selecione</option>
+                            {cars.map((car) => (
+                              <option key={car.id} value={car.id}>
+                                {car.model} - {car.license_plate}
                               </option>
                             ))}
                           </select>
                         </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <InlineText>Data da devolucao</InlineText>
+                          <input
+                            type="date"
+                            value={returnDate}
+                            onChange={(event) => setReturnDate(event.target.value)}
+                          />
+                        </div>
                       </Grid>
-                    )}
 
-                    <Actions style={{ marginTop: '12px' }}>
-                      <button className="primary" onClick={handleAddNf} type="button">
-                        {returnType === 'sobra'
-                          ? (selectedBatch ? 'Adicionar sobra no lote' : 'Adicionar sobra na lista')
-                          : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
-                      </button>
-                    </Actions>
-                  </>
-                )}
+                      {!!draftAggregatedItems.length && (
+                        <>
+                          <InlineText style={{ marginTop: '12px' }}>
+                            Pre-visualizacao dos produtos consolidados: {draftAggregatedItems.length}
+                          </InlineText>
+                          <List>
+                            {draftAggregatedItems.map((item) => (
+                              <li key={`draft-item-${getReturnItemKey(item)}`}>
+                                <span>
+                                  <strong>{item.product_id}</strong> - {item.product_description}
+                                  {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
+                                </span>
+                              </li>
+                            ))}
+                          </List>
+                        </>
+                      )}
 
-                <ListHeaderRow>
-                  <h2 style={{ marginTop: '18px' }}>Lista de NFs</h2>
-                  {selectedBatch && (
-                    <SaveBatchButton
-                      onClick={handleSaveBatch}
-                      disabled={!selectedBatchHasUnsavedChanges}
-                      type="button"
-                    >
-                      Salvar lote
-                    </SaveBatchButton>
+                      <Actions style={{ marginTop: '12px' }}>
+                        <button className="primary" onClick={handleConcludeBatch} disabled={draftNotes.length === 0} type="button">
+                          Concluir devolucao
+                        </button>
+                      </Actions>
+                    </>
                   )}
-                </ListHeaderRow>
-                {selectedBatch ? (
-                  !batchDraftNotes.length ? (
-                    <InlineText>Nenhuma NF no lote selecionado.</InlineText>
-                  ) : (
-                    <List>
-                      {batchDraftNotes.map((note) => (
-                        <li key={note.id}>
-                          <span>
-                            <strong>{getNoteDisplayLabel(note)}</strong>
-                            {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
-                            {` | Itens: ${note.items?.length || 0}`}
-                          </span>
-                          <Actions>
-                            <button className="danger" onClick={() => handleRemoveNoteFromBatch(note.id)} type="button">
-                              Remover NF
-                            </button>
-                          </Actions>
-                        </li>
-                      ))}
-                    </List>
-                  )
-                ) : (
-                  !draftNotes.length ? (
-                    <InlineText>Nenhuma NF adicionada ainda.</InlineText>
-                  ) : (
-                    <List>
-                      {draftNotes.map((note) => (
-                        <li key={note.invoice_number}>
-                          <span>
-                            <strong>{getNoteDisplayLabel(note)}</strong>
-                            {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
-                            {` | Itens: ${note.items.length}`}
-                          </span>
-                          <Actions>
-                            <button className="danger" onClick={() => removeDraftNf(note.invoice_number)} type="button">
-                              Remover NF
-                            </button>
-                          </Actions>
-                        </li>
-                      ))}
-                    </List>
-                  )
-                )}
-
-                {selectedBatch && !!selectedBatchAggregatedPreview.length && (
-                  <>
-                    <InlineText style={{ marginTop: '12px' }}>
-                      Pre-visualizacao dos produtos consolidados do lote:
-                    </InlineText>
-                    <List>
-                      {selectedBatchAggregatedPreview.map((item) => (
-                        <li key={`batch-item-${getReturnItemKey(item)}`}>
-                          <span>
-                            <strong>{item.product_id}</strong> - {item.product_description}
-                            {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
-                          </span>
-                        </li>
-                      ))}
-                    </List>
-                  </>
-                )}
-
-                {!selectedBatch && (
-                  <>
-                    <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                      <div>
-                        <InlineText>Motorista</InlineText>
-                        <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
-                          <option value="">Selecione</option>
-                          {drivers.map((driver) => (
-                            <option key={driver.id} value={driver.id}>{driver.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <InlineText>Veiculo / Placa</InlineText>
-                        <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
-                          <option value="">Selecione</option>
-                          {cars.map((car) => (
-                            <option key={car.id} value={car.id}>
-                              {car.model} - {car.license_plate}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <InlineText>Data da devolucao</InlineText>
-                        <input
-                          type="date"
-                          value={returnDate}
-                          onChange={(event) => setReturnDate(event.target.value)}
-                        />
-                      </div>
-                    </Grid>
-
-                    {!!draftAggregatedItems.length && (
-                      <>
-                        <InlineText style={{ marginTop: '12px' }}>
-                          Pre-visualizacao dos produtos consolidados: {draftAggregatedItems.length}
-                        </InlineText>
-                        <List>
-                          {draftAggregatedItems.map((item) => (
-                            <li key={`draft-item-${getReturnItemKey(item)}`}>
-                              <span>
-                                <strong>{item.product_id}</strong> - {item.product_description}
-                                {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
-                              </span>
-                            </li>
-                          ))}
-                        </List>
-                      </>
-                    )}
-
-                    <Actions style={{ marginTop: '12px' }}>
-                      <button className="primary" onClick={handleConcludeBatch} disabled={draftNotes.length === 0} type="button">
-                        Concluir devolucao
-                      </button>
-                    </Actions>
-                  </>
-                )}
-              </Card>
-
-              {!!returnBatches.length && (
-                <Card>
-                  <h2>Lotes encontrados ({returnBatches.length})</h2>
-                  <List>
-                    {returnBatches.map((batch) => (
-                      <li key={batch.batch_code}>
-                        <BatchItemContent>
-                          <span>
-                            <strong>{batch.batch_code}</strong>
-                            {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
-                            {` | Placa: ${batch.vehicle_plate}`}
-                            {` | Data: ${batch.return_date}`}
-                            {` | NFs: ${batch.notes.length}`}
-                          </span>
-                          <BatchActionsRow>
-                            <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
-                              Abrir PDF
-                            </button>
-                            {isAdminUser && (
-                              <button className="secondary" onClick={() => handleViewBatchHistory(batch.batch_code)} type="button">
-                                Historico
-                              </button>
-                            )}
-                            <button className="primary" onClick={() => setSelectedBatchCode(batch.batch_code)} type="button">
-                              Editar lote
-                            </button>
-                          </BatchActionsRow>
-                        </BatchItemContent>
-                      </li>
-                    ))}
-                  </List>
                 </Card>
-              )}
 
-              {isBatchSearchOpen && (
-                <>
-                  <ModalOverlay onClick={() => setIsBatchSearchOpen(false)} />
-                  <ModalCard>
-                    <h3>Buscar lote por data</h3>
-                    <input
-                      type="date"
-                      value={batchesDate}
-                      onChange={(event) => setBatchesDate(event.target.value)}
-                    />
-                    <Actions>
-                      <button
-                        className="primary"
-                        onClick={async () => {
-                          await loadReturnBatches();
-                          setIsBatchSearchOpen(false);
-                        }}
-                        type="button"
-                      >
-                        Buscar
-                      </button>
-                      <button className="secondary" onClick={() => setIsBatchSearchOpen(false)} type="button">
-                        Fechar
-                      </button>
-                    </Actions>
-                  </ModalCard>
-                </>
-              )}
+                {!!returnBatches.length && (
+                  <Card>
+                    <h2>Lotes encontrados ({returnBatches.length})</h2>
+                    <List>
+                      {returnBatches.map((batch) => (
+                        <li key={batch.batch_code}>
+                          <BatchItemContent>
+                            <span>
+                              <strong>{batch.batch_code}</strong>
+                              {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
+                              {` | Placa: ${batch.vehicle_plate}`}
+                              {` | Data: ${batch.return_date}`}
+                              {` | NFs: ${batch.notes.length}`}
+                            </span>
+                            <BatchActionsRow>
+                              <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
+                                Abrir PDF
+                              </button>
+                              {isAdminUser && (
+                                <button className="secondary" onClick={() => handleViewBatchHistory(batch.batch_code)} type="button">
+                                  Historico
+                                </button>
+                              )}
+                              <button className="primary" onClick={() => setSelectedBatchCode(batch.batch_code)} type="button">
+                                Editar lote
+                              </button>
+                            </BatchActionsRow>
+                          </BatchItemContent>
+                        </li>
+                      ))}
+                    </List>
+                  </Card>
+                )}
+
+                {isBatchSearchOpen && (
+                  <>
+                    <ModalOverlay onClick={() => setIsBatchSearchOpen(false)} />
+                    <ModalCard>
+                      <h3>Buscar lote por data</h3>
+                      <input
+                        type="date"
+                        value={batchesDate}
+                        onChange={(event) => setBatchesDate(event.target.value)}
+                      />
+                      <Actions>
+                        <button
+                          className="primary"
+                          onClick={async () => {
+                            await loadReturnBatches();
+                            setIsBatchSearchOpen(false);
+                          }}
+                          type="button"
+                        >
+                          Buscar
+                        </button>
+                        <button className="secondary" onClick={() => setIsBatchSearchOpen(false)} type="button">
+                          Fechar
+                        </button>
+                      </Actions>
+                    </ModalCard>
+                  </>
+                )}
               </SingleColumn>
             )}
 
             {activeTab === 'occurrences' && (
               <TwoColumns>
-              <Card>
-                <CardHeaderRow>
-                  <h2>Registrar Ocorrencia</h2>
-                  <button className="secondary" onClick={handleSearchOccurrenceNf} type="button">Buscar NF</button>
-                </CardHeaderRow>
-                <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                  <div>
-                    <InlineText>NF</InlineText>
-                    <input
-                      type="number"
-                      value={occurrenceNf}
-                      onChange={(event) => setOccurrenceNf(event.target.value)}
-                      placeholder="Digite a NF"
-                    />
-                  </div>
-                  <div>
-                    <InlineText>Motorista</InlineText>
-                    <select
-                      value={occurrenceDriverId}
-                      onChange={(event) => setOccurrenceDriverId(event.target.value)}
-                    >
-                      <option value="">Nao informado</option>
-                      {drivers.map((driver) => (
-                        <option key={driver.id} value={driver.id}>{driver.name}</option>
+                <Card>
+                  <CardHeaderRow>
+                    <h2>Registrar Ocorrencia</h2>
+                    <button className="secondary" onClick={handleSearchOccurrenceNf} type="button">Buscar NF</button>
+                  </CardHeaderRow>
+                  <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                    <div>
+                      <InlineText>NF</InlineText>
+                      <input
+                        type="number"
+                        value={occurrenceNf}
+                        onChange={(event) => setOccurrenceNf(event.target.value)}
+                        placeholder="Digite a NF"
+                      />
+                    </div>
+                    <div>
+                      <InlineText>Motorista</InlineText>
+                      <select
+                        value={occurrenceDriverId}
+                        onChange={(event) => setOccurrenceDriverId(event.target.value)}
+                      >
+                        <option value="">Nao informado</option>
+                        {drivers.map((driver) => (
+                          <option key={driver.id} value={driver.id}>{driver.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </Grid>
+
+                  {occurrenceDanfe && (
+                    <>
+                      <InlineText style={{ marginTop: '12px' }}>
+                        NF selecionada: {occurrenceDanfe.invoice_number} | Cliente: {occurrenceDanfe.Customer.name_or_legal_entity}
+                      </InlineText>
+
+                      <Grid style={{ marginTop: '12px' }}>
+                        <div>
+                          <InlineText>Produto (opcional)</InlineText>
+                          <select
+                            value={occurrenceProductCode}
+                            onChange={(event) => setOccurrenceProductCode(event.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {occurrenceDanfe.DanfeProducts.map((item) => (
+                              <option key={item.Product.code} value={item.Product.code}>
+                                {item.Product.code} - {item.Product.description}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <InlineText>Quantidade</InlineText>
+                          <input
+                            type="number"
+                            min={1}
+                            value={occurrenceQuantity}
+                            onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
+                            disabled={!occurrenceProductCode}
+                          />
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <InlineText>Descricao da ocorrencia</InlineText>
+                          <textarea
+                            value={occurrenceDescription}
+                            onChange={(event) => setOccurrenceDescription(event.target.value)}
+                            placeholder="Ex.: falta de 2 unidades do item X"
+                          />
+                        </div>
+                      </Grid>
+
+                      <Actions style={{ marginTop: '12px' }}>
+                        <button className="primary" onClick={handleCreateOccurrence} type="button">
+                          Registrar ocorrencia
+                        </button>
+                      </Actions>
+                    </>
+                  )}
+                </Card>
+
+                <Card>
+                  <CardHeaderRow>
+                    <h2>Ocorrencias Cadastradas</h2>
+                    <button className="secondary" onClick={loadOccurrences} type="button">Atualizar lista</button>
+                  </CardHeaderRow>
+                  <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                    <div>
+                      <InlineText>Status</InlineText>
+                      <select
+                        value={occurrenceStatusFilter}
+                        onChange={(event) => setOccurrenceStatusFilter(event.target.value as 'all' | 'pending' | 'resolved')}
+                      >
+                        <option value="pending">Pendentes</option>
+                        <option value="resolved">Resolvidas</option>
+                        <option value="all">Todas</option>
+                      </select>
+                    </div>
+                    <div>
+                      <InlineText>Filtro por NF</InlineText>
+                      <input
+                        value={occurrenceNfFilter}
+                        onChange={(event) => setOccurrenceNfFilter(event.target.value)}
+                        placeholder="Ex.: 12345"
+                      />
+                    </div>
+                    <div>
+                      <InlineText>Data inicial</InlineText>
+                      <input
+                        type="date"
+                        value={occurrenceStartDate}
+                        onChange={(event) => setOccurrenceStartDate(event.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <InlineText>Data final</InlineText>
+                      <input
+                        type="date"
+                        value={occurrenceEndDate}
+                        onChange={(event) => setOccurrenceEndDate(event.target.value)}
+                      />
+                    </div>
+                  </Grid>
+
+                  {!occurrences.length ? (
+                    <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia encontrada.</InlineText>
+                  ) : (
+                    <List>
+                      {occurrences.map((occurrence) => (
+                        <li key={occurrence.id}>
+                          <OccurrenceItemContent>
+                            <span>
+                              <strong>NF {occurrence.invoice_number}</strong> | {occurrence.product_id || 'Sem produto'}
+                              {occurrence.quantity ? ` | Qtd: ${occurrence.quantity}` : ''}
+                              {' | '}
+                              {occurrence.description}
+                              {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
+                              {' | Status: '}
+                              <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
+                            </span>
+
+                            <OccurrenceActionsRow>
+                              <OccurrenceActionsLeft>
+                                {occurrence.status === 'pending' && (
+                                  <button
+                                    className="primary"
+                                    onClick={() => handleResolveOccurrence(occurrence.id)}
+                                    type="button"
+                                  >
+                                    Marcar resolvida
+                                  </button>
+                                )}
+                              </OccurrenceActionsLeft>
+
+                              <OccurrenceActionsRight>
+                                {isAdminUser && (
+                                  <button
+                                    className="secondary"
+                                    onClick={() => handleViewOccurrenceHistory(occurrence.id)}
+                                    type="button"
+                                  >
+                                    Historico
+                                  </button>
+                                )}
+                                <button
+                                  className="danger"
+                                  onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                  type="button"
+                                >
+                                  Excluir
+                                </button>
+                              </OccurrenceActionsRight>
+                            </OccurrenceActionsRow>
+                          </OccurrenceItemContent>
+                        </li>
                       ))}
-                    </select>
-                  </div>
-                </Grid>
-
-                {occurrenceDanfe && (
-                  <>
-                    <InlineText style={{ marginTop: '12px' }}>
-                      NF selecionada: {occurrenceDanfe.invoice_number} | Cliente: {occurrenceDanfe.Customer.name_or_legal_entity}
-                    </InlineText>
-
-                    <Grid style={{ marginTop: '12px' }}>
-                      <div>
-                        <InlineText>Produto (opcional)</InlineText>
-                        <select
-                          value={occurrenceProductCode}
-                          onChange={(event) => setOccurrenceProductCode(event.target.value)}
-                        >
-                          <option value="">Selecione</option>
-                          {occurrenceDanfe.DanfeProducts.map((item) => (
-                            <option key={item.Product.code} value={item.Product.code}>
-                              {item.Product.code} - {item.Product.description}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <InlineText>Quantidade</InlineText>
-                        <input
-                          type="number"
-                          min={1}
-                          value={occurrenceQuantity}
-                          onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
-                          disabled={!occurrenceProductCode}
-                        />
-                      </div>
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <InlineText>Descricao da ocorrencia</InlineText>
-                        <textarea
-                          value={occurrenceDescription}
-                          onChange={(event) => setOccurrenceDescription(event.target.value)}
-                          placeholder="Ex.: falta de 2 unidades do item X"
-                        />
-                      </div>
-                    </Grid>
-
-                    <Actions style={{ marginTop: '12px' }}>
-                      <button className="primary" onClick={handleCreateOccurrence} type="button">
-                        Registrar ocorrencia
-                      </button>
-                    </Actions>
-                  </>
-                )}
-              </Card>
-
-              <Card>
-                <CardHeaderRow>
-                  <h2>Ocorrencias Cadastradas</h2>
-                  <button className="secondary" onClick={loadOccurrences} type="button">Atualizar lista</button>
-                </CardHeaderRow>
-                <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                  <div>
-                    <InlineText>Status</InlineText>
-                    <select
-                      value={occurrenceStatusFilter}
-                      onChange={(event) => setOccurrenceStatusFilter(event.target.value as 'all' | 'pending' | 'resolved')}
-                    >
-                      <option value="pending">Pendentes</option>
-                      <option value="resolved">Resolvidas</option>
-                      <option value="all">Todas</option>
-                    </select>
-                  </div>
-                  <div>
-                    <InlineText>Filtro por NF</InlineText>
-                    <input
-                      value={occurrenceNfFilter}
-                      onChange={(event) => setOccurrenceNfFilter(event.target.value)}
-                      placeholder="Ex.: 12345"
-                    />
-                  </div>
-                  <div>
-                    <InlineText>Data inicial</InlineText>
-                    <input
-                      type="date"
-                      value={occurrenceStartDate}
-                      onChange={(event) => setOccurrenceStartDate(event.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <InlineText>Data final</InlineText>
-                    <input
-                      type="date"
-                      value={occurrenceEndDate}
-                      onChange={(event) => setOccurrenceEndDate(event.target.value)}
-                    />
-                  </div>
-                </Grid>
-
-                {!occurrences.length ? (
-                  <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia encontrada.</InlineText>
-                ) : (
-                  <List>
-                    {occurrences.map((occurrence) => (
-                      <li key={occurrence.id}>
-                        <OccurrenceItemContent>
-                          <span>
-                            <strong>NF {occurrence.invoice_number}</strong> | {occurrence.product_id || 'Sem produto'}
-                            {occurrence.quantity ? ` | Qtd: ${occurrence.quantity}` : ''}
-                            {' | '}
-                            {occurrence.description}
-                            {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
-                            {' | Status: '}
-                            <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
-                          </span>
-
-                          <OccurrenceActionsRow>
-                            <OccurrenceActionsLeft>
-                              {occurrence.status === 'pending' && (
-                                <button
-                                  className="primary"
-                                  onClick={() => handleResolveOccurrence(occurrence.id)}
-                                  type="button"
-                                >
-                                  Marcar resolvida
-                                </button>
-                              )}
-                            </OccurrenceActionsLeft>
-
-                            <OccurrenceActionsRight>
-                              {isAdminUser && (
-                                <button
-                                  className="secondary"
-                                  onClick={() => handleViewOccurrenceHistory(occurrence.id)}
-                                  type="button"
-                                >
-                                  Historico
-                                </button>
-                              )}
-                              <button
-                                className="danger"
-                                onClick={() => handleDeleteOccurrence(occurrence.id)}
-                                type="button"
-                              >
-                                Excluir
-                              </button>
-                            </OccurrenceActionsRight>
-                          </OccurrenceActionsRow>
-                        </OccurrenceItemContent>
-                      </li>
-                    ))}
-                  </List>
-                )}
-              </Card>
+                    </List>
+                  )}
+                </Card>
               </TwoColumns>
             )}
           </section>

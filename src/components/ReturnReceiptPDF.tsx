@@ -71,8 +71,8 @@ const styles = StyleSheet.create({
   },
   signatureBox: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    left: 50,
+    right: 50,
     bottom: 20,
   },
   signatureLine: {

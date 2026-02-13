@@ -4,15 +4,15 @@ import TodayInvoices from './pages/TodayInvoices';
 import Products from './pages/Products';
 import Customers from './pages/Customers';
 import RoutePlanning from './pages/RoutePlanning';
-import Trips from './pages/Trips';
 import Invoices from './pages/Invoices';
 import FileUploadPage from './pages/FileUploadPage';
 import Login from './pages/Login';
 import ReturnsOccurrences from './pages/ReturnsOccurrences';
 import ControlTowerCollections from './pages/ControlTowerCollections';
+import GlobalAlertHost from './components/ui/GlobalAlertHost';
 // import FreightSummary from './pages/FreightCalculation';
 
-const INTERNAL_PERMISSIONS = ['admin', 'user', 'master'];
+const INTERNAL_PERMISSIONS = ['admin', 'user', 'master', 'expedicao'];
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
   const token = localStorage.getItem('token');
@@ -40,6 +40,7 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 function App() {
   return (
     <div>
+      <GlobalAlertHost />
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/home" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Home /></ProtectedRoute>} />
@@ -48,10 +49,10 @@ function App() {
         <Route path="/products" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Products /></ProtectedRoute>} />
         <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><RoutePlanning /></ProtectedRoute>} />
         <Route path="/customers" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Customers /></ProtectedRoute>} />
-        <Route path="/trips" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Trips /></ProtectedRoute>} />
+        <Route path="/trips" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><RoutePlanning /></ProtectedRoute>} />
         <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><FileUploadPage /></ProtectedRoute>} />
         <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><ReturnsOccurrences /></ProtectedRoute>} />
-        <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={['control_tower', 'admin', 'master']}><ControlTowerCollections /></ProtectedRoute>} />
+        <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={['control_tower', 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
         <Route path="*" element={<Login />} />
       </Routes>
     </div>

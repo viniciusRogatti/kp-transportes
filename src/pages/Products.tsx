@@ -65,33 +65,37 @@ function Products() {
       <Container>
       {isLoading ? (<ProductsLoader />) : (
         <>
-          <FilterBar>
+          <FilterBar className="max-[768px]:grid-cols-1 max-[768px]:[grid-template-columns:minmax(0,1fr)]">
             <FilterInput
               type="text"
               value={codeFilter}
               onChange={(event) => setCodeFilter(event.target.value)}
               placeholder="Filtrar por codigo"
+              className="max-w-full"
             />
             <FilterInput
               type="text"
               value={descriptionFilter}
               onChange={(event) => setDescriptionFilter(event.target.value)}
               placeholder="Filtrar por descricao"
+              className="max-w-full"
             />
           </FilterBar>
-          <table>
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Descrição</th>
-                <th>Preço</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              { filteredProducts.map((product) => <CardProducts product={product} />)}
-            </tbody>
-          </table>
+          <div className="w-full max-w-[1200px] overflow-x-auto">
+            <table className="min-w-[640px] max-[768px]:min-w-[540px] max-[768px]:[&_td:nth-child(2)]:text-[0.78rem]">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Descrição</th>
+                  <th className="max-[768px]:hidden">Preço</th>
+                  <th className="max-[768px]:hidden">Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                { filteredProducts.map((product) => <CardProducts product={product} />)}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       </Container>

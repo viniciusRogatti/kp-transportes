@@ -40,10 +40,11 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
 
     const groupedProducts = allProducts.reduce((accumulator: any, product) => {
       const existingProduct = accumulator.find((p: any) => p.Product.code === product.Product.code);
+      const quantity = Number(product.quantity || 0);
       if (existingProduct) {
-        existingProduct.quantity += product.quantity;
+        existingProduct.quantity += quantity;
       } else {
-        accumulator.push({ ...product });
+        accumulator.push({ ...product, quantity });
       }
       return accumulator;
     }, []);

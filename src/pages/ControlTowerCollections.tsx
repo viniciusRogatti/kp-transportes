@@ -1,201 +1,104 @@
-import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { SortingState } from '@tanstack/react-table';
+import axios from 'axios';
 
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import FiltersBar from '../components/ControlTower/FiltersBar';
+import KpiCards from '../components/ControlTower/KpiCards';
+import FlowTimeChart from '../components/ControlTower/charts/FlowTimeChart';
+import BacklogStatusChart from '../components/ControlTower/charts/BacklogStatusChart';
+import TopHorizontalChart, { TopMetric } from '../components/ControlTower/charts/TopHorizontalChart';
+import ReasonsDonutChart from '../components/ControlTower/charts/ReasonsDonutChart';
+import ActionQueue from '../components/ControlTower/ActionQueue';
+import ReturnsTable from '../components/ControlTower/ReturnsTable';
+import DetailsDrawer from '../components/ControlTower/DetailsDrawer';
+import { exportRowsToCsv, getFilterOptions, getReturnsTable } from '../services/controlTowerService';
+import { useControlTowerData, useControlTowerMutations } from '../hooks/useControlTower';
+import { BacklogStatus, ControlTowerFilters } from '../types/controlTower';
 import { API_URL } from '../data';
-import verifyToken from '../utils/verifyToken';
-import {
-  ICollectionDashboard,
-  ICollectionRequest,
-  IControlTowerReturn,
-  IControlTowerReturnsDashboard,
-} from '../types/types';
+
+const today = new Date().toISOString().slice(0, 10);
+
+const defaultFilters: ControlTowerFilters = {
+  search: '',
+  periodPreset: '7d',
+  startDate: '',
+  endDate: today,
+  returnStatus: 'all',
+  pickupStatus: 'all',
+  city: '',
+  route: '',
+  customer: '',
+  product: '',
+};
 
 function ControlTowerCollections() {
   const navigate = useNavigate();
   const userPermission = localStorage.getItem('user_permission') || '';
-  const isInternalUser = ['admin', 'master', 'user'].includes(userPermission);
+  const canManageStatus = ['admin', 'master', 'expedicao'].includes(userPermission);
+  const [filters, setFilters] = useState<ControlTowerFilters>(defaultFilters);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize] = useState(12);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'confirmedAt', desc: true }]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [topMetric, setTopMetric] = useState<TopMetric>('quantity');
+  const [registerNf, setRegisterNf] = useState('');
+  const [registeringPickup, setRegisteringPickup] = useState(false);
 
-  const [dashboard, setDashboard] = useState<ICollectionDashboard | null>(null);
-  const [searchRows, setSearchRows] = useState<ICollectionRequest[]>([]);
+  const sortingInput = sorting[0] ? { id: sorting[0].id as any, desc: sorting[0].desc ?? false } : undefined;
+  const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
 
-  const [returnsDashboard, setReturnsDashboard] = useState<IControlTowerReturnsDashboard | null>(null);
-  const [returnRows, setReturnRows] = useState<IControlTowerReturn[]>([]);
+  const { summary, charts, queue, table } = useControlTowerData(filters, pagination, sortingInput);
+  const { requestPickupMutation, updateStatusMutation, confirmSubmissionMutation, addObservationMutation, prioritizePickupMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
 
-  const [form, setForm] = useState({
-    invoice_number: '',
-    customer_name: '',
-    city: '',
-    product_id: '',
-    product_description: '',
-    product_type: '',
-    quantity: 1,
-    notes: '',
-  });
+  const selectedRow = selectedId ? getSelectedFromCache(selectedId) : null;
 
-  const [filters, setFilters] = useState({
-    invoice_number: '',
-    customer_name: '',
-    city: '',
-    product_term: '',
-    status: 'all',
-  });
+  const options = getFilterOptions();
 
-  const [returnFilters, setReturnFilters] = useState({
-    invoice_number: '',
-    customer_name: '',
-    city: '',
-  });
+  const updatedAgoLabel = summary.data?.updatedAt
+    ? formatDistanceToNow(new Date(summary.data.updatedAt), { addSuffix: false, locale: ptBR })
+    : '-';
 
-  const [loadingDashboard, setLoadingDashboard] = useState(false);
-  const [loadingSearch, setLoadingSearch] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const periodSubtitle = filters.periodPreset === 'custom'
+    ? `${filters.startDate || '-'} até ${filters.endDate || '-'}`
+    : filters.periodPreset === 'today'
+      ? 'Hoje'
+      : filters.periodPreset === '7d'
+        ? 'Últimos 7 dias'
+        : 'Últimos 30 dias';
 
-  const [loadingReturnsDashboard, setLoadingReturnsDashboard] = useState(false);
-  const [loadingReturnsSearch, setLoadingReturnsSearch] = useState(false);
-
-  const topClientsMax = useMemo(() => Math.max(...(dashboard?.top_clients.map((item) => item.requests) || [1])), [dashboard]);
-  const topProductsMax = useMemo(() => Math.max(...(dashboard?.top_products.map((item) => item.quantity) || [1])), [dashboard]);
-
-  const topReturnClientsMax = useMemo(() => Math.max(...(returnsDashboard?.top_customers.map((item) => item.returns) || [1])), [returnsDashboard]);
-  const topReturnedProductsMax = useMemo(() => Math.max(...(returnsDashboard?.top_products.map((item) => item.quantity) || [1])), [returnsDashboard]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    const validateAndLoad = async () => {
-      if (!token) {
-        navigate('/');
-        return;
-      }
-
-      const valid = await verifyToken(token);
-      if (!valid) {
-        navigate('/');
-        return;
-      }
-
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      await Promise.all([
-        loadDashboard(),
-        searchCollections(),
-        loadReturnsDashboard(),
-        searchReturns(),
-      ]);
-    };
-
-    validateAndLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadDashboard() {
-    try {
-      setLoadingDashboard(true);
-      const { data } = await axios.get(`${API_URL}/collection-requests/dashboard`);
-      setDashboard(data);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao carregar o painel de coletas.');
-    } finally {
-      setLoadingDashboard(false);
-    }
+  function handleFilterChange(next: Partial<ControlTowerFilters>) {
+    setPageIndex(0);
+    setFilters((prev) => ({ ...prev, ...next }));
   }
 
-  async function searchCollections() {
-    try {
-      setLoadingSearch(true);
-      const params = new URLSearchParams();
-
-      if (filters.invoice_number.trim()) params.append('invoice_number', filters.invoice_number.trim());
-      if (filters.customer_name.trim()) params.append('customer_name', filters.customer_name.trim());
-      if (filters.city.trim()) params.append('city', filters.city.trim());
-      if (filters.product_term.trim()) params.append('product_term', filters.product_term.trim());
-      if (filters.status !== 'all') params.append('status', filters.status);
-
-      const { data } = await axios.get(`${API_URL}/collection-requests/search?${params.toString()}`);
-      setSearchRows(data);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao pesquisar coletas.');
-    } finally {
-      setLoadingSearch(false);
-    }
+  async function applyFilterAndOpen(next: Partial<ControlTowerFilters>) {
+    const merged = { ...filters, ...next };
+    setPageIndex(0);
+    setFilters(merged);
+    const firstRow = await getReturnsTable(merged, { pageIndex: 0, pageSize: 1 }, sortingInput);
+    setSelectedId(firstRow.rows[0]?.id || null);
   }
 
-  async function loadReturnsDashboard() {
-    try {
-      setLoadingReturnsDashboard(true);
-      const { data } = await axios.get(`${API_URL}/returns/control-tower/dashboard`);
-      setReturnsDashboard(data);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao carregar o painel de devoluções.');
-    } finally {
-      setLoadingReturnsDashboard(false);
-    }
+  async function handleExport() {
+    const response = await getReturnsTable(filters, { pageIndex: 0, pageSize: 3000 }, sortingInput);
+    const csv = exportRowsToCsv(response.rows);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `control-tower-${today}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
-  async function searchReturns() {
-    try {
-      setLoadingReturnsSearch(true);
-      const params = new URLSearchParams();
-      if (returnFilters.invoice_number.trim()) params.append('invoice_number', returnFilters.invoice_number.trim());
-      if (returnFilters.customer_name.trim()) params.append('customer_name', returnFilters.customer_name.trim());
-      if (returnFilters.city.trim()) params.append('city', returnFilters.city.trim());
-
-      const { data } = await axios.get(`${API_URL}/returns/control-tower/search?${params.toString()}`);
-      setReturnRows(data);
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao pesquisar devoluções.');
-    } finally {
-      setLoadingReturnsSearch(false);
-    }
-  }
-
-  async function handleCreateCollection() {
-    if (!form.customer_name.trim() || !form.city.trim() || !form.product_description.trim() || Number(form.quantity) <= 0) {
-      alert('Preencha cliente, cidade, produto e quantidade.');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      await axios.post(`${API_URL}/collection-requests`, {
-        ...form,
-        quantity: Number(form.quantity),
-        product_type: form.product_type.trim().toUpperCase() || null,
-      });
-
-      alert('Solicitação de coleta criada com sucesso.');
-      setForm({
-        invoice_number: '',
-        customer_name: '',
-        city: '',
-        product_id: '',
-        product_description: '',
-        product_type: '',
-        quantity: 1,
-        notes: '',
-      });
-
-      await Promise.all([loadDashboard(), searchCollections()]);
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.response?.data?.error || 'Erro ao criar solicitação de coleta.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleUpdateStatus(id: number, status: 'pending' | 'completed' | 'cancelled') {
-    try {
-      await axios.patch(`${API_URL}/collection-requests/${id}/status`, { status });
-      await Promise.all([loadDashboard(), searchCollections()]);
-    } catch (error: any) {
-      console.error(error);
-      alert(error?.response?.data?.error || 'Erro ao atualizar status da coleta.');
-    }
+  function resetFilters() {
+    setPageIndex(0);
+    setFilters(defaultFilters);
   }
 
   function logout() {
@@ -205,276 +108,239 @@ function ControlTowerCollections() {
     navigate('/');
   }
 
+  async function refreshAll() {
+    await Promise.all([
+      summary.refetch(),
+      charts.refetch(),
+      queue.refetch(),
+      table.refetch(),
+    ]);
+  }
+
+  function openById(id: string) {
+    setSelectedId(id);
+  }
+
+  function quickRequestPickup(id: string) {
+    requestPickupMutation.mutate({ returnId: id });
+  }
+
+  function quickUpdateStatus(id: string, status: BacklogStatus) {
+    if (!canManageStatus) return;
+    updateStatusMutation.mutate({ pickupId: id, status });
+  }
+
+  function quickCancelPickup(id: string) {
+    const row = getSelectedFromCache(id);
+    if (row?.status === 'COLETADA') return;
+    updateStatusMutation.mutate({ pickupId: id, status: 'CANCELADA' });
+  }
+
+  function quickTogglePriority(id: string, pickupPriority: boolean) {
+    prioritizePickupMutation.mutate({ returnId: id, pickupPriority });
+  }
+
+  async function handleRegisterPickupByNf() {
+    const nf = registerNf.trim();
+    if (!nf) {
+      alert('Informe a NF para registrar a coleta.');
+      return;
+    }
+
+    setRegisteringPickup(true);
+    try {
+      const danfeResponse = await axios.get(`${API_URL}/danfes/nf/${nf}`);
+      if (!danfeResponse?.data) {
+        alert('NF não encontrada no banco de dados. Verifique o número informado.');
+        return;
+      }
+
+      const response = await getReturnsTable(
+        { ...filters, search: nf },
+        { pageIndex: 0, pageSize: 3000 },
+        sortingInput,
+      );
+
+      const row = response.rows.find((item) => String(item.invoiceNumber) === nf);
+
+      if (!row) {
+        alert('A NF existe no banco, mas não está disponível na Torre de Controle para coleta.');
+        return;
+      }
+
+      if (row.status === 'COLETADA') {
+        alert('Essa NF já está marcada como coletada.');
+        return;
+      }
+
+      if (row.status === 'CANCELADA') {
+        alert('Essa NF está com coleta cancelada e não pode ser registrada.');
+        return;
+      }
+
+      quickRequestPickup(row.id);
+      setRegisterNf('');
+      alert(`Coleta registrada para a NF ${nf}.`);
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        alert('NF não encontrada no banco de dados. Verifique o número informado.');
+      } else {
+        alert('Erro ao validar NF e registrar coleta.');
+      }
+    } finally {
+      setRegisteringPickup(false);
+    }
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(120deg, #f4f8fc 0%, #f0f6f4 100%)', padding: '18px' }}>
-      <div style={{ maxWidth: 1250, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+    <div className="min-h-screen bg-[#070f1a] px-3 py-3 text-slate-100 lg:px-4">
+      <div className="mx-auto max-w-[1550px] space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 style={{ margin: 0, color: '#123263' }}>Torre de Controle | MAR E RIO PESCADOS</h1>
-            <p style={{ margin: '4px 0 0 0', color: '#2f4a5f' }}>
-              Painel para solicitar coletas e monitorar devoluções com rastreabilidade operacional.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">Control Tower | KP Transportes + Mar e Rio</h1>
+            <p className="text-sm text-slate-400">Visão ampla de volume, tendência, gargalo e ação imediata.</p>
           </div>
-          <button type="button" onClick={logout} style={{ border: '1px solid #123263', background: '#fff', color: '#123263', borderRadius: 8, padding: '8px 12px' }}>
-            Sair
-          </button>
+          <Button tone="outline" className="border-slate-600 bg-slate-900 text-slate-100" onClick={logout}>Sair</Button>
         </div>
 
-        <h2 style={{ marginBottom: 10, color: '#123263' }}>Coletas</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <strong>Pendentes</strong>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#123263' }}>{dashboard?.metrics.pending_count || 0}</div>
-          </div>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <strong>Total de solicitações</strong>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#123263' }}>{dashboard?.metrics.total_requests || 0}</div>
-          </div>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <strong>Concluídas</strong>
-            <div style={{ fontSize: 28, fontWeight: 700, color: '#123263' }}>{dashboard?.metrics.completed_count || 0}</div>
-          </div>
-        </div>
+        <FiltersBar
+          filters={filters}
+          options={options}
+          updatedAgoLabel={updatedAgoLabel}
+          onChange={handleFilterChange}
+          onRefresh={refreshAll}
+          onReset={resetFilters}
+          onExport={handleExport}
+        />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <h3 style={{ marginTop: 0 }}>Nova solicitação de coleta</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              <input placeholder="NF (opcional)" value={form.invoice_number} onChange={(e) => setForm((prev) => ({ ...prev, invoice_number: e.target.value }))} />
-              <input placeholder="Cliente" value={form.customer_name} onChange={(e) => setForm((prev) => ({ ...prev, customer_name: e.target.value }))} />
-              <input placeholder="Cidade" value={form.city} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} />
-              <input placeholder="Código do produto (opcional)" value={form.product_id} onChange={(e) => setForm((prev) => ({ ...prev, product_id: e.target.value }))} />
-              <input placeholder="Produto" value={form.product_description} onChange={(e) => setForm((prev) => ({ ...prev, product_description: e.target.value }))} />
-              <input placeholder="Tipo (KG/CX/PCT/UN)" value={form.product_type} onChange={(e) => setForm((prev) => ({ ...prev, product_type: e.target.value.toUpperCase() }))} />
-              <input type="number" min={0.001} step={0.001} placeholder="Quantidade" value={form.quantity} onChange={(e) => setForm((prev) => ({ ...prev, quantity: Number(e.target.value) }))} />
-              <input placeholder="Observações" value={form.notes} onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))} />
+        <KpiCards summary={summary.data} />
+
+        <Card className="border-slate-800 bg-[#101b2b]">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[260px] flex-1">
+              <label htmlFor="register-pickup-nf" className="mb-1 block text-xs font-medium text-slate-300">
+                Registrar coleta por NF
+              </label>
+              <input
+                id="register-pickup-nf"
+                value={registerNf}
+                onChange={(event) => setRegisterNf(event.target.value)}
+                placeholder="Digite a NF (somente notas existentes no banco)"
+                className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+              />
+              <p className="mt-1 text-xs text-slate-400">A NF será validada no banco antes do registro da coleta.</p>
             </div>
-            <button type="button" onClick={handleCreateCollection} disabled={saving} style={{ marginTop: 10, background: '#123263', color: '#fff', border: 0, borderRadius: 8, padding: '10px 14px' }}>
-              {saving ? 'Salvando...' : 'Solicitar coleta'}
-            </button>
+            <Button
+              tone="secondary"
+              className="h-10 bg-slate-800 text-slate-100 hover:bg-slate-700 disabled:opacity-60"
+              onClick={handleRegisterPickupByNf}
+              disabled={registeringPickup}
+            >
+              {registeringPickup ? 'Validando...' : 'Registrar coleta'}
+            </Button>
+          </div>
+        </Card>
+
+        <div className="grid gap-3 xl:grid-cols-12">
+          <div className="space-y-3 xl:col-span-8">
+            <Card className="border-slate-800 bg-[#101b2b]">
+              <FlowTimeChart
+                data={charts.data}
+                subtitle={periodSubtitle}
+                onPointClick={(date) => applyFilterAndOpen({ periodPreset: 'custom', startDate: date, endDate: date })}
+              />
+            </Card>
+            <Card className="border-slate-800 bg-[#101b2b]">
+              <BacklogStatusChart
+                data={charts.data}
+                subtitle="Clique no status para filtrar a fila"
+                onStatusClick={(status) => applyFilterAndOpen({ pickupStatus: status })}
+              />
+            </Card>
           </div>
 
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <h3 style={{ marginTop: 0 }}>Coletas | Gráficos rápidos</h3>
-            <p style={{ marginBottom: 6, fontWeight: 600 }}>Clientes com mais solicitações</p>
-            {(dashboard?.top_clients || []).map((item) => (
-              <div key={`client-${item.customer_name}`} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12 }}>{item.customer_name} ({item.requests})</div>
-                <div style={{ height: 8, background: '#e4edf6', borderRadius: 6 }}>
-                  <div style={{ width: `${(item.requests / topClientsMax) * 100}%`, height: 8, borderRadius: 6, background: '#123263' }} />
-                </div>
+          <div className="space-y-3 xl:col-span-4">
+            <Card className="border-slate-800 bg-[#101b2b]">
+              <div className="mb-2 flex items-center justify-end">
+                <select
+                  value={topMetric}
+                  onChange={(event) => setTopMetric(event.target.value as TopMetric)}
+                  className="h-8 rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs"
+                >
+                  <option value="quantity">Quantidade</option>
+                  <option value="weightKg">Peso (kg)</option>
+                  <option value="valueAmount">Valor (R$)</option>
+                </select>
               </div>
-            ))}
+              <TopHorizontalChart
+                title="Top produtos devolvidos"
+                subtitle={periodSubtitle}
+                data={charts.data?.topProducts || []}
+                metric={topMetric}
+                color="#60a5fa"
+                onBarClick={(name) => applyFilterAndOpen({ product: name })}
+              />
+            </Card>
 
-            <p style={{ margin: '12px 0 6px 0', fontWeight: 600 }}>Produtos mais coletados (quantidade)</p>
-            {(dashboard?.top_products || []).map((item) => (
-              <div key={`product-${item.product_description}`} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12 }}>{item.product_description} ({item.quantity})</div>
-                <div style={{ height: 8, background: '#dff2ec', borderRadius: 6 }}>
-                  <div style={{ width: `${(item.quantity / topProductsMax) * 100}%`, height: 8, borderRadius: 6, background: '#19a293' }} />
-                </div>
-              </div>
-            ))}
+            <Card className="border-slate-800 bg-[#101b2b]">
+              <TopHorizontalChart
+                title="Top clientes que devolvem"
+                subtitle={periodSubtitle}
+                data={charts.data?.topClients || []}
+                metric={topMetric}
+                color="#f59e0b"
+                onBarClick={(name) => applyFilterAndOpen({ customer: name })}
+              />
+            </Card>
+
+            <Card className="border-slate-800 bg-[#101b2b]">
+              <ReasonsDonutChart
+                data={charts.data}
+                subtitle={periodSubtitle}
+                onSliceClick={(reason) => applyFilterAndOpen({ search: reason })}
+              />
+            </Card>
           </div>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef', marginTop: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Pendentes e últimas 5 concluídas</h3>
-          {loadingDashboard ? <p>Carregando...</p> : (
-            <>
-              <p style={{ fontWeight: 600, marginBottom: 6 }}>Pendentes ({dashboard?.pending?.length || 0})</p>
-              <div style={{ maxHeight: 220, overflow: 'auto', border: '1px solid #edf2f7', borderRadius: 8 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left' }}>NF</th>
-                      <th style={{ textAlign: 'left' }}>Cliente</th>
-                      <th style={{ textAlign: 'left' }}>Cidade</th>
-                      <th style={{ textAlign: 'left' }}>Produto</th>
-                      <th style={{ textAlign: 'left' }}>Qtd</th>
-                      {isInternalUser && <th style={{ textAlign: 'left' }}>Ações</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(dashboard?.pending || []).map((item) => (
-                      <tr key={`pending-${item.id}`}>
-                        <td>{item.invoice_number || '-'}</td>
-                        <td>{item.customer_name}</td>
-                        <td>{item.city}</td>
-                        <td>{item.product_description}</td>
-                        <td>{item.quantity} {item.product_type || ''}</td>
-                        {isInternalUser && (
-                          <td>
-                            <button type="button" onClick={() => handleUpdateStatus(item.id, 'completed')}>Concluir</button>
-                            <button type="button" onClick={() => handleUpdateStatus(item.id, 'cancelled')} style={{ marginLeft: 6 }}>Cancelar</button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        <ActionQueue
+          rows={queue.data || []}
+          loading={queue.isLoading}
+          canManageStatus={canManageStatus}
+          onTogglePriority={quickTogglePriority}
+          onCancelPickup={quickCancelPickup}
+          onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
+          onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
+          onOpen={openById}
+        />
 
-              <p style={{ fontWeight: 600, margin: '12px 0 6px 0' }}>Últimas 5 concluídas</p>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {(dashboard?.latest_completed || []).map((item) => (
-                  <li key={`latest-${item.id}`}>
-                    {item.invoice_number || 'Sem NF'} | {item.customer_name} | {item.city} | {item.product_description} | {item.quantity} {item.product_type || ''}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+        <ReturnsTable
+          rows={table.data?.rows || []}
+          total={table.data?.total || 0}
+          loading={table.isLoading}
+          pageIndex={pageIndex}
+          pageSize={pageSize}
+          sorting={sorting}
+          onPaginationChange={setPageIndex}
+          onSortingChange={setSorting}
+          onOpenDetails={openById}
+        />
 
-        <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef', marginTop: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Pesquisa avançada de coletas</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 8, marginBottom: 10 }}>
-            <input placeholder="NF" value={filters.invoice_number} onChange={(e) => setFilters((prev) => ({ ...prev, invoice_number: e.target.value }))} />
-            <input placeholder="Cliente" value={filters.customer_name} onChange={(e) => setFilters((prev) => ({ ...prev, customer_name: e.target.value }))} />
-            <input placeholder="Cidade" value={filters.city} onChange={(e) => setFilters((prev) => ({ ...prev, city: e.target.value }))} />
-            <input placeholder="Produto/código" value={filters.product_term} onChange={(e) => setFilters((prev) => ({ ...prev, product_term: e.target.value }))} />
-            <select value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}>
-              <option value="all">Todos status</option>
-              <option value="pending">Pendente</option>
-              <option value="completed">Concluída</option>
-              <option value="cancelled">Cancelada</option>
-            </select>
-          </div>
-          <button type="button" onClick={searchCollections} disabled={loadingSearch} style={{ marginBottom: 10 }}>
-            {loadingSearch ? 'Pesquisando...' : 'Pesquisar'}
-          </button>
-
-          <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #edf2f7', borderRadius: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>ID</th>
-                  <th style={{ textAlign: 'left' }}>NF</th>
-                  <th style={{ textAlign: 'left' }}>Cliente</th>
-                  <th style={{ textAlign: 'left' }}>Cidade</th>
-                  <th style={{ textAlign: 'left' }}>Produto</th>
-                  <th style={{ textAlign: 'left' }}>Qtd</th>
-                  <th style={{ textAlign: 'left' }}>Status</th>
-                  <th style={{ textAlign: 'left' }}>Criado em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {searchRows.map((item) => (
-                  <tr key={`search-${item.id}`}>
-                    <td>{item.id}</td>
-                    <td>{item.invoice_number || '-'}</td>
-                    <td>{item.customer_name}</td>
-                    <td>{item.city}</td>
-                    <td>{item.product_description}</td>
-                    <td>{item.quantity} {item.product_type || ''}</td>
-                    <td>{item.status}</td>
-                    <td>{new Date(item.created_at).toLocaleString('pt-BR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <h2 style={{ margin: '18px 0 10px 0', color: '#123263' }}>Devoluções</h2>
-
-        <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef', marginBottom: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Últimas 10 devoluções</h3>
-          {loadingReturnsDashboard ? <p>Carregando...</p> : (
-            <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid #edf2f7', borderRadius: 8 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'left' }}>Data</th>
-                    <th style={{ textAlign: 'left' }}>NF</th>
-                    <th style={{ textAlign: 'left' }}>Cliente</th>
-                    <th style={{ textAlign: 'left' }}>Cidade</th>
-                    <th style={{ textAlign: 'left' }}>Tipo</th>
-                    <th style={{ textAlign: 'left' }}>Lote</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(returnsDashboard?.latest_returns || []).map((row) => (
-                    <tr key={`latest-return-${row.id}`}>
-                      <td>{new Date(row.created_at).toLocaleString('pt-BR')}</td>
-                      <td>{row.invoice_number}</td>
-                      <td>{row.customer_name}</td>
-                      <td>{row.city}</td>
-                      <td>{row.return_type}</td>
-                      <td>{row.batch_code}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <h3 style={{ marginTop: 0 }}>Clientes que mais devolvem</h3>
-            {(returnsDashboard?.top_customers || []).map((item) => (
-              <div key={`return-client-${item.customer_name}`} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12 }}>{item.customer_name} ({item.returns})</div>
-                <div style={{ height: 8, background: '#e4edf6', borderRadius: 6 }}>
-                  <div style={{ width: `${(item.returns / topReturnClientsMax) * 100}%`, height: 8, borderRadius: 6, background: '#123263' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef' }}>
-            <h3 style={{ marginTop: 0 }}>Produtos mais devolvidos</h3>
-            {(returnsDashboard?.top_products || []).map((item) => (
-              <div key={`return-product-${item.product_id}-${item.product_description}`} style={{ marginBottom: 8 }}>
-                <div style={{ fontSize: 12 }}>{item.product_description} ({item.quantity})</div>
-                <div style={{ height: 8, background: '#dff2ec', borderRadius: 6 }}>
-                  <div style={{ width: `${(item.quantity / topReturnedProductsMax) * 100}%`, height: 8, borderRadius: 6, background: '#19a293' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ background: '#fff', borderRadius: 12, padding: 14, border: '1px solid #d7e3ef', marginTop: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Pesquisa de devoluções</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginBottom: 10 }}>
-            <input placeholder="NF" value={returnFilters.invoice_number} onChange={(e) => setReturnFilters((prev) => ({ ...prev, invoice_number: e.target.value }))} />
-            <input placeholder="Cliente" value={returnFilters.customer_name} onChange={(e) => setReturnFilters((prev) => ({ ...prev, customer_name: e.target.value }))} />
-            <input placeholder="Cidade" value={returnFilters.city} onChange={(e) => setReturnFilters((prev) => ({ ...prev, city: e.target.value }))} />
-          </div>
-          <button type="button" onClick={searchReturns} disabled={loadingReturnsSearch} style={{ marginBottom: 10 }}>
-            {loadingReturnsSearch ? 'Pesquisando...' : 'Pesquisar devoluções'}
-          </button>
-
-          <div style={{ maxHeight: 320, overflow: 'auto', border: '1px solid #edf2f7', borderRadius: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>Data</th>
-                  <th style={{ textAlign: 'left' }}>NF</th>
-                  <th style={{ textAlign: 'left' }}>Cliente</th>
-                  <th style={{ textAlign: 'left' }}>Cidade</th>
-                  <th style={{ textAlign: 'left' }}>Tipo</th>
-                  <th style={{ textAlign: 'left' }}>Itens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {returnRows.map((row) => (
-                  <tr key={`return-search-${row.id}`}>
-                    <td>{new Date(row.created_at).toLocaleString('pt-BR')}</td>
-                    <td>{row.invoice_number}</td>
-                    <td>{row.customer_name}</td>
-                    <td>{row.city}</td>
-                    <td>{row.return_type}</td>
-                    <td>{row.items.length}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {selectedRow ? (
+          <DetailsDrawer
+            row={selectedRow}
+            onClose={() => setSelectedId(null)}
+            canManageStatus={canManageStatus}
+            onRequestPickup={(id) => {
+              quickRequestPickup(id);
+              confirmSubmissionMutation.mutate(selectedRow.batchCode);
+            }}
+            onCancelPickup={quickCancelPickup}
+            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
+            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
+            onAddObservation={(id, note) => addObservationMutation.mutate({ returnId: id, note })}
+          />
+        ) : null}
       </div>
     </div>
   );

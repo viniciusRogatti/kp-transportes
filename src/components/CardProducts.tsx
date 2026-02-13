@@ -10,8 +10,8 @@ const CardProducts = ({ product } : CardProductsProps) => {
     <tr key={product.code}>
       <td>{product.code}</td>
       <td>{product.description}</td>
-      <td>{product.price}</td>
-      <td>{product.type}</td>
+      <td className="max-[768px]:hidden">{product.price}</td>
+      <td className="max-[768px]:hidden">{product.type}</td>
     </tr>
   );
 }

@@ -20,6 +20,7 @@ import {
   SupportText,
   ErrorText,
 } from '../style/Login';
+import CaptchaSlot from '../components/ui/CaptchaSlot';
 import axios from 'axios';
 import { API_URL } from '../data';
 import { useNavigate } from 'react-router-dom';
@@ -31,6 +32,11 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
+  const captchaProvider: 'turnstile' | 'recaptcha' | 'none' = process.env.REACT_APP_TURNSTILE_SITE_KEY
+    ? 'turnstile'
+    : process.env.REACT_APP_RECAPTCHA_SITE_KEY
+      ? 'recaptcha'
+      : 'none';
 
   const onInputChange = ({ target: { name, value } }: any) => {
     if (errorMessage) setErrorMessage('');
@@ -126,6 +132,7 @@ function Login() {
               </BoxPassword>
               {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
             </BoxInput>
+            <CaptchaSlot provider={captchaProvider} />
             <ButtonLogin
               type="button"
               onClick={ handleEnter }

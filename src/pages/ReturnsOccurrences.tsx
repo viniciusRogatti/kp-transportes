@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 
 import Header from '../components/Header';
@@ -63,6 +64,7 @@ const groupItemsByProductAndType = (items: IInvoiceReturnItem[]) => items.reduce
 
 function ReturnsOccurrences() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const getTodayDate = () => new Date().toISOString().split('T')[0];
   const getReturnPdfFileName = (dateValue: string) => {
     const [year, month, day] = String(dateValue || '').split('-');
@@ -163,6 +165,33 @@ function ReturnsOccurrences() {
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
   ), [returnBatches, selectedBatchCode]);
   const isAdminUser = userPermission === 'admin';
+
+  function setTab(nextTab: 'returns' | 'occurrences') {
+    setActiveTab(nextTab);
+    localStorage.setItem('returns_occurrences_last_tab', nextTab);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', nextTab);
+    setSearchParams(next, { replace: true });
+  }
+
+  useEffect(() => {
+    const tabFromQuery = searchParams.get('tab');
+    const tabFromStorage = localStorage.getItem('returns_occurrences_last_tab');
+    const resolved = (tabFromQuery === 'returns' || tabFromQuery === 'occurrences')
+      ? tabFromQuery
+      : (tabFromStorage === 'returns' || tabFromStorage === 'occurrences')
+        ? tabFromStorage
+        : 'returns';
+
+    setActiveTab(resolved);
+
+    if (tabFromQuery !== resolved) {
+      const next = new URLSearchParams(searchParams);
+      next.set('tab', resolved);
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -963,19 +992,25 @@ function ReturnsOccurrences() {
     <div>
       <Header />
       <Container>
-        <PageContainer>
+        <PageContainer className="gap-0">
           <TabsRow>
-            <Tabs>
+            <Tabs className="w-auto">
               <button
-                className={activeTab === 'returns' ? 'active' : ''}
-                onClick={() => setActiveTab('returns')}
+                className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
+                  ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
+                  : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
+                }`}
+                onClick={() => setTab('returns')}
                 type="button"
               >
                 Devolucoes
               </button>
               <button
-                className={activeTab === 'occurrences' ? 'active' : ''}
-                onClick={() => setActiveTab('occurrences')}
+                className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'occurrences'
+                  ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
+                  : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
+                }`}
+                onClick={() => setTab('occurrences')}
                 type="button"
               >
                 Ocorrencias
@@ -988,8 +1023,9 @@ function ReturnsOccurrences() {
             )}
           </TabsRow>
 
-          {activeTab === 'returns' && (
-            <SingleColumn>
+          <section className="-mt-px w-full rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+            {activeTab === 'returns' && (
+              <SingleColumn>
               {selectedBatch && (
                 <TopActionBar>
                   <button className="secondary" onClick={handleCreateNewBatch} type="button">
@@ -1399,11 +1435,11 @@ function ReturnsOccurrences() {
                   </ModalCard>
                 </>
               )}
-            </SingleColumn>
-          )}
+              </SingleColumn>
+            )}
 
-          {activeTab === 'occurrences' && (
-            <TwoColumns>
+            {activeTab === 'occurrences' && (
+              <TwoColumns>
               <Card>
                 <CardHeaderRow>
                   <h2>Registrar Ocorrencia</h2>
@@ -1581,8 +1617,9 @@ function ReturnsOccurrences() {
                   </List>
                 )}
               </Card>
-            </TwoColumns>
-          )}
+              </TwoColumns>
+            )}
+          </section>
 
           {historyModalOpen && (
             <>

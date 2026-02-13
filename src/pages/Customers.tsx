@@ -8,6 +8,57 @@ import { API_URL } from "../data";
 import { ICustomer } from "../types/types";
 import { ProductsLoader } from "../style/Loaders";
 
+type CustomerWithOptionalNumber = ICustomer & {
+  address_number?: string | number | null;
+  number?: string | number | null;
+  nro?: string | number | null;
+};
+
+function normalizeSpaces(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function toTitleCase(value: string) {
+  return normalizeSpaces(value)
+    .split(" ")
+    .map((chunk) => {
+      const lower = chunk.toLocaleLowerCase("pt-BR");
+      if (!lower) return lower;
+      return `${lower.charAt(0).toLocaleUpperCase("pt-BR")}${lower.slice(1)}`;
+    })
+    .join(" ");
+}
+
+function removeRepeatedStreetPrefix(value: string) {
+  const normalized = normalizeSpaces(value);
+  const tokens = normalized.split(" ");
+  if (tokens.length >= 2 && tokens[0].toLocaleLowerCase("pt-BR") === tokens[1].toLocaleLowerCase("pt-BR")) {
+    return tokens.slice(1).join(" ");
+  }
+  return normalized;
+}
+
+function getOptionalAddressNumber(customer: CustomerWithOptionalNumber) {
+  const candidates = [customer.address_number, customer.number, customer.nro];
+  const found = candidates.find((value) => value !== null && value !== undefined && String(value).trim() !== "");
+  return found ? String(found).trim() : "";
+}
+
+function formatAddress(customer: CustomerWithOptionalNumber) {
+  if (!customer.address) return "-";
+
+  const withoutDup = removeRepeatedStreetPrefix(customer.address);
+  const formatted = toTitleCase(withoutDup);
+  const optionalNumber = getOptionalAddressNumber(customer);
+
+  if (!optionalNumber) return formatted;
+
+  const hasNumberAlready = /\b\d+[A-Za-z]?\b|s\/n\b/i.test(formatted);
+  if (hasNumberAlready) return formatted;
+
+  return `${formatted}, ${optionalNumber}`;
+}
+
 function Customers() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<ICustomer[]>([]);
@@ -54,7 +105,7 @@ function Customers() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="max-[768px]:[&_table]:text-[0.75rem] max-[768px]:[&_th]:text-[0.7rem] max-[768px]:[&_td]:text-[0.75rem]">
         {isLoading ? (
           <ProductsLoader />
         ) : (
@@ -65,18 +116,18 @@ function Customers() {
                 value={nameFilter}
                 onChange={(event) => setNameFilter(event.target.value)}
                 placeholder="Filtrar por nome"
-                className="max-w-full"
+                className="max-w-full max-[768px]:h-9 max-[768px]:text-[0.8rem]"
               />
               <FilterInput
                 type="text"
                 value={cityFilter}
                 onChange={(event) => setCityFilter(event.target.value)}
                 placeholder="Filtrar por cidade"
-                className="max-w-full"
+                className="max-w-full max-[768px]:h-9 max-[768px]:text-[0.8rem]"
               />
             </FilterBar>
             <div className="w-full max-w-[1200px] overflow-x-auto">
-              <table className="min-w-[760px] max-[768px]:min-w-[560px] max-[768px]:[&_td]:text-[0.78rem] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:text-[0.74rem]">
+              <table className="min-w-[760px] max-[768px]:min-w-[560px] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:leading-tight">
                 <thead>
                   <tr>
                     <th>Nome</th>
@@ -90,9 +141,9 @@ function Customers() {
                 <tbody>
                   {filteredCustomers.map((customer) => (
                     <tr key={customer.cnpj_or_cpf}>
-                      <td>{customer.name_or_legal_entity}</td>
-                      <td className="max-[768px]:text-[0.74rem] max-[768px]:leading-snug">{customer.address || "-"}</td>
-                      <td>{customer.city || "-"}</td>
+                      <td>{toTitleCase(customer.name_or_legal_entity || "-")}</td>
+                      <td className="max-[768px]:text-[0.72rem] max-[768px]:leading-snug">{formatAddress(customer)}</td>
+                      <td>{customer.city ? toTitleCase(customer.city) : "-"}</td>
                       <td className="max-[768px]:hidden">{customer.state || "-"}</td>
                       <td>{customer.phone || "-"}</td>
                       <td className="max-[768px]:hidden">{customer.cnpj_or_cpf}</td>

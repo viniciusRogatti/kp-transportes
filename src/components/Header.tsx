@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { API_URL } from '../data';
+import BottomNavMobile from './layout/BottomNavMobile';
 
 type NavItem = {
   to: string;
@@ -41,8 +42,6 @@ const navItems: NavItem[] = [
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" /> },
   { to: '/control-tower/coletas', label: 'Torre de Controle', shortLabel: 'Torre', icon: <Building2 className="h-4 w-4" /> },
 ];
-
-const mobileMainNav = ['/home', '/todayInvoices', '/routePlanning', '/trips', '/returns-occurrences'];
 
 const routeTitles: Record<string, string> = {
   '/home': 'Painel Operacional',
@@ -127,11 +126,6 @@ function Header() {
       document.removeEventListener('mousedown', handleClickOutsideShell);
     };
   }, [isSidebarCollapsed]);
-
-  const mobileNavItems = useMemo(
-    () => navItems.filter((item) => mobileMainNav.includes(item.to)),
-    [],
-  );
 
   function handleLogout() {
     localStorage.removeItem('token');
@@ -333,24 +327,7 @@ function Header() {
         </button>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-[1150] grid h-[var(--mobile-bottom-nav-height)] grid-cols-5 border-t border-border bg-[rgba(6,13,25,0.95)] px-1 py-1 backdrop-blur md:hidden">
-        {mobileNavItems.map((item) => {
-          const isActive = location.pathname === item.to;
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                'flex flex-col items-center justify-center rounded-md text-[11px] transition',
-                isActive ? 'bg-sky-900/35 text-sky-100' : 'text-muted',
-              )}
-            >
-              {item.icon}
-              <span className="mt-0.5">{item.shortLabel}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      <BottomNavMobile />
     </>
   );
 }

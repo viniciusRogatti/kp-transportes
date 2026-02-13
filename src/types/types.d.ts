@@ -276,6 +276,7 @@ export interface ICustomer {
   name_or_legal_entity: string;
   phone: string | null;
   address: string | null;
+  address_number?: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;

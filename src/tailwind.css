@@ -39,7 +39,7 @@
   --shadow-3: 0 22px 48px rgba(1, 6, 16, 0.55);
 
   --header-height: 68px;
-  --mobile-bottom-nav-height: 64px;
+  --mobile-bottom-nav-height: 72px;
   --app-sidebar-width: 260px;
   --app-sidebar-width-collapsed: 96px;
   --app-sidebar-current: var(--app-sidebar-width);
@@ -124,10 +124,10 @@ body.with-app-shell #root {
   padding-left: var(--app-sidebar-current);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 768px) {
   body.with-app-shell #root {
     padding-left: 0;
-    padding-bottom: var(--mobile-bottom-nav-height);
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + max(env(safe-area-inset-bottom), 0px));
   }
 }
 

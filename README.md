@@ -33,6 +33,7 @@ Aplicacao web para operacao de transporte e distribuicao: importacao de DANFEs, 
 ### 4) Pesquisar notas (`/invoices`)
 - Busca por NF pontual.
 - Busca por periodo (data inicio/data fim).
+- Busca rapida por NF via header global (atalho): ao pressionar `Enter`, abre `Pesquisar notas` ja com a NF consultada.
 - Filtros por:
   - NF
   - Produto (codigo ou descricao)
@@ -57,6 +58,8 @@ Aplicacao web para operacao de transporte e distribuicao: importacao de DANFEs, 
 - Geracao de PDF de comprovante/lote.
 - Registro de ocorrencias (com ou sem produto).
 - Resolucao de ocorrencias pendentes.
+- Navegacao por abas (Devolucoes/Ocorrencias) com estilo de janela, sem troca de rota.
+- Estado da aba persistido por query param (`?tab=returns|occurrences`) e ultima aba salva localmente.
 
 ### 8) Cadastros e consultas
 - Produtos (`/products`)
@@ -111,3 +114,7 @@ Observacoes:
 - `npm run build`: build de producao
 - `npm test`: testes
 - `npm run deploy`: publica build no GitHub Pages
+
+## Atualizacoes recentes
+- Busca rapida por NF no topo agora encaminha para `/invoices?nf=...` e executa a busca automaticamente.
+- Pagina `Devolucoes/Ocorrencias` recebeu abas conectadas ao painel (efeito de aba de navegador), com aba inativa mais escura e persistencia de selecao.

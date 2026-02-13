@@ -99,6 +99,20 @@ npm start
 
 Aplicacao local: `http://localhost:3000`
 
+## Human Verification (Login)
+Para habilitar CAPTCHA no frontend, crie `frontend/.env` com uma das chaves:
+
+```bash
+REACT_APP_TURNSTILE_SITE_KEY=...
+# ou
+REACT_APP_RECAPTCHA_SITE_KEY=...
+```
+
+O backend valida o token no endpoint de login usando as variaveis:
+- `HUMAN_VERIFICATION_PROVIDER` (`turnstile`, `recaptcha` ou `none`)
+- `TURNSTILE_SECRET_KEY`
+- `RECAPTCHA_SECRET_KEY`
+
 ## Build e deploy
 ```bash
 npm run build

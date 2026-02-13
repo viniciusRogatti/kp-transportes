@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FaEyeSlash, FaEye } from 'react-icons/fa';
 import {
   BoxInput,
@@ -20,7 +20,7 @@ import {
   SupportText,
   ErrorText,
 } from '../style/Login';
-import CaptchaSlot from '../components/ui/CaptchaSlot';
+import HumanVerification, { HumanVerificationProvider } from '../components/ui/HumanVerification';
 import axios from 'axios';
 import { API_URL } from '../data';
 import { useNavigate } from 'react-router-dom';
@@ -31,8 +31,11 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaResetKey, setCaptchaResetKey] = useState(0);
+  const [captchaError, setCaptchaError] = useState('');
   const navigate = useNavigate();
-  const captchaProvider: 'turnstile' | 'recaptcha' | 'none' = process.env.REACT_APP_TURNSTILE_SITE_KEY
+  const captchaProvider: HumanVerificationProvider = process.env.REACT_APP_TURNSTILE_SITE_KEY
     ? 'turnstile'
     : process.env.REACT_APP_RECAPTCHA_SITE_KEY
       ? 'recaptcha'
@@ -43,17 +46,31 @@ function Login() {
     setState({ ...state, [name]: value });
   };
 
+  const handleCaptchaTokenChange = useCallback((token: string) => {
+    setCaptchaToken(token);
+    setErrorMessage((current) => (current ? '' : current));
+  }, []);
+
   const handleEnter = async () => {
     if (!state.username.trim() || !state.password.trim()) {
       setErrorMessage('Preencha usuário e senha para continuar.');
       return;
     }
 
+    if (captchaProvider !== 'none' && !captchaToken) {
+      setErrorMessage('Conclua a verificação de segurança para continuar.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMessage('');
 
-    try {      
-      const response = await axios.post(`${API_URL}/login`, state);
+    try {
+      const response = await axios.post(`${API_URL}/login`, {
+        ...state,
+        captchaToken,
+        captchaProvider,
+      });
       if (response) {
         const token = response.data.token;
         const permission = response.data?.data?.permission;
@@ -71,7 +88,13 @@ function Login() {
       }
       setErrorMessage('Não foi possível validar o acesso. Tente novamente.');
     } catch (error) {
-      setErrorMessage('Usuário ou senha inválidos.');
+      setCaptchaToken('');
+      setCaptchaResetKey((prev) => prev + 1);
+      if (axios.isAxiosError(error) && error.response?.data?.message) {
+        setErrorMessage(error.response.data.message);
+      } else {
+        setErrorMessage('Usuário ou senha inválidos.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -131,8 +154,14 @@ function Login() {
                 />
               </BoxPassword>
               {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
+              {captchaError && <ErrorText>{captchaError}</ErrorText>}
             </BoxInput>
-            <CaptchaSlot provider={captchaProvider} />
+            <HumanVerification
+              provider={captchaProvider}
+              resetKey={captchaResetKey}
+              onTokenChange={handleCaptchaTokenChange}
+              onErrorChange={setCaptchaError}
+            />
             <ButtonLogin
               type="button"
               onClick={ handleEnter }

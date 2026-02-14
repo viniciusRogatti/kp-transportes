@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { IDanfe } from "../types/types";
 import axios from "axios";
+import { Search } from "lucide-react";
 import CardDanfes from "../components/CardDanfes";
 import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchButton, SearchRow } from "../style/invoices";
+import IconButton from "../components/ui/IconButton";
+import SearchInput from "../components/ui/SearchInput";
+import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchRow } from "../style/invoices";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
 import { useNavigate } from "react-router";
@@ -153,9 +156,15 @@ function Invoices() {
       <Header />
       <Container>
         <SearchBar>
-          <SearchRow>
-            <input value={nf} type="number" onChange={setFilter} placeholder="Digite a nf" />
-            <SearchButton onClick={getDanfeByNf}>Pesquisar</SearchButton>
+          <SearchRow className="w-full grid-cols-1 max-[768px]:grid-cols-1">
+            <SearchInput
+              value={nf}
+              type="number"
+              onChange={setFilter}
+              onSearch={getDanfeByNf}
+              placeholder="Digite a nf"
+              searchLabel="Pesquisar NF"
+            />
           </SearchRow>
           <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-1">
             <DateGroup>
@@ -180,8 +189,14 @@ function Invoices() {
                 withPortal
               />
             </DateGroup>
-            <DateAction className="justify-end gap-2 max-[768px]:justify-stretch">
-              <SearchButton className="max-[768px]:flex-1" onClick={getDanfesByDate}>Buscar</SearchButton>
+            <DateAction className="justify-end gap-2 max-[768px]:justify-start">
+              <IconButton
+                icon={Search}
+                label="Buscar notas por periodo"
+                onClick={getDanfesByDate}
+                className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                size="lg"
+              />
               <select
                 onChange={filterByRoute}
                 className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:min-w-0 max-[768px]:flex-1"

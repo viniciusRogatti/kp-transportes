@@ -37,13 +37,13 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
         const driverName = driverByInvoice[String(danfe.invoice_number)];
 
         return (
-          <div key={danfe.barcode} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
+          <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
             <div
               className="relative h-full w-full transition-transform duration-500"
               style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
             >
               <CardsDanfe
-                className={!driverName ? 'absolute inset-0 select-text border-amber-500/75 shadow-[0_0_0_1px_rgba(245,158,11,0.2)]' : 'absolute inset-0 select-text'}
+                className={!driverName ? 'absolute inset-0 select-text border-accent/55 shadow-[0_0_0_1px_rgba(1,87,163,0.25)]' : 'absolute inset-0 select-text'}
                 style={{ backfaceVisibility: 'hidden' }}
               >
                 <TitleCard>
@@ -51,22 +51,14 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                   <p className={`absolute left-1/2 top-1.5 -translate-x-1/2 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                     driverName
                       ? 'border-emerald-500/40 bg-emerald-900/25 text-emerald-200'
-                      : 'border-amber-500/50 bg-amber-900/30 text-amber-200'
+                      : 'border-accent/45 bg-accent/20 text-text-accent'
                   }`}>
                     {driverName ? `Motorista: ${driverName}` : 'Sem motorista'}
                   </p>
                   <h4>{danfe.invoice_date}</h4>
-                  <button
-                    type="button"
-                    onClick={() => toggleFlip(key)}
-                    className="absolute right-1 top-8 z-10 inline-flex h-7 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
-                    aria-label={`Mostrar detalhes da NF ${danfe.invoice_number}`}
-                  >
-                    Detalhes
-                  </button>
                 </TitleCard>
                 <h4 className="mt-1 text-sm font-semibold leading-tight">{danfe.Customer.name_or_legal_entity}</h4>
-                <p className="text-xs text-slate-400">{danfe.Customer.city}</p>
+                <p className="text-xs text-muted">{danfe.Customer.city}</p>
                 <ContainerItems>
                   <DescriptionColumns>
                     <span>Código</span>
@@ -81,7 +73,17 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                     </ListItems>
                   ))}
                 </ContainerItems>
-                <TotalQuantity><p>{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p></TotalQuantity>
+                <TotalQuantity className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
+                  <button
+                    type="button"
+                    onClick={() => toggleFlip(key)}
+                    className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                    aria-label={`Mostrar detalhes da NF ${danfe.invoice_number}`}
+                  >
+                    Detalhes
+                  </button>
+                </TotalQuantity>
               </CardsDanfe>
 
               <CardsDanfe
@@ -91,14 +93,6 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                 <TitleCard>
                   <h1>{`NF ${danfe.invoice_number}`}</h1>
                   <h4>Detalhes</h4>
-                  <button
-                    type="button"
-                    onClick={() => toggleFlip(key)}
-                    className="absolute right-1 top-8 z-10 inline-flex h-7 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
-                    aria-label={`Voltar para frente do card da NF ${danfe.invoice_number}`}
-                  >
-                    Voltar
-                  </button>
                 </TitleCard>
                 <div className="mt-2 space-y-2 text-sm">
                   <p><strong>Cliente:</strong> {danfe.Customer.name_or_legal_entity}</p>
@@ -108,7 +102,17 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                   <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                   <p><strong>Motorista:</strong> {driverName || 'Sem motorista'}</p>
                 </div>
-                <TotalQuantity><p>Use o botão Voltar</p></TotalQuantity>
+                <TotalQuantity className="flex items-center justify-between gap-2">
+                  <p>Use o botão Voltar</p>
+                  <button
+                    type="button"
+                    onClick={() => toggleFlip(key)}
+                    className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                    aria-label={`Voltar para frente do card da NF ${danfe.invoice_number}`}
+                  >
+                    Voltar
+                  </button>
+                </TotalQuantity>
               </CardsDanfe>
             </div>
           </div>

@@ -4,6 +4,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import TripsPDF from '../components/TripsPDF';
+import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
 import { ITrip } from '../types/types';
 
@@ -41,7 +42,14 @@ const FreightSummary: React.FC = () => {
       <h1>Freight Summary</h1>
       <div>
         <label>Driver ID:</label>
-        <input type="text" value={driverId} onChange={(e) => setDriverId(e.target.value)} />
+        <SearchInput
+          type="text"
+          value={driverId}
+          onChange={(e) => setDriverId(e.target.value)}
+          onSearch={searchTrips}
+          searchLabel="Search trips"
+          placeholder="Driver ID"
+        />
       </div>
       <div>
         <label>Start Date:</label>
@@ -51,7 +59,6 @@ const FreightSummary: React.FC = () => {
         <label>End Date:</label>
         <DatePicker selected={endDate} onChange={(date: Date) => setEndDate(date)} />
       </div>
-      <button onClick={searchTrips}>Search Trips</button>
       {trips.length > 0 && (
         <div>
           <h2>Trips Found</h2>

@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import { useNavigate } from "react-router";
 import { format } from 'date-fns';
+import { Search } from "lucide-react";
 
 import { ITrip } from "../types/types";
 import TripList from "../components/TripList";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
+import IconButton from "../components/ui/IconButton";
 import { Container } from "../style/invoices";
 import { BoxSearch, ContainerInputs, ContainerTrips } from "../style/trips";
 import axios from "axios";
@@ -96,9 +98,16 @@ function Trips() {
                   selected={selectedDate} 
                   onChange={handleDateChange}
                   dateFormat="dd/MM/yyyy"
-                  locale={ptBR}       
+                  locale={ptBR}
+                  className="date-picker-input"
                 />
-                <button onClick={handleSearch}>Buscar</button>
+                <IconButton
+                  icon={Search}
+                  label="Buscar viagens"
+                  onClick={handleSearch}
+                  size="lg"
+                  className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                />
               </BoxSearch>
             </ContainerInputs>
             <ContainerTrips>

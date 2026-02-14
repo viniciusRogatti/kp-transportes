@@ -10,16 +10,16 @@ export function ContainerTrips({ className, ...props }: DivProps) {
 }
 
 export function ContainerInputs({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-full max-w-[260px] flex-col items-center justify-center text-text', className)} {...props} />;
+  return <div className={cn('flex w-full max-w-[320px] min-w-0 flex-col items-center justify-center text-text', className)} {...props} />;
 }
 
 export function BoxSearch({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'relative flex w-full gap-s1',
-        '[&_input]:absolute [&_input]:left-0 [&_input]:top-0 [&_input]:rounded-md [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:py-2 [&_input]:text-text [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
-        '[&>button]:absolute [&>button]:right-0 [&>button]:top-[2.4rem] [&>button]:rounded-sm [&>button]:bg-accent [&>button]:px-2 [&>button]:py-1 [&>button]:text-[#04131e]',
+        'flex w-full min-w-0 items-center gap-s2',
+        '[&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-text [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         className,
       )}
       {...props}

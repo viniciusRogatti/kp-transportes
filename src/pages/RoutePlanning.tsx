@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
-import { CarFront, ChevronDown, ChevronUp, MoreVertical, Route, Send, Truck, UserPlus } from 'lucide-react';
+import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Search, Send, Truck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -24,6 +24,7 @@ import { TruckLoader } from '../style/Loaders';
 import Header from '../components/Header';
 import Popup from '../components/Popup';
 import ProductListPDF from '../components/ProductListPDF';
+import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
 import verifyToken from '../utils/verifyToken';
 import { API_URL } from '../data';
@@ -1190,7 +1191,13 @@ function RoutePlanning() {
                   locale={ptBR}
                   className="h-10 rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text"
                 />
-                <button type="button" onClick={handleTripSearch} className="h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e]">Buscar</button>
+                <IconButton
+                  icon={Search}
+                  label="Buscar rotas por data"
+                  onClick={handleTripSearch}
+                  size="lg"
+                  className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                />
               </div>
             </div>
 
@@ -1212,7 +1219,12 @@ function RoutePlanning() {
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
-                        <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => startEditModeFromTrip(trip)}>Editar rota</button>
+                        <IconButton
+                          icon={Pencil}
+                          label="Editar rota"
+                          onClick={() => startEditModeFromTrip(trip)}
+                          className="rounded-md"
+                        />
                         <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
                         <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
                       </div>

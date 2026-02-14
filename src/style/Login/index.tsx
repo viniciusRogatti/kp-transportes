@@ -60,18 +60,13 @@ export function HeroPanel({ className, ...props }: AsideProps) {
         className,
       )}
       style={{
-        backgroundImage: `linear-gradient(to top, rgba(4, 14, 26, 0.78), rgba(8, 25, 41, 0.35)), url(${VolksImage})`,
+        backgroundImage: `url(${VolksImage})`,
         backgroundPosition: 'right',
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat',
       }}
       {...props}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{ background: 'linear-gradient(130deg, rgba(39, 198, 179, 0.12), transparent 62%)' }}
-      />
       {props.children}
     </aside>
   );

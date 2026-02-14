@@ -9,7 +9,7 @@ export function ContainerCards({ className, ...props }: DivProps) {
 }
 
 export function CardsDanfe({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex h-full w-full flex-col rounded-lg border border-border bg-surface/80 px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
+  return <div className={cn('relative flex h-full w-full flex-col rounded-lg border border-border bg-[#0C243B] px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
 }
 
 export function DescriptionColumns({ className, ...props }: DivProps) {
@@ -29,5 +29,13 @@ export function TitleCard({ className, ...props }: DivProps) {
 }
 
 export function TotalQuantity({ className, ...props }: DivProps) {
-  return <div className={cn('absolute bottom-2 left-3 right-3 border-t border-border pt-1.5 [&_p]:text-sm [&_p]:font-semibold [&_p]:text-text', className)} {...props} />;
+  return (
+    <div
+      className={cn(
+        'absolute bottom-2 left-3 right-3 border-t border-border pt-1.5 [&_p]:text-sm [&_p]:font-semibold [&_p]:text-text',
+        className,
+      )}
+      {...props}
+    />
+  );
 }

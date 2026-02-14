@@ -12,7 +12,7 @@ type PProps = DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagr
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
 export function PageContainer({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-full max-w-[1200px] flex-col gap-s4', className)} {...props} />;
+  return <div className={cn('flex w-full min-w-0 max-w-[1200px] flex-col gap-s4', className)} {...props} />;
 }
 
 export function Tabs({ className, ...props }: DivProps) {
@@ -75,7 +75,7 @@ export function ReturnSearchRow({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-nowrap items-center gap-s3 max-md:gap-s2 max-md:overflow-x-auto max-md:pb-[2px] [&_input[type="number"]]:w-[130px] [&_input[type="number"]]:min-w-0 [&_input[type="number"]]:rounded-sm [&_input[type="number"]]:border [&_input[type="number"]]:border-white/10 [&_input[type="number"]]:bg-[rgba(11,27,42,0.6)] [&_input[type="number"]]:px-3 [&_input[type="number"]]:py-2 [&_input[type="number"]]:text-text max-md:[&_input[type="number"]]:w-24 max-md:[&_input[type="number"]]:px-[0.6rem] max-md:[&_input[type="number"]]:py-[0.55rem] [&_label]:inline-flex [&_label]:items-center [&_label]:justify-center [&_label]:gap-2 [&_label]:whitespace-nowrap [&_label]:text-[0.92rem] [&_label]:leading-none [&_label]:text-text max-md:[&_label]:gap-[0.35rem] max-md:[&_label]:text-[0.85rem] [&_input[type="checkbox"]]:grid [&_input[type="checkbox"]]:h-5 [&_input[type="checkbox"]]:w-5 [&_input[type="checkbox"]]:cursor-pointer [&_input[type="checkbox"]]:place-content-center [&_input[type="checkbox"]]:appearance-none [&_input[type="checkbox"]]:rounded-full [&_input[type="checkbox"]]:border-2 [&_input[type="checkbox"]]:border-white/45 [&_input[type="checkbox"]]:bg-[rgba(11,27,42,0.6)] [&_input[type="checkbox"]:checked]:bg-[radial-gradient(circle,var(--color-accent)_0_45%,transparent_50%)] [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button]:px-8 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button]:text-text max-md:[&_button]:whitespace-nowrap max-md:[&_button]:px-[0.9rem] max-md:[&_button]:py-[0.55rem]',
+        'flex min-w-0 flex-wrap items-center gap-s2 [&_input[type="number"]]:w-[130px] [&_input[type="number"]]:min-w-0 [&_input[type="number"]]:rounded-sm [&_input[type="number"]]:border [&_input[type="number"]]:border-white/10 [&_input[type="number"]]:bg-[rgba(11,27,42,0.6)] [&_input[type="number"]]:px-3 [&_input[type="number"]]:py-2 [&_input[type="number"]]:text-text max-md:[&_input[type="number"]]:w-full max-md:[&_input[type="number"]]:px-[0.6rem] max-md:[&_input[type="number"]]:py-[0.55rem] [&_label]:inline-flex [&_label]:min-w-0 [&_label]:items-center [&_label]:gap-2 [&_label]:rounded-md [&_label]:px-2 [&_label]:py-1.5 [&_label]:text-[0.92rem] [&_label]:leading-none [&_label]:text-text max-md:[&_label]:flex-1 max-md:[&_label]:min-w-[calc(50%-0.25rem)] max-md:[&_label]:gap-[0.35rem] max-md:[&_label]:text-[0.85rem] [&_input[type="checkbox"]]:grid [&_input[type="checkbox"]]:h-5 [&_input[type="checkbox"]]:w-5 [&_input[type="checkbox"]]:cursor-pointer [&_input[type="checkbox"]]:place-content-center [&_input[type="checkbox"]]:appearance-none [&_input[type="checkbox"]]:rounded-full [&_input[type="checkbox"]]:border-2 [&_input[type="checkbox"]]:border-white/45 [&_input[type="checkbox"]]:bg-[rgba(11,27,42,0.6)] [&_input[type="checkbox"]:checked]:bg-[radial-gradient(circle,var(--color-accent)_0_45%,transparent_50%)]',
         className,
       )}
       {...props}
@@ -87,7 +87,7 @@ export function List({ className, ...props }: UlProps) {
   return (
     <ul
       className={cn(
-        'mt-s3 flex list-none flex-col gap-s2 [&>li]:flex [&>li]:min-w-0 [&>li]:items-center [&>li]:justify-between [&>li]:gap-s3 [&>li]:rounded-sm [&>li]:border [&>li]:border-white/10 [&>li]:bg-[rgba(5,14,22,0.5)] [&>li]:px-s3 [&>li]:py-s2 [&>li>span]:min-w-0 [&>li>span]:break-words',
+        'mt-s3 flex list-none flex-col gap-s2 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:justify-between [&>li]:gap-s3 [&>li]:rounded-sm [&>li]:border [&>li]:border-white/10 [&>li]:bg-[rgba(5,14,22,0.5)] [&>li]:px-s3 [&>li]:py-s2 max-md:[&>li]:items-start [&>li>span]:min-w-0 [&>li>span]:break-words',
         className,
       )}
       {...props}
@@ -99,15 +99,27 @@ export function OccurrenceItemContent({ className, ...props }: DivProps) {
   return <div className={cn('flex w-full flex-col gap-s2', className)} {...props} />;
 }
 
+export function OccurrenceCardFooter({ className, ...props }: DivProps) {
+  return (
+    <div
+      className={cn(
+        'mt-1 w-full rounded-md border border-border bg-[linear-gradient(135deg,rgba(8,21,33,0.9)_0%,rgba(12,36,59,0.95)_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 export function OccurrenceActionsRow({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-full items-end justify-between gap-s2', className)} {...props} />;
+  return <div className={cn('flex w-full flex-nowrap items-center justify-between gap-s2', className)} {...props} />;
 }
 
 export function OccurrenceActionsLeft({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e]',
+        'flex flex-nowrap items-center gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e]',
         className,
       )}
       {...props}
@@ -119,7 +131,7 @@ export function OccurrenceActionsRight({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-white/15 [&_button.secondary]:text-text [&_button.danger]:bg-[#f05e5e] [&_button.danger]:text-white',
+        'flex flex-nowrap items-center justify-end gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-white/15 [&_button.secondary]:text-text [&_button.danger]:bg-[#f05e5e] [&_button.danger]:text-white',
         className,
       )}
       {...props}
@@ -188,7 +200,7 @@ export function InfoText({ className, ...props }: PProps) {
 }
 
 export function TwoColumns({ className, ...props }: DivProps) {
-  return <div className={cn('grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-s4', className)} {...props} />;
+  return <div className={cn('grid min-w-0 grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-s4 max-[768px]:grid-cols-1', className)} {...props} />;
 }
 
 export function SingleColumn({ className, ...props }: DivProps) {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,6 +20,7 @@ import { exportRowsToCsv, getFilterOptions, getReturnsTable } from '../services/
 import { useControlTowerData, useControlTowerMutations } from '../hooks/useControlTower';
 import { BacklogStatus, ControlTowerFilters } from '../types/controlTower';
 import { API_URL } from '../data';
+import { IOccurrence } from '../types/types';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -48,6 +49,7 @@ function ControlTowerCollections() {
   const [topMetric, setTopMetric] = useState<TopMetric>('quantity');
   const [registerNf, setRegisterNf] = useState('');
   const [registeringPickup, setRegisteringPickup] = useState(false);
+  const [recentOccurrences, setRecentOccurrences] = useState<IOccurrence[]>([]);
 
   const sortingInput = sorting[0] ? { id: sorting[0].id as any, desc: sorting[0].desc ?? false } : undefined;
   const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
@@ -75,6 +77,24 @@ function ControlTowerCollections() {
     setPageIndex(0);
     setFilters((prev) => ({ ...prev, ...next }));
   }
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const loadRecentOccurrences = async () => {
+      try {
+        const { data } = await axios.get(`${API_URL}/occurrences/search?status=all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setRecentOccurrences(Array.isArray(data) ? data.slice(0, 10) : []);
+      } catch {
+        setRecentOccurrences([]);
+      }
+    };
+
+    loadRecentOccurrences();
+  }, []);
 
   async function applyFilterAndOpen(next: Partial<ControlTowerFilters>) {
     const merged = { ...filters, ...next };
@@ -214,6 +234,40 @@ function ControlTowerCollections() {
         />
 
         <KpiCards summary={summary.data} />
+
+        <Card className="border-slate-800 bg-[#101b2b]">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-100">Ocorrências (acompanhamento)</h3>
+            <span className="text-xs text-slate-400">Somente leitura para Control Tower</span>
+          </div>
+          {!recentOccurrences.length ? (
+            <p className="text-xs text-slate-400">Nenhuma ocorrência recente.</p>
+          ) : (
+            <ul className="space-y-2">
+              {recentOccurrences.map((occurrence) => (
+                <li key={occurrence.id} className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2 text-xs text-slate-200">
+                  <div>
+                    <strong>NF {occurrence.invoice_number}</strong>
+                    {` | Motivo: ${occurrence.reason || 'legacy_outros'}`}
+                    {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'itens'}`}
+                    {` | Status: ${occurrence.status === 'resolved' ? 'resolvida' : 'pendente'}`}
+                  </div>
+                  {occurrence.scope === 'items' && !!occurrence.items?.length ? (
+                    <div className="mt-1 text-slate-300">
+                      Itens: {occurrence.items.map((item) => `${item.product_id} (${item.quantity})`).join(', ')}
+                    </div>
+                  ) : null}
+                  {occurrence.resolution_type ? (
+                    <div className="mt-1 text-slate-300">
+                      Resolução: {occurrence.resolution_type}
+                      {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         <Card className="border-slate-800 bg-[#101b2b]">
           <div className="flex flex-wrap items-end gap-2">

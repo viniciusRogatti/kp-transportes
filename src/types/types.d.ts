@@ -85,18 +85,26 @@ export interface IReturnBatch {
 export interface IOccurrence {
   id: number;
   invoice_number: string;
+  customer_name?: string | null;
+  city?: string | null;
+  reason?: 'faltou_no_carregamento' | 'faltou_na_carga' | 'produto_avariado' | 'produto_invertido' | 'produto_sem_etiqueta_ou_data' | 'legacy_outros' | null;
+  scope?: 'invoice_total' | 'items';
+  items?: Array<{
+    product_id: string;
+    product_description?: string | null;
+    quantity: number;
+  }>;
   product_id: string | null;
   product_description: string | null;
   quantity: number | null;
   description: string;
   status: 'pending' | 'resolved';
-  reported_by_driver_id: number | null;
+  resolution_type?: 'enviado_posteriormente' | 'talao_mercadoria_faltante' | 'motivo_corrigido' | 'motorista_pagou_cliente' | 'troca_realizada' | 'cliente_aceitou_invertido' | 'legacy_outros' | null;
+  resolution_note?: string | null;
+  resolved_by_user_id?: number | null;
+  resolved_by_username?: string | null;
   resolved_at: string | null;
   created_at: string;
-  reportedByDriver?: {
-    id: number;
-    name: string;
-  };
 }
 
 export interface ICar {

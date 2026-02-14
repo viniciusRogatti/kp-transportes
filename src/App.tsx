@@ -51,7 +51,7 @@ function App() {
         <Route path="/customers" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Customers /></ProtectedRoute>} />
         <Route path="/trips" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><RoutePlanning /></ProtectedRoute>} />
         <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><FileUploadPage /></ProtectedRoute>} />
-        <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><ReturnsOccurrences /></ProtectedRoute>} />
+        <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...INTERNAL_PERMISSIONS, 'control_tower']}><ReturnsOccurrences /></ProtectedRoute>} />
         <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={['control_tower', 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
         <Route path="*" element={<Login />} />
       </Routes>

@@ -16,7 +16,6 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
   async function fetchDanfes(nf: string) {
     try {
       const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
-      console.log(`Fetched danfe for NF: ${nf}`, data); // Debugging log
       return data;
     } catch (error) {
       console.error('Erro ao buscar danfe:', error);

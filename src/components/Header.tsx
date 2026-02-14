@@ -3,7 +3,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   Bell,
-  Building2,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -40,7 +39,6 @@ const navItems: NavItem[] = [
   { to: '/trips', label: 'Trips', shortLabel: 'Trips', icon: <Truck className="h-4 w-4" /> },
   { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" /> },
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" /> },
-  { to: '/control-tower/coletas', label: 'Torre de Controle', shortLabel: 'Torre', icon: <Building2 className="h-4 w-4" /> },
 ];
 
 const routeTitles: Record<string, string> = {

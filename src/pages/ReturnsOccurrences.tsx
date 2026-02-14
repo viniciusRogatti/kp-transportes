@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
@@ -40,6 +41,64 @@ import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence,
 import verifyToken from '../utils/verifyToken';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['KG', 'CX', 'UN', 'PCT'];
+
+const OCCURRENCE_REASONS = [
+  { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
+  { value: 'faltou_na_carga', label: 'Faltou na carga' },
+  { value: 'produto_avariado', label: 'Produto avariado' },
+  { value: 'produto_invertido', label: 'Produto invertido' },
+  { value: 'produto_sem_etiqueta_ou_data', label: 'Produto sem etiqueta de identificacao ou data' },
+] as const;
+
+const OCCURRENCE_TOTAL_OPTION = '__INVOICE_TOTAL__';
+
+const RESOLUTION_LABELS: Record<string, string> = {
+  enviado_posteriormente: 'Enviado posteriormente',
+  talao_mercadoria_faltante: 'Talao de mercadoria faltante',
+  motivo_corrigido: 'Motivo corrigido',
+  motorista_pagou_cliente: 'Motorista pagou cliente',
+  troca_realizada: 'Troca realizada',
+  cliente_aceitou_invertido: 'Cliente aceitou produto invertido',
+  legacy_outros: 'Legado / outros',
+};
+
+const RESOLUTION_OPTIONS_BY_REASON: Record<string, Array<{ value: string; label: string }>> = {
+  faltou_no_carregamento: [
+    { value: 'enviado_posteriormente', label: RESOLUTION_LABELS.enviado_posteriormente },
+    { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
+  ],
+  faltou_na_carga: [
+    { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
+    { value: 'motivo_corrigido', label: RESOLUTION_LABELS.motivo_corrigido },
+  ],
+  produto_avariado: [
+    { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
+    { value: 'motorista_pagou_cliente', label: RESOLUTION_LABELS.motorista_pagou_cliente },
+  ],
+  produto_invertido: [
+    { value: 'troca_realizada', label: RESOLUTION_LABELS.troca_realizada },
+    { value: 'cliente_aceitou_invertido', label: RESOLUTION_LABELS.cliente_aceitou_invertido },
+    { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
+  ],
+  produto_sem_etiqueta_ou_data: [
+    { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
+  ],
+  legacy_outros: [
+    { value: 'legacy_outros', label: RESOLUTION_LABELS.legacy_outros },
+  ],
+};
+
+const OCCURRENCE_REASON_LABELS: Record<string, string> = OCCURRENCE_REASONS.reduce((acc, item) => {
+  acc[item.value] = item.label;
+  return acc;
+}, {} as Record<string, string>);
+OCCURRENCE_REASON_LABELS.legacy_outros = 'Legado / outros';
+type OccurrenceReasonValue = (typeof OCCURRENCE_REASONS)[number]['value'] | 'legacy_outros';
+type OccurrenceDraftItem = {
+  product_id: string;
+  product_description: string;
+  quantity: number;
+};
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
 const getReturnItemKey = (item: Pick<IInvoiceReturnItem, 'product_id' | 'product_type'>) => (
@@ -141,10 +200,16 @@ function ReturnsOccurrences() {
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
-  const [occurrenceProductCode, setOccurrenceProductCode] = useState('');
+  const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReasonValue>('faltou_no_carregamento');
+  const [occurrenceProductCode, setOccurrenceProductCode] = useState(OCCURRENCE_TOTAL_OPTION);
   const [occurrenceQuantity, setOccurrenceQuantity] = useState<number>(1);
-  const [occurrenceDescription, setOccurrenceDescription] = useState('');
-  const [occurrenceDriverId, setOccurrenceDriverId] = useState('');
+  const [occurrenceItems, setOccurrenceItems] = useState<OccurrenceDraftItem[]>([]);
+  const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
+  const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
+  const [resolutionType, setResolutionType] = useState('');
+  const [resolutionNote, setResolutionNote] = useState('');
+  const [scanError, setScanError] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
   const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<'all' | 'pending' | 'resolved'>('pending');
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
@@ -160,11 +225,15 @@ function ReturnsOccurrences() {
     actor_username: string | null;
     created_at: string;
   }>>([]);
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerReaderRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
 
   const selectedBatch = useMemo(() => (
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
   ), [returnBatches, selectedBatchCode]);
   const isAdminUser = userPermission === 'admin';
+  const canManageOccurrenceStatus = userPermission !== 'control_tower';
 
   function setTab(nextTab: 'returns' | 'occurrences') {
     setActiveTab(nextTab);
@@ -308,6 +377,29 @@ function ReturnsOccurrences() {
 
     return `NF ${note.invoice_number}`;
   };
+  const occurrenceProducts = useMemo(() => occurrenceDanfe?.DanfeProducts || [], [occurrenceDanfe]);
+  const selectedOccurrenceProduct = useMemo(() => (
+    occurrenceProducts.find((item) => item.Product.code === occurrenceProductCode) || null
+  ), [occurrenceProducts, occurrenceProductCode]);
+  const isOccurrenceTotal = occurrenceProductCode === OCCURRENCE_TOTAL_OPTION;
+  const occurrenceScope = isOccurrenceTotal ? 'invoice_total' : 'items';
+  const occurrenceProductIsKg = useMemo(() => {
+    if (!selectedOccurrenceProduct) return false;
+    return normalizeProductType(selectedOccurrenceProduct.type || selectedOccurrenceProduct.Product.type).includes('KG');
+  }, [selectedOccurrenceProduct]);
+  const occurrenceQuantityStep = occurrenceProductIsKg ? 0.1 : 1;
+  const occurrenceQuantityMin = occurrenceProductIsKg ? 0.1 : 1;
+  const occurrenceProductMaxQty = selectedOccurrenceProduct ? Number(selectedOccurrenceProduct.quantity) : 0;
+  const occurrenceProductAlreadyAddedQty = occurrenceProductCode
+    ? occurrenceItems
+      .filter((item) => item.product_id === occurrenceProductCode)
+      .reduce((sum, item) => sum + Number(item.quantity), 0)
+    : 0;
+  const occurrenceProductRemainingQty = Math.max(0, occurrenceProductMaxQty - occurrenceProductAlreadyAddedQty);
+  const availableResolutionOptions = useMemo(() => {
+    const key = resolvingOccurrence?.reason || 'legacy_outros';
+    return RESOLUTION_OPTIONS_BY_REASON[key] || RESOLUTION_OPTIONS_BY_REASON.legacy_outros;
+  }, [resolvingOccurrence]);
 
   useEffect(() => {
     if (!partialProductCode || !selectedPartialDanfeProduct) {
@@ -330,6 +422,21 @@ function ReturnsOccurrences() {
 
     setPartialQuantity(normalizeProductType(partialProductType).includes('KG') ? 0.1 : 1);
   }, [partialProductCode, partialProductType]);
+
+  useEffect(() => {
+    if (!occurrenceProductCode || !selectedOccurrenceProduct) {
+      setOccurrenceQuantity(1);
+      return;
+    }
+
+    setOccurrenceQuantity(occurrenceProductIsKg ? 0.1 : 1);
+  }, [occurrenceProductCode, selectedOccurrenceProduct, occurrenceProductIsKg]);
+
+  useEffect(() => {
+    if (isOccurrenceTotal && occurrenceItems.length) {
+      setOccurrenceItems([]);
+    }
+  }, [isOccurrenceTotal, occurrenceItems.length]);
 
   useEffect(() => {
     if (!leftoverProductCode) {
@@ -367,6 +474,62 @@ function ReturnsOccurrences() {
     validateAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => (
+    () => {
+      scannerControlsRef.current?.stop();
+      scannerControlsRef.current = null;
+    }
+  ), []);
+
+  useEffect(() => {
+    if (!isScannerOpen) return;
+
+    const initializeScanner = async () => {
+      if (!scannerVideoRef.current) {
+        setScanError('Elemento de video indisponivel para leitura.');
+        return;
+      }
+
+      if (!scannerReaderRef.current) {
+        scannerReaderRef.current = new BrowserMultiFormatReader();
+      }
+
+      try {
+        scannerControlsRef.current = await scannerReaderRef.current.decodeFromVideoDevice(
+          undefined,
+          scannerVideoRef.current,
+          async (result) => {
+            if (!result) return;
+            const rawText = String(result.getText() || '').trim();
+            const numericNf = rawText.replace(/\D/g, '');
+            if (!numericNf) return;
+
+            if (navigator.vibrate) navigator.vibrate(120);
+
+            setOccurrenceNf(numericNf);
+            stopScanner();
+            const data = await findDanfeByNf(numericNf);
+            if (data) {
+              setOccurrenceDanfe(data);
+            }
+          },
+        );
+      } catch (error) {
+        console.error(error);
+        setScanError('Nao foi possivel acessar a camera. Verifique permissao do navegador.');
+      }
+    };
+
+    const timer = window.setTimeout(() => {
+      initializeScanner();
+    }, 80);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScannerOpen]);
 
   async function loadDrivers() {
     try {
@@ -853,56 +1016,209 @@ function ReturnsOccurrences() {
       }
 
       setOccurrenceDanfe(data);
-      setOccurrenceProductCode('');
+      setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
       setOccurrenceQuantity(1);
+      setOccurrenceItems([]);
     } catch (error) {
       console.error(error);
       alert('Erro ao buscar NF para ocorrencia.');
     }
   }
 
-  async function handleCreateOccurrence() {
+  function resetOccurrenceBuilder() {
+    setEditingOccurrenceId(null);
+    setOccurrenceReason('faltou_no_carregamento');
+    setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
+    setOccurrenceQuantity(1);
+    setOccurrenceItems([]);
+    setOccurrenceDanfe(null);
+    setOccurrenceNf('');
+  }
+
+  function addOccurrenceItem() {
+    if (!occurrenceDanfe) {
+      alert('Busque uma NF primeiro.');
+      return;
+    }
+
+    if (!occurrenceProductCode) {
+      alert('Selecione um produto.');
+      return;
+    }
+
+    if (!selectedOccurrenceProduct) {
+      alert('Produto selecionado nao encontrado na NF.');
+      return;
+    }
+
+    if (!occurrenceQuantity || occurrenceQuantity <= 0) {
+      alert('Informe uma quantidade valida.');
+      return;
+    }
+
+    if (!occurrenceProductIsKg && !Number.isInteger(occurrenceQuantity)) {
+      alert('Para este produto, utilize quantidade inteira.');
+      return;
+    }
+
+    const normalizedQty = occurrenceProductIsKg
+      ? Math.round(Number(occurrenceQuantity) * 10) / 10
+      : Number(occurrenceQuantity);
+
+    if (normalizedQty < occurrenceQuantityMin) {
+      alert(`Quantidade minima permitida: ${occurrenceQuantityMin}.`);
+      return;
+    }
+
+    if (normalizedQty + occurrenceProductAlreadyAddedQty > occurrenceProductMaxQty) {
+      alert(`Quantidade excede o limite da NF. Restante disponivel: ${occurrenceProductRemainingQty}.`);
+      return;
+    }
+
+    setOccurrenceItems((previous) => {
+      const existing = previous.find((item) => item.product_id === occurrenceProductCode);
+      if (!existing) {
+        return [
+          ...previous,
+          {
+            product_id: occurrenceProductCode,
+            product_description: selectedOccurrenceProduct.Product.description,
+            quantity: normalizedQty,
+          },
+        ];
+      }
+
+      return previous.map((item) => (
+        item.product_id === occurrenceProductCode
+          ? { ...item, quantity: Number(item.quantity) + normalizedQty }
+          : item
+      ));
+    });
+
+    setOccurrenceQuantity(occurrenceQuantityMin);
+  }
+
+  function removeOccurrenceItem(productId: string) {
+    setOccurrenceItems((previous) => previous.filter((item) => item.product_id !== productId));
+  }
+
+  async function handleCreateOrEditOccurrence() {
     if (!occurrenceDanfe) {
       alert('Busque uma NF para ocorrencia.');
       return;
     }
 
-    if (!occurrenceDescription.trim()) {
-      alert('Descreva a ocorrencia.');
+    if (!occurrenceReason) {
+      alert('Selecione o motivo da ocorrencia.');
       return;
     }
 
-    const selectedProduct = occurrenceDanfe.DanfeProducts.find((item) => item.Product.code === occurrenceProductCode);
+    if (occurrenceScope === 'items' && !occurrenceItems.length) {
+      alert('Selecione ao menos um item e quantidade para a ocorrencia.');
+      return;
+    }
 
     try {
-      await axios.post(`${API_URL}/occurrences/create`, {
-        invoice_number: occurrenceDanfe.invoice_number,
-        product_id: selectedProduct?.Product.code || null,
-        product_description: selectedProduct?.Product.description || null,
-        quantity: selectedProduct ? Number(occurrenceQuantity) : null,
-        description: occurrenceDescription.trim(),
-        reported_by_driver_id: occurrenceDriverId ? Number(occurrenceDriverId) : null,
-      });
+      const payload = {
+        invoice_number: String(occurrenceDanfe.invoice_number),
+        reason: occurrenceReason,
+        scope: occurrenceScope,
+        items: occurrenceScope === 'items' ? occurrenceItems : [],
+      };
 
-      alert('Ocorrencia registrada com sucesso.');
-      setOccurrenceDescription('');
-      setOccurrenceQuantity(1);
-      setOccurrenceProductCode('');
+      if (editingOccurrenceId) {
+        await axios.put(`${API_URL}/occurrences/${editingOccurrenceId}`, payload);
+      } else {
+        await axios.post(`${API_URL}/occurrences/create`, payload);
+      }
+
+      alert(editingOccurrenceId ? 'Ocorrencia atualizada com sucesso.' : 'Ocorrencia registrada com sucesso.');
+      resetOccurrenceBuilder();
       await loadOccurrences();
     } catch (error) {
       console.error(error);
-      alert('Erro ao registrar ocorrencia.');
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao salvar ocorrencia.');
+      } else {
+        alert('Erro ao salvar ocorrencia.');
+      }
     }
   }
 
-  async function handleResolveOccurrence(id: number) {
+  async function startEditOccurrence(occurrence: IOccurrence) {
+    if (occurrence.status !== 'pending') return;
+
+    setEditingOccurrenceId(occurrence.id);
+    setOccurrenceNf(String(occurrence.invoice_number || ''));
+    setOccurrenceReason((occurrence.reason || 'legacy_outros') as OccurrenceReasonValue);
+    const scopeFromOccurrence = (occurrence.scope || 'items') as 'invoice_total' | 'items';
+    setOccurrenceItems(
+      (occurrence.items || [])
+        .map((item) => ({
+          product_id: String(item.product_id || '').trim(),
+          product_description: String(item.product_description || '').trim(),
+          quantity: Number(item.quantity || 0),
+        }))
+        .filter((item) => item.product_id && item.quantity > 0),
+    );
+    setOccurrenceProductCode(
+      scopeFromOccurrence === 'invoice_total'
+        ? OCCURRENCE_TOTAL_OPTION
+        : String(occurrence.items?.[0]?.product_id || '').trim() || OCCURRENCE_TOTAL_OPTION,
+    );
+    setOccurrenceQuantity(1);
+
     try {
-      await axios.put(`${API_URL}/occurrences/status/${id}`, { status: 'resolved' });
+      const data = await findDanfeByNf(String(occurrence.invoice_number));
+      if (data) {
+        setOccurrenceDanfe(data);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async function handleResolveOccurrence() {
+    if (!resolvingOccurrence) return;
+    if (!resolutionType) {
+      alert('Selecione como a ocorrencia foi resolvida.');
+      return;
+    }
+
+    if (resolutionType === 'motivo_corrigido' && !resolutionNote.trim()) {
+      alert('Motivo corrigido exige observacao.');
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/occurrences/status/${resolvingOccurrence.id}`, {
+        status: 'resolved',
+        resolution_type: resolutionType,
+        resolution_note: resolutionNote.trim(),
+      });
+      setResolvingOccurrence(null);
+      setResolutionType('');
+      setResolutionNote('');
       await loadOccurrences();
     } catch (error) {
       console.error(error);
-      alert('Erro ao atualizar status da ocorrencia.');
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao atualizar status da ocorrencia.');
+      } else {
+        alert('Erro ao atualizar status da ocorrencia.');
+      }
     }
+  }
+
+  function startScanner() {
+    setScanError('');
+    setIsScannerOpen(true);
+  }
+
+  function stopScanner() {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+    setIsScannerOpen(false);
   }
 
   async function handleOpenBatchPdf(batch: IReturnBatch) {
@@ -993,7 +1309,7 @@ function ReturnsOccurrences() {
       <Header />
       <Container>
         <PageContainer className="gap-0">
-          <TabsRow>
+          <TabsRow className="max-[768px]:flex-nowrap max-[768px]:gap-2">
             <Tabs className="w-auto">
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
@@ -1017,8 +1333,12 @@ function ReturnsOccurrences() {
               </button>
             </Tabs>
             {activeTab === 'returns' && (
-              <HighlightButton type="button" onClick={() => setIsBatchSearchOpen(true)}>
-                Buscar devolucao por data
+              <HighlightButton
+                type="button"
+                onClick={() => setIsBatchSearchOpen(true)}
+                className="ml-auto max-[768px]:px-3 max-[768px]:py-[0.55rem] max-[768px]:text-[0.82rem]"
+              >
+                Buscar
               </HighlightButton>
             )}
           </TabsRow>
@@ -1038,27 +1358,48 @@ function ReturnsOccurrences() {
                 )}
 
                 <Card>
-                  <BoxDescription>
-                    <h2>{selectedBatch ? `Editando lote ${selectedBatch.batch_code}` : 'Nova devolucao (lista de NFs)'}</h2>
+                  <BoxDescription className="flex-col gap-1">
+                    <h2 className="leading-tight max-[768px]:text-[0.92rem]">
+                      {selectedBatch ? (
+                        `Editando lote ${selectedBatch.batch_code}`
+                      ) : (
+                        <>
+                          <span className="max-[768px]:hidden">Nova devolucao (lista de NFs)</span>
+                          <span className="hidden max-[768px]:inline">Nova devolucao - lista de NFs</span>
+                        </>
+                      )}
+                    </h2>
                     {selectedBatch ? (
                       <InlineText>
                         Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
                       </InlineText>
                     ) : (
-                      <InlineText>Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
+                      <>
+                        <InlineText className="max-[768px]:hidden">Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
+                        <InlineText className="hidden max-[768px]:block">Busque a NF, escolha o tipo e adicione na lista.</InlineText>
+                      </>
                     )}
 
                   </BoxDescription>
                   <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
-                  <ReturnSearchRow>
-
-                    <input
-                      type="number"
-                      value={returnNf}
-                      onChange={(event) => setReturnNf(event.target.value)}
-                      placeholder="Digite a NF"
-                    />
-
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={returnNf}
+                        onChange={(event) => setReturnNf(event.target.value)}
+                        placeholder="Digite a NF"
+                        className="w-full rounded-sm border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-2 text-text"
+                      />
+                      <button
+                        onClick={handleSearchReturnNf}
+                        type="button"
+                        className="shrink-0 rounded-md border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-4 py-[0.65rem] font-semibold text-text max-[768px]:px-3 max-[768px]:py-[0.58rem]"
+                      >
+                        Buscar
+                      </button>
+                    </div>
+                    <ReturnSearchRow className="max-[768px]:flex-wrap max-[768px]:items-center max-[768px]:overflow-visible">
                     <label>
                       <input
                         type="checkbox"
@@ -1091,8 +1432,8 @@ function ReturnsOccurrences() {
                       />
                       Sobra
                     </label>
-                    <button onClick={handleSearchReturnNf} type="button">Buscar</button>
-                  </ReturnSearchRow>
+                    </ReturnSearchRow>
+                  </div>
 
                   {(returnDanfe || returnType === 'sobra') && (
                     <>
@@ -1440,32 +1781,37 @@ function ReturnsOccurrences() {
 
             {activeTab === 'occurrences' && (
               <TwoColumns>
-                <Card>
-                  <CardHeaderRow>
-                    <h2>Registrar Ocorrencia</h2>
-                    <button className="secondary" onClick={handleSearchOccurrenceNf} type="button">Buscar NF</button>
-                  </CardHeaderRow>
-                  <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                    <div>
-                      <InlineText>NF</InlineText>
+                <div className="flex flex-col gap-2 max-[768px]:gap-1">
+                  <h2 className="px-1 text-[1.04rem] font-semibold text-text max-[768px]:text-[0.96rem]">
+                    {editingOccurrenceId ? `Editar ocorrencia #${editingOccurrenceId}` : 'Registrar Ocorrencia'}
+                  </h2>
+                  <Card className="pt-3 max-[768px]:pt-2">
+                  <Grid className="grid-cols-1">
+                    <div className="flex items-center gap-2 max-[768px]:gap-1.5">
+                      <InlineText className="mb-0 shrink-0 whitespace-nowrap text-[0.82rem] max-[768px]:text-[0.8rem]">NF</InlineText>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={occurrenceNf}
-                        onChange={(event) => setOccurrenceNf(event.target.value)}
+                        onChange={(event) => setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 8))}
                         placeholder="Digite a NF"
+                        maxLength={8}
+                        aria-label="NF da ocorrencia"
+                        className="text-[1rem] tracking-[0.04em] max-[768px]:h-[46px] max-[768px]:text-[1.05rem] max-[768px]:font-semibold"
                       />
-                    </div>
-                    <div>
-                      <InlineText>Motorista</InlineText>
-                      <select
-                        value={occurrenceDriverId}
-                        onChange={(event) => setOccurrenceDriverId(event.target.value)}
+                      <button
+                        type="button"
+                        onClick={handleSearchOccurrenceNf}
+                        className="shrink-0 rounded-md border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-4 py-[0.65rem] font-semibold text-text max-[768px]:px-3 max-[768px]:py-[0.72rem]"
                       >
-                        <option value="">Nao informado</option>
-                        {drivers.map((driver) => (
-                          <option key={driver.id} value={driver.id}>{driver.name}</option>
-                        ))}
-                      </select>
+                        Buscar
+                      </button>
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <Actions className="md:hidden [&_button]:w-full">
+                        <button className="secondary" onClick={startScanner} type="button">Ler codigo de barras</button>
+                      </Actions>
+                      {scanError ? <InfoText style={{ marginTop: 6 }}>{scanError}</InfoText> : null}
                     </div>
                   </Grid>
 
@@ -1475,49 +1821,114 @@ function ReturnsOccurrences() {
                         NF selecionada: {occurrenceDanfe.invoice_number} | Cliente: {occurrenceDanfe.Customer.name_or_legal_entity}
                       </InlineText>
 
-                      <Grid style={{ marginTop: '12px' }}>
+                      <Grid className="mt-3 grid-cols-1 md:grid-cols-2">
                         <div>
-                          <InlineText>Produto (opcional)</InlineText>
+                          <InlineText>Motivo</InlineText>
                           <select
-                            value={occurrenceProductCode}
-                            onChange={(event) => setOccurrenceProductCode(event.target.value)}
+                            value={occurrenceReason}
+                            onChange={(event) => setOccurrenceReason(event.target.value as OccurrenceReasonValue)}
+                            className="max-[768px]:text-[0.95rem]"
                           >
-                            <option value="">Selecione</option>
-                            {occurrenceDanfe.DanfeProducts.map((item) => (
-                              <option key={item.Product.code} value={item.Product.code}>
-                                {item.Product.code} - {item.Product.description}
+                            {occurrenceReason === 'legacy_outros' && (
+                              <option value="legacy_outros">Legado / outros</option>
+                            )}
+                            {OCCURRENCE_REASONS.map((reason) => (
+                              <option key={reason.value} value={reason.value}>
+                                {reason.label}
                               </option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <InlineText>Quantidade</InlineText>
-                          <input
-                            type="number"
-                            min={1}
-                            value={occurrenceQuantity}
-                            onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
-                            disabled={!occurrenceProductCode}
-                          />
-                        </div>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <InlineText>Descricao da ocorrencia</InlineText>
-                          <textarea
-                            value={occurrenceDescription}
-                            onChange={(event) => setOccurrenceDescription(event.target.value)}
-                            placeholder="Ex.: falta de 2 unidades do item X"
-                          />
+                          <InlineText>Produto</InlineText>
+                          <select
+                            value={occurrenceProductCode}
+                            className="max-[768px]:text-[0.97rem]"
+                            onChange={(event) => {
+                              const nextProductCode = event.target.value;
+                              const switchingToTotal = nextProductCode === OCCURRENCE_TOTAL_OPTION;
+
+                              if (editingOccurrenceId && switchingToTotal && occurrenceItems.length) {
+                                const confirmed = window.confirm('Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.');
+                                if (!confirmed) return;
+                              }
+
+                              setOccurrenceProductCode(nextProductCode);
+                            }}
+                          >
+                            <option value={OCCURRENCE_TOTAL_OPTION}>Total da NF</option>
+                            {occurrenceDanfe.DanfeProducts.map((item) => (
+                              <option key={`occ-select-${item.Product.code}`} value={item.Product.code}>
+                                {item.Product.code} - {item.Product.description}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </Grid>
 
+                      {!isOccurrenceTotal && (
+                        <>
+                          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                            <div>
+                              <InlineText>Quantidade</InlineText>
+                              <input
+                                type="number"
+                                min={occurrenceQuantityMin}
+                                max={occurrenceProductRemainingQty || undefined}
+                                step={occurrenceQuantityStep}
+                                value={occurrenceQuantity}
+                                onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
+                                disabled={!selectedOccurrenceProduct}
+                                className="max-[768px]:text-[0.98rem]"
+                              />
+                              {!!selectedOccurrenceProduct && (
+                                <InfoText>
+                                  Limite da NF: {occurrenceProductMaxQty} | Restante: {occurrenceProductRemainingQty}
+                                </InfoText>
+                              )}
+                            </div>
+                            <button
+                              className="secondary h-[42px] shrink-0 rounded-md border-none bg-white/15 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45 max-[768px]:px-3 max-[768px]:text-[0.85rem]"
+                              onClick={addOccurrenceItem}
+                              type="button"
+                              disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}
+                            >
+                              Adicionar item
+                            </button>
+                          </div>
+                          <List className="max-[768px]:gap-2 max-[768px]:[&>li]:items-start max-[768px]:[&>li]:py-3 max-[768px]:[&>li>span]:text-[0.94rem] max-[768px]:[&>li>span]:leading-snug">
+                            {!occurrenceItems.length ? (
+                              <li>
+                                <span>Nenhum item selecionado.</span>
+                              </li>
+                            ) : occurrenceItems.map((item) => (
+                              <li key={`occ-item-${item.product_id}`}>
+                                <span className="text-[0.95rem] leading-snug">
+                                  <strong>{item.product_id}</strong> - {item.product_description} | Qtd: {item.quantity}
+                                </span>
+                                <Actions>
+                                  <button className="danger" onClick={() => removeOccurrenceItem(item.product_id)} type="button">Remover</button>
+                                </Actions>
+                              </li>
+                            ))}
+                          </List>
+                        </>
+                      )}
+
                       <Actions style={{ marginTop: '12px' }}>
-                        <button className="primary" onClick={handleCreateOccurrence} type="button">
-                          Registrar ocorrencia
+                        <button className="primary" onClick={handleCreateOrEditOccurrence} type="button">
+                          {editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
                         </button>
+                        {editingOccurrenceId && (
+                          <button className="secondary" onClick={resetOccurrenceBuilder} type="button">
+                            Cancelar edicao
+                          </button>
+                        )}
                       </Actions>
                     </>
                   )}
-                </Card>
+                  </Card>
+                </div>
 
                 <Card>
                   <CardHeaderRow>
@@ -1570,21 +1981,34 @@ function ReturnsOccurrences() {
                         <li key={occurrence.id}>
                           <OccurrenceItemContent>
                             <span>
-                              <strong>NF {occurrence.invoice_number}</strong> | {occurrence.product_id || 'Sem produto'}
-                              {occurrence.quantity ? ` | Qtd: ${occurrence.quantity}` : ''}
-                              {' | '}
-                              {occurrence.description}
+                              <strong>NF {occurrence.invoice_number}</strong>
+                              {` | Motivo: ${OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros'}`}
+                              {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'Itens especificos'}`}
                               {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
-                              {' | Status: '}
+                              {' | '}
                               <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
                             </span>
+                            {occurrence.scope === 'items' && !!occurrence.items?.length && (
+                              <span>Itens: {occurrence.items.map((item) => `${item.product_id} (${item.quantity})`).join(', ')}</span>
+                            )}
+                            {occurrence.resolution_type && (
+                              <span>
+                                Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
+                                {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
+                              </span>
+                            )}
+                            {occurrence.description ? <span>Observacao: {occurrence.description}</span> : null}
 
                             <OccurrenceActionsRow>
                               <OccurrenceActionsLeft>
-                                {occurrence.status === 'pending' && (
+                                {occurrence.status === 'pending' && canManageOccurrenceStatus && (
                                   <button
                                     className="primary"
-                                    onClick={() => handleResolveOccurrence(occurrence.id)}
+                                    onClick={() => {
+                                      setResolvingOccurrence(occurrence);
+                                      setResolutionType('');
+                                      setResolutionNote('');
+                                    }}
                                     type="button"
                                   >
                                     Marcar resolvida
@@ -1593,6 +2017,15 @@ function ReturnsOccurrences() {
                               </OccurrenceActionsLeft>
 
                               <OccurrenceActionsRight>
+                                {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                  <button
+                                    className="secondary"
+                                    onClick={() => startEditOccurrence(occurrence)}
+                                    type="button"
+                                  >
+                                    Editar
+                                  </button>
+                                )}
                                 {isAdminUser && (
                                   <button
                                     className="secondary"
@@ -1602,13 +2035,15 @@ function ReturnsOccurrences() {
                                     Historico
                                   </button>
                                 )}
-                                <button
-                                  className="danger"
-                                  onClick={() => handleDeleteOccurrence(occurrence.id)}
-                                  type="button"
-                                >
-                                  Excluir
-                                </button>
+                                {canManageOccurrenceStatus && (
+                                  <button
+                                    className="danger"
+                                    onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                    type="button"
+                                  >
+                                    Excluir
+                                  </button>
+                                )}
                               </OccurrenceActionsRight>
                             </OccurrenceActionsRow>
                           </OccurrenceItemContent>
@@ -1618,6 +2053,53 @@ function ReturnsOccurrences() {
                   )}
                 </Card>
               </TwoColumns>
+            )}
+
+            {resolvingOccurrence && (
+              <>
+                <ModalOverlay onClick={() => setResolvingOccurrence(null)} />
+                <ModalCard>
+                  <h3>Resolver ocorrencia #{resolvingOccurrence.id}</h3>
+                  <InlineText>
+                    Motivo: {OCCURRENCE_REASON_LABELS[resolvingOccurrence.reason || 'legacy_outros'] || 'Legado / outros'}
+                  </InlineText>
+                  <InlineText style={{ marginTop: '10px' }}>Como foi resolvida?</InlineText>
+                  <select
+                    value={resolutionType}
+                    onChange={(event) => setResolutionType(event.target.value)}
+                    style={{ width: '100%', marginTop: 6, minHeight: 40 }}
+                  >
+                    <option value="">Selecione</option>
+                    {availableResolutionOptions.map((option) => (
+                      <option key={`res-${option.value}`} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  <InlineText style={{ marginTop: '10px' }}>Observacao (opcional)</InlineText>
+                  <textarea
+                    value={resolutionNote}
+                    onChange={(event) => setResolutionNote(event.target.value)}
+                    placeholder="Detalhes da resolucao"
+                    style={{ width: '100%', minHeight: 96, marginTop: 6 }}
+                  />
+                  <Actions style={{ marginTop: '12px' }}>
+                    <button className="primary" onClick={handleResolveOccurrence} type="button">Confirmar</button>
+                    <button className="secondary" onClick={() => setResolvingOccurrence(null)} type="button">Cancelar</button>
+                  </Actions>
+                </ModalCard>
+              </>
+            )}
+
+            {isScannerOpen && (
+              <>
+                <ModalOverlay onClick={stopScanner} />
+                <ModalCard>
+                  <h3>Ler codigo de barras da NF</h3>
+                  <video ref={scannerVideoRef} style={{ width: '100%', marginTop: 8, borderRadius: 8 }} muted />
+                  <Actions style={{ marginTop: '12px' }}>
+                    <button className="secondary" onClick={stopScanner} type="button">Fechar camera</button>
+                  </Actions>
+                </ModalCard>
+              </>
             )}
           </section>
 

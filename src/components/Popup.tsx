@@ -53,7 +53,7 @@ function Popup({ title, closePopup, onAdd }: IPopup) {
       closePopup();
       
     } catch (error) {
-      console.log(`Erro ao ${title}`, error);      
+      console.error(`Erro ao ${title}`, error);
     }
   }
 

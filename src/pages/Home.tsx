@@ -32,20 +32,65 @@ function Home() {
   async function loadPendingOccurrences() {
     try {
       const { data } = await axios.get(`${API_URL}/occurrences/pending`);
-      setPendingOccurrences(data);
+
+      const missingContextOccurrences = (Array.isArray(data) ? data : []).filter((occurrence: IOccurrence) => {
+        const invoice = String(occurrence.invoice_number || '').trim();
+        const needsContext = !occurrence.customer_name || !occurrence.city || (!occurrence.product_description && !!occurrence.product_id);
+        return needsContext && /^\d+$/.test(invoice);
+      });
+
+      if (!missingContextOccurrences.length) {
+        setPendingOccurrences(data);
+        return;
+      }
+
+      const fallbackResults = await Promise.all(
+        missingContextOccurrences.map(async (occurrence: IOccurrence) => {
+          try {
+            const { data: danfe } = await axios.get(`${API_URL}/danfes/nf/${occurrence.invoice_number}`);
+            const fallbackProductDescription = occurrence.product_description
+              || danfe?.DanfeProducts?.find(
+                (item: any) => String(item?.Product?.code || '').trim() === String(occurrence.product_id || '').trim(),
+              )?.Product?.description
+              || null;
+
+            return {
+              id: occurrence.id,
+              customer_name: danfe?.Customer?.name_or_legal_entity || occurrence.customer_name || null,
+              city: danfe?.Customer?.city || occurrence.city || null,
+              product_description: fallbackProductDescription,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      const fallbackByOccurrenceId = new Map(
+        fallbackResults
+          .filter((item): item is NonNullable<typeof item> => !!item)
+          .map((item) => [item.id, item]),
+      );
+
+      const merged = (Array.isArray(data) ? data : []).map((occurrence: IOccurrence) => {
+        const fallback = fallbackByOccurrenceId.get(occurrence.id);
+        if (!fallback) return occurrence;
+        return {
+          ...occurrence,
+          customer_name: fallback.customer_name ?? occurrence.customer_name ?? null,
+          city: fallback.city ?? occurrence.city ?? null,
+          product_description: fallback.product_description ?? occurrence.product_description ?? null,
+        };
+      });
+
+      setPendingOccurrences(merged);
     } catch (error) {
       console.error('Erro ao carregar ocorrencias pendentes:', error);
     }
   }
 
-  async function resolveOccurrence(id: number) {
-    try {
-      await axios.put(`${API_URL}/occurrences/status/${id}`, { status: 'resolved' });
-      await loadPendingOccurrences();
-    } catch (error) {
-      console.error('Erro ao resolver ocorrencia:', error);
-      alert('Nao foi possivel atualizar a ocorrencia.');
-    }
+  function resolveOccurrence() {
+    navigate('/returns-occurrences?tab=occurrences');
   }
 
   return (
@@ -61,15 +106,23 @@ function Home() {
               {pendingOccurrences.map((occurrence) => (
                 <li key={occurrence.id}>
                   <div>
-                    <strong>NF {occurrence.invoice_number}</strong>
+                    <strong>
+                      {`NF: ${occurrence.invoice_number}`}
+                      {occurrence.customer_name ? ` | ${occurrence.customer_name}` : ''}
+                      {occurrence.city ? ` - ${occurrence.city}` : ''}
+                    </strong>
                     <p>{occurrence.description}</p>
                     <small>
-                      {occurrence.product_id ? `Produto ${occurrence.product_id}` : 'Sem produto vinculado'}
+                      {occurrence.product_description
+                        ? `Produto: ${occurrence.product_description}`
+                        : occurrence.product_id
+                          ? `Produto ${occurrence.product_id}`
+                          : 'Sem produto vinculado'}
                       {occurrence.quantity ? ` | Qtd ${occurrence.quantity}` : ''}
                     </small>
                   </div>
-                  <button onClick={() => resolveOccurrence(occurrence.id)} type="button">
-                    Marcar resolvida
+                  <button onClick={resolveOccurrence} type="button">
+                    Resolver na aba de ocorrencias
                   </button>
                 </li>
               ))}

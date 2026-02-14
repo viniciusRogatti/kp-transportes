@@ -21,5 +21,5 @@ export function LoaderPrinting({ className, ...props }: SpanProps) {
 }
 
 export function ProductsLoader({ className, ...props }: DivProps) {
-  return <div className={cn('h-[140px] w-[200px] animate-pulse rounded-md border border-accent/40 bg-surface/70', className)} {...props} />;
+  return <div className={cn('book-loader mt-14', className)} {...props} />;
 }

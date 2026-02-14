@@ -51,7 +51,7 @@ function Invoices() {
         setEndDate(null);
         setDataDanfes(data);
       } catch (error) {
-        console.log('Não foi possível encontrar notas com essas datas');
+        console.error('Não foi possível encontrar notas com essas datas', error);
       }
     }
   }
@@ -75,7 +75,7 @@ function Invoices() {
         }
         
       } catch (error) {
-        console.log('Algo deu errado ao tentar buscar essa nf');
+        console.error('Algo deu errado ao tentar buscar essa nf', error);
       }
     }
     setNf('');
@@ -94,7 +94,7 @@ function Invoices() {
         setDanfes([data]);
         setDataDanfes([data]);
       } catch (error) {
-        console.log('Algo deu errado ao tentar buscar essa nf');
+        console.error('Algo deu errado ao tentar buscar essa nf', error);
       }
     };
 

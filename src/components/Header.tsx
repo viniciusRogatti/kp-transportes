@@ -143,12 +143,12 @@ function Header() {
       <aside
         ref={desktopSidebarRef}
         className={cn(
-          'fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.94)_0%,rgba(8,16,30,0.96)_100%)] px-3 py-3 shadow-[var(--shadow-2)] backdrop-blur md:flex md:flex-col',
+          'fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.94)_0%,rgba(8,16,30,0.96)_100%)] px-3 py-3 shadow-[var(--shadow-2)] backdrop-blur md:flex md:flex-col md:transition-[width] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
           isSidebarCollapsed ? 'w-[var(--app-sidebar-width-collapsed)]' : 'w-[var(--app-sidebar-width)]',
         )}
       >
         <div className="mb-3 flex items-center justify-between rounded-md border border-border bg-surface/80 px-2 py-2">
-          <div className={cn('overflow-hidden transition-all', isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100')}>
+          <div className={cn('overflow-hidden transition-all duration-300 ease-out', isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100')}>
             <p className="text-xs uppercase tracking-wide text-muted">KP Transportes</p>
             <strong className="text-sm text-text">Operações</strong>
           </div>
@@ -184,7 +184,7 @@ function Header() {
                 )}>
                   {item.icon}
                 </span>
-                <span className={cn('whitespace-nowrap transition-all', isSidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'opacity-100')}>
+                <span className={cn('whitespace-nowrap transition-all duration-300 ease-out', isSidebarCollapsed ? 'w-0 overflow-hidden opacity-0' : 'opacity-100')}>
                   {item.label}
                 </span>
               </Link>
@@ -201,7 +201,7 @@ function Header() {
         </button>
       </aside>
 
-      <header ref={topbarRef} className="fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border bg-[rgba(6,13,25,0.86)] px-3 backdrop-blur-xl md:left-[var(--app-sidebar-current)] md:px-4">
+      <header ref={topbarRef} className="fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border bg-[rgba(6,13,25,0.86)] px-3 backdrop-blur-xl md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -270,14 +270,14 @@ function Header() {
       <div
         onClick={() => setIsMobileDrawerOpen(false)}
         className={cn(
-          'fixed inset-0 z-[1190] bg-black/55 transition-opacity md:hidden',
+          'fixed inset-0 z-[1190] bg-black/55 transition-opacity duration-300 ease-out md:hidden',
           isMobileDrawerOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.97)_0%,rgba(8,16,30,0.98)_100%)] p-3 transition-transform md:hidden',
+          'fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.97)_0%,rgba(8,16,30,0.98)_100%)] p-3 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
           isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >

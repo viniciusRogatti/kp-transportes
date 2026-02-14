@@ -3,10 +3,12 @@ import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
+import { CheckCircle2, History, Pencil, Search, Trash2 } from 'lucide-react';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
-import BarcodeScannerModal from '../components/ui/BarcodeScannerModal';
+import IconButton from '../components/ui/IconButton';
+import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import {
@@ -17,7 +19,6 @@ import {
   BatchActionsRow,
   BatchItemContent,
   Grid,
-  HighlightButton,
   InfoText,
   InlineText,
   ListHeaderRow,
@@ -27,6 +28,7 @@ import {
   OccurrenceActionsLeft,
   OccurrenceActionsRight,
   OccurrenceActionsRow,
+  OccurrenceCardFooter,
   OccurrenceItemContent,
   PageContainer,
   ReturnSearchRow,
@@ -208,8 +210,6 @@ function ReturnsOccurrences() {
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
   const [resolutionType, setResolutionType] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
-  const [scanError, setScanError] = useState('');
-  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
   const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<'all' | 'pending' | 'resolved'>('pending');
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
@@ -1151,45 +1151,6 @@ function ReturnsOccurrences() {
     }
   }
 
-  function startScanner() {
-    setScanError('');
-    setIsScannerOpen(true);
-  }
-
-  function stopScanner() {
-    setIsScannerOpen(false);
-  }
-
-  async function handleOccurrenceBarcodeDetected(scannedValue: string) {
-    const numericNf = String(scannedValue || '').replace(/\D/g, '');
-    if (!numericNf) {
-      setScanError('Codigo lido nao contem numeros validos da NF.');
-      setIsScannerOpen(false);
-      return;
-    }
-
-    try {
-      setScanError('');
-      setOccurrenceNf(numericNf);
-      const data = await findDanfeByNf(numericNf);
-
-      if (!data) {
-        setScanError('NF nao encontrada para o codigo lido.');
-        return;
-      }
-
-      setOccurrenceDanfe(data);
-      setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
-      setOccurrenceQuantity(1);
-      setOccurrenceItems([]);
-    } catch (error) {
-      console.error(error);
-      setScanError('Erro ao buscar NF a partir do codigo lido.');
-    } finally {
-      setIsScannerOpen(false);
-    }
-  }
-
   async function handleOpenBatchPdf(batch: IReturnBatch) {
     try {
       const aggregatedItems = batch.aggregated_items?.length
@@ -1278,7 +1239,7 @@ function ReturnsOccurrences() {
       <Header />
       <Container>
         <PageContainer className="gap-0">
-          <TabsRow className="max-[768px]:flex-nowrap max-[768px]:gap-2">
+          <TabsRow className="max-[768px]:gap-2">
             <Tabs className="w-auto">
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
@@ -1302,17 +1263,16 @@ function ReturnsOccurrences() {
               </button>
             </Tabs>
             {activeTab === 'returns' && (
-              <HighlightButton
-                type="button"
+              <IconButton
+                icon={Search}
+                label="Buscar lote por data"
                 onClick={() => setIsBatchSearchOpen(true)}
-                className="ml-auto max-[768px]:px-3 max-[768px]:py-[0.55rem] max-[768px]:text-[0.82rem]"
-              >
-                Buscar
-              </HighlightButton>
+                className="ml-auto"
+              />
             )}
           </TabsRow>
 
-          <section className="-mt-px w-full rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+          <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             {activeTab === 'returns' && (
               <SingleColumn>
                 {selectedBatch && (
@@ -1352,23 +1312,18 @@ function ReturnsOccurrences() {
                   </BoxDescription>
                   <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <input
+                    <div className="min-w-0">
+                      <SearchInput
                         type="number"
                         value={returnNf}
                         onChange={(event) => setReturnNf(event.target.value)}
                         placeholder="Digite a NF"
-                        className="w-full rounded-sm border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-2 text-text"
+                        onSearch={handleSearchReturnNf}
+                        searchLabel="Buscar NF de devolucao"
+                        className="border-white/10 bg-[rgba(11,27,42,0.6)]"
                       />
-                      <button
-                        onClick={handleSearchReturnNf}
-                        type="button"
-                        className="shrink-0 rounded-md border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-4 py-[0.65rem] font-semibold text-text max-[768px]:px-3 max-[768px]:py-[0.58rem]"
-                      >
-                        Buscar
-                      </button>
                     </div>
-                    <ReturnSearchRow className="max-[768px]:flex-wrap max-[768px]:items-center max-[768px]:overflow-visible">
+                    <ReturnSearchRow>
                     <label>
                       <input
                         type="checkbox"
@@ -1702,13 +1657,19 @@ function ReturnsOccurrences() {
                                 Abrir PDF
                               </button>
                               {isAdminUser && (
-                                <button className="secondary" onClick={() => handleViewBatchHistory(batch.batch_code)} type="button">
-                                  Historico
-                                </button>
+                                <IconButton
+                                  icon={History}
+                                  label="Histórico do lote"
+                                  onClick={() => handleViewBatchHistory(batch.batch_code)}
+                                  className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                />
                               )}
-                              <button className="primary" onClick={() => setSelectedBatchCode(batch.batch_code)} type="button">
-                                Editar lote
-                              </button>
+                              <IconButton
+                                icon={Pencil}
+                                label="Editar lote"
+                                onClick={() => setSelectedBatchCode(batch.batch_code)}
+                                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                              />
                             </BatchActionsRow>
                           </BatchItemContent>
                         </li>
@@ -1728,16 +1689,16 @@ function ReturnsOccurrences() {
                         onChange={(event) => setBatchesDate(event.target.value)}
                       />
                       <Actions>
-                        <button
-                          className="primary"
+                        <IconButton
+                          icon={Search}
+                          label="Buscar lote"
                           onClick={async () => {
                             await loadReturnBatches();
                             setIsBatchSearchOpen(false);
                           }}
-                          type="button"
-                        >
-                          Buscar
-                        </button>
+                          className="!h-10 !w-10 !min-h-10 !min-w-10 !px-0 !py-0"
+                          size="lg"
+                        />
                         <button className="secondary" onClick={() => setIsBatchSearchOpen(false)} type="button">
                           Fechar
                         </button>
@@ -1756,31 +1717,19 @@ function ReturnsOccurrences() {
                   </h2>
                   <Card className="pt-3 max-[768px]:pt-2">
                   <Grid className="grid-cols-1">
-                    <div className="flex items-center gap-2 max-[768px]:gap-1.5">
-                      <InlineText className="mb-0 shrink-0 whitespace-nowrap text-[0.82rem] max-[768px]:text-[0.8rem]">NF</InlineText>
-                      <input
+                    <div className="min-w-0">
+                      <SearchInput
                         type="text"
                         inputMode="numeric"
                         value={occurrenceNf}
                         onChange={(event) => setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 8))}
                         placeholder="Digite a NF"
                         maxLength={8}
+                        onSearch={handleSearchOccurrenceNf}
+                        searchLabel="Buscar NF de ocorrencia"
                         aria-label="NF da ocorrencia"
                         className="text-[1rem] tracking-[0.04em] max-[768px]:h-[46px] max-[768px]:text-[1.05rem] max-[768px]:font-semibold"
                       />
-                      <button
-                        type="button"
-                        onClick={handleSearchOccurrenceNf}
-                        className="shrink-0 rounded-md border-none bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-4 py-[0.65rem] font-semibold text-text max-[768px]:px-3 max-[768px]:py-[0.72rem]"
-                      >
-                        Buscar
-                      </button>
-                    </div>
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <Actions className="[&_button]:w-full md:[&_button]:w-auto">
-                        <button className="secondary" onClick={startScanner} type="button">Ler codigo de barras</button>
-                      </Actions>
-                      {scanError ? <InfoText style={{ marginTop: 6 }}>{scanError}</InfoText> : null}
                     </div>
                   </Grid>
 
@@ -1946,78 +1895,108 @@ function ReturnsOccurrences() {
                     <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia encontrada.</InlineText>
                   ) : (
                     <List>
-                      {occurrences.map((occurrence) => (
+                      {occurrences.map((occurrence) => {
+                        const reasonLabel = OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros';
+                        const itemsSummary = occurrence.items?.length
+                          ? occurrence.items
+                            .map((item) => {
+                              const id = String(item.product_id || '').trim();
+                              const description = String(item.product_description || '').trim();
+                              if (id && description) return `${id} - ${description}`;
+                              return id || description || '';
+                            })
+                            .filter(Boolean)
+                            .join(', ')
+                          : (() => {
+                            const productId = String(occurrence.product_id || '').trim();
+                            const productDescription = String(occurrence.product_description || '').trim();
+                            if (productId && productDescription) return `${productId} - ${productDescription}`;
+                            if (productId) return productId;
+                            if (productDescription) return productDescription;
+                            return 'NF total';
+                          })();
+
+                        return (
                         <li key={occurrence.id}>
                           <OccurrenceItemContent>
                             <span>
-                              <strong>NF {occurrence.invoice_number}</strong>
-                              {` | Motivo: ${OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros'}`}
-                              {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'Itens especificos'}`}
-                              {` | Data: ${new Date(occurrence.created_at).toLocaleDateString('pt-BR')}`}
-                              {' | '}
-                              <strong>{occurrence.status === 'pending' ? 'Pendente' : 'Resolvida'}</strong>
+                              <strong>NF: {occurrence.invoice_number}</strong>
+                              {` | CLIENTE: ${occurrence.customer_name || '-'}`}
                             </span>
-                            {occurrence.scope === 'items' && !!occurrence.items?.length && (
-                              <span>Itens: {occurrence.items.map((item) => `${item.product_id} (${item.quantity})`).join(', ')}</span>
-                            )}
+                            <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
+                            <span>{`ITENS: ${itemsSummary || 'NF total'}`}</span>
+                            <span>{`MOTIVO: ${reasonLabel}`}</span>
                             {occurrence.resolution_type && (
                               <span>
                                 Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
                                 {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
                               </span>
                             )}
-                            {occurrence.description ? <span>Observacao: {occurrence.description}</span> : null}
 
-                            <OccurrenceActionsRow>
-                              <OccurrenceActionsLeft>
-                                {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                                  <button
-                                    className="primary"
-                                    onClick={() => {
-                                      setResolvingOccurrence(occurrence);
-                                      setResolutionType('');
-                                      setResolutionNote('');
-                                    }}
-                                    type="button"
-                                  >
-                                    Marcar resolvida
-                                  </button>
-                                )}
-                              </OccurrenceActionsLeft>
+                            <OccurrenceCardFooter>
+                              <OccurrenceActionsRow>
+                                <OccurrenceActionsLeft>
+                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    <>
+                                      <button
+                                        className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
+                                        onClick={() => {
+                                          setResolvingOccurrence(occurrence);
+                                          setResolutionType('');
+                                          setResolutionNote('');
+                                        }}
+                                        type="button"
+                                      >
+                                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                        Marcar como resolvida
+                                      </button>
+                                      <IconButton
+                                        icon={CheckCircle2}
+                                        label="Marcar ocorrência como resolvida"
+                                        onClick={() => {
+                                          setResolvingOccurrence(occurrence);
+                                          setResolutionType('');
+                                          setResolutionNote('');
+                                        }}
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
+                                      />
+                                    </>
+                                  )}
+                                </OccurrenceActionsLeft>
 
-                              <OccurrenceActionsRight>
-                                {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                                  <button
-                                    className="secondary"
-                                    onClick={() => startEditOccurrence(occurrence)}
-                                    type="button"
-                                  >
-                                    Editar
-                                  </button>
-                                )}
-                                {isAdminUser && (
-                                  <button
-                                    className="secondary"
-                                    onClick={() => handleViewOccurrenceHistory(occurrence.id)}
-                                    type="button"
-                                  >
-                                    Historico
-                                  </button>
-                                )}
-                                {canManageOccurrenceStatus && (
-                                  <button
-                                    className="danger"
-                                    onClick={() => handleDeleteOccurrence(occurrence.id)}
-                                    type="button"
-                                  >
-                                    Excluir
-                                  </button>
-                                )}
-                              </OccurrenceActionsRight>
-                            </OccurrenceActionsRow>
+                                <OccurrenceActionsRight>
+                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    <IconButton
+                                      icon={Pencil}
+                                      label="Editar ocorrencia"
+                                      onClick={() => startEditOccurrence(occurrence)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                  {isAdminUser && (
+                                    <IconButton
+                                      icon={History}
+                                      label="Histórico da ocorrência"
+                                      onClick={() => handleViewOccurrenceHistory(occurrence.id)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                  {canManageOccurrenceStatus && (
+                                    <IconButton
+                                      icon={Trash2}
+                                      label="Excluir ocorrencia"
+                                      variant="danger"
+                                      onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                </OccurrenceActionsRight>
+                              </OccurrenceActionsRow>
+                            </OccurrenceCardFooter>
                           </OccurrenceItemContent>
                         </li>
-                      ))}
+                        );
+                      })}
                     </List>
                   )}
                 </Card>
@@ -2058,13 +2037,6 @@ function ReturnsOccurrences() {
               </>
             )}
 
-            <BarcodeScannerModal
-              isOpen={isScannerOpen}
-              title="Ler codigo de barras da NF"
-              onClose={stopScanner}
-              onBarcodeDetected={handleOccurrenceBarcodeDetected}
-              onError={setScanError}
-            />
           </section>
 
           {historyModalOpen && (

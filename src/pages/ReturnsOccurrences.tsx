@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
+import BarcodeScannerModal from '../components/ui/BarcodeScannerModal';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import {
@@ -225,9 +225,6 @@ function ReturnsOccurrences() {
     actor_username: string | null;
     created_at: string;
   }>>([]);
-  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
-  const scannerReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-  const scannerControlsRef = useRef<IScannerControls | null>(null);
 
   const selectedBatch = useMemo(() => (
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
@@ -474,62 +471,6 @@ function ReturnsOccurrences() {
     validateAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => (
-    () => {
-      scannerControlsRef.current?.stop();
-      scannerControlsRef.current = null;
-    }
-  ), []);
-
-  useEffect(() => {
-    if (!isScannerOpen) return;
-
-    const initializeScanner = async () => {
-      if (!scannerVideoRef.current) {
-        setScanError('Elemento de video indisponivel para leitura.');
-        return;
-      }
-
-      if (!scannerReaderRef.current) {
-        scannerReaderRef.current = new BrowserMultiFormatReader();
-      }
-
-      try {
-        scannerControlsRef.current = await scannerReaderRef.current.decodeFromVideoDevice(
-          undefined,
-          scannerVideoRef.current,
-          async (result) => {
-            if (!result) return;
-            const rawText = String(result.getText() || '').trim();
-            const numericNf = rawText.replace(/\D/g, '');
-            if (!numericNf) return;
-
-            if (navigator.vibrate) navigator.vibrate(120);
-
-            setOccurrenceNf(numericNf);
-            stopScanner();
-            const data = await findDanfeByNf(numericNf);
-            if (data) {
-              setOccurrenceDanfe(data);
-            }
-          },
-        );
-      } catch (error) {
-        console.error(error);
-        setScanError('Nao foi possivel acessar a camera. Verifique permissao do navegador.');
-      }
-    };
-
-    const timer = window.setTimeout(() => {
-      initializeScanner();
-    }, 80);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isScannerOpen]);
 
   async function loadDrivers() {
     try {
@@ -1216,9 +1157,37 @@ function ReturnsOccurrences() {
   }
 
   function stopScanner() {
-    scannerControlsRef.current?.stop();
-    scannerControlsRef.current = null;
     setIsScannerOpen(false);
+  }
+
+  async function handleOccurrenceBarcodeDetected(scannedValue: string) {
+    const numericNf = String(scannedValue || '').replace(/\D/g, '');
+    if (!numericNf) {
+      setScanError('Codigo lido nao contem numeros validos da NF.');
+      setIsScannerOpen(false);
+      return;
+    }
+
+    try {
+      setScanError('');
+      setOccurrenceNf(numericNf);
+      const data = await findDanfeByNf(numericNf);
+
+      if (!data) {
+        setScanError('NF nao encontrada para o codigo lido.');
+        return;
+      }
+
+      setOccurrenceDanfe(data);
+      setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
+      setOccurrenceQuantity(1);
+      setOccurrenceItems([]);
+    } catch (error) {
+      console.error(error);
+      setScanError('Erro ao buscar NF a partir do codigo lido.');
+    } finally {
+      setIsScannerOpen(false);
+    }
   }
 
   async function handleOpenBatchPdf(batch: IReturnBatch) {
@@ -1808,7 +1777,7 @@ function ReturnsOccurrences() {
                       </button>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <Actions className="md:hidden [&_button]:w-full">
+                      <Actions className="[&_button]:w-full md:[&_button]:w-auto">
                         <button className="secondary" onClick={startScanner} type="button">Ler codigo de barras</button>
                       </Actions>
                       {scanError ? <InfoText style={{ marginTop: 6 }}>{scanError}</InfoText> : null}
@@ -2089,18 +2058,13 @@ function ReturnsOccurrences() {
               </>
             )}
 
-            {isScannerOpen && (
-              <>
-                <ModalOverlay onClick={stopScanner} />
-                <ModalCard>
-                  <h3>Ler codigo de barras da NF</h3>
-                  <video ref={scannerVideoRef} style={{ width: '100%', marginTop: 8, borderRadius: 8 }} muted />
-                  <Actions style={{ marginTop: '12px' }}>
-                    <button className="secondary" onClick={stopScanner} type="button">Fechar camera</button>
-                  </Actions>
-                </ModalCard>
-              </>
-            )}
+            <BarcodeScannerModal
+              isOpen={isScannerOpen}
+              title="Ler codigo de barras da NF"
+              onClose={stopScanner}
+              onBarcodeDetected={handleOccurrenceBarcodeDetected}
+              onError={setScanError}
+            />
           </section>
 
           {historyModalOpen && (

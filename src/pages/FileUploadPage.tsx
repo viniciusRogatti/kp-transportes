@@ -171,19 +171,6 @@ function FileUploadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    const previousHtmlOverflow = document.documentElement.style.overflowY;
-    const previousBodyOverflow = document.body.style.overflowY;
-
-    document.documentElement.style.overflowY = 'hidden';
-    document.body.style.overflowY = 'hidden';
-
-    return () => {
-      document.documentElement.style.overflowY = previousHtmlOverflow;
-      document.body.style.overflowY = previousBodyOverflow;
-    };
-  }, []);
-
   const selectedCount = queue.length;
   const totalBytes = useMemo(() => queue.reduce((acc, item) => acc + item.file.size, 0), [queue]);
   const failedItems = useMemo(() => queue.filter((item) => item.status === 'error'), [queue]);
@@ -442,10 +429,10 @@ function FileUploadPage() {
   const successResults = report?.results.filter((item) => item.status === 'success') || [];
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div>
       <Header />
-      <Container className="h-full min-h-0 overflow-hidden pb-s3 max-[768px]:pb-s3">
-        <div className="flex h-full min-h-0 w-full max-w-[1200px] flex-col gap-3 overflow-hidden">
+      <Container className="pb-s3 max-[768px]:pb-s3">
+        <div className="w-full max-w-[1200px] space-y-3">
           <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-4 shadow-[var(--shadow-1)]">
             <h2 className="text-[1.1rem] font-semibold text-text">Importação de XML</h2>
             <p className="mt-1 text-sm text-muted">Arraste arquivos, acompanhe o processamento e consulte o relatório completo.</p>
@@ -562,13 +549,13 @@ function FileUploadPage() {
               </div>
             ) : (
               <p className="mt-2 text-xs text-muted">
-                A fila fica recolhida por padrão para manter a tela sem rolagem.
+                A fila fica recolhida por padrão para manter a tela organizada.
               </p>
             )}
           </div>
 
           {report && (
-            <div className="min-h-0 flex flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-3 shadow-[var(--shadow-1)]">
+            <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-3 shadow-[var(--shadow-1)]">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -600,7 +587,7 @@ function FileUploadPage() {
                 </button>
               </div>
 
-              <div className="scrollbar-ui mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="mt-3">
                 {activeTab === 'summary' && (
                   <ImportSummary
                     summary={summary}

@@ -42,7 +42,7 @@ function SearchInput({
         onClick={onSearch}
         disabled={!onSearch}
         className={cn(
-          'absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+          'absolute inset-y-0 right-2 inline-flex w-9 -translate-y-0.5 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
           onSearch
             ? 'cursor-pointer text-muted hover:text-text-accent'
             : 'pointer-events-none text-muted',

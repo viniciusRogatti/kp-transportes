@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
-import { CheckCircle2, History, Pencil, Search, Trash2, X } from 'lucide-react';
+import { CheckCircle2, History, Pencil, Trash2, X } from 'lucide-react';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
@@ -42,6 +42,11 @@ import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence,
 import verifyToken from '../utils/verifyToken';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
+const RETURN_BATCH_LOOKBACK_OPTIONS = [
+  { value: '7', label: 'Ultimos 7 dias' },
+  { value: '30', label: 'Ultimos 30 dias' },
+] as const;
+type ReturnBatchLookbackValue = (typeof RETURN_BATCH_LOOKBACK_OPTIONS)[number]['value'];
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -179,7 +184,22 @@ const groupItemsByProductAndType = (items: IInvoiceReturnItem[]) => items.reduce
 function ReturnsOccurrences() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const getTodayDate = () => new Date().toISOString().split('T')[0];
+  const getDateInputValue = (date: Date) => {
+    const timezoneOffsetMs = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - timezoneOffsetMs).toISOString().split('T')[0];
+  };
+  const getTodayDate = () => getDateInputValue(new Date());
+  const getBatchRangeByLookback = (lookbackDays: number) => {
+    const safeLookback = Number.isFinite(lookbackDays) && lookbackDays > 0 ? Math.floor(lookbackDays) : 7;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - (safeLookback - 1));
+
+    return {
+      startDate: getDateInputValue(startDate),
+      endDate: getDateInputValue(endDate),
+    };
+  };
   const getReturnPdfFileName = (dateValue: string) => {
     const [year, month, day] = String(dateValue || '').split('-');
     if (!year || !month || !day) {
@@ -247,11 +267,10 @@ function ReturnsOccurrences() {
   const [selectedCarId, setSelectedCarId] = useState('');
   const [returnDate, setReturnDate] = useState(getTodayDate());
 
-  const [batchesDate, setBatchesDate] = useState(getTodayDate());
+  const [batchLookbackDays, setBatchLookbackDays] = useState<ReturnBatchLookbackValue>('7');
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
-  const [isBatchSearchOpen, setIsBatchSearchOpen] = useState(false);
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
@@ -577,12 +596,14 @@ function ReturnsOccurrences() {
     }
   }
 
-  async function loadReturnBatches() {
+  async function loadReturnBatches(lookbackDaysOverride?: ReturnBatchLookbackValue | number) {
     try {
+      const selectedLookbackRaw = lookbackDaysOverride ?? batchLookbackDays;
+      const selectedLookback = Number(selectedLookbackRaw);
+      const { startDate, endDate } = getBatchRangeByLookback(selectedLookback);
       const params = new URLSearchParams();
-      if (batchesDate) {
-        params.append('date', batchesDate);
-      }
+      params.append('startDate', startDate);
+      params.append('endDate', endDate);
 
       const { data } = await axios.get(`${API_URL}/returns/batches/search?${params.toString()}`);
       setReturnBatches(data);
@@ -596,6 +617,10 @@ function ReturnsOccurrences() {
     } catch (error) {
       console.error('Erro ao carregar lotes de devolucao:', error);
     }
+  }
+
+  async function handleLoadLatestBatches() {
+    await loadReturnBatches(batchLookbackDays);
   }
 
   async function loadOccurrences() {
@@ -1380,12 +1405,29 @@ function ReturnsOccurrences() {
               </button>
             </Tabs>
             {activeTab === 'returns' && (
-              <IconButton
-                icon={Search}
-                label="Buscar lote por data"
-                onClick={() => setIsBatchSearchOpen(true)}
-                className="ml-auto"
-              />
+              <div className="ml-auto flex w-full flex-col gap-2 min-[860px]:w-auto min-[860px]:flex-row min-[860px]:items-center">
+                <div className="min-w-0 min-[860px]:w-[190px]">
+                  <select
+                    value={batchLookbackDays}
+                    onChange={(event) => setBatchLookbackDays(event.target.value as ReturnBatchLookbackValue)}
+                    className="h-10 w-full rounded-sm border border-white/15 bg-[rgba(11,27,42,0.7)] px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                    aria-label="Periodo de devolucoes"
+                  >
+                    {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
+                      <option key={`return-lookback-${option.value}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLoadLatestBatches}
+                  className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.85rem] font-bold text-[#1f1300] transition hover:brightness-105"
+                >
+                  Trazer ultimas devolucoes
+                </button>
+              </div>
             )}
           </TabsRow>
 
@@ -1429,51 +1471,55 @@ function ReturnsOccurrences() {
                   </BoxDescription>
                   <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
                   <div className="space-y-2">
-                    <div className="min-w-0">
-                      <SearchInput
-                        type="number"
-                        value={returnNf}
-                        onChange={(event) => setReturnNf(event.target.value)}
-                        placeholder="Digite a NF"
-                        onSearch={handleSearchReturnNf}
-                        searchLabel="Buscar NF de devolucao"
-                        className="border-white/10 bg-[rgba(11,27,42,0.6)]"
-                      />
+                    <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
+                      <div className="min-w-0 md:w-[220px] md:shrink-0">
+                        <SearchInput
+                          type="text"
+                          inputMode="numeric"
+                          value={returnNf}
+                          onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                          placeholder="Digite a NF"
+                          maxLength={9}
+                          onSearch={handleSearchReturnNf}
+                          searchLabel="Buscar NF de devolucao"
+                          className="border-white/10 bg-[rgba(11,27,42,0.6)] tracking-[0.03em]"
+                        />
+                      </div>
+                      <ReturnSearchRow className="md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={returnType === 'total'}
+                            onChange={() => setReturnType('total')}
+                          />
+                          Total
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={returnType === 'partial'}
+                            onChange={() => setReturnType('partial')}
+                          />
+                          Parcial
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={returnType === 'coleta'}
+                            onChange={() => setReturnType('coleta')}
+                          />
+                          Coleta
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={returnType === 'sobra'}
+                            onChange={() => setReturnType('sobra')}
+                          />
+                          Sobra
+                        </label>
+                      </ReturnSearchRow>
                     </div>
-                    <ReturnSearchRow>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={returnType === 'total'}
-                          onChange={() => setReturnType('total')}
-                        />
-                        Total
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={returnType === 'partial'}
-                          onChange={() => setReturnType('partial')}
-                        />
-                        Parcial
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={returnType === 'coleta'}
-                          onChange={() => setReturnType('coleta')}
-                        />
-                        Coleta
-                      </label>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={returnType === 'sobra'}
-                          onChange={() => setReturnType('sobra')}
-                        />
-                        Sobra
-                      </label>
-                    </ReturnSearchRow>
                   </div>
 
                   {(returnDanfe || returnType === 'sobra') && (
@@ -1538,7 +1584,7 @@ function ReturnsOccurrences() {
                           </Grid>
                           <Actions style={{ marginTop: '12px' }}>
                             <button
-                              className="secondary"
+                              className="bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] text-[#1f1300]"
                               onClick={addPartialItem}
                               disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                               type="button"
@@ -1718,15 +1764,24 @@ function ReturnsOccurrences() {
                             ))}
                           </select>
                         </div>
-                        <div style={{ gridColumn: '1 / -1' }}>
+                      </Grid>
+
+                      <div className="mt-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                        <div className="min-w-0 md:w-[240px] md:shrink-0">
                           <InlineText>Data da devolucao</InlineText>
                           <input
                             type="date"
                             value={returnDate}
                             onChange={(event) => setReturnDate(event.target.value)}
+                            className="w-full rounded-sm border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-2 text-text"
                           />
                         </div>
-                      </Grid>
+                        <Actions className="md:justify-end">
+                          <button className="primary" onClick={handleConcludeBatch} disabled={draftNotes.length === 0} type="button">
+                            Concluir devolucao
+                          </button>
+                        </Actions>
+                      </div>
 
                       {!!draftAggregatedItems.length && (
                         <>
@@ -1745,12 +1800,6 @@ function ReturnsOccurrences() {
                           </List>
                         </>
                       )}
-
-                      <Actions style={{ marginTop: '12px' }}>
-                        <button className="primary" onClick={handleConcludeBatch} disabled={draftNotes.length === 0} type="button">
-                          Concluir devolucao
-                        </button>
-                      </Actions>
                     </>
                   )}
                 </Card>
@@ -1795,34 +1844,6 @@ function ReturnsOccurrences() {
                   </Card>
                 )}
 
-                {isBatchSearchOpen && (
-                  <>
-                    <ModalOverlay onClick={() => setIsBatchSearchOpen(false)} />
-                    <ModalCard>
-                      <h3>Buscar lote por data</h3>
-                      <input
-                        type="date"
-                        value={batchesDate}
-                        onChange={(event) => setBatchesDate(event.target.value)}
-                      />
-                      <Actions>
-                        <IconButton
-                          icon={Search}
-                          label="Buscar lote"
-                          onClick={async () => {
-                            await loadReturnBatches();
-                            setIsBatchSearchOpen(false);
-                          }}
-                          className="!h-10 !w-10 !min-h-10 !min-w-10 !px-0 !py-0"
-                          size="lg"
-                        />
-                        <button className="secondary" onClick={() => setIsBatchSearchOpen(false)} type="button">
-                          Fechar
-                        </button>
-                      </Actions>
-                    </ModalCard>
-                  </>
-                )}
               </SingleColumn>
             )}
 

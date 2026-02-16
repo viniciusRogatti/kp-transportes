@@ -44,8 +44,8 @@ function SearchInput({
         className={cn(
           'absolute inset-y-0 right-2 inline-flex w-9 -translate-y-0.5 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
           onSearch
-            ? 'cursor-pointer text-muted hover:text-text-accent'
-            : 'pointer-events-none text-muted',
+            ? 'cursor-pointer text-[#ffd24a] hover:text-[#ffe082]'
+            : 'pointer-events-none text-[#ffd24a]/55',
         )}
       >
         <Search className="h-5 w-5" aria-hidden="true" />

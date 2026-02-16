@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
-import { CheckCircle2, History, Pencil, Search, Trash2 } from 'lucide-react';
+import { CheckCircle2, History, Pencil, Search, Trash2, X } from 'lucide-react';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
@@ -37,12 +37,11 @@ import {
   Tabs,
   TabsRow,
   TopActionBar,
-  TwoColumns,
 } from '../style/returnsOccurrences';
 import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence, IProduct, IReturnBatch } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 
-const DEFAULT_RETURN_UNIT_TYPES = ['KG', 'CX', 'UN', 'PCT'];
+const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -99,10 +98,64 @@ type OccurrenceReasonValue = (typeof OCCURRENCE_REASONS)[number]['value'] | 'leg
 type OccurrenceDraftItem = {
   product_id: string;
   product_description: string;
+  product_type: string | null;
   quantity: number;
+};
+type OccurrenceCardItemSummary = {
+  label: string;
+  quantityWithType: string;
 };
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
+const formatOccurrenceQtyWithType = (quantity: number, productType?: string | null) => {
+  const normalizedType = normalizeProductType(productType);
+  return `${Number(quantity || 0)}${normalizedType || ''}`;
+};
+const buildOccurrenceCardItemSummary = (occurrence: IOccurrence): OccurrenceCardItemSummary[] => {
+  if (occurrence.items?.length) {
+    return occurrence.items
+      .map((item) => {
+        const id = String(item.product_id || '').trim();
+        const description = String(item.product_description || '').trim();
+        const quantity = Number(item.quantity || 0);
+        const label = (() => {
+          if (id && description) return `${id} - ${description}`;
+          return id || description || '';
+        })();
+
+        return {
+          label: label || 'Item',
+          quantityWithType: formatOccurrenceQtyWithType(quantity, item.product_type || occurrence.product_type),
+        };
+      })
+      .filter((item) => Boolean(item.label));
+  }
+
+  const productId = String(occurrence.product_id || '').trim();
+  const productDescription = String(occurrence.product_description || '').trim();
+  const quantity = Number(occurrence.quantity || 0);
+
+  if (productId && productDescription) {
+    return [{
+      label: `${productId} - ${productDescription}`,
+      quantityWithType: formatOccurrenceQtyWithType(quantity, occurrence.product_type),
+    }];
+  }
+  if (productId) {
+    return [{
+      label: productId,
+      quantityWithType: formatOccurrenceQtyWithType(quantity, occurrence.product_type),
+    }];
+  }
+  if (productDescription) {
+    return [{
+      label: productDescription,
+      quantityWithType: formatOccurrenceQtyWithType(quantity, occurrence.product_type),
+    }];
+  }
+
+  return [];
+};
 const getReturnItemKey = (item: Pick<IInvoiceReturnItem, 'product_id' | 'product_type'>) => (
   `${item.product_id}::${normalizeProductType(item.product_type)}`
 );
@@ -204,12 +257,14 @@ function ReturnsOccurrences() {
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
   const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReasonValue>('faltou_no_carregamento');
   const [occurrenceProductCode, setOccurrenceProductCode] = useState(OCCURRENCE_TOTAL_OPTION);
-  const [occurrenceQuantity, setOccurrenceQuantity] = useState<number>(1);
+  const [occurrenceProductType, setOccurrenceProductType] = useState('');
+  const [occurrenceQuantityInput, setOccurrenceQuantityInput] = useState('1');
   const [occurrenceItems, setOccurrenceItems] = useState<OccurrenceDraftItem[]>([]);
   const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
   const [resolutionType, setResolutionType] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
+  const [isOccurrenceBuilderOpen, setIsOccurrenceBuilderOpen] = useState(false);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
   const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<'all' | 'pending' | 'resolved'>('pending');
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
@@ -378,12 +433,15 @@ function ReturnsOccurrences() {
   const selectedOccurrenceProduct = useMemo(() => (
     occurrenceProducts.find((item) => item.Product.code === occurrenceProductCode) || null
   ), [occurrenceProducts, occurrenceProductCode]);
+  const occurrenceTypeOptions = useMemo(() => {
+    const productType = normalizeProductType(selectedOccurrenceProduct?.type || selectedOccurrenceProduct?.Product.type);
+    return Array.from(new Set([productType, ...DEFAULT_RETURN_UNIT_TYPES].filter(Boolean)));
+  }, [selectedOccurrenceProduct]);
   const isOccurrenceTotal = occurrenceProductCode === OCCURRENCE_TOTAL_OPTION;
   const occurrenceScope = isOccurrenceTotal ? 'invoice_total' : 'items';
   const occurrenceProductIsKg = useMemo(() => {
-    if (!selectedOccurrenceProduct) return false;
-    return normalizeProductType(selectedOccurrenceProduct.type || selectedOccurrenceProduct.Product.type).includes('KG');
-  }, [selectedOccurrenceProduct]);
+    return normalizeProductType(occurrenceProductType).includes('KG');
+  }, [occurrenceProductType]);
   const occurrenceQuantityStep = occurrenceProductIsKg ? 0.1 : 1;
   const occurrenceQuantityMin = occurrenceProductIsKg ? 0.1 : 1;
   const occurrenceProductMaxQty = selectedOccurrenceProduct ? Number(selectedOccurrenceProduct.quantity) : 0;
@@ -421,17 +479,24 @@ function ReturnsOccurrences() {
   }, [partialProductCode, partialProductType]);
 
   useEffect(() => {
-    if (!occurrenceProductCode || !selectedOccurrenceProduct) {
-      setOccurrenceQuantity(1);
+    if (!occurrenceProductCode || !selectedOccurrenceProduct || isOccurrenceTotal) {
+      setOccurrenceProductType('');
+      setOccurrenceQuantityInput('1');
       return;
     }
 
-    setOccurrenceQuantity(occurrenceProductIsKg ? 0.1 : 1);
-  }, [occurrenceProductCode, selectedOccurrenceProduct, occurrenceProductIsKg]);
+    const defaultType = normalizeProductType(selectedOccurrenceProduct.type || selectedOccurrenceProduct.Product.type)
+      || DEFAULT_RETURN_UNIT_TYPES[0];
+    setOccurrenceProductType((current) => normalizeProductType(current) || defaultType);
+    setOccurrenceQuantityInput(defaultType.includes('KG') ? '0.1' : '1');
+  }, [occurrenceProductCode, selectedOccurrenceProduct, isOccurrenceTotal]);
 
   useEffect(() => {
-    if (isOccurrenceTotal && occurrenceItems.length) {
-      setOccurrenceItems([]);
+    if (isOccurrenceTotal) {
+      setOccurrenceProductType('');
+      if (occurrenceItems.length) {
+        setOccurrenceItems([]);
+      }
     }
   }, [isOccurrenceTotal, occurrenceItems.length]);
 
@@ -471,6 +536,19 @@ function ReturnsOccurrences() {
     validateAndLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'occurrences') return;
+
+    const timer = window.setTimeout(() => {
+      loadOccurrences();
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, occurrenceStatusFilter, occurrenceNfFilter, occurrenceStartDate, occurrenceEndDate]);
 
   async function loadDrivers() {
     try {
@@ -958,7 +1036,8 @@ function ReturnsOccurrences() {
 
       setOccurrenceDanfe(data);
       setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
-      setOccurrenceQuantity(1);
+      setOccurrenceProductType('');
+      setOccurrenceQuantityInput('1');
       setOccurrenceItems([]);
     } catch (error) {
       console.error(error);
@@ -970,10 +1049,21 @@ function ReturnsOccurrences() {
     setEditingOccurrenceId(null);
     setOccurrenceReason('faltou_no_carregamento');
     setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
-    setOccurrenceQuantity(1);
+    setOccurrenceProductType('');
+    setOccurrenceQuantityInput('1');
     setOccurrenceItems([]);
     setOccurrenceDanfe(null);
     setOccurrenceNf('');
+  }
+
+  function openCreateOccurrenceBuilder() {
+    resetOccurrenceBuilder();
+    setIsOccurrenceBuilderOpen(true);
+  }
+
+  function closeOccurrenceBuilder() {
+    setIsOccurrenceBuilderOpen(false);
+    resetOccurrenceBuilder();
   }
 
   function addOccurrenceItem() {
@@ -992,19 +1082,32 @@ function ReturnsOccurrences() {
       return;
     }
 
-    if (!occurrenceQuantity || occurrenceQuantity <= 0) {
+    const normalizedProductType = normalizeProductType(occurrenceProductType);
+    if (!normalizedProductType) {
+      alert('Selecione o tipo da quantidade.');
+      return;
+    }
+
+    const rawQuantity = String(occurrenceQuantityInput || '').trim();
+    if (!rawQuantity) {
       alert('Informe uma quantidade valida.');
       return;
     }
 
-    if (!occurrenceProductIsKg && !Number.isInteger(occurrenceQuantity)) {
+    const parsedQuantity = Number(rawQuantity.replace(',', '.'));
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      alert('Informe uma quantidade valida.');
+      return;
+    }
+
+    if (!occurrenceProductIsKg && !Number.isInteger(parsedQuantity)) {
       alert('Para este produto, utilize quantidade inteira.');
       return;
     }
 
     const normalizedQty = occurrenceProductIsKg
-      ? Math.round(Number(occurrenceQuantity) * 10) / 10
-      : Number(occurrenceQuantity);
+      ? Math.round(parsedQuantity * 10) / 10
+      : parsedQuantity;
 
     if (normalizedQty < occurrenceQuantityMin) {
       alert(`Quantidade minima permitida: ${occurrenceQuantityMin}.`);
@@ -1017,13 +1120,17 @@ function ReturnsOccurrences() {
     }
 
     setOccurrenceItems((previous) => {
-      const existing = previous.find((item) => item.product_id === occurrenceProductCode);
+      const existing = previous.find((item) => (
+        item.product_id === occurrenceProductCode
+        && normalizeProductType(item.product_type) === normalizedProductType
+      ));
       if (!existing) {
         return [
           ...previous,
           {
             product_id: occurrenceProductCode,
             product_description: selectedOccurrenceProduct.Product.description,
+            product_type: normalizedProductType,
             quantity: normalizedQty,
           },
         ];
@@ -1031,16 +1138,19 @@ function ReturnsOccurrences() {
 
       return previous.map((item) => (
         item.product_id === occurrenceProductCode
+          && normalizeProductType(item.product_type) === normalizedProductType
           ? { ...item, quantity: Number(item.quantity) + normalizedQty }
           : item
       ));
     });
 
-    setOccurrenceQuantity(occurrenceQuantityMin);
+    setOccurrenceQuantityInput(String(occurrenceQuantityMin));
   }
 
-  function removeOccurrenceItem(productId: string) {
-    setOccurrenceItems((previous) => previous.filter((item) => item.product_id !== productId));
+  function removeOccurrenceItem(productId: string, productType: string | null = null) {
+    setOccurrenceItems((previous) => previous.filter((item) => (
+      !(item.product_id === productId && normalizeProductType(item.product_type) === normalizeProductType(productType))
+    )));
   }
 
   async function handleCreateOrEditOccurrence() {
@@ -1074,7 +1184,7 @@ function ReturnsOccurrences() {
       }
 
       alert(editingOccurrenceId ? 'Ocorrencia atualizada com sucesso.' : 'Ocorrencia registrada com sucesso.');
-      resetOccurrenceBuilder();
+      closeOccurrenceBuilder();
       await loadOccurrences();
     } catch (error) {
       console.error(error);
@@ -1089,6 +1199,7 @@ function ReturnsOccurrences() {
   async function startEditOccurrence(occurrence: IOccurrence) {
     if (occurrence.status !== 'pending') return;
 
+    setIsOccurrenceBuilderOpen(true);
     setEditingOccurrenceId(occurrence.id);
     setOccurrenceNf(String(occurrence.invoice_number || ''));
     setOccurrenceReason((occurrence.reason || 'legacy_outros') as OccurrenceReasonValue);
@@ -1098,6 +1209,7 @@ function ReturnsOccurrences() {
         .map((item) => ({
           product_id: String(item.product_id || '').trim(),
           product_description: String(item.product_description || '').trim(),
+          product_type: normalizeProductType(item.product_type) || null,
           quantity: Number(item.quantity || 0),
         }))
         .filter((item) => item.product_id && item.quantity > 0),
@@ -1107,7 +1219,12 @@ function ReturnsOccurrences() {
         ? OCCURRENCE_TOTAL_OPTION
         : String(occurrence.items?.[0]?.product_id || '').trim() || OCCURRENCE_TOTAL_OPTION,
     );
-    setOccurrenceQuantity(1);
+    setOccurrenceProductType(
+      scopeFromOccurrence === 'invoice_total'
+        ? ''
+        : normalizeProductType(occurrence.items?.[0]?.product_type) || '',
+    );
+    setOccurrenceQuantityInput('1');
 
     try {
       const data = await findDanfeByNf(String(occurrence.invoice_number));
@@ -1324,38 +1441,38 @@ function ReturnsOccurrences() {
                       />
                     </div>
                     <ReturnSearchRow>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={returnType === 'total'}
-                        onChange={() => setReturnType('total')}
-                      />
-                      Total
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={returnType === 'partial'}
-                        onChange={() => setReturnType('partial')}
-                      />
-                      Parcial
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={returnType === 'coleta'}
-                        onChange={() => setReturnType('coleta')}
-                      />
-                      Coleta
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={returnType === 'sobra'}
-                        onChange={() => setReturnType('sobra')}
-                      />
-                      Sobra
-                    </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={returnType === 'total'}
+                          onChange={() => setReturnType('total')}
+                        />
+                        Total
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={returnType === 'partial'}
+                          onChange={() => setReturnType('partial')}
+                        />
+                        Parcial
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={returnType === 'coleta'}
+                          onChange={() => setReturnType('coleta')}
+                        />
+                        Coleta
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={returnType === 'sobra'}
+                          onChange={() => setReturnType('sobra')}
+                        />
+                        Sobra
+                      </label>
                     </ReturnSearchRow>
                   </div>
 
@@ -1710,150 +1827,21 @@ function ReturnsOccurrences() {
             )}
 
             {activeTab === 'occurrences' && (
-              <TwoColumns>
-                <div className="flex flex-col gap-2 max-[768px]:gap-1">
-                  <h2 className="px-1 text-[1.04rem] font-semibold text-text max-[768px]:text-[0.96rem]">
-                    {editingOccurrenceId ? `Editar ocorrencia #${editingOccurrenceId}` : 'Registrar Ocorrencia'}
-                  </h2>
-                  <Card className="pt-3 max-[768px]:pt-2">
-                  <Grid className="grid-cols-1">
-                    <div className="min-w-0">
-                      <SearchInput
-                        type="text"
-                        inputMode="numeric"
-                        value={occurrenceNf}
-                        onChange={(event) => setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 8))}
-                        placeholder="Digite a NF"
-                        maxLength={8}
-                        onSearch={handleSearchOccurrenceNf}
-                        searchLabel="Buscar NF de ocorrencia"
-                        aria-label="NF da ocorrencia"
-                        className="text-[1rem] tracking-[0.04em] max-[768px]:h-[46px] max-[768px]:text-[1.05rem] max-[768px]:font-semibold"
-                      />
-                    </div>
-                  </Grid>
-
-                  {occurrenceDanfe && (
-                    <>
-                      <InlineText style={{ marginTop: '12px' }}>
-                        NF selecionada: {occurrenceDanfe.invoice_number} | Cliente: {occurrenceDanfe.Customer.name_or_legal_entity}
-                      </InlineText>
-
-                      <Grid className="mt-3 grid-cols-1 md:grid-cols-2">
-                        <div>
-                          <InlineText>Motivo</InlineText>
-                          <select
-                            value={occurrenceReason}
-                            onChange={(event) => setOccurrenceReason(event.target.value as OccurrenceReasonValue)}
-                            className="max-[768px]:text-[0.95rem]"
-                          >
-                            {occurrenceReason === 'legacy_outros' && (
-                              <option value="legacy_outros">Legado / outros</option>
-                            )}
-                            {OCCURRENCE_REASONS.map((reason) => (
-                              <option key={reason.value} value={reason.value}>
-                                {reason.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <InlineText>Produto</InlineText>
-                          <select
-                            value={occurrenceProductCode}
-                            className="max-[768px]:text-[0.97rem]"
-                            onChange={(event) => {
-                              const nextProductCode = event.target.value;
-                              const switchingToTotal = nextProductCode === OCCURRENCE_TOTAL_OPTION;
-
-                              if (editingOccurrenceId && switchingToTotal && occurrenceItems.length) {
-                                const confirmed = window.confirm('Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.');
-                                if (!confirmed) return;
-                              }
-
-                              setOccurrenceProductCode(nextProductCode);
-                            }}
-                          >
-                            <option value={OCCURRENCE_TOTAL_OPTION}>Total da NF</option>
-                            {occurrenceDanfe.DanfeProducts.map((item) => (
-                              <option key={`occ-select-${item.Product.code}`} value={item.Product.code}>
-                                {item.Product.code} - {item.Product.description}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </Grid>
-
-                      {!isOccurrenceTotal && (
-                        <>
-                          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-                            <div>
-                              <InlineText>Quantidade</InlineText>
-                              <input
-                                type="number"
-                                min={occurrenceQuantityMin}
-                                max={occurrenceProductRemainingQty || undefined}
-                                step={occurrenceQuantityStep}
-                                value={occurrenceQuantity}
-                                onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
-                                disabled={!selectedOccurrenceProduct}
-                                className="max-[768px]:text-[0.98rem]"
-                              />
-                              {!!selectedOccurrenceProduct && (
-                                <InfoText>
-                                  Limite da NF: {occurrenceProductMaxQty} | Restante: {occurrenceProductRemainingQty}
-                                </InfoText>
-                              )}
-                            </div>
-                            <button
-                              className="secondary h-[42px] shrink-0 rounded-md border-none bg-white/15 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45 max-[768px]:px-3 max-[768px]:text-[0.85rem]"
-                              onClick={addOccurrenceItem}
-                              type="button"
-                              disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}
-                            >
-                              Adicionar item
-                            </button>
-                          </div>
-                          <List className="max-[768px]:gap-2 max-[768px]:[&>li]:items-start max-[768px]:[&>li]:py-3 max-[768px]:[&>li>span]:text-[0.94rem] max-[768px]:[&>li>span]:leading-snug">
-                            {!occurrenceItems.length ? (
-                              <li>
-                                <span>Nenhum item selecionado.</span>
-                              </li>
-                            ) : occurrenceItems.map((item) => (
-                              <li key={`occ-item-${item.product_id}`}>
-                                <span className="text-[0.95rem] leading-snug">
-                                  <strong>{item.product_id}</strong> - {item.product_description} | Qtd: {item.quantity}
-                                </span>
-                                <Actions>
-                                  <button className="danger" onClick={() => removeOccurrenceItem(item.product_id)} type="button">Remover</button>
-                                </Actions>
-                              </li>
-                            ))}
-                          </List>
-                        </>
-                      )}
-
-                      <Actions style={{ marginTop: '12px' }}>
-                        <button className="primary" onClick={handleCreateOrEditOccurrence} type="button">
-                          {editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
-                        </button>
-                        {editingOccurrenceId && (
-                          <button className="secondary" onClick={resetOccurrenceBuilder} type="button">
-                            Cancelar edicao
-                          </button>
-                        )}
-                      </Actions>
-                    </>
-                  )}
-                  </Card>
-                </div>
-
+              <SingleColumn>
                 <Card>
                   <CardHeaderRow>
                     <h2>Ocorrencias Cadastradas</h2>
-                    <button className="secondary" onClick={loadOccurrences} type="button">Atualizar lista</button>
+                    {canManageOccurrenceStatus && (
+                      <button
+                        onClick={openCreateOccurrenceBuilder}
+                        type="button"
+                        className="rounded-md border border-amber-500/60 bg-[linear-gradient(135deg,#ffba2b_0%,#ff7a18_100%)] px-4 py-[0.65rem] font-bold text-[#1f1300] transition hover:brightness-105"
+                      >
+                        Criar ocorrencia
+                      </button>
+                    )}
                   </CardHeaderRow>
-                  <Grid style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                  <Grid className="mt-[5px] grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <InlineText>Status</InlineText>
                       <select
@@ -1897,110 +1885,271 @@ function ReturnsOccurrences() {
                     <List>
                       {occurrences.map((occurrence) => {
                         const reasonLabel = OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros';
-                        const itemsSummary = occurrence.items?.length
-                          ? occurrence.items
-                            .map((item) => {
-                              const id = String(item.product_id || '').trim();
-                              const description = String(item.product_description || '').trim();
-                              if (id && description) return `${id} - ${description}`;
-                              return id || description || '';
-                            })
-                            .filter(Boolean)
-                            .join(', ')
-                          : (() => {
-                            const productId = String(occurrence.product_id || '').trim();
-                            const productDescription = String(occurrence.product_description || '').trim();
-                            if (productId && productDescription) return `${productId} - ${productDescription}`;
-                            if (productId) return productId;
-                            if (productDescription) return productDescription;
-                            return 'NF total';
-                          })();
+                        const occurrenceItemSummaries = buildOccurrenceCardItemSummary(occurrence);
 
                         return (
-                        <li key={occurrence.id}>
-                          <OccurrenceItemContent>
-                            <span>
-                              <strong>NF: {occurrence.invoice_number}</strong>
-                              {` | CLIENTE: ${occurrence.customer_name || '-'}`}
-                            </span>
-                            <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
-                            <span>{`ITENS: ${itemsSummary || 'NF total'}`}</span>
-                            <span>{`MOTIVO: ${reasonLabel}`}</span>
-                            {occurrence.resolution_type && (
+                          <li key={occurrence.id}>
+                            <OccurrenceItemContent>
                               <span>
-                                Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
-                                {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
+                                <strong>NF: {occurrence.invoice_number}</strong>
+                                {` | CLIENTE: ${occurrence.customer_name || '-'}`}
                               </span>
-                            )}
+                              <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
+                              <span>
+                                ITENS:{' '}
+                                {occurrenceItemSummaries.length ? (
+                                  occurrenceItemSummaries.map((item, index) => (
+                                    <span key={`occ-summary-${occurrence.id}-${item.label}-${index}`}>
+                                      {index > 0 ? ', ' : ''}
+                                      {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+                                    </span>
+                                  ))
+                                ) : 'NF total'}
+                              </span>
+                              <span>{`MOTIVO: ${reasonLabel}`}</span>
+                              {occurrence.resolution_type && (
+                                <span>
+                                  Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
+                                  {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
+                                </span>
+                              )}
 
-                            <OccurrenceCardFooter>
-                              <OccurrenceActionsRow>
-                                <OccurrenceActionsLeft>
-                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                                    <>
-                                      <button
-                                        className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
-                                        onClick={() => {
-                                          setResolvingOccurrence(occurrence);
-                                          setResolutionType('');
-                                          setResolutionNote('');
-                                        }}
-                                        type="button"
-                                      >
-                                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                                        Marcar como resolvida
-                                      </button>
+                              <OccurrenceCardFooter>
+                                <OccurrenceActionsRow>
+                                  <OccurrenceActionsLeft>
+                                    {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                      <>
+                                        <button
+                                          className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
+                                          onClick={() => {
+                                            setResolvingOccurrence(occurrence);
+                                            setResolutionType('');
+                                            setResolutionNote('');
+                                          }}
+                                          type="button"
+                                        >
+                                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                          Marcar como resolvida
+                                        </button>
+                                        <IconButton
+                                          icon={CheckCircle2}
+                                          label="Marcar ocorrência como resolvida"
+                                          onClick={() => {
+                                            setResolvingOccurrence(occurrence);
+                                            setResolutionType('');
+                                            setResolutionNote('');
+                                          }}
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
+                                        />
+                                      </>
+                                    )}
+                                  </OccurrenceActionsLeft>
+
+                                  <OccurrenceActionsRight>
+                                    {occurrence.status === 'pending' && canManageOccurrenceStatus && (
                                       <IconButton
-                                        icon={CheckCircle2}
-                                        label="Marcar ocorrência como resolvida"
-                                        onClick={() => {
-                                          setResolvingOccurrence(occurrence);
-                                          setResolutionType('');
-                                          setResolutionNote('');
-                                        }}
-                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
+                                        icon={Pencil}
+                                        label="Editar ocorrencia"
+                                        onClick={() => startEditOccurrence(occurrence)}
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
                                       />
-                                    </>
-                                  )}
-                                </OccurrenceActionsLeft>
-
-                                <OccurrenceActionsRight>
-                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                                    <IconButton
-                                      icon={Pencil}
-                                      label="Editar ocorrencia"
-                                      onClick={() => startEditOccurrence(occurrence)}
-                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                                    />
-                                  )}
-                                  {isAdminUser && (
-                                    <IconButton
-                                      icon={History}
-                                      label="Histórico da ocorrência"
-                                      onClick={() => handleViewOccurrenceHistory(occurrence.id)}
-                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                                    />
-                                  )}
-                                  {canManageOccurrenceStatus && (
-                                    <IconButton
-                                      icon={Trash2}
-                                      label="Excluir ocorrencia"
-                                      variant="danger"
-                                      onClick={() => handleDeleteOccurrence(occurrence.id)}
-                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                                    />
-                                  )}
-                                </OccurrenceActionsRight>
-                              </OccurrenceActionsRow>
-                            </OccurrenceCardFooter>
-                          </OccurrenceItemContent>
-                        </li>
+                                    )}
+                                    {isAdminUser && (
+                                      <IconButton
+                                        icon={History}
+                                        label="Histórico da ocorrência"
+                                        onClick={() => handleViewOccurrenceHistory(occurrence.id)}
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                      />
+                                    )}
+                                    {canManageOccurrenceStatus && (
+                                      <IconButton
+                                        icon={Trash2}
+                                        label="Excluir ocorrencia"
+                                        variant="danger"
+                                        onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                      />
+                                    )}
+                                  </OccurrenceActionsRight>
+                                </OccurrenceActionsRow>
+                              </OccurrenceCardFooter>
+                            </OccurrenceItemContent>
+                          </li>
                         );
                       })}
                     </List>
                   )}
                 </Card>
-              </TwoColumns>
+              </SingleColumn>
+            )}
+
+            {isOccurrenceBuilderOpen && canManageOccurrenceStatus && (
+              <>
+                <ModalOverlay onClick={closeOccurrenceBuilder} />
+                <ModalCard className="max-h-[88vh] w-[min(96vw,760px)] overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={closeOccurrenceBuilder}
+                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md border border-rose-800/70 bg-rose-950/35 text-rose-200 transition hover:bg-rose-900/45"
+                    aria-label="Fechar popup"
+                    title="Fechar"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <h3 className="text-center">{editingOccurrenceId ? `Editar ocorrencia #${editingOccurrenceId}` : 'Registrar Ocorrencia'}</h3>
+                  <Grid className="grid-cols-1">
+                    <div className="min-w-0">
+                      <SearchInput
+                        type="text"
+                        inputMode="numeric"
+                        value={occurrenceNf}
+                        onChange={(event) => setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                        placeholder="Digite a NF"
+                        maxLength={9}
+                        onSearch={handleSearchOccurrenceNf}
+                        searchLabel="Buscar NF de ocorrencia"
+                        aria-label="NF da ocorrencia"
+                        className="text-[1rem] tracking-[0.04em]"
+                        wrapperClassName="mx-auto max-w-[280px] max-md:max-w-full"
+                      />
+                    </div>
+                  </Grid>
+
+                  {occurrenceDanfe && (
+                    <>
+                      <InlineText style={{ marginTop: '12px' }}>
+                        NF selecionada: {occurrenceDanfe.invoice_number} | Cliente: {occurrenceDanfe.Customer.name_or_legal_entity}
+                      </InlineText>
+
+                      <Grid className="mt-3 grid-cols-1 md:grid-cols-3">
+                        <div>
+                          <InlineText>Motivo</InlineText>
+                          <select
+                            value={occurrenceReason}
+                            onChange={(event) => setOccurrenceReason(event.target.value as OccurrenceReasonValue)}
+                          >
+                            {occurrenceReason === 'legacy_outros' && (
+                              <option value="legacy_outros">Legado / outros</option>
+                            )}
+                            {OCCURRENCE_REASONS.map((reason) => (
+                              <option key={reason.value} value={reason.value}>
+                                {reason.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <InlineText>Produto</InlineText>
+                          <select
+                            value={occurrenceProductCode}
+                            onChange={(event) => {
+                              const nextProductCode = event.target.value;
+                              const switchingToTotal = nextProductCode === OCCURRENCE_TOTAL_OPTION;
+
+                              if (editingOccurrenceId && switchingToTotal && occurrenceItems.length) {
+                                const confirmed = window.confirm('Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.');
+                                if (!confirmed) return;
+                              }
+
+                              setOccurrenceProductType('');
+                              setOccurrenceProductCode(nextProductCode);
+                            }}
+                          >
+                            <option value={OCCURRENCE_TOTAL_OPTION}>Total da NF</option>
+                            {occurrenceDanfe.DanfeProducts.map((item) => (
+                              <option key={`occ-select-${item.Product.code}`} value={item.Product.code}>
+                                {item.Product.code} - {item.Product.description}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <InlineText>Tipo da quantidade</InlineText>
+                          <select
+                            value={occurrenceProductType}
+                            onChange={(event) => {
+                              const nextType = normalizeProductType(event.target.value);
+                              setOccurrenceProductType(nextType);
+                              setOccurrenceQuantityInput(nextType.includes('KG') ? '0.1' : '1');
+                            }}
+                            disabled={isOccurrenceTotal || !selectedOccurrenceProduct}
+                          >
+                            {!occurrenceTypeOptions.length ? (
+                              <option value="">Selecione</option>
+                            ) : (
+                              occurrenceTypeOptions.map((typeOption) => (
+                                <option key={`occ-type-${typeOption}`} value={typeOption}>
+                                  {typeOption}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      </Grid>
+
+                      {!isOccurrenceTotal && (
+                        <>
+                          <div className="mt-2">
+                            <div className="grid grid-cols-[minmax(150px,220px)_auto] items-end justify-start gap-2 max-[430px]:grid-cols-[minmax(118px,160px)_auto] max-[430px]:gap-1">
+                              <div className="min-w-0">
+                                <InlineText>Quantidade</InlineText>
+                                <input
+                                  type="number"
+                                  min={occurrenceQuantityMin}
+                                  max={occurrenceProductRemainingQty || undefined}
+                                  step={occurrenceQuantityStep}
+                                  value={occurrenceQuantityInput}
+                                  onChange={(event) => setOccurrenceQuantityInput(event.target.value)}
+                                  disabled={!selectedOccurrenceProduct}
+                                />
+                              </div>
+                              <button
+                                className="mb-3 h-[42px] shrink-0 whitespace-nowrap rounded-md border-none bg-white/15 px-3 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45 max-[430px]:px-2 max-[430px]:text-[0.8rem]"
+                                onClick={addOccurrenceItem}
+                                type="button"
+                                disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}
+                              >
+                                Adicionar item
+                              </button>
+                            </div>
+                            {!!selectedOccurrenceProduct && (
+                              <InfoText className="mt-1">
+                                Limite da NF: {occurrenceProductMaxQty} | Restante: {occurrenceProductRemainingQty}
+                              </InfoText>
+                            )}
+                          </div>
+                          <List>
+                            {!occurrenceItems.length ? (
+                              <li>
+                                <span>Nenhum item selecionado.</span>
+                              </li>
+                            ) : occurrenceItems.map((item) => (
+                              <li key={`occ-item-${item.product_id}-${normalizeProductType(item.product_type) || 'NA'}`}>
+                                <span>
+                                  <strong>{item.product_id}</strong> - {item.product_description}
+                                  {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
+                                </span>
+                                <Actions>
+                                  <button className="danger" onClick={() => removeOccurrenceItem(item.product_id, item.product_type)} type="button">Remover</button>
+                                </Actions>
+                              </li>
+                            ))}
+                          </List>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  <Actions style={{ marginTop: '12px' }}>
+                    {occurrenceDanfe && (
+                      <button className="primary" onClick={handleCreateOrEditOccurrence} type="button">
+                        {editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
+                      </button>
+                    )}
+                  </Actions>
+                </ModalCard>
+              </>
             )}
 
             {resolvingOccurrence && (

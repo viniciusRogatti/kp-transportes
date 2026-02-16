@@ -92,10 +92,12 @@ export interface IOccurrence {
   items?: Array<{
     product_id: string;
     product_description?: string | null;
+    product_type?: string | null;
     quantity: number;
   }>;
   product_id: string | null;
   product_description: string | null;
+  product_type?: string | null;
   quantity: number | null;
   description: string;
   status: 'pending' | 'resolved';

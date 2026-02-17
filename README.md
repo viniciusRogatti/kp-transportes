@@ -1,85 +1,104 @@
 # KP Transportes - Frontend
 
-Aplicacao web para operacao de transporte e distribuicao: importacao de DANFEs, pesquisa e filtragem de notas, roteirizacao de viagens e controle de devolucoes/ocorrencias.
+Aplicacao web para operacao de transporte e distribuicao, com foco em DANFEs, roteirizacao, devolucoes, ocorrencias e operacao da torre de controle.
 
 ## Stack
 - React 18 + TypeScript
-- React Router DOM
-- Styled Components
+- React Router DOM (`HashRouter`)
+- Tailwind CSS + componentes utilitarios internos
 - Axios
-- React Datepicker
-- Framer Motion (animacoes pontuais)
-- React PDF Renderer (geracao/abertura de PDFs)
+- TanStack Query
+- TanStack Table
+- Date-fns
+- React PDF Renderer
 
-## Funcionalidades
+## Perfis e acesso
+- Perfis internos: `admin`, `user`, `master`, `expedicao`
+- Perfil torre: `control_tower`
+- Rotas protegidas por permissao no `App.tsx`
+- Se o token for invalido/ausente, o usuario volta para `/`
 
-### 1) Autenticacao
-- Tela de login com validacao de token.
-- Redirecionamento para `/` quando token e invalido ou ausente.
+## Modulos principais
 
-### 2) Upload de XML (DANFEs)
-- Importacao de XMLs para alimentar dados de clientes, produtos e notas.
+### Login e seguranca
+- Login com validacao de token.
+- Integracao opcional com Human Verification (Turnstile ou reCAPTCHA).
 
-### 3) Notas do dia (`/todayInvoices`)
+### Upload de XML (`/uploadFiles`)
+- Importacao de XMLs de notas para alimentar base de clientes, produtos e DANFEs.
+- Fila de upload e feedback de sucesso/erro na interface.
+
+### Notas do dia (`/todayInvoices`)
 - Lista de DANFEs do dia.
-- Filtros por:
-  - NF
-  - Produto (codigo ou descricao)
-  - Nome do cliente
-  - Cidade
-  - Rota (oculto no mobile)
-- Abertura de lista de produtos em PDF.
+- Filtros por NF, produto, cliente, cidade e rota.
+- Exportacao/abertura de lista de produtos em PDF.
+- Cards responsivos com suporte mobile.
+- Lista de produtos dentro do card com scroll vertical no mobile.
 
-### 4) Pesquisar notas (`/invoices`)
-- Busca por NF pontual.
-- Busca por periodo (data inicio/data fim).
-- Busca rapida por NF via header global (atalho): ao pressionar `Enter`, abre `Pesquisar notas` ja com a NF consultada.
-- Filtros por:
-  - NF
-  - Produto (codigo ou descricao)
-  - Nome do cliente
-  - Cidade
-  - Rota (oculto no mobile)
-- Layout responsivo com foco em usabilidade no celular.
+### Pesquisa de notas (`/invoices`)
+- Busca por NF e por periodo.
+- Busca rapida via header (atalho por NF).
+- Filtros por NF, produto, cliente, cidade e rota.
 
-### 5) Roteirizacao (`/routePlanning`)
+### Roteirizacao (`/routePlanning`)
 - Selecao de motorista e veiculo.
 - Adicao de nota por NF ou codigo de barras.
-- Reordenacao e remocao de notas da viagem.
+- Reordenacao/remocao de notas.
 - Persistencia da viagem e atualizacao de status das notas.
 
-### 6) Viagens (`/trips`)
-- Consulta de viagens por data.
-- Visualizacao e exportacao de informacoes da roteirizacao.
+### Viagens (`/trips`)
+- Consulta e visualizacao de viagens.
+- Exportacao de lista de produtos/roteiro em PDF.
 
-### 7) Devolucoes e Ocorrencias (`/returns-occurrences`)
-- Fluxo de devolucao total/parcial por NF.
-- Criacao e gestao de lotes de devolucao.
-- Geracao de PDF de comprovante/lote.
-- Registro de ocorrencias (com ou sem produto).
-- Resolucao de ocorrencias pendentes.
-- Navegacao por abas (Devolucoes/Ocorrencias) com estilo de janela, sem troca de rota.
-- Estado da aba persistido por query param (`?tab=returns|occurrences`) e ultima aba salva localmente.
+### Home operacional (`/home`)
+- Painel de ocorrencias pendentes.
+- Fluxo de edicao, exclusao e resolucao de ocorrencias.
+- Historico de ocorrencia (perfil admin).
+- Itens de ocorrencia exibidos em linhas separadas para leitura rapida.
 
-### 8) Cadastros e consultas
-- Produtos (`/products`)
-- Clientes (`/customers`)
-- Home operacional com indicadores e pendencias (`/home`)
+### Devolucoes e ocorrencias (`/returns-occurrences`)
+- Fluxo de devolucao total, parcial, sobra e coleta.
+- Criacao e manutencao de lotes.
+- Geracao de PDF do lote.
+- Cadastro/edicao/resolucao de ocorrencias.
+- Abas `returns` e `occurrences` com persistencia em query string.
+- Itens de ocorrencia exibidos em linhas separadas.
+- Perfil `control_tower` em modo leitura para ocorrencias.
+- Para `control_tower`, a lista de ocorrencias fica filtrada por `resolution_type = talao_mercadoria_faltante` e `credit_status = pending`.
+
+### Torre de controle (`/control-tower/coletas`)
+- Painel de coletas com KPIs, graficos, fila de acao e tabela detalhada.
+- Registro de coleta por NF com validacao de existencia da nota.
+- Bloco de ocorrencias com talao pendentes de credito.
+- Acao `Credito concluido` para `control_tower`, `admin` e `master`.
+- Exibicao focada em pendencias de credito para cliente.
+
+## Regras de negocio refletidas na UI
+- Torre de controle trabalha com devolucoes/sobras e ocorrencias com talao pendentes de credito.
+- Ocorrencias com outros motivos de resolucao nao entram na pendencia da torre.
+- Quando o credito e finalizado na torre, a ocorrencia sai da lista pendente.
+
+## Atualizacao automatica de versao (anti-sessao desatualizada)
+- O app executa checagem de versao em producao ao voltar para a aba e ao focar a janela.
+- Tambem existe checagem periodica em intervalo fixo.
+- A comparacao e feita entre o `main.js` carregado e o `asset-manifest.json` atual.
+- Quando detecta versao nova, a pagina recarrega automaticamente.
+- Implementacao em `src/hooks/useAppVersionAutoRefresh.ts`.
 
 ## Rotas da aplicacao
-- `/` login
+- `/`
 - `/home`
 - `/todayInvoices`
 - `/invoices`
 - `/routePlanning`
 - `/trips`
 - `/returns-occurrences`
+- `/control-tower/coletas`
 - `/uploadFiles`
 - `/products`
 - `/customers`
 
-## Estrutura de dados utilizada (resumo)
-As entidades principais consumidas no frontend sao:
+## Entidades consumidas no frontend
 - `Customer`
 - `Danfe`
 - `DanfeProduct`
@@ -88,8 +107,24 @@ As entidades principais consumidas no frontend sao:
 - `Car`
 - `Trips`
 - `TripNotes`
-- `InvoiceReturn` / `InvoiceReturnItem`
+- `InvoiceReturn`
+- `InvoiceReturnItem`
 - `Occurrence`
+
+## Integracoes de API usadas na interface
+- `GET /danfes`, `GET /danfes/date`, `GET /danfes/nf/:id`, `GET /danfes/barcode/:id`
+- `PUT /danfes/update-status`
+- `POST /returns/batches/create`
+- `GET /returns/batches/search`
+- `POST /returns/batches/:batchCode/add-note`
+- `DELETE /returns/notes/:id`
+- `GET /occurrences/search`
+- `GET /occurrences/pending`
+- `POST /occurrences/create`
+- `PUT /occurrences/:id`
+- `PUT /occurrences/status/:id`
+- `PUT /occurrences/credit/:id`
+- `DELETE /occurrences/:id`
 
 ## Execucao local
 ```bash
@@ -99,7 +134,7 @@ npm start
 
 Aplicacao local: `http://localhost:3000`
 
-## Human Verification (Login)
+## Human Verification (login)
 Para habilitar CAPTCHA no frontend, crie `frontend/.env` com uma das chaves:
 
 ```bash
@@ -108,7 +143,7 @@ REACT_APP_TURNSTILE_SITE_KEY=...
 REACT_APP_RECAPTCHA_SITE_KEY=...
 ```
 
-O backend valida o token no endpoint de login usando as variaveis:
+Variaveis esperadas no backend para validacao:
 - `HUMAN_VERIFICATION_PROVIDER` (`turnstile`, `recaptcha` ou `none`)
 - `TURNSTILE_SECRET_KEY`
 - `RECAPTCHA_SECRET_KEY`
@@ -120,15 +155,11 @@ npm run deploy
 ```
 
 Observacoes:
-- O projeto usa `HashRouter` para evitar erro `404` em hospedagem estatica.
-- `homepage` no `package.json` aponta para o path de publicacao em GitHub Pages.
+- O projeto usa `HashRouter` para evitar erro 404 em hospedagem estatica.
+- O `homepage` no `package.json` define o path de publicacao.
 
 ## Scripts
-- `npm start`: ambiente de desenvolvimento
-- `npm run build`: build de producao
-- `npm test`: testes
-- `npm run deploy`: publica build no GitHub Pages
-
-## Atualizacoes recentes
-- Busca rapida por NF no topo agora encaminha para `/invoices?nf=...` e executa a busca automaticamente.
-- Pagina `Devolucoes/Ocorrencias` recebeu abas conectadas ao painel (efeito de aba de navegador), com aba inativa mais escura e persistencia de selecao.
+- `npm start`
+- `npm run build`
+- `npm test`
+- `npm run deploy`

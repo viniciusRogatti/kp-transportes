@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import ReturnsOccurrences from './pages/ReturnsOccurrences';
 import ControlTowerCollections from './pages/ControlTowerCollections';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
+import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 // import FreightSummary from './pages/FreightCalculation';
 
 const INTERNAL_PERMISSIONS = ['admin', 'user', 'master', 'expedicao'];
@@ -38,6 +39,8 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 }
 
 function App() {
+  useAppVersionAutoRefresh();
+
   return (
     <div>
       <GlobalAlertHost />

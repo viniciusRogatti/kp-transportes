@@ -23,6 +23,8 @@ import { API_URL } from '../data';
 import { IOccurrence } from '../types/types';
 
 const today = new Date().toISOString().slice(0, 10);
+const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
+const CREDIT_MANAGERS = ['control_tower', 'admin', 'master'];
 
 const defaultFilters: ControlTowerFilters = {
   search: '',
@@ -41,6 +43,7 @@ function ControlTowerCollections() {
   const navigate = useNavigate();
   const userPermission = localStorage.getItem('user_permission') || '';
   const canManageStatus = ['admin', 'master', 'expedicao'].includes(userPermission);
+  const canFinalizeOccurrenceCredit = CREDIT_MANAGERS.includes(userPermission);
   const [filters, setFilters] = useState<ControlTowerFilters>(defaultFilters);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize] = useState(12);
@@ -84,10 +87,15 @@ function ControlTowerCollections() {
 
     const loadRecentOccurrences = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/occurrences/search?status=all`, {
+        const params = new URLSearchParams({
+          status: 'resolved',
+          resolution_type: CONTROL_TOWER_OCCURRENCE_RESOLUTION,
+          credit_status: 'pending',
+        });
+        const { data } = await axios.get(`${API_URL}/occurrences/search?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setRecentOccurrences(Array.isArray(data) ? data.slice(0, 10) : []);
+        setRecentOccurrences(Array.isArray(data) ? data.slice(0, 20) : []);
       } catch {
         setRecentOccurrences([]);
       }
@@ -158,6 +166,29 @@ function ControlTowerCollections() {
 
   function quickTogglePriority(id: string, pickupPriority: boolean) {
     prioritizePickupMutation.mutate({ returnId: id, pickupPriority });
+  }
+
+  async function handleFinalizeOccurrenceCredit(occurrenceId: number) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Sessão inválida. Faça login novamente.');
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/occurrences/credit/${occurrenceId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setRecentOccurrences((previous) => previous.filter((occurrence) => occurrence.id !== occurrenceId));
+      alert(`Crédito da ocorrência #${occurrenceId} finalizado com sucesso.`);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao finalizar crédito da ocorrência.');
+      } else {
+        alert('Erro ao finalizar crédito da ocorrência.');
+      }
+    }
   }
 
   async function handleRegisterPickupByNf() {
@@ -237,11 +268,11 @@ function ControlTowerCollections() {
 
         <Card className="border-slate-800 bg-[#101b2b]">
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-100">Ocorrências (acompanhamento)</h3>
-            <span className="text-xs text-slate-400">Somente leitura para Control Tower</span>
+            <h3 className="text-sm font-semibold text-slate-100">Ocorrências com talão (pendentes de crédito)</h3>
+            <span className="text-xs text-slate-400">Pendências até confirmação do crédito</span>
           </div>
           {!recentOccurrences.length ? (
-            <p className="text-xs text-slate-400">Nenhuma ocorrência recente.</p>
+            <p className="text-xs text-slate-400">Nenhuma ocorrência com talão pendente de crédito.</p>
           ) : (
             <ul className="space-y-2">
               {recentOccurrences.map((occurrence) => (
@@ -250,17 +281,44 @@ function ControlTowerCollections() {
                     <strong>NF {occurrence.invoice_number}</strong>
                     {` | Motivo: ${occurrence.reason || 'legacy_outros'}`}
                     {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'itens'}`}
-                    {` | Status: ${occurrence.status === 'resolved' ? 'resolvida' : 'pendente'}`}
+                    {' | Status Torre: pendente de crédito'}
                   </div>
                   {occurrence.scope === 'items' && !!occurrence.items?.length ? (
+                    <div className="mt-1 space-y-1 text-slate-300">
+                      <div className="font-medium text-slate-200">Itens:</div>
+                      {occurrence.items.map((item, index) => {
+                        const itemCode = String(item.product_id || '').trim();
+                        const itemDescription = String(item.product_description || '').trim();
+                        const itemType = String(item.product_type || '').trim().toUpperCase();
+                        const itemLabel = itemCode && itemDescription
+                          ? `${itemCode} - ${itemDescription}`
+                          : itemCode || itemDescription || 'Item';
+
+                        return (
+                          <div key={`ct-occ-item-${occurrence.id}-${itemCode}-${index}`} className="pl-2">
+                            {itemLabel} | <strong>{`Qtd: ${Number(item.quantity || 0)}${itemType}`}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-slate-300">Itens: NF total</div>
+                  )}
+                  {occurrence.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION ? (
                     <div className="mt-1 text-slate-300">
-                      Itens: {occurrence.items.map((item) => `${item.product_id} (${item.quantity})`).join(', ')}
+                      Resolução: Talão de mercadoria faltante
+                      {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
                     </div>
                   ) : null}
-                  {occurrence.resolution_type ? (
-                    <div className="mt-1 text-slate-300">
-                      Resolução: {occurrence.resolution_type}
-                      {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
+                  {canFinalizeOccurrenceCredit ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleFinalizeOccurrenceCredit(occurrence.id)}
+                        className="rounded-md border border-emerald-500/60 bg-emerald-700/25 px-3 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-700/40"
+                      >
+                        Crédito concluído
+                      </button>
                     </div>
                   ) : null}
                 </li>

@@ -101,6 +101,7 @@ export interface IOccurrence {
   quantity: number | null;
   description: string;
   status: 'pending' | 'resolved';
+  credit_status?: 'not_applicable' | 'pending' | 'completed';
   resolution_type?: 'enviado_posteriormente' | 'talao_mercadoria_faltante' | 'motivo_corrigido' | 'motorista_pagou_cliente' | 'troca_realizada' | 'cliente_aceitou_invertido' | 'legacy_outros' | null;
   resolution_note?: string | null;
   resolved_by_user_id?: number | null;

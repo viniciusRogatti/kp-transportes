@@ -304,7 +304,8 @@ function ReturnsOccurrences() {
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
   ), [returnBatches, selectedBatchCode]);
   const isAdminUser = userPermission === 'admin';
-  const canManageOccurrenceStatus = userPermission !== 'control_tower';
+  const isControlTowerUser = userPermission === 'control_tower';
+  const canManageOccurrenceStatus = !isControlTowerUser;
 
   function setTab(nextTab: 'returns' | 'occurrences') {
     setActiveTab(nextTab);
@@ -567,7 +568,7 @@ function ReturnsOccurrences() {
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, occurrenceStatusFilter, occurrenceNfFilter, occurrenceStartDate, occurrenceEndDate]);
+  }, [activeTab, occurrenceStatusFilter, occurrenceNfFilter, occurrenceStartDate, occurrenceEndDate, userPermission]);
 
   async function loadDrivers() {
     try {
@@ -626,9 +627,10 @@ function ReturnsOccurrences() {
   async function loadOccurrences() {
     try {
       const params = new URLSearchParams();
+      const effectiveStatus = isControlTowerUser ? 'resolved' : occurrenceStatusFilter;
 
-      if (occurrenceStatusFilter !== 'all') {
-        params.append('status', occurrenceStatusFilter);
+      if (effectiveStatus !== 'all') {
+        params.append('status', effectiveStatus);
       }
 
       if (occurrenceNfFilter.trim()) {
@@ -638,6 +640,11 @@ function ReturnsOccurrences() {
       if (occurrenceStartDate && occurrenceEndDate) {
         params.append('startDate', occurrenceStartDate);
         params.append('endDate', occurrenceEndDate);
+      }
+
+      if (isControlTowerUser) {
+        params.append('resolution_type', 'talao_mercadoria_faltante');
+        params.append('credit_status', 'pending');
       }
 
       const { data } = await axios.get(`${API_URL}/occurrences/search?${params.toString()}`);
@@ -1866,12 +1873,19 @@ function ReturnsOccurrences() {
                     <div>
                       <InlineText>Status</InlineText>
                       <select
-                        value={occurrenceStatusFilter}
+                        value={isControlTowerUser ? 'resolved' : occurrenceStatusFilter}
                         onChange={(event) => setOccurrenceStatusFilter(event.target.value as 'all' | 'pending' | 'resolved')}
+                        disabled={isControlTowerUser}
                       >
-                        <option value="pending">Pendentes</option>
-                        <option value="resolved">Resolvidas</option>
-                        <option value="all">Todas</option>
+                        {isControlTowerUser ? (
+                          <option value="resolved">Pendentes de credito (Talão)</option>
+                        ) : (
+                          <>
+                            <option value="pending">Pendentes</option>
+                            <option value="resolved">Resolvidas</option>
+                            <option value="all">Todas</option>
+                          </>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -1916,16 +1930,17 @@ function ReturnsOccurrences() {
                                 {` | CLIENTE: ${occurrence.customer_name || '-'}`}
                               </span>
                               <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
-                              <span>
-                                ITENS:{' '}
+                              <span className="flex flex-col gap-1">
+                                <strong>ITENS:</strong>
                                 {occurrenceItemSummaries.length ? (
                                   occurrenceItemSummaries.map((item, index) => (
-                                    <span key={`occ-summary-${occurrence.id}-${item.label}-${index}`}>
-                                      {index > 0 ? ', ' : ''}
+                                    <span key={`occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
                                       {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
                                     </span>
                                   ))
-                                ) : 'NF total'}
+                                ) : (
+                                  <span className="pl-2">NF total</span>
+                                )}
                               </span>
                               <span>{`MOTIVO: ${reasonLabel}`}</span>
                               {occurrence.resolution_type && (

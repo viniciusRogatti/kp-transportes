@@ -9,7 +9,7 @@ export function ContainerCards({ className, ...props }: DivProps) {
 }
 
 export function CardsDanfe({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex h-full w-full flex-col rounded-lg border border-border bg-[#0C243B] px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
+  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-[#0C243B] px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
 }
 
 export function DescriptionColumns({ className, ...props }: DivProps) {
@@ -17,7 +17,7 @@ export function DescriptionColumns({ className, ...props }: DivProps) {
 }
 
 export function ContainerItems({ className, ...props }: DivProps) {
-  return <div className={cn('scrollbar-ui mt-s2 flex h-[180px] w-full flex-col gap-2 overflow-y-auto rounded-md border border-border bg-surface-2/65 p-s2', className)} {...props} />;
+  return <div className={cn('scrollbar-ui mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain rounded-md border border-border bg-surface-2/65 p-s2 touch-pan-y [-webkit-overflow-scrolling:touch]', className)} {...props} />;
 }
 
 export function ListItems({ className, ...props }: UlProps) {
@@ -32,7 +32,7 @@ export function TotalQuantity({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'absolute bottom-2 left-3 right-3 border-t border-border pt-1.5 [&_p]:text-sm [&_p]:font-semibold [&_p]:text-text',
+        'mt-2 border-t border-border pt-1.5 [&_p]:text-sm [&_p]:font-semibold [&_p]:text-text',
         className,
       )}
       {...props}

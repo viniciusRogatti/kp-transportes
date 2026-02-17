@@ -43,7 +43,7 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
               style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
             >
               <CardsDanfe
-                className={!driverName ? 'absolute inset-0 select-text border-accent/55 shadow-[0_0_0_1px_rgba(1,87,163,0.25)]' : 'absolute inset-0 select-text'}
+                className={!driverName ? 'absolute inset-0 select-text overflow-hidden border-accent/55 shadow-[0_0_0_1px_rgba(1,87,163,0.25)]' : 'absolute inset-0 select-text overflow-hidden'}
                 style={{ backfaceVisibility: 'hidden' }}
               >
                 <TitleCard>
@@ -65,7 +65,7 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                     <span>Descrição</span>
                     <span>Qtd</span>
                   </DescriptionColumns>
-                  {danfe.DanfeProducts.map((item, index) => (
+                  {danfe.DanfeProducts.map((item) => (
                     <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
                         <li>{item.Product.code}</li>
                         <li title={item.Product.description}>{item.Product.description}</li>
@@ -73,7 +73,7 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                     </ListItems>
                   ))}
                 </ContainerItems>
-                <TotalQuantity className="flex items-center justify-between gap-2">
+                <TotalQuantity className="mt-auto flex items-center justify-between gap-2">
                   <p className="min-w-0 truncate">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
                   <button
                     type="button"
@@ -87,7 +87,7 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
               </CardsDanfe>
 
               <CardsDanfe
-                className="absolute inset-0 select-text"
+                className="absolute inset-0 select-text overflow-hidden"
                 style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
               >
                 <TitleCard>
@@ -102,7 +102,7 @@ function CardDanfes({ danfes, animationKey, driverByInvoice = {} } : CardDanfesP
                   <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                   <p><strong>Motorista:</strong> {driverName || 'Sem motorista'}</p>
                 </div>
-                <TotalQuantity className="flex items-center justify-between gap-2">
+                <TotalQuantity className="mt-auto flex items-center justify-between gap-2">
                   <p>Use o botão Voltar</p>
                   <button
                     type="button"

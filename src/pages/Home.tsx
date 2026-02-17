@@ -632,16 +632,17 @@ function Home() {
                         {` | CLIENTE: ${occurrence.customer_name || '-'}`}
                       </span>
                       <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
-                      <span>
-                        ITENS:{' '}
+                      <span className="flex flex-col gap-1">
+                        <strong>ITENS:</strong>
                         {itemsSummary.length ? (
                           itemsSummary.map((item, index) => (
-                            <span key={`home-occ-summary-${occurrence.id}-${item.label}-${index}`}>
-                              {index > 0 ? ', ' : ''}
+                            <span key={`home-occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
                               {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
                             </span>
                           ))
-                        ) : 'NF total'}
+                        ) : (
+                          <span className="pl-2">NF total</span>
+                        )}
                       </span>
                       <span>{`MOTIVO: ${reasonLabel}`}</span>
                       {occurrence.resolution_type && (

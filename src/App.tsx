@@ -11,6 +11,7 @@ import ReturnsOccurrences from './pages/ReturnsOccurrences';
 import ControlTowerCollections from './pages/ControlTowerCollections';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
+import axios from 'axios';
 // import FreightSummary from './pages/FreightCalculation';
 
 const INTERNAL_PERMISSIONS = ['admin', 'user', 'master', 'expedicao'];
@@ -40,6 +41,12 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 
 function App() {
   useAppVersionAutoRefresh();
+  const token = localStorage.getItem('token');
+  if (token) {
+    axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete axios.defaults.headers.common.Authorization;
+  }
 
   return (
     <div>

@@ -45,18 +45,27 @@ function getOptionalAddressNumber(customer: CustomerWithOptionalNumber) {
 }
 
 function formatAddress(customer: CustomerWithOptionalNumber) {
-  if (!customer.address) return "-";
+  const neighborhood = normalizeSpaces(String(customer.neighborhood || ""));
 
-  const withoutDup = removeRepeatedStreetPrefix(customer.address);
-  const formatted = toTitleCase(withoutDup);
+  if (!customer.address && !neighborhood) return "-";
+
+  const streetValue = customer.address ? removeRepeatedStreetPrefix(customer.address) : "";
+  const formattedStreet = streetValue ? toTitleCase(streetValue) : "";
   const optionalNumber = getOptionalAddressNumber(customer);
 
-  if (!optionalNumber) return formatted;
+  let baseAddress = formattedStreet;
+  if (optionalNumber && formattedStreet) {
+    const hasNumberAlready = /\b\d+[A-Za-z]?\b|s\/n\b/i.test(formattedStreet);
+    if (!hasNumberAlready) {
+      baseAddress = `${formattedStreet}, ${optionalNumber}`;
+    }
+  }
 
-  const hasNumberAlready = /\b\d+[A-Za-z]?\b|s\/n\b/i.test(formatted);
-  if (hasNumberAlready) return formatted;
+  const formattedNeighborhood = neighborhood ? toTitleCase(neighborhood) : "";
+  if (!baseAddress) return formattedNeighborhood || "-";
+  if (!formattedNeighborhood) return baseAddress;
 
-  return `${formatted}, ${optionalNumber}`;
+  return `${baseAddress} - ${formattedNeighborhood}`;
 }
 
 function Customers() {

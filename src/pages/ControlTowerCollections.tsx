@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -9,8 +9,6 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import FiltersBar from '../components/ControlTower/FiltersBar';
 import KpiCards from '../components/ControlTower/KpiCards';
-import FlowTimeChart from '../components/ControlTower/charts/FlowTimeChart';
-import BacklogStatusChart from '../components/ControlTower/charts/BacklogStatusChart';
 import TopHorizontalChart, { TopMetric } from '../components/ControlTower/charts/TopHorizontalChart';
 import ReasonsDonutChart from '../components/ControlTower/charts/ReasonsDonutChart';
 import ActionQueue from '../components/ControlTower/ActionQueue';
@@ -32,6 +30,7 @@ const defaultFilters: ControlTowerFilters = {
   startDate: '',
   endDate: today,
   returnStatus: 'all',
+  returnType: 'all',
   pickupStatus: 'all',
   city: '',
   route: '',
@@ -58,7 +57,7 @@ function ControlTowerCollections() {
   const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
 
   const { summary, charts, queue, table } = useControlTowerData(filters, pagination, sortingInput);
-  const { requestPickupMutation, updateStatusMutation, confirmSubmissionMutation, addObservationMutation, prioritizePickupMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
+  const { requestPickupMutation, updateStatusMutation, addObservationMutation, prioritizePickupMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
 
   const selectedRow = selectedId ? getSelectedFromCache(selectedId) : null;
 
@@ -81,28 +80,36 @@ function ControlTowerCollections() {
     setFilters((prev) => ({ ...prev, ...next }));
   }
 
-  useEffect(() => {
+  const loadRecentOccurrences = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      setRecentOccurrences([]);
+      return;
+    }
 
-    const loadRecentOccurrences = async () => {
-      try {
-        const params = new URLSearchParams({
-          status: 'resolved',
-          resolution_type: CONTROL_TOWER_OCCURRENCE_RESOLUTION,
-          credit_status: 'pending',
-        });
-        const { data } = await axios.get(`${API_URL}/occurrences/search?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setRecentOccurrences(Array.isArray(data) ? data.slice(0, 20) : []);
-      } catch {
-        setRecentOccurrences([]);
-      }
-    };
-
-    loadRecentOccurrences();
+    try {
+      const params = new URLSearchParams({
+        workflow_status: 'awaiting_control_tower',
+        status: 'resolved',
+        resolution_type: CONTROL_TOWER_OCCURRENCE_RESOLUTION,
+      });
+      const { data } = await axios.get(`${API_URL}/occurrences/search?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const normalizedRows = Array.isArray(data) ? data : [];
+      const talaoOnlyRows = normalizedRows.filter((occurrence) => (
+        occurrence?.status === 'resolved'
+        && occurrence?.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION
+      ));
+      setRecentOccurrences(talaoOnlyRows.slice(0, 20));
+    } catch {
+      setRecentOccurrences([]);
+    }
   }, []);
+
+  useEffect(() => {
+    loadRecentOccurrences();
+  }, [loadRecentOccurrences]);
 
   async function applyFilterAndOpen(next: Partial<ControlTowerFilters>) {
     const merged = { ...filters, ...next };
@@ -142,6 +149,7 @@ function ControlTowerCollections() {
       charts.refetch(),
       queue.refetch(),
       table.refetch(),
+      loadRecentOccurrences(),
     ]);
   }
 
@@ -180,7 +188,7 @@ function ControlTowerCollections() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setRecentOccurrences((previous) => previous.filter((occurrence) => occurrence.id !== occurrenceId));
+      await loadRecentOccurrences();
       alert(`Crédito da ocorrência #${occurrenceId} finalizado com sucesso.`);
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -353,66 +361,47 @@ function ControlTowerCollections() {
           </div>
         </Card>
 
-        <div className="grid gap-3 xl:grid-cols-12">
-          <div className="space-y-3 xl:col-span-8">
-            <Card className="border-slate-800 bg-[#101b2b]">
-              <FlowTimeChart
-                data={charts.data}
-                subtitle={periodSubtitle}
-                onPointClick={(date) => applyFilterAndOpen({ periodPreset: 'custom', startDate: date, endDate: date })}
-              />
-            </Card>
-            <Card className="border-slate-800 bg-[#101b2b]">
-              <BacklogStatusChart
-                data={charts.data}
-                subtitle="Clique no status para filtrar a fila"
-                onStatusClick={(status) => applyFilterAndOpen({ pickupStatus: status })}
-              />
-            </Card>
-          </div>
+        <div className="grid gap-3 xl:grid-cols-3">
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <div className="mb-2 flex items-center justify-end">
+              <select
+                value={topMetric}
+                onChange={(event) => setTopMetric(event.target.value as TopMetric)}
+                className="h-8 rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs"
+              >
+                <option value="quantity">Quantidade</option>
+                <option value="weightKg">Peso (kg)</option>
+                <option value="valueAmount">Valor (R$)</option>
+              </select>
+            </div>
+            <TopHorizontalChart
+              title="Top produtos devolvidos"
+              subtitle={periodSubtitle}
+              data={charts.data?.topProducts || []}
+              metric={topMetric}
+              color="#60a5fa"
+              onBarClick={(name) => applyFilterAndOpen({ product: name })}
+            />
+          </Card>
 
-          <div className="space-y-3 xl:col-span-4">
-            <Card className="border-slate-800 bg-[#101b2b]">
-              <div className="mb-2 flex items-center justify-end">
-                <select
-                  value={topMetric}
-                  onChange={(event) => setTopMetric(event.target.value as TopMetric)}
-                  className="h-8 rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs"
-                >
-                  <option value="quantity">Quantidade</option>
-                  <option value="weightKg">Peso (kg)</option>
-                  <option value="valueAmount">Valor (R$)</option>
-                </select>
-              </div>
-              <TopHorizontalChart
-                title="Top produtos devolvidos"
-                subtitle={periodSubtitle}
-                data={charts.data?.topProducts || []}
-                metric={topMetric}
-                color="#60a5fa"
-                onBarClick={(name) => applyFilterAndOpen({ product: name })}
-              />
-            </Card>
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <TopHorizontalChart
+              title="Top clientes que devolvem"
+              subtitle={periodSubtitle}
+              data={charts.data?.topClients || []}
+              metric={topMetric}
+              color="#f59e0b"
+              onBarClick={(name) => applyFilterAndOpen({ customer: name })}
+            />
+          </Card>
 
-            <Card className="border-slate-800 bg-[#101b2b]">
-              <TopHorizontalChart
-                title="Top clientes que devolvem"
-                subtitle={periodSubtitle}
-                data={charts.data?.topClients || []}
-                metric={topMetric}
-                color="#f59e0b"
-                onBarClick={(name) => applyFilterAndOpen({ customer: name })}
-              />
-            </Card>
-
-            <Card className="border-slate-800 bg-[#101b2b]">
-              <ReasonsDonutChart
-                data={charts.data}
-                subtitle={periodSubtitle}
-                onSliceClick={(reason) => applyFilterAndOpen({ search: reason })}
-              />
-            </Card>
-          </div>
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <ReasonsDonutChart
+              data={charts.data}
+              subtitle={periodSubtitle}
+              onSliceClick={(reason) => applyFilterAndOpen({ search: reason })}
+            />
+          </Card>
         </div>
 
         <ActionQueue
@@ -430,11 +419,13 @@ function ControlTowerCollections() {
           rows={table.data?.rows || []}
           total={table.data?.total || 0}
           loading={table.isLoading}
+          returnTypeFilter={filters.returnType}
           pageIndex={pageIndex}
           pageSize={pageSize}
           sorting={sorting}
           onPaginationChange={setPageIndex}
           onSortingChange={setSorting}
+          onFilterByReturnType={(returnType) => handleFilterChange({ returnType })}
           onOpenDetails={openById}
         />
 
@@ -445,7 +436,6 @@ function ControlTowerCollections() {
             canManageStatus={canManageStatus}
             onRequestPickup={(id) => {
               quickRequestPickup(id);
-              confirmSubmissionMutation.mutate(selectedRow.batchCode);
             }}
             onCancelPickup={quickCancelPickup}
             onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}

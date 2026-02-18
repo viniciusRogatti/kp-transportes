@@ -99,6 +99,29 @@ const OCCURRENCE_REASON_LABELS: Record<string, string> = OCCURRENCE_REASONS.redu
   return acc;
 }, {} as Record<string, string>);
 OCCURRENCE_REASON_LABELS.legacy_outros = 'Legado / outros';
+
+const OCCURRENCE_WORKFLOW_LABELS: Record<'pending_transportadora' | 'awaiting_control_tower' | 'finalized', string> = {
+  pending_transportadora: 'Pendente da transportadora',
+  awaiting_control_tower: 'Aguardando finalizacao da torre',
+  finalized: 'Finalizada',
+};
+
+type OccurrenceWorkflowFilter = 'all' | 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+
+const resolveOccurrenceWorkflowStatus = (occurrence: IOccurrence): Exclude<OccurrenceWorkflowFilter, 'all'> => {
+  const resolved = occurrence.status === 'resolved';
+  const isTalao = occurrence.resolution_type === 'talao_mercadoria_faltante';
+  const creditCompleted = occurrence.credit_status === 'completed';
+
+  if (!resolved) return 'pending_transportadora';
+  if (isTalao && !creditCompleted) return 'awaiting_control_tower';
+  return 'finalized';
+};
+
+const isOccurrencePendingForTransportadora = (occurrence: IOccurrence) => (
+  resolveOccurrenceWorkflowStatus(occurrence) === 'pending_transportadora'
+);
+
 type OccurrenceReasonValue = (typeof OCCURRENCE_REASONS)[number]['value'] | 'legacy_outros';
 type OccurrenceDraftItem = {
   product_id: string;
@@ -109,6 +132,30 @@ type OccurrenceDraftItem = {
 type OccurrenceCardItemSummary = {
   label: string;
   quantityWithType: string;
+};
+
+type ReturnBatchWorkflowStatus = 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+
+const RETURN_BATCH_WORKFLOW_LABELS: Record<ReturnBatchWorkflowStatus, string> = {
+  pending_transportadora: 'Pendente da transportadora',
+  awaiting_control_tower: 'Aguardando confirmacao da Torre de Controle',
+  finalized: 'Recebido e finalizado pela Torre de Controle',
+};
+
+const resolveReturnBatchWorkflowStatus = (batch: IReturnBatch): ReturnBatchWorkflowStatus => {
+  if (batch.workflow_status) {
+    return batch.workflow_status;
+  }
+
+  if (!batch.sent_to_control_tower_at) {
+    return 'pending_transportadora';
+  }
+
+  if (!batch.received_by_control_tower_at) {
+    return 'awaiting_control_tower';
+  }
+
+  return 'finalized';
 };
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
@@ -285,7 +332,7 @@ function ReturnsOccurrences() {
   const [resolutionNote, setResolutionNote] = useState('');
   const [isOccurrenceBuilderOpen, setIsOccurrenceBuilderOpen] = useState(false);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
-  const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<'all' | 'pending' | 'resolved'>('pending');
+  const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<OccurrenceWorkflowFilter>('pending_transportadora');
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
   const [occurrenceStartDate, setOccurrenceStartDate] = useState('');
   const [occurrenceEndDate, setOccurrenceEndDate] = useState('');
@@ -303,9 +350,20 @@ function ReturnsOccurrences() {
   const selectedBatch = useMemo(() => (
     returnBatches.find((batch) => batch.batch_code === selectedBatchCode) || null
   ), [returnBatches, selectedBatchCode]);
+  const selectedBatchWorkflowStatus = useMemo<ReturnBatchWorkflowStatus | null>(() => (
+    selectedBatch ? resolveReturnBatchWorkflowStatus(selectedBatch) : null
+  ), [selectedBatch]);
   const isAdminUser = userPermission === 'admin';
   const isControlTowerUser = userPermission === 'control_tower';
   const canManageOccurrenceStatus = !isControlTowerUser;
+  const canManageBatchTransportadora = !isControlTowerUser;
+  const canConfirmBatchReceipt = ['control_tower', 'admin', 'master'].includes(userPermission);
+  const isSelectedBatchEditableByTransportadora = Boolean(
+    selectedBatch
+      && selectedBatchWorkflowStatus === 'pending_transportadora'
+      && canManageBatchTransportadora,
+  );
+  const isSelectedBatchAwaitingControlTower = selectedBatchWorkflowStatus === 'awaiting_control_tower';
 
   function setTab(nextTab: 'returns' | 'occurrences') {
     setActiveTab(nextTab);
@@ -627,10 +685,12 @@ function ReturnsOccurrences() {
   async function loadOccurrences() {
     try {
       const params = new URLSearchParams();
-      const effectiveStatus = isControlTowerUser ? 'resolved' : occurrenceStatusFilter;
+      const effectiveWorkflowStatus: OccurrenceWorkflowFilter = isControlTowerUser
+        ? 'awaiting_control_tower'
+        : occurrenceStatusFilter;
 
-      if (effectiveStatus !== 'all') {
-        params.append('status', effectiveStatus);
+      if (effectiveWorkflowStatus !== 'all') {
+        params.append('workflow_status', effectiveWorkflowStatus);
       }
 
       if (occurrenceNfFilter.trim()) {
@@ -640,11 +700,6 @@ function ReturnsOccurrences() {
       if (occurrenceStartDate && occurrenceEndDate) {
         params.append('startDate', occurrenceStartDate);
         params.append('endDate', occurrenceEndDate);
-      }
-
-      if (isControlTowerUser) {
-        params.append('resolution_type', 'talao_mercadoria_faltante');
-        params.append('credit_status', 'pending');
       }
 
       const { data } = await axios.get(`${API_URL}/occurrences/search?${params.toString()}`);
@@ -827,7 +882,19 @@ function ReturnsOccurrences() {
     return groupItemsByProductAndType(partialItems);
   }
 
+  function ensureSelectedBatchEditable() {
+    if (!selectedBatch) return true;
+    if (isSelectedBatchEditableByTransportadora) return true;
+
+    alert('Este lote ja foi confirmado como enviado e nao pode mais ser editado.');
+    return false;
+  }
+
   async function handleAddNf() {
+    if (selectedBatch && !ensureSelectedBatchEditable()) {
+      return;
+    }
+
     if (returnType !== 'sobra' && !returnDanfe) {
       alert('Busque uma NF para adicionar na lista.');
       return;
@@ -1014,11 +1081,19 @@ function ReturnsOccurrences() {
   }
 
   function handleRemoveNoteFromBatch(noteId: number) {
+    if (!ensureSelectedBatchEditable()) {
+      return;
+    }
+
     setBatchDraftNotes((previous) => previous.filter((note) => note.id !== noteId));
   }
 
   async function handleSaveBatch() {
     if (!selectedBatch) {
+      return;
+    }
+
+    if (!ensureSelectedBatchEditable()) {
       return;
     }
 
@@ -1049,6 +1124,73 @@ function ReturnsOccurrences() {
     } catch (error) {
       console.error(error);
       alert('Erro ao salvar alteracoes do lote.');
+    }
+  }
+
+  async function handleConfirmBatchSubmission() {
+    if (!selectedBatch) {
+      return;
+    }
+
+    if (selectedBatchHasUnsavedChanges) {
+      alert('Salve as alteracoes do lote antes de confirmar o envio.');
+      return;
+    }
+
+    if (!canManageBatchTransportadora || selectedBatchWorkflowStatus !== 'pending_transportadora') {
+      alert('Apenas lotes pendentes da transportadora podem ser confirmados para envio.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Ao confirmar o envio da devolucao, este lote nao podera mais ser editado. Deseja continuar?',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/confirm-submission`);
+      alert('Envio do lote confirmado. O lote agora aguarda confirmacao da Torre de Controle.');
+      await loadReturnBatches();
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao confirmar envio do lote.');
+      } else {
+        alert('Erro ao confirmar envio do lote.');
+      }
+    }
+  }
+
+  async function handleConfirmBatchReceipt() {
+    if (!selectedBatch) {
+      return;
+    }
+
+    if (!canConfirmBatchReceipt || !isSelectedBatchAwaitingControlTower) {
+      alert('Somente lotes aguardando a Torre de Controle podem ser finalizados.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Confirma que a Torre de Controle recebeu esta devolucao e deseja finalizar o lote?',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/confirm-receipt`);
+      alert('Recebimento confirmado pela Torre de Controle.');
+      await loadReturnBatches();
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao confirmar recebimento do lote.');
+      } else {
+        alert('Erro ao confirmar recebimento do lote.');
+      }
     }
   }
 
@@ -1229,7 +1371,7 @@ function ReturnsOccurrences() {
   }
 
   async function startEditOccurrence(occurrence: IOccurrence) {
-    if (occurrence.status !== 'pending') return;
+    if (!isOccurrencePendingForTransportadora(occurrence)) return;
 
     setIsOccurrenceBuilderOpen(true);
     setEditingOccurrenceId(occurrence.id);
@@ -1286,10 +1428,20 @@ function ReturnsOccurrences() {
         resolution_type: resolutionType,
         resolution_note: resolutionNote.trim(),
       });
+
+      if (resolutionType === 'talao_mercadoria_faltante') {
+        alert('Ocorrencia enviada para a Torre de Controle e aguardando finalizacao do credito.');
+      }
+
       setResolvingOccurrence(null);
       setResolutionType('');
       setResolutionNote('');
-      await loadOccurrences();
+
+      if (resolutionType === 'talao_mercadoria_faltante' && !isControlTowerUser) {
+        setOccurrenceStatusFilter('awaiting_control_tower');
+      } else {
+        await loadOccurrences();
+      }
     } catch (error) {
       console.error(error);
       if (axios.isAxiosError(error)) {
@@ -1449,6 +1601,24 @@ function ReturnsOccurrences() {
                     <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
                       Abrir PDF
                     </button>
+                    {selectedBatchWorkflowStatus === 'pending_transportadora' && canManageBatchTransportadora && (
+                      <button
+                        type="button"
+                        onClick={handleConfirmBatchSubmission}
+                        className="rounded-md border border-amber-500/70 bg-[linear-gradient(135deg,#ffd166_0%,#f7b733_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#2b1b00] transition hover:brightness-105"
+                      >
+                        Confirmar envio da devolucao
+                      </button>
+                    )}
+                    {isSelectedBatchAwaitingControlTower && canConfirmBatchReceipt && (
+                      <button
+                        type="button"
+                        onClick={handleConfirmBatchReceipt}
+                        className="rounded-md border border-emerald-500/70 bg-[linear-gradient(135deg,#9ae6b4_0%,#38a169_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#052814] transition hover:brightness-105"
+                      >
+                        Confirmar recebimento da devolucao
+                      </button>
+                    )}
                   </TopActionBar>
                 )}
 
@@ -1456,7 +1626,9 @@ function ReturnsOccurrences() {
                   <BoxDescription className="flex-col gap-1">
                     <h2 className="leading-tight max-[768px]:text-[0.92rem]">
                       {selectedBatch ? (
-                        `Editando lote ${selectedBatch.batch_code}`
+                        selectedBatchWorkflowStatus === 'pending_transportadora'
+                          ? `Editando lote ${selectedBatch.batch_code}`
+                          : `Lote ${selectedBatch.batch_code} (somente leitura)`
                       ) : (
                         <>
                           <span className="max-[768px]:hidden">Nova devolucao (lista de NFs)</span>
@@ -1465,9 +1637,31 @@ function ReturnsOccurrences() {
                       )}
                     </h2>
                     {selectedBatch ? (
-                      <InlineText>
-                        Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
-                      </InlineText>
+                      <>
+                        <InlineText>
+                          Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
+                        </InlineText>
+                        <InlineText>
+                          Status do lote: {RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']}
+                          {selectedBatch.sent_to_control_tower_at ? ` | Enviado em: ${new Date(selectedBatch.sent_to_control_tower_at).toLocaleString('pt-BR')}` : ''}
+                          {selectedBatch.received_by_control_tower_at ? ` | Recebido em: ${new Date(selectedBatch.received_by_control_tower_at).toLocaleString('pt-BR')}` : ''}
+                        </InlineText>
+                        {!isSelectedBatchEditableByTransportadora && selectedBatchWorkflowStatus === 'awaiting_control_tower' && (
+                          <InfoText>
+                            Este lote ja foi enviado pela transportadora e esta aguardando confirmacao de recebimento pela Torre de Controle. Edicao bloqueada.
+                          </InfoText>
+                        )}
+                        {!isSelectedBatchEditableByTransportadora && selectedBatchWorkflowStatus === 'finalized' && (
+                          <InfoText>
+                            Este lote ja foi finalizado pela Torre de Controle e permanece somente para consulta.
+                          </InfoText>
+                        )}
+                        {isSelectedBatchEditableByTransportadora && (
+                          <InfoText>
+                            Ao confirmar o envio da devolucao, o lote sera bloqueado para edicao.
+                          </InfoText>
+                        )}
+                      </>
                     ) : (
                       <>
                         <InlineText className="max-[768px]:hidden">Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
@@ -1665,7 +1859,12 @@ function ReturnsOccurrences() {
                       )}
 
                       <Actions style={{ marginTop: '12px' }}>
-                        <button className="primary" onClick={handleAddNf} type="button">
+                        <button
+                          className="primary"
+                          onClick={handleAddNf}
+                          disabled={Boolean(selectedBatch && !isSelectedBatchEditableByTransportadora)}
+                          type="button"
+                        >
                           {returnType === 'sobra'
                             ? (selectedBatch ? 'Adicionar sobra no lote' : 'Adicionar sobra na lista')
                             : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
@@ -1679,7 +1878,7 @@ function ReturnsOccurrences() {
                     {selectedBatch && (
                       <SaveBatchButton
                         onClick={handleSaveBatch}
-                        disabled={!selectedBatchHasUnsavedChanges}
+                        disabled={!selectedBatchHasUnsavedChanges || !isSelectedBatchEditableByTransportadora}
                         type="button"
                       >
                         Salvar lote
@@ -1699,7 +1898,12 @@ function ReturnsOccurrences() {
                               {` | Itens: ${note.items?.length || 0}`}
                             </span>
                             <Actions>
-                              <button className="danger" onClick={() => handleRemoveNoteFromBatch(note.id)} type="button">
+                              <button
+                                className="danger"
+                                onClick={() => handleRemoveNoteFromBatch(note.id)}
+                                disabled={!isSelectedBatchEditableByTransportadora}
+                                type="button"
+                              >
                                 Remover NF
                               </button>
                             </Actions>
@@ -1815,38 +2019,44 @@ function ReturnsOccurrences() {
                   <Card>
                     <h2>Lotes encontrados ({returnBatches.length})</h2>
                     <List>
-                      {returnBatches.map((batch) => (
-                        <li key={batch.batch_code}>
-                          <BatchItemContent>
-                            <span>
-                              <strong>{batch.batch_code}</strong>
-                              {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
-                              {` | Placa: ${batch.vehicle_plate}`}
-                              {` | Data: ${batch.return_date}`}
-                              {` | NFs: ${batch.notes.length}`}
-                            </span>
-                            <BatchActionsRow>
-                              <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
-                                Abrir PDF
-                              </button>
-                              {isAdminUser && (
+                      {returnBatches.map((batch) => {
+                        const batchWorkflowStatus = resolveReturnBatchWorkflowStatus(batch);
+                        const canEditBatch = batchWorkflowStatus === 'pending_transportadora';
+
+                        return (
+                          <li key={batch.batch_code}>
+                            <BatchItemContent>
+                              <span>
+                                <strong>{batch.batch_code}</strong>
+                                {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
+                                {` | Placa: ${batch.vehicle_plate}`}
+                                {` | Data: ${batch.return_date}`}
+                                {` | NFs: ${batch.notes.length}`}
+                                {` | Status: ${RETURN_BATCH_WORKFLOW_LABELS[batchWorkflowStatus]}`}
+                              </span>
+                              <BatchActionsRow>
+                                <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
+                                  Abrir PDF
+                                </button>
+                                {isAdminUser && (
+                                  <IconButton
+                                    icon={History}
+                                    label="Histórico do lote"
+                                    onClick={() => handleViewBatchHistory(batch.batch_code)}
+                                    className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                  />
+                                )}
                                 <IconButton
-                                  icon={History}
-                                  label="Histórico do lote"
-                                  onClick={() => handleViewBatchHistory(batch.batch_code)}
+                                  icon={Pencil}
+                                  label={canEditBatch ? 'Editar lote' : 'Abrir lote (somente leitura)'}
+                                  onClick={() => setSelectedBatchCode(batch.batch_code)}
                                   className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
                                 />
-                              )}
-                              <IconButton
-                                icon={Pencil}
-                                label="Editar lote"
-                                onClick={() => setSelectedBatchCode(batch.batch_code)}
-                                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                              />
-                            </BatchActionsRow>
-                          </BatchItemContent>
-                        </li>
-                      ))}
+                              </BatchActionsRow>
+                            </BatchItemContent>
+                          </li>
+                        );
+                      })}
                     </List>
                   </Card>
                 )}
@@ -1873,16 +2083,17 @@ function ReturnsOccurrences() {
                     <div>
                       <InlineText>Status</InlineText>
                       <select
-                        value={isControlTowerUser ? 'resolved' : occurrenceStatusFilter}
-                        onChange={(event) => setOccurrenceStatusFilter(event.target.value as 'all' | 'pending' | 'resolved')}
+                        value={isControlTowerUser ? 'awaiting_control_tower' : occurrenceStatusFilter}
+                        onChange={(event) => setOccurrenceStatusFilter(event.target.value as OccurrenceWorkflowFilter)}
                         disabled={isControlTowerUser}
                       >
                         {isControlTowerUser ? (
-                          <option value="resolved">Pendentes de credito (Talão)</option>
+                          <option value="awaiting_control_tower">Aguardando finalizacao (Talão)</option>
                         ) : (
                           <>
-                            <option value="pending">Pendentes</option>
-                            <option value="resolved">Resolvidas</option>
+                            <option value="pending_transportadora">Pendentes da transportadora</option>
+                            <option value="awaiting_control_tower">Aguardando finalizacao da torre</option>
+                            <option value="finalized">Finalizadas</option>
                             <option value="all">Todas</option>
                           </>
                         )}
@@ -1921,6 +2132,8 @@ function ReturnsOccurrences() {
                       {occurrences.map((occurrence) => {
                         const reasonLabel = OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros';
                         const occurrenceItemSummaries = buildOccurrenceCardItemSummary(occurrence);
+                        const workflowStatus = occurrence.workflow_status || resolveOccurrenceWorkflowStatus(occurrence);
+                        const workflowStatusLabel = OCCURRENCE_WORKFLOW_LABELS[workflowStatus];
 
                         return (
                           <li key={occurrence.id}>
@@ -1943,6 +2156,7 @@ function ReturnsOccurrences() {
                                 )}
                               </span>
                               <span>{`MOTIVO: ${reasonLabel}`}</span>
+                              <span>{`STATUS: ${workflowStatusLabel}`}</span>
                               {occurrence.resolution_type && (
                                 <span>
                                   Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
@@ -1953,7 +2167,7 @@ function ReturnsOccurrences() {
                               <OccurrenceCardFooter>
                                 <OccurrenceActionsRow>
                                   <OccurrenceActionsLeft>
-                                    {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    {isOccurrencePendingForTransportadora(occurrence) && canManageOccurrenceStatus && (
                                       <>
                                         <button
                                           className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
@@ -1982,7 +2196,7 @@ function ReturnsOccurrences() {
                                   </OccurrenceActionsLeft>
 
                                   <OccurrenceActionsRight>
-                                    {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    {isOccurrencePendingForTransportadora(occurrence) && canManageOccurrenceStatus && (
                                       <IconButton
                                         icon={Pencil}
                                         label="Editar ocorrencia"

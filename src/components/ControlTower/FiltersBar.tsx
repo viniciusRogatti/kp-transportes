@@ -34,6 +34,15 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
     : filters.returnStatus === 'pending'
       ? 'Pendentes'
       : 'Todos';
+  const returnTypeLabel = filters.returnType === 'total'
+    ? 'Total'
+    : filters.returnType === 'partial'
+      ? 'Parcial'
+      : filters.returnType === 'coleta'
+        ? 'Coleta'
+        : filters.returnType === 'sobra'
+          ? 'Sobra'
+          : 'Todos';
   const pickupStatusLabel = filters.pickupStatus === 'all'
     ? 'Todos'
     : filters.pickupStatus === 'PENDENTE'
@@ -56,6 +65,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
       onRemove: () => onChange({ periodPreset: '7d', startDate: '', endDate: today }),
     }] : []),
     ...(filters.returnStatus !== 'all' ? [{ key: 'returnStatus', label: `Status devolução: ${returnStatusLabel}`, onRemove: () => onChange({ returnStatus: 'all' }) }] : []),
+    ...(filters.returnType !== 'all' ? [{ key: 'returnType', label: `Tipo devolução: ${returnTypeLabel}`, onRemove: () => onChange({ returnType: 'all' }) }] : []),
     ...(filters.pickupStatus !== 'all' ? [{ key: 'pickupStatus', label: `Status coleta: ${pickupStatusLabel}`, onRemove: () => onChange({ pickupStatus: 'all' }) }] : []),
     ...(filters.city ? [{ key: 'city', label: `Cidade: ${filters.city}`, onRemove: () => onChange({ city: '' }) }] : []),
     ...(filters.route ? [{ key: 'route', label: `Rota: ${filters.route}`, onRemove: () => onChange({ route: '' }) }] : []),

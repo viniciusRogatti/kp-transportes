@@ -1,6 +1,8 @@
 export type PeriodPreset = 'today' | '7d' | '30d' | 'custom';
 
 export type BacklogStatus = 'PENDENTE' | 'SOLICITADA' | 'EM_ROTA' | 'COLETADA' | 'CANCELADA';
+export type ReturnSourceType = 'total' | 'partial' | 'coleta' | 'sobra';
+export type ReturnTypeFilter = 'all' | ReturnSourceType;
 
 export interface ControlTowerFilters {
   search: string;
@@ -8,6 +10,7 @@ export interface ControlTowerFilters {
   startDate: string;
   endDate: string;
   returnStatus: 'all' | 'confirmed' | 'pending';
+  returnType: ReturnTypeFilter;
   pickupStatus: 'all' | BacklogStatus;
   city: string;
   route: string;
@@ -16,7 +19,7 @@ export interface ControlTowerFilters {
 }
 
 export interface KpiMetric {
-  id: 'confirmedReturns' | 'requestedPickups' | 'backlog' | 'slaRisk';
+  id: 'confirmedReturns' | 'requestedPickups' | 'shortages' | 'surpluses';
   label: string;
   value: number;
   unit: 'count' | 'kg' | 'currency' | 'hours';
@@ -82,6 +85,7 @@ export interface ReturnBatch {
   id: string;
   batchCode: string;
   invoiceNumber: string;
+  sourceType?: ReturnSourceType;
   customer: string;
   city: string;
   route: string;
@@ -124,6 +128,7 @@ export interface ReturnsTableRow {
   id: string;
   batchCode: string;
   invoiceNumber: string;
+  returnType: ReturnSourceType | 'nao_informado';
   customer: string;
   city: string;
   route: string;

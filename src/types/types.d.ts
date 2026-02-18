@@ -61,6 +61,13 @@ export interface IInvoiceReturn {
   return_date: string;
   batch_code?: string;
   batch_status?: 'open' | 'closed';
+  workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+  sent_to_control_tower_at?: string | null;
+  sent_to_control_tower_by_user_id?: number | null;
+  sent_to_control_tower_by_username?: string | null;
+  received_by_control_tower_at?: string | null;
+  received_by_control_tower_user_id?: number | null;
+  received_by_control_tower_username?: string | null;
   Driver?: {
     id: number;
     name: string;
@@ -71,9 +78,16 @@ export interface IInvoiceReturn {
 export interface IReturnBatch {
   batch_code: string;
   batch_status: 'open' | 'closed';
+  workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
   driver_id: number;
   vehicle_plate: string;
   return_date: string;
+  sent_to_control_tower_at?: string | null;
+  sent_to_control_tower_by_user_id?: number | null;
+  sent_to_control_tower_by_username?: string | null;
+  received_by_control_tower_at?: string | null;
+  received_by_control_tower_user_id?: number | null;
+  received_by_control_tower_username?: string | null;
   Driver?: {
     id: number;
     name: string;
@@ -101,6 +115,7 @@ export interface IOccurrence {
   quantity: number | null;
   description: string;
   status: 'pending' | 'resolved';
+  workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
   credit_status?: 'not_applicable' | 'pending' | 'completed';
   resolution_type?: 'enviado_posteriormente' | 'talao_mercadoria_faltante' | 'motivo_corrigido' | 'motorista_pagou_cliente' | 'troca_realizada' | 'cliente_aceitou_invertido' | 'legacy_outros' | null;
   resolution_note?: string | null;
@@ -184,6 +199,13 @@ export interface IControlTowerReturn {
   return_date: string;
   batch_code: string;
   batch_status: 'open' | 'closed';
+  workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+  sent_to_control_tower_at?: string | null;
+  sent_to_control_tower_by_user_id?: number | null;
+  sent_to_control_tower_by_username?: string | null;
+  received_by_control_tower_at?: string | null;
+  received_by_control_tower_user_id?: number | null;
+  received_by_control_tower_username?: string | null;
   created_at: string;
   customer_name: string;
   city: string;

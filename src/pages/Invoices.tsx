@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IDanfe } from "../types/types";
+import { IDanfe, IOccurrence, IReturnBatch, IInvoiceSearchContext } from "../types/types";
 import axios from "axios";
 import { Search } from "lucide-react";
 import CardDanfes from "../components/CardDanfes";
@@ -20,11 +20,92 @@ registerLocale('ptBR', ptBR);
 function Invoices() {
   const [danfes, setDanfes] = useState<IDanfe[]>([]);
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
+  const [invoiceContextByNf, setInvoiceContextByNf] = useState<Record<string, IInvoiceSearchContext>>({});
   const [nf, setNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  const normalizeInvoiceNumber = (value: unknown) => String(value || '').trim();
+
+  const buildInvoiceContext = (invoiceNumber: string, occurrences: IOccurrence[], returnBatches: IReturnBatch[]): IInvoiceSearchContext => {
+    const creditLetterOccurrences = occurrences.filter((occurrence) => (
+      String(occurrence.resolution_type || '').trim().toLowerCase() === 'talao_mercadoria_faltante'
+    ));
+    const creditLetterCompletedCount = creditLetterOccurrences.filter((occurrence) => (
+      String(occurrence.credit_status || '').trim().toLowerCase() === 'completed'
+    )).length;
+    const creditLetterPendingCount = Math.max(0, creditLetterOccurrences.length - creditLetterCompletedCount);
+
+    const returnTypes = Array.from(new Set(
+      returnBatches.flatMap((batch) => (
+        (batch.notes || [])
+          .filter((note) => normalizeInvoiceNumber(note.invoice_number) === invoiceNumber)
+          .map((note) => note.return_type)
+      ))
+    ))
+      .filter((returnType): returnType is 'total' | 'partial' | 'sobra' | 'coleta' => (
+        ['total', 'partial', 'sobra', 'coleta'].includes(String(returnType))
+      ));
+
+    return {
+      occurrence_count: occurrences.length,
+      occurrence_pending_count: occurrences.filter((occurrence) => occurrence.status === 'pending').length,
+      occurrence_resolved_count: occurrences.filter((occurrence) => occurrence.status === 'resolved').length,
+      credit_letter_count: creditLetterOccurrences.length,
+      credit_letter_pending_count: creditLetterPendingCount,
+      credit_letter_completed_count: creditLetterCompletedCount,
+      return_count: returnTypes.length,
+      return_types: returnTypes,
+    };
+  };
+
+  async function loadInvoiceContext(danfesToProcess: IDanfe[]) {
+    const uniqueInvoiceNumbers = Array.from(new Set(
+      danfesToProcess
+        .map((danfe) => normalizeInvoiceNumber(danfe.invoice_number))
+        .filter(Boolean),
+    ));
+    const missingInvoiceNumbers = uniqueInvoiceNumbers.filter((invoiceNumber) => !invoiceContextByNf[invoiceNumber]);
+    if (!missingInvoiceNumbers.length) return;
+
+    const contextEntries = await Promise.all(
+      missingInvoiceNumbers.map(async (invoiceNumber) => {
+        try {
+          const [occurrencesResponse, returnBatchesResponse] = await Promise.all([
+            axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
+              params: { invoice_number: invoiceNumber },
+            }),
+            axios.get<IReturnBatch[]>(`${API_URL}/returns/batches/search`, {
+              params: {
+                invoice_number: invoiceNumber,
+                workflow_status: 'all',
+              },
+            }),
+          ]);
+
+          const occurrences = Array.isArray(occurrencesResponse.data) ? occurrencesResponse.data : [];
+          const returnBatches = Array.isArray(returnBatchesResponse.data) ? returnBatchesResponse.data : [];
+
+          return [invoiceNumber, buildInvoiceContext(invoiceNumber, occurrences, returnBatches)] as const;
+        } catch (error) {
+          console.error(`Erro ao carregar contexto da NF ${invoiceNumber}`, error);
+          return [invoiceNumber, buildInvoiceContext(invoiceNumber, [], [])] as const;
+        }
+      }),
+    );
+
+    setInvoiceContextByNf((previous) => {
+      const next = { ...previous };
+      contextEntries.forEach(([invoiceNumber, context]) => {
+        if (!next[invoiceNumber]) {
+          next[invoiceNumber] = context;
+        }
+      });
+      return next;
+    });
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -53,6 +134,7 @@ function Invoices() {
         setStartDate(null);
         setEndDate(null);
         setDataDanfes(data);
+        await loadInvoiceContext(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Não foi possível encontrar notas com essas datas', error);
       }
@@ -74,6 +156,7 @@ function Invoices() {
         const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
         
         if (data) {
+          await loadInvoiceContext([data]);
           setDanfes([...danfes, data]);
         }
         
@@ -96,12 +179,14 @@ function Invoices() {
         if (!data) return;
         setDanfes([data]);
         setDataDanfes([data]);
+        await loadInvoiceContext([data]);
       } catch (error) {
         console.error('Algo deu errado ao tentar buscar essa nf', error);
       }
     };
 
     fetchQueryNf();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   function formatDate(date: Date | null) {
@@ -219,7 +304,7 @@ function Invoices() {
           <input type="text" onChange={filterByCustomerCity} placeholder="Filtrar por cidade" />
         </FilterBar>
         <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
-        <CardDanfes danfes={danfes} animationKey={notesSignature} />
+        <CardDanfes danfes={danfes} animationKey={notesSignature} invoiceContextByNf={invoiceContextByNf} />
       </Container>
     </div>
   )

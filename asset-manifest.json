@@ -1,16 +1,16 @@
 {
   "files": {
-    "main.css": "/kp-transportes/static/css/main.0ac92d66.css",
-    "main.js": "/kp-transportes/static/js/main.e5d6238c.js",
+    "main.css": "/kp-transportes/static/css/main.974fdd27.css",
+    "main.js": "/kp-transportes/static/js/main.a103aa2a.js",
     "static/js/453.59700d60.chunk.js": "/kp-transportes/static/js/453.59700d60.chunk.js",
     "static/media/volks.png": "/kp-transportes/static/media/volks.b7290d1177c78ac78b1b.png",
     "index.html": "/kp-transportes/index.html",
-    "main.0ac92d66.css.map": "/kp-transportes/static/css/main.0ac92d66.css.map",
-    "main.e5d6238c.js.map": "/kp-transportes/static/js/main.e5d6238c.js.map",
+    "main.974fdd27.css.map": "/kp-transportes/static/css/main.974fdd27.css.map",
+    "main.a103aa2a.js.map": "/kp-transportes/static/js/main.a103aa2a.js.map",
     "453.59700d60.chunk.js.map": "/kp-transportes/static/js/453.59700d60.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.0ac92d66.css",
-    "static/js/main.e5d6238c.js"
+    "static/css/main.974fdd27.css",
+    "static/js/main.a103aa2a.js"
   ]
 }

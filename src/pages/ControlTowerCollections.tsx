@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SortingState } from '@tanstack/react-table';
+import { Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import axios from 'axios';
 
 import Button from '../components/ui/Button';
@@ -16,16 +17,21 @@ import ReturnsTable from '../components/ControlTower/ReturnsTable';
 import DetailsDrawer from '../components/ControlTower/DetailsDrawer';
 import { exportRowsToCsv, getFilterOptions, getReturnsTable } from '../services/controlTowerService';
 import { useControlTowerData, useControlTowerMutations } from '../hooks/useControlTower';
-import { BacklogStatus, ControlTowerFilters } from '../types/controlTower';
+import { BacklogStatus, ControlTowerFilters, RegisterControlTowerOccurrenceInput } from '../types/controlTower';
 import { API_URL } from '../data';
-import { IOccurrence } from '../types/types';
+import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
 
 const today = new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
 const CREDIT_MANAGERS = ['control_tower', 'admin', 'master'];
+const NF_NOT_FOUND_MESSAGE = 'NF nao encontrada no banco de dados. Entre em contato com a expedicao da transportadora e envie o XML para cadastro.';
+const NOTIFICATIONS_STORAGE_KEY = 'ct_notifications_seen_at';
+const SHOW_FILTERS_STORAGE_KEY = 'ct_show_filters';
+const SHOW_KPIS_STORAGE_KEY = 'ct_show_kpis';
 
 const defaultFilters: ControlTowerFilters = {
   search: '',
+  invoiceNumber: '',
   periodPreset: '7d',
   startDate: '',
   endDate: today,
@@ -33,10 +39,105 @@ const defaultFilters: ControlTowerFilters = {
   returnType: 'all',
   pickupStatus: 'all',
   city: '',
-  route: '',
   customer: '',
   product: '',
 };
+
+type ManualCollectionRequestPayload = {
+  invoice_number: string;
+  request_code: string;
+  customer_name: string;
+  city: string;
+  product_id: string | null;
+  product_description: string;
+  product_type: string | null;
+  quantity: number;
+  request_scope: 'invoice_total' | 'items';
+  urgency_level: 'baixa' | 'media' | 'alta' | 'critica';
+  notes?: string;
+};
+
+type TowerNotificationEntry = {
+  key: string;
+  type: 'occurrence' | 'batch' | 'pickup';
+  title: string;
+  description: string;
+  date: string;
+  occurrenceId?: number;
+  batchCode?: string;
+  pickupId?: number;
+  invoiceNumber?: string;
+};
+
+function parseNumericInput(value: unknown): number {
+  const normalized = String(value ?? '').trim().replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function buildCollectionRequestCode(invoiceNumber: string) {
+  const normalizedInvoice = String(invoiceNumber || '').trim().replace(/\D/g, '').slice(-6) || '000000';
+  return `CR-FE-${Date.now()}-${normalizedInvoice}`;
+}
+
+function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): ManualCollectionRequestPayload[] {
+  const invoiceNumber = String(danfe.invoice_number || fallbackInvoice || '').trim();
+  const customerName = String(danfe.Customer?.name_or_legal_entity || '').trim();
+  const city = String(danfe.Customer?.city || '').trim();
+  const requestCode = buildCollectionRequestCode(invoiceNumber || fallbackInvoice);
+
+  const detailedPayloads = (Array.isArray(danfe.DanfeProducts) ? danfe.DanfeProducts : [])
+    .map((item) => {
+      const quantity = parseNumericInput(item.quantity);
+      const productDescription = String(item.Product?.description || '').trim();
+
+      if (!Number.isFinite(quantity) || quantity <= 0 || !productDescription) {
+        return null;
+      }
+
+      const productId = String(item.Product?.code || '').trim();
+      const productType = String(item.type || item.Product?.type || '').trim().toUpperCase();
+
+      return {
+        invoice_number: invoiceNumber,
+        request_code: requestCode,
+        customer_name: customerName,
+        city,
+        product_id: productId || null,
+        product_description: productDescription,
+        product_type: productType || null,
+        quantity,
+        request_scope: 'items',
+        urgency_level: 'media',
+      };
+    })
+    .filter((item): item is ManualCollectionRequestPayload => item !== null);
+
+  if (detailedPayloads.length) {
+    return detailedPayloads;
+  }
+
+  const totalQuantity = parseNumericInput(danfe.total_quantity);
+  return [{
+    invoice_number: invoiceNumber,
+    request_code: requestCode,
+    customer_name: customerName,
+    city,
+    product_id: null,
+    product_description: `NF ${invoiceNumber || fallbackInvoice}`,
+    product_type: null,
+    quantity: Number.isFinite(totalQuantity) && totalQuantity > 0 ? totalQuantity : 1,
+    request_scope: 'invoice_total',
+    urgency_level: 'media',
+    notes: 'Solicitacao manual sem detalhamento de itens na DANFE.',
+  }];
+}
+
+function formatDateTimeLabel(value?: string | null) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toLocaleString('pt-BR');
+}
 
 function ControlTowerCollections() {
   const navigate = useNavigate();
@@ -52,12 +153,34 @@ function ControlTowerCollections() {
   const [registerNf, setRegisterNf] = useState('');
   const [registeringPickup, setRegisteringPickup] = useState(false);
   const [recentOccurrences, setRecentOccurrences] = useState<IOccurrence[]>([]);
+  const [pendingBatches, setPendingBatches] = useState<IReturnBatch[]>([]);
+  const [receivingBatchCode, setReceivingBatchCode] = useState<string | null>(null);
+  const [towerNotifications, setTowerNotifications] = useState<TowerNotificationEntry[]>([]);
+  const [notificationTotals, setNotificationTotals] = useState({
+    occurrences: 0,
+    batches: 0,
+    pickups: 0,
+  });
+  const [notificationsSeenAt, setNotificationsSeenAt] = useState(() => {
+    const saved = Number(localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) || '0');
+    return Number.isFinite(saved) ? saved : 0;
+  });
+  const [showFilters, setShowFilters] = useState(() => localStorage.getItem(SHOW_FILTERS_STORAGE_KEY) !== '0');
+  const [showKpis, setShowKpis] = useState(() => localStorage.getItem(SHOW_KPIS_STORAGE_KEY) !== '0');
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+  const [highlightedOccurrenceId, setHighlightedOccurrenceId] = useState<number | null>(null);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionQueueSectionRef = useRef<HTMLDivElement | null>(null);
+  const returnsTableSectionRef = useRef<HTMLDivElement | null>(null);
+  const occurrenceSectionRef = useRef<HTMLDivElement | null>(null);
+  const pendingBatchesSectionRef = useRef<HTMLDivElement | null>(null);
+  const occurrenceItemRefs = useRef<Map<number, HTMLLIElement>>(new Map());
 
   const sortingInput = sorting[0] ? { id: sorting[0].id as any, desc: sorting[0].desc ?? false } : undefined;
   const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
 
   const { summary, charts, queue, table } = useControlTowerData(filters, pagination, sortingInput);
-  const { requestPickupMutation, updateStatusMutation, addObservationMutation, prioritizePickupMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
+  const { updateStatusMutation, addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
 
   const selectedRow = selectedId ? getSelectedFromCache(selectedId) : null;
 
@@ -74,6 +197,7 @@ function ControlTowerCollections() {
       : filters.periodPreset === '7d'
         ? 'Últimos 7 dias'
         : 'Últimos 30 dias';
+  const pendingSituationsCount = notificationTotals.occurrences + notificationTotals.batches + notificationTotals.pickups;
 
   function handleFilterChange(next: Partial<ControlTowerFilters>) {
     setPageIndex(0);
@@ -100,6 +224,7 @@ function ControlTowerCollections() {
       const talaoOnlyRows = normalizedRows.filter((occurrence) => (
         occurrence?.status === 'resolved'
         && occurrence?.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION
+        && occurrence?.credit_status !== 'completed'
       ));
       setRecentOccurrences(talaoOnlyRows.slice(0, 20));
     } catch {
@@ -107,9 +232,166 @@ function ControlTowerCollections() {
     }
   }, []);
 
+  const loadTowerNotifications = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setTowerNotifications([]);
+      setPendingBatches([]);
+      setNotificationTotals({ occurrences: 0, batches: 0, pickups: 0 });
+      return;
+    }
+
+    const headers = { Authorization: `Bearer ${token}` };
+    const [occurrenceResult, batchResult, pickupResult] = await Promise.allSettled([
+      axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
+        params: {
+          workflow_status: 'awaiting_control_tower',
+          status: 'resolved',
+          resolution_type: CONTROL_TOWER_OCCURRENCE_RESOLUTION,
+        },
+        headers,
+      }),
+      axios.get<IReturnBatch[]>(`${API_URL}/returns/batches/search`, {
+        params: { workflow_status: 'awaiting_control_tower' },
+        headers,
+      }),
+      axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/search`, {
+        params: { workflow_status: 'aceita_agendada', limit: 80 },
+        headers,
+      }),
+    ]);
+
+    const occurrenceRows = occurrenceResult.status === 'fulfilled' && Array.isArray(occurrenceResult.value.data)
+      ? occurrenceResult.value.data
+      : [];
+    const pendingOccurrenceRows = occurrenceRows.filter((occurrence) => (
+      occurrence?.status === 'resolved'
+      && occurrence?.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION
+      && occurrence?.credit_status !== 'completed'
+    ));
+    const occurrenceNotifications: TowerNotificationEntry[] = pendingOccurrenceRows.slice(0, 8).map((occurrence) => ({
+      key: `occ-${occurrence.id}`,
+      type: 'occurrence',
+      title: `Ocorrencia pendente de credito | NF ${occurrence.invoice_number}`,
+      description: `Motivo: ${occurrence.reason || 'legacy_outros'}`,
+      date: occurrence.resolved_at || occurrence.created_at,
+      occurrenceId: occurrence.id,
+      invoiceNumber: occurrence.invoice_number,
+    }));
+
+    const batchRows = batchResult.status === 'fulfilled' && Array.isArray(batchResult.value.data)
+      ? batchResult.value.data
+      : [];
+    const pendingBatchRows = batchRows.filter((batch) => (
+      batch?.workflow_status === 'awaiting_control_tower'
+      || (Boolean(batch?.sent_to_control_tower_at) && !batch?.received_by_control_tower_at)
+    ));
+    const sortedPendingBatchRows = [...pendingBatchRows].sort((left, right) => {
+      const leftDate = new Date(left.sent_to_control_tower_at || `${left.return_date}T12:00:00.000Z`).getTime();
+      const rightDate = new Date(right.sent_to_control_tower_at || `${right.return_date}T12:00:00.000Z`).getTime();
+      return (Number.isNaN(rightDate) ? 0 : rightDate) - (Number.isNaN(leftDate) ? 0 : leftDate);
+    });
+    setPendingBatches(sortedPendingBatchRows);
+    const batchNotifications: TowerNotificationEntry[] = pendingBatchRows.slice(0, 8).map((batch) => ({
+      key: `batch-${batch.batch_code}`,
+      type: 'batch',
+      title: `Lote pendente de recebimento | ${batch.batch_code}`,
+      description: `NFs no lote: ${batch.notes?.length || 0}`,
+      date: batch.sent_to_control_tower_at || `${batch.return_date}T12:00:00.000Z`,
+      batchCode: batch.batch_code,
+    }));
+
+    const pickupRows = pickupResult.status === 'fulfilled' && Array.isArray(pickupResult.value.data)
+      ? pickupResult.value.data
+      : [];
+    const scheduledPickupRows = pickupRows.filter((pickup) => (
+      String(pickup.workflow_status || '').toLowerCase() === 'aceita_agendada'
+      && Boolean(pickup.scheduled_for)
+    ));
+    const pickupNotifications: TowerNotificationEntry[] = scheduledPickupRows.slice(0, 8).map((pickup) => ({
+      key: `pickup-${pickup.id}`,
+      type: 'pickup',
+      title: `Coleta com data confirmada | NF ${pickup.invoice_number || '-'}`,
+      description: `Prevista para ${pickup.scheduled_for || '-'} | Cliente: ${pickup.customer_name || '-'}`,
+      date: pickup.accepted_at || `${pickup.scheduled_for}T12:00:00.000Z`,
+      pickupId: pickup.id,
+      invoiceNumber: pickup.invoice_number || undefined,
+    }));
+
+    const merged = [...occurrenceNotifications, ...batchNotifications, ...pickupNotifications]
+      .sort((left, right) => {
+        const leftDate = new Date(left.date).getTime();
+        const rightDate = new Date(right.date).getTime();
+        return (Number.isNaN(rightDate) ? 0 : rightDate) - (Number.isNaN(leftDate) ? 0 : leftDate);
+      })
+      .slice(0, 18);
+
+    setNotificationTotals({
+      occurrences: pendingOccurrenceRows.length,
+      batches: pendingBatchRows.length,
+      pickups: scheduledPickupRows.length,
+    });
+    setTowerNotifications(merged);
+  }, []);
+
   useEffect(() => {
     loadRecentOccurrences();
   }, [loadRecentOccurrences]);
+
+  useEffect(() => {
+    loadTowerNotifications();
+    const intervalId = window.setInterval(() => {
+      loadTowerNotifications();
+    }, 60000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadTowerNotifications]);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_FILTERS_STORAGE_KEY, showFilters ? '1' : '0');
+  }, [showFilters]);
+
+  useEffect(() => {
+    localStorage.setItem(SHOW_KPIS_STORAGE_KEY, showKpis ? '1' : '0');
+  }, [showKpis]);
+
+  useEffect(() => {
+    if (!isNotificationMenuOpen) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!notificationMenuRef.current?.contains(event.target as Node)) {
+        setIsNotificationMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsNotificationMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isNotificationMenuOpen]);
+
+  useEffect(() => {
+    if (!highlightedOccurrenceId) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setHighlightedOccurrenceId(null);
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [highlightedOccurrenceId]);
 
   async function applyFilterAndOpen(next: Partial<ControlTowerFilters>) {
     const merged = { ...filters, ...next };
@@ -150,15 +432,106 @@ function ControlTowerCollections() {
       queue.refetch(),
       table.refetch(),
       loadRecentOccurrences(),
+      loadTowerNotifications(),
     ]);
+  }
+
+  function markNotificationsAsRead() {
+    const now = Date.now();
+    setNotificationsSeenAt(now);
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, String(now));
+  }
+
+  function markNotificationAsRead(date: string) {
+    const notificationDate = new Date(date).getTime();
+    if (Number.isNaN(notificationDate)) return;
+
+    setNotificationsSeenAt((previous) => {
+      const next = Math.max(previous, notificationDate);
+      localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, String(next));
+      return next;
+    });
+  }
+
+  function handleNotificationClick(notification: TowerNotificationEntry) {
+    markNotificationAsRead(notification.date);
+    setIsNotificationMenuOpen(false);
+
+    if (notification.type === 'occurrence' && notification.occurrenceId) {
+      const occurrenceId = notification.occurrenceId;
+      occurrenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      window.setTimeout(() => {
+        const target = occurrenceItemRefs.current.get(occurrenceId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedOccurrenceId(occurrenceId);
+        }
+      }, 180);
+      return;
+    }
+
+    if (notification.type === 'pickup') {
+      actionQueueSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    if (notification.type === 'batch') {
+      pendingBatchesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function handleOpenBatchInvoice(batch: IReturnBatch, invoiceNumber: string) {
+    const normalizedInvoice = String(invoiceNumber || '').trim();
+    const invoiceDigits = normalizedInvoice.replace(/\D/g, '').slice(0, 9);
+    const firstInvoice = String(batch.notes?.[0]?.invoice_number || '').trim();
+    const firstInvoiceDigits = firstInvoice.replace(/\D/g, '').slice(0, 9);
+
+    if (invoiceDigits) {
+      applyFilterAndOpen({ invoiceNumber: invoiceDigits, search: '' });
+      return;
+    }
+
+    if (firstInvoiceDigits) {
+      applyFilterAndOpen({ invoiceNumber: firstInvoiceDigits, search: '' });
+      return;
+    }
+
+    applyFilterAndOpen({ search: normalizedInvoice || firstInvoice });
+  }
+
+  async function handleConfirmBatchReceipt(batchCode: string) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Sessão inválida. Faça login novamente.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirma o recebimento do lote ${batchCode}? Se houver divergência em alguma NF, registre a ocorrência antes de confirmar.`,
+    );
+    if (!confirmed) return;
+
+    setReceivingBatchCode(batchCode);
+    try {
+      await axios.put(`${API_URL}/returns/batches/${encodeURIComponent(batchCode)}/confirm-receipt`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await refreshAll();
+      alert(`Lote ${batchCode} marcado como recebido.`);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao confirmar recebimento do lote.');
+      } else {
+        alert('Erro ao confirmar recebimento do lote.');
+      }
+    } finally {
+      setReceivingBatchCode(null);
+    }
   }
 
   function openById(id: string) {
     setSelectedId(id);
-  }
-
-  function quickRequestPickup(id: string) {
-    requestPickupMutation.mutate({ returnId: id });
   }
 
   function quickUpdateStatus(id: string, status: BacklogStatus) {
@@ -176,6 +549,21 @@ function ControlTowerCollections() {
     prioritizePickupMutation.mutate({ returnId: id, pickupPriority });
   }
 
+  async function handleRegisterOccurrenceFromDrawer(payload: RegisterControlTowerOccurrenceInput) {
+    try {
+      await registerOccurrenceMutation.mutateAsync(payload);
+      await refreshAll();
+      alert('Ocorrência registrada e enviada para a transportadora.');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao registrar ocorrência.');
+        return;
+      }
+
+      alert('Erro ao registrar ocorrência.');
+    }
+  }
+
   async function handleFinalizeOccurrenceCredit(occurrenceId: number) {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -188,7 +576,7 @@ function ControlTowerCollections() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      await loadRecentOccurrences();
+      await refreshAll();
       alert(`Crédito da ocorrência #${occurrenceId} finalizado com sucesso.`);
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -208,44 +596,40 @@ function ControlTowerCollections() {
 
     setRegisteringPickup(true);
     try {
-      const danfeResponse = await axios.get(`${API_URL}/danfes/nf/${nf}`);
-      if (!danfeResponse?.data) {
-        alert('NF não encontrada no banco de dados. Verifique o número informado.');
+      const danfeResponse = await axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${nf}`);
+      const danfe = danfeResponse?.data;
+
+      if (!danfe) {
+        alert(NF_NOT_FOUND_MESSAGE);
         return;
       }
 
-      const response = await getReturnsTable(
-        { ...filters, search: nf },
-        { pageIndex: 0, pageSize: 3000 },
-        sortingInput,
-      );
-
-      const row = response.rows.find((item) => String(item.invoiceNumber) === nf);
-
-      if (!row) {
-        alert('A NF existe no banco, mas não está disponível na Torre de Controle para coleta.');
+      const hasCustomerData = String(danfe.Customer?.name_or_legal_entity || '').trim();
+      const hasCityData = String(danfe.Customer?.city || '').trim();
+      if (!hasCustomerData || !hasCityData) {
+        alert('A NF foi localizada, mas os dados estao incompletos. Entre em contato com a expedicao da transportadora para revisar o XML.');
         return;
       }
 
-      if (row.status === 'COLETADA') {
-        alert('Essa NF já está marcada como coletada.');
-        return;
-      }
+      const payloads = buildManualCollectionPayloads(danfe, nf);
 
-      if (row.status === 'CANCELADA') {
-        alert('Essa NF está com coleta cancelada e não pode ser registrada.');
-        return;
-      }
+      await Promise.all(payloads.map((payload) => axios.post(`${API_URL}/collection-requests`, payload)));
 
-      quickRequestPickup(row.id);
       setRegisterNf('');
+      await refreshAll();
       alert(`Coleta registrada para a NF ${nf}.`);
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
-        alert('NF não encontrada no banco de dados. Verifique o número informado.');
-      } else {
-        alert('Erro ao validar NF e registrar coleta.');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          alert(NF_NOT_FOUND_MESSAGE);
+          return;
+        }
+
+        alert(error.response?.data?.error || 'Erro ao validar NF e registrar coleta.');
+        return;
       }
+
+      alert('Erro ao validar NF e registrar coleta.');
     } finally {
       setRegisteringPickup(false);
     }
@@ -259,107 +643,325 @@ function ControlTowerCollections() {
             <h1 className="text-2xl font-semibold tracking-tight">Control Tower | KP Transportes + Mar e Rio</h1>
             <p className="text-sm text-slate-400">Visão ampla de volume, tendência, gargalo e ação imediata.</p>
           </div>
-          <Button tone="outline" className="border-slate-600 bg-slate-900 text-slate-100" onClick={logout}>Sair</Button>
-        </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div ref={notificationMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotificationMenuOpen((current) => !current)}
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/80 text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                title="Abrir notificações"
+                aria-label="Abrir notificações"
+                aria-expanded={isNotificationMenuOpen}
+              >
+                <Bell className="h-5 w-5" />
+                {pendingSituationsCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full border border-amber-300/70 bg-amber-500 px-1 py-0.5 text-[10px] font-bold leading-none text-slate-950">
+                    {pendingSituationsCount > 99 ? '99+' : pendingSituationsCount}
+                  </span>
+                ) : null}
+              </button>
 
-        <FiltersBar
-          filters={filters}
-          options={options}
-          updatedAgoLabel={updatedAgoLabel}
-          onChange={handleFilterChange}
-          onRefresh={refreshAll}
-          onReset={resetFilters}
-          onExport={handleExport}
-        />
-
-        <KpiCards summary={summary.data} />
-
-        <Card className="border-slate-800 bg-[#101b2b]">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-100">Ocorrências com talão (pendentes de crédito)</h3>
-            <span className="text-xs text-slate-400">Pendências até confirmação do crédito</span>
-          </div>
-          {!recentOccurrences.length ? (
-            <p className="text-xs text-slate-400">Nenhuma ocorrência com talão pendente de crédito.</p>
-          ) : (
-            <ul className="space-y-2">
-              {recentOccurrences.map((occurrence) => (
-                <li key={occurrence.id} className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2 text-xs text-slate-200">
-                  <div>
-                    <strong>NF {occurrence.invoice_number}</strong>
-                    {` | Motivo: ${occurrence.reason || 'legacy_outros'}`}
-                    {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'itens'}`}
-                    {' | Status Torre: pendente de crédito'}
+              {isNotificationMenuOpen ? (
+                <div className="absolute right-0 top-11 z-50 w-[360px] max-w-[calc(100vw-1.5rem)] rounded-lg border border-slate-700 bg-[#0b1624] shadow-[0_16px_36px_rgba(2,6,23,0.65)]">
+                  <div className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-200">Notificações</span>
+                    <button
+                      type="button"
+                      onClick={markNotificationsAsRead}
+                      className="text-[11px] font-semibold text-sky-300 hover:text-sky-200"
+                    >
+                      Marcar lidas
+                    </button>
                   </div>
-                  {occurrence.scope === 'items' && !!occurrence.items?.length ? (
-                    <div className="mt-1 space-y-1 text-slate-300">
-                      <div className="font-medium text-slate-200">Itens:</div>
-                      {occurrence.items.map((item, index) => {
-                        const itemCode = String(item.product_id || '').trim();
-                        const itemDescription = String(item.product_description || '').trim();
-                        const itemType = String(item.product_type || '').trim().toUpperCase();
-                        const itemLabel = itemCode && itemDescription
-                          ? `${itemCode} - ${itemDescription}`
-                          : itemCode || itemDescription || 'Item';
+                  {!towerNotifications.length ? (
+                    <p className="px-3 py-3 text-xs text-slate-400">Sem notificações no momento.</p>
+                  ) : (
+                    <ul className="max-h-[320px] space-y-1 overflow-auto p-2">
+                      {towerNotifications.map((notification) => {
+                        const notificationDateMs = new Date(notification.date).getTime();
+                        const isUnread = !Number.isNaN(notificationDateMs) && notificationDateMs > notificationsSeenAt;
+                        const typeLabel = notification.type === 'occurrence'
+                          ? 'Ocorrência'
+                          : notification.type === 'batch'
+                            ? 'Lote'
+                            : 'Coleta';
 
                         return (
-                          <div key={`ct-occ-item-${occurrence.id}-${itemCode}-${index}`} className="pl-2">
-                            {itemLabel} | <strong>{`Qtd: ${Number(item.quantity || 0)}${itemType}`}</strong>
-                          </div>
+                          <li key={`menu-${notification.key}`}>
+                            <button
+                              type="button"
+                              onClick={() => handleNotificationClick(notification)}
+                              className={`w-full rounded-md border px-2.5 py-2 text-left transition ${isUnread
+                                ? 'border-sky-500/60 bg-sky-900/20 hover:bg-sky-900/30'
+                                : 'border-slate-700 bg-slate-900/50 hover:bg-slate-900/80'
+                                }`}
+                            >
+                              <div className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="font-semibold text-slate-100">{typeLabel}</span>
+                                {isUnread ? (
+                                  <span className="rounded-full border border-sky-400/60 px-2 py-0.5 font-semibold text-sky-200">
+                                    Novo
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 text-xs font-medium text-slate-100">{notification.title}</div>
+                              <div className="mt-0.5 text-xs text-slate-300">{notification.description}</div>
+                            </button>
+                          </li>
                         );
                       })}
-                    </div>
-                  ) : (
-                    <div className="mt-1 text-slate-300">Itens: NF total</div>
+                    </ul>
                   )}
-                  {occurrence.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION ? (
-                    <div className="mt-1 text-slate-300">
-                      Resolução: Talão de mercadoria faltante
-                      {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
-                    </div>
-                  ) : null}
-                  {canFinalizeOccurrenceCredit ? (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleFinalizeOccurrenceCredit(occurrence.id)}
-                        className="rounded-md border border-emerald-500/60 bg-emerald-700/25 px-3 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-700/40"
-                      >
-                        Crédito concluído
-                      </button>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+                </div>
+              ) : null}
+            </div>
+            <Button tone="outline" className="border-slate-600 bg-slate-900 text-slate-100" onClick={logout}>Sair</Button>
+          </div>
+        </div>
 
-        <Card className="border-slate-800 bg-[#101b2b]">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[260px] flex-1">
-              <label htmlFor="register-pickup-nf" className="mb-1 block text-xs font-medium text-slate-300">
-                Registrar coleta por NF
-              </label>
+        <section className="group rounded-lg border border-slate-800 bg-[#0b1624]/60">
+          <button
+            type="button"
+            onClick={() => setShowFilters((current) => !current)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Barra de filtros</span>
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showFilters ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                }`}
+            >
+              {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+          {showFilters ? (
+            <div className="border-t border-slate-800 p-2">
+              <FiltersBar
+                filters={filters}
+                options={options}
+                updatedAgoLabel={updatedAgoLabel}
+                onChange={handleFilterChange}
+                onRefresh={refreshAll}
+                onReset={resetFilters}
+                onExport={handleExport}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        <Card className="border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-100">Registrar Coleta</h3>
+              <p className="text-xs text-amber-200/80">Use a NF para abrir rapidamente uma solicitação de coleta para a transportadora.</p>
+            </div>
+          </div>
+          <div className="w-full max-w-[460px]">
+            <label htmlFor="register-pickup-nf" className="mb-1 block text-xs font-medium text-slate-200">
+              NF para coleta
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 id="register-pickup-nf"
                 value={registerNf}
-                onChange={(event) => setRegisterNf(event.target.value)}
-                placeholder="Digite a NF (somente notas existentes no banco)"
-                className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                onChange={(event) => setRegisterNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                inputMode="numeric"
+                maxLength={9}
+                placeholder="Digite a NF"
+                className="h-10 w-full max-w-[220px] rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
               />
-              <p className="mt-1 text-xs text-slate-400">A NF será validada no banco antes do registro da coleta.</p>
+              <Button
+                tone="secondary"
+                className="h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
+                onClick={handleRegisterPickupByNf}
+                disabled={registeringPickup}
+              >
+                {registeringPickup ? 'Validando...' : 'Registrar coleta'}
+              </Button>
             </div>
-            <Button
-              tone="secondary"
-              className="h-10 bg-slate-800 text-slate-100 hover:bg-slate-700 disabled:opacity-60"
-              onClick={handleRegisterPickupByNf}
-              disabled={registeringPickup}
-            >
-              {registeringPickup ? 'Validando...' : 'Registrar coleta'}
-            </Button>
+            <p className="mt-1 text-xs text-slate-300">A NF será validada no banco antes do registro da coleta.</p>
           </div>
         </Card>
+
+        <section className="group rounded-lg border border-slate-800 bg-[#101b2b]/60">
+          <button
+            type="button"
+            onClick={() => setShowKpis((current) => !current)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Indicadores (KPIs)</span>
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showKpis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                }`}
+            >
+              {showKpis ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+          {showKpis ? (
+            <div className="border-t border-slate-800 p-3">
+              <KpiCards summary={summary.data} />
+            </div>
+          ) : null}
+        </section>
+
+
+
+        <div ref={occurrenceSectionRef}>
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-100">Ocorrências com talão (pendentes de crédito)</h3>
+              <span className="text-xs text-slate-400">Pendências até confirmação do crédito</span>
+            </div>
+            {!recentOccurrences.length ? (
+              <p className="text-xs text-slate-400">Nenhuma ocorrência com talão pendente de crédito.</p>
+            ) : (
+              <ul className="space-y-2">
+                {recentOccurrences.map((occurrence) => (
+                  <li
+                    key={occurrence.id}
+                    ref={(element) => {
+                      if (element) occurrenceItemRefs.current.set(occurrence.id, element);
+                      else occurrenceItemRefs.current.delete(occurrence.id);
+                    }}
+                    className={`rounded-sm border px-3 py-2 text-xs text-slate-200 transition ${highlightedOccurrenceId === occurrence.id
+                      ? 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40'
+                      : 'border-slate-700 bg-slate-900/50'
+                      }`}
+                  >
+                    <div>
+                      <strong>NF {occurrence.invoice_number}</strong>
+                      {` | Motivo: ${occurrence.reason || 'legacy_outros'}`}
+                      {` | Escopo: ${occurrence.scope === 'invoice_total' ? 'NF total' : 'itens'}`}
+                      {' | Status Torre: pendente de crédito'}
+                    </div>
+                    {occurrence.scope === 'items' && !!occurrence.items?.length ? (
+                      <div className="mt-1 space-y-1 text-slate-300">
+                        <div className="font-medium text-slate-200">Itens:</div>
+                        {occurrence.items.map((item, index) => {
+                          const itemCode = String(item.product_id || '').trim();
+                          const itemDescription = String(item.product_description || '').trim();
+                          const itemType = String(item.product_type || '').trim().toUpperCase();
+                          const itemLabel = itemCode && itemDescription
+                            ? `${itemCode} - ${itemDescription}`
+                            : itemCode || itemDescription || 'Item';
+
+                          return (
+                            <div key={`ct-occ-item-${occurrence.id}-${itemCode}-${index}`} className="pl-2">
+                              {itemLabel} | <strong>{`Qtd: ${Number(item.quantity || 0)}${itemType}`}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-slate-300">Itens: NF total</div>
+                    )}
+                    {occurrence.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION ? (
+                      <div className="mt-1 text-slate-300">
+                        Resolução: Transportadora identificou a falta e solicita o crédito do valor para o cliente.
+                        {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
+                      </div>
+                    ) : null}
+                    {canFinalizeOccurrenceCredit ? (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleFinalizeOccurrenceCredit(occurrence.id)}
+                          className="rounded-md border border-emerald-500/60 bg-emerald-700/25 px-3 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-700/40"
+                        >
+                          Confirmar crédito para o cliente
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div ref={pendingBatchesSectionRef}>
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-100">Lotes de devolução pendentes de aprovação</h3>
+              <span className="text-xs text-slate-400">{pendingBatches.length} pendente(s)</span>
+            </div>
+            <p className="mb-2 text-xs text-slate-400">
+              Abra a NF do lote para registrar ocorrência, se necessário. Depois disso, confirme o recebimento do lote.
+            </p>
+            {!pendingBatches.length ? (
+              <p className="text-xs text-slate-400">Nenhum lote aguardando recebimento pela Torre de Controle.</p>
+            ) : (
+              <ul className="space-y-2">
+                {pendingBatches.map((batch) => (
+                  <li key={`pending-batch-${batch.batch_code}`} className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2 text-xs text-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <strong>{batch.batch_code}</strong>
+                        {` | Enviado em: ${formatDateTimeLabel(batch.sent_to_control_tower_at)}`}
+                        {` | NFs: ${batch.notes?.length || 0}`}
+                      </div>
+                      <Button
+                        tone="secondary"
+                        className="h-8 bg-emerald-700/80 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
+                        onClick={() => handleConfirmBatchReceipt(batch.batch_code)}
+                        disabled={receivingBatchCode === batch.batch_code}
+                      >
+                        {receivingBatchCode === batch.batch_code ? 'Confirmando...' : 'Marcar como recebido'}
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(batch.notes || []).slice(0, 10).map((note) => (
+                        <button
+                          key={`pending-batch-note-${batch.batch_code}-${note.id}`}
+                          type="button"
+                          onClick={() => handleOpenBatchInvoice(batch, note.invoice_number)}
+                          className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-900/35"
+                        >
+                          {`Abrir NF ${note.invoice_number}`}
+                        </button>
+                      ))}
+                      {(batch.notes?.length || 0) > 10 ? (
+                        <span className="self-center text-[11px] text-slate-400">
+                          {`+${(batch.notes?.length || 0) - 10} NF(s)`}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+
+        <div ref={actionQueueSectionRef}>
+          <ActionQueue
+            rows={queue.data || []}
+            loading={queue.isLoading}
+            canManageStatus={canManageStatus}
+            onTogglePriority={quickTogglePriority}
+            onCancelPickup={quickCancelPickup}
+            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
+            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
+            onOpen={openById}
+          />
+        </div>
+
+        <div ref={returnsTableSectionRef}>
+          <ReturnsTable
+            rows={table.data?.rows || []}
+            total={table.data?.total || 0}
+            loading={table.isLoading}
+            returnTypeFilter={filters.returnType}
+            invoiceNumber={filters.invoiceNumber}
+            pageIndex={pageIndex}
+            pageSize={pageSize}
+            sorting={sorting}
+            onPaginationChange={setPageIndex}
+            onSortingChange={setSorting}
+            onInvoiceNumberChange={(invoiceNumber) => handleFilterChange({ invoiceNumber })}
+            onFilterByReturnType={(returnType) => handleFilterChange({ returnType })}
+            onOpenDetails={openById}
+          />
+        </div>
 
         <div className="grid gap-3 xl:grid-cols-3">
           <Card className="border-slate-800 bg-[#101b2b]">
@@ -404,43 +1006,37 @@ function ControlTowerCollections() {
           </Card>
         </div>
 
-        <ActionQueue
-          rows={queue.data || []}
-          loading={queue.isLoading}
-          canManageStatus={canManageStatus}
-          onTogglePriority={quickTogglePriority}
-          onCancelPickup={quickCancelPickup}
-          onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
-          onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
-          onOpen={openById}
-        />
+        <div className="grid gap-3 xl:grid-cols-2">
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <TopHorizontalChart
+              title="Produtos com mais sobras"
+              subtitle={periodSubtitle}
+              data={charts.data?.topSurplusProducts || []}
+              metric="quantity"
+              color="#34d399"
+              onBarClick={(name) => applyFilterAndOpen({ product: name, returnType: 'sobra' })}
+            />
+          </Card>
 
-        <ReturnsTable
-          rows={table.data?.rows || []}
-          total={table.data?.total || 0}
-          loading={table.isLoading}
-          returnTypeFilter={filters.returnType}
-          pageIndex={pageIndex}
-          pageSize={pageSize}
-          sorting={sorting}
-          onPaginationChange={setPageIndex}
-          onSortingChange={setSorting}
-          onFilterByReturnType={(returnType) => handleFilterChange({ returnType })}
-          onOpenDetails={openById}
-        />
+          <Card className="border-slate-800 bg-[#101b2b]">
+            <TopHorizontalChart
+              title="Produtos com mais faltas (talão)"
+              subtitle={periodSubtitle}
+              data={charts.data?.topShortageProducts || []}
+              metric="quantity"
+              color="#f87171"
+              onBarClick={(name) => applyFilterAndOpen({ product: name })}
+            />
+          </Card>
+        </div>
 
         {selectedRow ? (
           <DetailsDrawer
             row={selectedRow}
             onClose={() => setSelectedId(null)}
-            canManageStatus={canManageStatus}
-            onRequestPickup={(id) => {
-              quickRequestPickup(id);
-            }}
-            onCancelPickup={quickCancelPickup}
-            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
-            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
             onAddObservation={(id, note) => addObservationMutation.mutate({ returnId: id, note })}
+            onRegisterOccurrence={handleRegisterOccurrenceFromDrawer}
+            registeringOccurrence={registerOccurrenceMutation.isPending}
           />
         ) : null}
       </div>

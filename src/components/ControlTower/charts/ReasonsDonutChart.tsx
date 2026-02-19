@@ -7,7 +7,7 @@ function ReasonsDonutChart({ data, subtitle, onSliceClick }: { data?: DashboardC
 
   const option = {
     title: {
-      text: 'Motivos de devolução',
+      text: 'Causas de devolução',
       subtext: subtitle,
       top: 6,
       left: 12,

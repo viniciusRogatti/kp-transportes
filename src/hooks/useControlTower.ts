@@ -2,17 +2,16 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addReturnObservation,
-  confirmReturnSubmission,
   getActionQueue,
   getControlTowerCharts,
   getControlTowerSummary,
   getReturnById,
   getReturnsTable,
-  requestPickup,
+  registerControlTowerOccurrence,
   setPickupPriority,
   updatePickupStatus,
 } from '../services/controlTowerService';
-import { BacklogStatus, ControlTowerFilters, PaginationInput, SortingInput } from '../types/controlTower';
+import { BacklogStatus, ControlTowerFilters, PaginationInput, RegisterControlTowerOccurrenceInput, SortingInput } from '../types/controlTower';
 
 export function useControlTowerData(filters: ControlTowerFilters, pagination: PaginationInput, sorting?: SortingInput) {
   const keyFilters = useMemo(() => ({ ...filters }), [filters]);
@@ -47,18 +46,8 @@ export function useControlTowerMutations(filters: ControlTowerFilters, paginatio
     predicate: (query) => String(query.queryKey?.[0] || '').startsWith('ct-'),
   });
 
-  const requestPickupMutation = useMutation({
-    mutationFn: ({ returnId, scheduledFor, notes }: { returnId: string; scheduledFor?: string; notes?: string }) => requestPickup(returnId, scheduledFor, notes),
-    onSuccess: invalidate,
-  });
-
   const updateStatusMutation = useMutation({
     mutationFn: ({ pickupId, status }: { pickupId: string; status: BacklogStatus }) => updatePickupStatus(pickupId, status),
-    onSuccess: invalidate,
-  });
-
-  const confirmSubmissionMutation = useMutation({
-    mutationFn: (batchId: string) => confirmReturnSubmission(batchId),
     onSuccess: invalidate,
   });
 
@@ -69,6 +58,11 @@ export function useControlTowerMutations(filters: ControlTowerFilters, paginatio
 
   const prioritizePickupMutation = useMutation({
     mutationFn: ({ returnId, pickupPriority }: { returnId: string; pickupPriority: boolean }) => setPickupPriority(returnId, pickupPriority),
+    onSuccess: invalidate,
+  });
+
+  const registerOccurrenceMutation = useMutation({
+    mutationFn: (payload: RegisterControlTowerOccurrenceInput) => registerControlTowerOccurrence(payload),
     onSuccess: invalidate,
   });
 
@@ -84,11 +78,10 @@ export function useControlTowerMutations(filters: ControlTowerFilters, paginatio
   };
 
   return {
-    requestPickupMutation,
     updateStatusMutation,
-    confirmSubmissionMutation,
     addObservationMutation,
     prioritizePickupMutation,
+    registerOccurrenceMutation,
     getSelectedFromCache,
   };
 }

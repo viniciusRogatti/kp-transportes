@@ -16,7 +16,7 @@ import {
   DashboardSummary,
   EventLog,
   PaginationInput,
-  PickupRequest,
+  RegisterControlTowerOccurrenceInput,
   ReasonDistribution,
   ReturnBatch,
   ReturnItem,
@@ -31,6 +31,7 @@ import { ICollectionRequest, IControlTowerReturn, IOccurrence } from '../types/t
 
 const STATUS_ORDER: BacklogStatus[] = ['PENDENTE', 'SOLICITADA', 'EM_ROTA', 'COLETADA', 'CANCELADA'];
 const RETURN_TYPES: ReturnSourceType[] = ['total', 'partial', 'coleta', 'sobra'];
+const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
 const PRODUCT_TYPES = ['CX', 'UN', 'PCT', 'KG'];
 const CITIES = ['Sao Paulo', 'Santos', 'Campinas', 'Guarulhos', 'Sorocaba', 'Ribeirao Preto'];
 const ROUTES = ['SP-CAPITAL', 'SP-LITORAL', 'SP-INTERIOR', 'SP-METRO'];
@@ -63,12 +64,9 @@ const CONTROL_TOWER_DATA_MODE = String(process.env.REACT_APP_CONTROL_TOWER_DATA_
   ? 'mock'
   : 'api';
 
-type ControlTowerDataMode = 'mock' | 'api';
-
 type FilterOptions = {
   customers: string[];
   cities: string[];
-  routes: string[];
   products: string[];
 };
 
@@ -203,7 +201,6 @@ function generateMockData(total = 320): ReturnBatch[] {
 const MOCK_FILTER_OPTIONS: FilterOptions = {
   customers: CUSTOMERS,
   cities: CITIES,
-  routes: ROUTES,
   products: PRODUCTS,
 };
 
@@ -212,7 +209,7 @@ let lastBaseRows: ReturnBatch[] = CONTROL_TOWER_DATA_MODE === 'mock' ? returnsSt
 let lastResolvedRows: ReturnBatch[] = CONTROL_TOWER_DATA_MODE === 'mock' ? returnsStore : [];
 let filterOptionsStore: FilterOptions = CONTROL_TOWER_DATA_MODE === 'mock'
   ? MOCK_FILTER_OPTIONS
-  : { customers: [], cities: [], routes: [], products: [] };
+  : { customers: [], cities: [], products: [] };
 
 const localOverlayStore = new Map<string, LocalReturnOverlay>();
 const inflightApiLoads = new Map<string, Promise<ReturnBatch[]>>();
@@ -220,6 +217,10 @@ let shortagesStore: IOccurrence[] = [];
 let inflightShortagesLoad: Promise<IOccurrence[]> | null = null;
 let shortagesFetchedAt = 0;
 const SHORTAGES_CACHE_MS = 30 * 1000;
+const occurrenceCacheStore = new Map<string, IOccurrence[]>();
+const occurrenceCacheFetchedAt = new Map<string, number>();
+const inflightOccurrenceLoads = new Map<string, Promise<IOccurrence[]>>();
+const OCCURRENCES_CACHE_MS = 30 * 1000;
 
 function getInterval(filters: ControlTowerFilters) {
   const now = new Date();
@@ -239,6 +240,10 @@ function getInterval(filters: ControlTowerFilters) {
 
 function normalizeText(value: unknown) {
   return String(value || '').trim();
+}
+
+function normalizeInvoiceNumber(value: unknown) {
+  return normalizeText(value).replace(/\D/g, '');
 }
 
 function toNumber(value: unknown, fallback = 0) {
@@ -283,9 +288,61 @@ function mapReturnTypeReason(returnType: ReturnSourceType) {
   return labels[returnType] || 'Nao informado';
 }
 
-function mapCollectionStatus(status: ICollectionRequest['status']): BacklogStatus {
-  if (status === 'completed') return 'COLETADA';
-  if (status === 'cancelled') return 'CANCELADA';
+function mapOccurrenceReasonLabel(reason?: string | null) {
+  const normalized = normalizeText(reason).toLowerCase();
+  if (normalized === 'faltou_no_carregamento') return 'Faltou no carregamento';
+  if (normalized === 'faltou_na_carga') return 'Faltou na carga';
+  if (normalized === 'produto_avariado') return 'Produto avariado';
+  if (normalized === 'produto_invertido') return 'Produto invertido';
+  if (normalized === 'produto_sem_etiqueta_ou_data') return 'Produto sem etiqueta ou data';
+  if (normalized === 'legacy_outros') return 'Outros';
+  return normalizeText(reason) || 'Ocorrência';
+}
+
+function mapOccurrenceTableStatus(occurrence: IOccurrence) {
+  const status = normalizeText(occurrence.status).toLowerCase();
+  const resolutionType = normalizeText(occurrence.resolution_type).toLowerCase();
+  const creditStatus = normalizeText(occurrence.credit_status).toLowerCase();
+
+  if (status !== 'resolved') {
+    return 'PENDENTE_TRANSPORTADORA';
+  }
+
+  if (resolutionType === 'talao_mercadoria_faltante') {
+    if (creditStatus === 'completed') {
+      return 'CREDITO_CONCLUIDO';
+    }
+    return 'PENDENTE_CREDITO';
+  }
+
+  return 'FINALIZADA';
+}
+
+function isControlTowerOccurrence(occurrence: IOccurrence) {
+  const status = normalizeText(occurrence.status).toLowerCase();
+  const resolutionType = normalizeText(occurrence.resolution_type).toLowerCase();
+  return status === 'resolved' && resolutionType === CONTROL_TOWER_OCCURRENCE_RESOLUTION;
+}
+
+function mapCollectionStatus(collection: ICollectionRequest): BacklogStatus {
+  const normalizedWorkflow = normalizeText(
+    collection.display_status === 'em_tratativa'
+      ? 'recebida'
+      : collection.workflow_status || collection.status,
+  ).toLowerCase();
+
+  if (normalizedWorkflow === 'cancelada' || normalizedWorkflow === 'cancelled') {
+    return 'CANCELADA';
+  }
+
+  if (normalizedWorkflow === 'aceita_agendada') {
+    return 'EM_ROTA';
+  }
+
+  if (['coletada', 'enviada_em_lote', 'recebida', 'completed'].includes(normalizedWorkflow)) {
+    return 'COLETADA';
+  }
+
   return 'SOLICITADA';
 }
 
@@ -314,19 +371,27 @@ function occurrenceContainsProduct(occurrence: IOccurrence, productTerm: string)
   });
 }
 
-function filterShortageOccurrences(occurrences: IOccurrence[], filters: ControlTowerFilters, start: Date, end: Date) {
+function filterShortageOccurrences(
+  occurrences: IOccurrence[],
+  filters: ControlTowerFilters,
+  start: Date,
+  end: Date,
+  options?: { ignoreDateRange?: boolean },
+) {
   const term = normalizeText(filters.search).toLowerCase();
   const product = normalizeText(filters.product).toLowerCase();
+  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
+  const ignoreDateRange = Boolean(options?.ignoreDateRange || exactInvoice);
 
   return occurrences.filter((occurrence) => {
     const occurrenceDate = parseOccurrenceDate(occurrence);
     if (!occurrenceDate) return false;
-    if (occurrenceDate < start || occurrenceDate > end) return false;
+    if (!ignoreDateRange && (occurrenceDate < start || occurrenceDate > end)) return false;
+
+    if (exactInvoice && normalizeInvoiceNumber(occurrence.invoice_number) !== exactInvoice) return false;
 
     if (filters.city && normalizeText(occurrence.city).toUpperCase() !== normalizeText(filters.city).toUpperCase()) return false;
     if (filters.customer && normalizeText(occurrence.customer_name).toUpperCase() !== normalizeText(filters.customer).toUpperCase()) return false;
-    if (filters.route && inferRoute(normalizeText(occurrence.city)) !== filters.route) return false;
-
     if (product && !occurrenceContainsProduct(occurrence, product)) return false;
 
     if (term) {
@@ -389,6 +454,61 @@ async function loadShortageOccurrences(): Promise<IOccurrence[]> {
   return inflightShortagesLoad;
 }
 
+function buildOccurrenceLoadKey(filters: ControlTowerFilters) {
+  const invoiceHint = extractInvoiceSearchHint(filters.search, filters.invoiceNumber);
+  return invoiceHint ? `invoice:${invoiceHint}` : 'all';
+}
+
+async function loadApiOccurrences(filters: ControlTowerFilters): Promise<IOccurrence[]> {
+  if (CONTROL_TOWER_DATA_MODE === 'mock') {
+    return [];
+  }
+
+  const key = buildOccurrenceLoadKey(filters);
+  const now = Date.now();
+  const cached = occurrenceCacheStore.get(key);
+  const fetchedAt = occurrenceCacheFetchedAt.get(key) || 0;
+  if (cached && now - fetchedAt < OCCURRENCES_CACHE_MS) {
+    return cached;
+  }
+
+  const inFlight = inflightOccurrenceLoads.get(key);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const headers = getAuthHeaders();
+  const invoiceHint = extractInvoiceSearchHint(filters.search, filters.invoiceNumber);
+  const params: Record<string, string> = {};
+  params.status = 'resolved';
+  params.resolution_type = CONTROL_TOWER_OCCURRENCE_RESOLUTION;
+  if (invoiceHint) {
+    params.invoice_number = invoiceHint;
+  }
+
+  const request = axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
+    params,
+    headers,
+  }).then((response) => {
+    const normalizedRows = Array.isArray(response.data)
+      ? response.data.filter((occurrence) => isControlTowerOccurrence(occurrence))
+      : [];
+    occurrenceCacheStore.set(key, normalizedRows);
+    occurrenceCacheFetchedAt.set(key, Date.now());
+    return normalizedRows;
+  }).catch((error) => {
+    console.error('Falha ao carregar ocorrencias para o fluxo da torre de controle.', error);
+    occurrenceCacheStore.set(key, []);
+    occurrenceCacheFetchedAt.set(key, Date.now());
+    return [];
+  }).finally(() => {
+    inflightOccurrenceLoads.delete(key);
+  });
+
+  inflightOccurrenceLoads.set(key, request);
+  return request;
+}
+
 function toUniqueSorted(values: string[]) {
   return Array.from(new Set(values.map((value) => normalizeText(value)).filter(Boolean)))
     .sort((left, right) => left.localeCompare(right, 'pt-BR'));
@@ -399,10 +519,12 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function extractInvoiceSearchHint(search: string) {
+function extractInvoiceSearchHint(search: string, invoiceNumber?: string) {
+  const invoice = normalizeInvoiceNumber(invoiceNumber);
+  if (invoice) return invoice;
+
   const term = normalizeText(search);
   if (!term) return '';
-
   if (/^\d{3,}$/.test(term)) return term;
   if (/^SOBRA-/i.test(term)) return term;
   return '';
@@ -412,7 +534,7 @@ function buildApiLoadKey(filters: ControlTowerFilters) {
   return JSON.stringify({
     customer: normalizeText(filters.customer).toLowerCase(),
     city: normalizeText(filters.city).toLowerCase(),
-    invoiceHint: extractInvoiceSearchHint(filters.search),
+    invoiceHint: extractInvoiceSearchHint(filters.search, filters.invoiceNumber),
   });
 }
 
@@ -458,15 +580,53 @@ function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectio
     note: latestCollection.notes || undefined,
   });
 
-  if (latestCollection.status === 'completed') {
+  const workflowStatus = normalizeText(latestCollection.workflow_status || latestCollection.status).toLowerCase();
+
+  if (normalizeText(latestCollection.scheduled_for)) {
     events.push({
-      at: toIsoDateTime(latestCollection.completed_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
-      actor: 'Operacao',
+      at: toIsoDateTime(latestCollection.accepted_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
+      actor: latestCollection.acceptedByUser?.username || 'Transportadora',
+      action: `Coleta aceita e agendada para ${latestCollection.scheduled_for}`,
+    });
+  }
+
+  if (['coletada', 'enviada_em_lote', 'recebida', 'completed'].includes(workflowStatus)) {
+    events.push({
+      at: toIsoDateTime(
+        latestCollection.collected_at,
+        toIsoDateTime(latestCollection.completed_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
+      ),
+      actor: latestCollection.collectedByUser?.username || 'Operacao',
       action: 'Coleta concluida',
     });
   }
 
-  if (latestCollection.status === 'cancelled') {
+  if (workflowStatus === 'enviada_em_lote') {
+    events.push({
+      at: toIsoDateTime(latestCollection.sent_in_batch_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
+      actor: 'Transportadora',
+      action: `Enviada no lote ${latestCollection.sent_in_batch_code || '-'}`,
+    });
+  }
+
+  if (workflowStatus === 'recebida') {
+    events.push({
+      at: toIsoDateTime(latestCollection.received_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
+      actor: 'Torre',
+      action: 'Recebimento confirmado pela Torre de Controle',
+    });
+  }
+
+  if (latestCollection.display_status === 'em_tratativa') {
+    events.push({
+      at: toIsoDateTime(latestCollection.updated_at, createdAt),
+      actor: 'Torre',
+      action: 'Ocorrencia vinculada (em tratativa)',
+      note: latestCollection.quality_note || undefined,
+    });
+  }
+
+  if (workflowStatus === 'cancelada' || workflowStatus === 'cancelled') {
     events.push({
       at: toIsoDateTime(latestCollection.updated_at, createdAt),
       actor: 'Operacao',
@@ -500,9 +660,18 @@ function mapApiReturnRow(note: IControlTowerReturn, collectionsByInvoice: Map<st
   const city = normalizeText(note.city) || 'NAO INFORMADO';
   const collectionRows = sortByNewestCreatedAt(collectionsByInvoice.get(invoice) || []);
   const latestCollection = collectionRows[0];
+  const collectionWorkflowStatus = latestCollection
+    ? normalizeText(latestCollection.workflow_status || latestCollection.status).toLowerCase()
+    : '';
+  const collectionDisplayStatus = latestCollection
+    ? normalizeText(latestCollection.display_status).toLowerCase()
+    : '';
+  const collectionQualityStatus = latestCollection
+    ? normalizeText(latestCollection.quality_status).toLowerCase()
+    : '';
 
   const baseStatus: BacklogStatus = latestCollection
-    ? mapCollectionStatus(latestCollection.status)
+    ? mapCollectionStatus(latestCollection)
     : 'PENDENTE';
 
   const parsedConfirmed = new Date(confirmedAt);
@@ -523,10 +692,16 @@ function mapApiReturnRow(note: IControlTowerReturn, collectionsByInvoice: Map<st
     createdAt,
     confirmedAt,
     pickupRequestedAt: latestCollection ? toIsoDateTime(latestCollection.created_at, createdAt) : undefined,
-    pickupCompletedAt: latestCollection?.status === 'completed'
+    pickupCompletedAt: latestCollection && ['coletada', 'enviada_em_lote', 'recebida', 'completed']
+      .includes(normalizeText(latestCollection.workflow_status || latestCollection.status).toLowerCase())
       ? toIsoDateTime(latestCollection.completed_at, toIsoDateTime(latestCollection.updated_at, createdAt))
       : undefined,
     ageHours,
+    collectionRequestId: latestCollection ? String(latestCollection.id) : undefined,
+    collectionWorkflowStatus: collectionWorkflowStatus || undefined,
+    collectionDisplayStatus: collectionDisplayStatus || undefined,
+    collectionQualityStatus: collectionQualityStatus || undefined,
+    relatedOccurrenceId: latestCollection?.related_occurrence_id ?? null,
     items: (note.items || []).map(mapApiItem),
     events: buildApiEvents(note, latestCollection),
   };
@@ -567,7 +742,6 @@ function refreshResolvedRowsFromBase() {
   filterOptionsStore = {
     customers: toUniqueSorted(lastResolvedRows.map((row) => row.customer)),
     cities: toUniqueSorted(lastResolvedRows.map((row) => row.city)),
-    routes: toUniqueSorted(lastResolvedRows.map((row) => row.route)),
     products: toUniqueSorted(lastResolvedRows.flatMap((row) => row.items.map((item) => item.productDescription))),
   };
 }
@@ -581,13 +755,13 @@ async function loadApiRows(filters: ControlTowerFilters): Promise<ReturnBatch[]>
     const headers = getAuthHeaders();
     const params: Record<string, string | number> = {
       limit: 300,
-      batch_workflow_status: 'awaiting_control_tower',
+      batch_workflow_status: 'all',
     };
     const permission = localStorage.getItem('user_permission') || '';
 
     const customer = normalizeText(filters.customer);
     const city = normalizeText(filters.city);
-    const invoiceHint = extractInvoiceSearchHint(filters.search);
+    const invoiceHint = extractInvoiceSearchHint(filters.search, filters.invoiceNumber);
 
     if (customer) params.customer_name = customer;
     if (city) params.city = city;
@@ -649,19 +823,21 @@ async function getAllRows(filters: ControlTowerFilters): Promise<ReturnBatch[]> 
 function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): ReturnBatch[] {
   const { start, end } = getInterval(filters);
   const term = filters.search.trim().toLowerCase();
+  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
 
   return rows.filter((row) => {
+    if (exactInvoice && normalizeInvoiceNumber(row.invoiceNumber) !== exactInvoice) return false;
+
     const rowDate = new Date(row.confirmedAt);
     if (Number.isNaN(rowDate.getTime())) return false;
-    if (rowDate < start || rowDate > end) return false;
+    if (!exactInvoice && (rowDate < start || rowDate > end)) return false;
 
     if (filters.returnStatus === 'pending' && row.status === 'COLETADA') return false;
     if (filters.returnStatus === 'confirmed' && row.status !== 'COLETADA') return false;
-    if (filters.returnType !== 'all' && row.sourceType !== filters.returnType) return false;
+    if (filters.returnType !== 'all' && filters.returnType !== 'faltante' && row.sourceType !== filters.returnType) return false;
 
     if (filters.pickupStatus !== 'all' && row.status !== filters.pickupStatus) return false;
     if (filters.city && row.city !== filters.city) return false;
-    if (filters.route && row.route !== filters.route) return false;
     if (filters.customer && row.customer !== filters.customer) return false;
 
     const hasProduct = !filters.product
@@ -670,6 +846,38 @@ function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): Return
 
     if (term) {
       const haystack = `${row.invoiceNumber} ${row.customer} ${row.city} ${row.batchCode} ${row.reason} ${row.sourceType || ''} ${row.items.map((item) => item.productDescription).join(' ')}`.toLowerCase();
+      if (!haystack.includes(term)) return false;
+    }
+
+    return true;
+  });
+}
+
+function filterFlowOccurrences(occurrences: IOccurrence[], filters: ControlTowerFilters): IOccurrence[] {
+  const { start, end } = getInterval(filters);
+  const term = normalizeText(filters.search).toLowerCase();
+  const product = normalizeText(filters.product).toLowerCase();
+  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
+
+  return occurrences.filter((occurrence) => {
+    if (!isControlTowerOccurrence(occurrence)) return false;
+
+    const occurrenceDate = parseOccurrenceDate(occurrence);
+    if (!occurrenceDate) return false;
+    if (!exactInvoice && (occurrenceDate < start || occurrenceDate > end)) return false;
+    if (exactInvoice && normalizeInvoiceNumber(occurrence.invoice_number) !== exactInvoice) return false;
+
+    if (filters.returnType !== 'all' && filters.returnType !== 'faltante') return false;
+
+    if (filters.city && normalizeText(occurrence.city).toUpperCase() !== normalizeText(filters.city).toUpperCase()) return false;
+    if (filters.customer && normalizeText(occurrence.customer_name).toUpperCase() !== normalizeText(filters.customer).toUpperCase()) return false;
+    if (product && !occurrenceContainsProduct(occurrence, product)) return false;
+
+    if (term) {
+      const itemTerms = (Array.isArray(occurrence.items) ? occurrence.items : [])
+        .map((item) => `${normalizeText(item.product_id)} ${normalizeText(item.product_description)}`)
+        .join(' ');
+      const haystack = `${normalizeText(occurrence.invoice_number)} ${normalizeText(occurrence.customer_name)} ${normalizeText(occurrence.city)} ${normalizeText(occurrence.reason)} ${normalizeText(occurrence.resolution_type)} ${normalizeText(occurrence.resolution_note)} ${normalizeText(occurrence.product_id)} ${normalizeText(occurrence.product_description)} ${itemTerms}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
 
@@ -710,15 +918,43 @@ function aggregateTop(rows: ReturnBatch[], by: 'product' | 'customer'): TopDimen
     }));
 }
 
+function aggregateShortageTop(occurrences: IOccurrence[]): TopDimension[] {
+  const map = new Map<string, TopDimension>();
+
+  occurrences.forEach((occurrence) => {
+    const items = Array.isArray(occurrence.items) ? occurrence.items : [];
+
+    if (items.length) {
+      items.forEach((item) => {
+        const name = normalizeText(item.product_description || item.product_id || 'Item sem descricao');
+        const quantity = toNumber(item.quantity, 0);
+        if (!name || quantity <= 0) return;
+
+        const current = map.get(name) || { name, quantity: 0, weightKg: 0, valueAmount: 0 };
+        current.quantity += quantity;
+        map.set(name, current);
+      });
+      return;
+    }
+
+    const fallbackName = normalizeText(occurrence.product_description || occurrence.product_id || 'Item sem descricao');
+    const fallbackQty = toNumber(occurrence.quantity, 0);
+    if (!fallbackName || fallbackQty <= 0) return;
+
+    const current = map.get(fallbackName) || { name: fallbackName, quantity: 0, weightKg: 0, valueAmount: 0 };
+    current.quantity += fallbackQty;
+    map.set(fallbackName, current);
+  });
+
+  return Array.from(map.values())
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 8);
+}
+
 function reasonDistribution(rows: ReturnBatch[]): ReasonDistribution[] {
   const counts = new Map<string, number>();
   rows.forEach((row) => counts.set(row.reason, (counts.get(row.reason) || 0) + 1));
   return Array.from(counts.entries()).map(([reason, count]) => ({ reason, count }));
-}
-
-function toPickupStatus(status: BacklogStatus) {
-  if (status === 'PENDENTE') return 'SOLICITADA' as const;
-  return status;
 }
 
 function variation(current: number, previous: number) {
@@ -802,12 +1038,12 @@ export async function getControlTowerSummary(filters: ControlTowerFilters): Prom
       },
       {
         id: 'requestedPickups',
-        label: 'Coletas solicitadas',
+        label: 'Coletas recebidas',
         value: currentRequested,
         unit: 'count',
         variationPct: variation(currentRequested, prevRequested),
         sparkline: sparkFrom((row) => row.status !== 'PENDENTE'),
-        helpText: 'Devolucoes que já possuem pedido de coleta registrado. A % ao lado mostra a variação em relação ao período anterior equivalente.',
+        helpText: 'Devolucoes que já foram recebidas. A % ao lado mostra a variação em relação ao período anterior equivalente.',
       },
       {
         id: 'shortages',
@@ -838,32 +1074,23 @@ export async function getControlTowerCharts(filters: ControlTowerFilters): Promi
 
   const rows = await getAllRows(filters);
   const filtered = applyFilters(rows, filters);
-
   const { start, end } = getInterval(filters);
-  const days = eachDayOfInterval({ start, end });
-
-  const flowSeries = days.map((day) => {
-    const key = format(day, 'yyyy-MM-dd');
-    const rowsByDay = filtered.filter((row) => format(new Date(row.confirmedAt), 'yyyy-MM-dd') === key);
-
-    return {
-      date: key,
-      confirmed: rowsByDay.length,
-      requested: rowsByDay.filter((row) => row.status !== 'PENDENTE').length,
-      completed: rowsByDay.filter((row) => row.status === 'COLETADA').length,
-    };
-  });
-
-  const backlog = STATUS_ORDER.map((status) => ({
-    status,
-    count: filtered.filter((row) => row.status === status).length,
-  }));
+  const allShortages = await loadShortageOccurrences();
+  const filteredShortages = filterShortageOccurrences(allShortages, filters, start, end);
+  const shortageProductsSource = filterShortageOccurrences(
+    allShortages,
+    filters,
+    new Date('1970-01-01T00:00:00.000Z'),
+    end,
+    { ignoreDateRange: true },
+  );
+  const surplusRows = filtered.filter((row) => isSurplusRow(row));
 
   return {
-    flowSeries,
-    backlog,
     topProducts: aggregateTop(filtered, 'product'),
     topClients: aggregateTop(filtered, 'customer'),
+    topSurplusProducts: aggregateTop(surplusRows, 'product'),
+    topShortageProducts: aggregateShortageTop(shortageProductsSource.length ? shortageProductsSource : filteredShortages),
     reasons: reasonDistribution(filtered),
   };
 }
@@ -908,6 +1135,7 @@ function toTableRow(row: ReturnBatch): ReturnsTableRow {
 
   return {
     id: row.id,
+    flowOrigin: 'devolucao',
     batchCode: row.batchCode,
     invoiceNumber: row.invoiceNumber,
     returnType: normalizeReturnType(row.sourceType),
@@ -925,6 +1153,36 @@ function toTableRow(row: ReturnBatch): ReturnsTableRow {
   };
 }
 
+function occurrenceToTableRow(occurrence: IOccurrence): ReturnsTableRow {
+  const occurrenceDate = parseOccurrenceDate(occurrence) || new Date();
+  const confirmedAt = occurrenceDate.toISOString();
+  const items = Array.isArray(occurrence.items) ? occurrence.items : [];
+  const fallbackQty = toNumber(occurrence.quantity, 0);
+  const quantity = items.length
+    ? items.reduce((sum, item) => sum + toNumber(item.quantity, 0), 0)
+    : fallbackQty;
+  const productCount = items.length || (occurrence.product_id || occurrence.product_description ? 1 : 0);
+
+  return {
+    id: `occ-${occurrence.id}`,
+    flowOrigin: 'ocorrencia',
+    batchCode: 'OCORRENCIA',
+    invoiceNumber: normalizeText(occurrence.invoice_number) || 'SEM_NF',
+    returnType: 'faltante',
+    customer: normalizeText(occurrence.customer_name) || 'NAO INFORMADO',
+    city: normalizeText(occurrence.city) || 'NAO INFORMADO',
+    route: inferRoute(normalizeText(occurrence.city) || 'NAO INFORMADO'),
+    productCount,
+    quantity,
+    weightKg: 0,
+    valueAmount: 0,
+    reason: `Ocorrencia - ${mapOccurrenceReasonLabel(occurrence.reason)}`,
+    status: mapOccurrenceTableStatus(occurrence),
+    confirmedAt,
+    ageHours: Math.max(0, differenceInHours(new Date(), occurrenceDate)),
+  };
+}
+
 export async function getReturnsTable(
   filters: ControlTowerFilters,
   pagination: PaginationInput,
@@ -934,7 +1192,15 @@ export async function getReturnsTable(
     await wait(360);
   }
 
-  const rows = applyFilters(await getAllRows(filters), filters).map(toTableRow);
+  const [returnRows, occurrenceRows] = await Promise.all([
+    getAllRows(filters),
+    loadApiOccurrences(filters),
+  ]);
+
+  const rows = [
+    ...applyFilters(returnRows, filters).map(toTableRow),
+    ...filterFlowOccurrences(occurrenceRows, filters).map(occurrenceToTableRow),
+  ];
 
   const sorted = sorting
     ? [...rows].sort((a, b) => {
@@ -981,64 +1247,7 @@ function updateMockStore(mapper: (row: ReturnBatch) => ReturnBatch) {
   lastResolvedRows = returnsStore;
 }
 
-export async function requestPickup(returnId: string, scheduledFor?: string, notes?: string): Promise<PickupRequest> {
-  if (CONTROL_TOWER_DATA_MODE === 'mock') {
-    await wait(240);
-
-    updateMockStore((row) => {
-      if (row.id !== returnId) return row;
-      const nextStatus = toPickupStatus(row.status);
-      const nowIso = new Date().toISOString();
-      return {
-        ...row,
-        status: nextStatus,
-        pickupRequestedAt: row.pickupRequestedAt || nowIso,
-        events: [
-          ...row.events,
-          {
-            at: nowIso,
-            actor: 'Operador',
-            action: 'Coleta solicitada manualmente',
-            note: notes || undefined,
-          },
-        ],
-      };
-    });
-
-    return {
-      id: `pick-${returnId}`,
-      returnId,
-      status: 'SOLICITADA',
-      scheduledFor,
-      notes,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-
-  const nowIso = new Date().toISOString();
-  const selected = getReturnById(returnId);
-
-  saveOverlay(returnId, {
-    status: 'SOLICITADA',
-    pickupRequestedAt: selected?.pickupRequestedAt || nowIso,
-  }, {
-    at: nowIso,
-    actor: 'Operador',
-    action: 'Coleta solicitada manualmente',
-    note: notes || undefined,
-  });
-
-  return {
-    id: `pick-${returnId}`,
-    returnId,
-    status: 'SOLICITADA',
-    scheduledFor,
-    notes,
-    updatedAt: nowIso,
-  };
-}
-
-export async function updatePickupStatus(pickupId: string, status: BacklogStatus): Promise<PickupRequest> {
+export async function updatePickupStatus(pickupId: string, status: BacklogStatus): Promise<{ id: string; returnId: string; status: BacklogStatus; updatedAt: string; }> {
   if (CONTROL_TOWER_DATA_MODE === 'mock') {
     await wait(220);
 
@@ -1086,42 +1295,6 @@ export async function updatePickupStatus(pickupId: string, status: BacklogStatus
     status,
     updatedAt: nowIso,
   };
-}
-
-export async function confirmReturnSubmission(batchId: string): Promise<{ ok: true }> {
-  if (CONTROL_TOWER_DATA_MODE === 'mock') {
-    await wait(180);
-
-    updateMockStore((row) => (
-      row.batchCode === batchId
-        ? {
-          ...row,
-          events: [
-            ...row.events,
-            {
-              at: new Date().toISOString(),
-              actor: 'Torre',
-              action: 'Confirmacao de submissao do lote',
-            },
-          ],
-        }
-        : row
-    ));
-
-    return { ok: true };
-  }
-
-  const target = lastResolvedRows.find((row) => row.batchCode === batchId);
-  if (!target) return { ok: true };
-
-  const nowIso = new Date().toISOString();
-  saveOverlay(target.id, {}, {
-    at: nowIso,
-    actor: 'Torre',
-    action: 'Confirmacao de submissao do lote',
-  });
-
-  return { ok: true };
 }
 
 export async function addReturnObservation(returnId: string, note: string): Promise<{ ok: true }> {
@@ -1194,6 +1367,48 @@ export async function setPickupPriority(returnId: string, pickupPriority: boolea
   return { ok: true };
 }
 
+export async function registerControlTowerOccurrence(input: RegisterControlTowerOccurrenceInput): Promise<{ ok: true }> {
+  const collectionRequestId = normalizeText(input.collectionRequestId);
+  if (!collectionRequestId) {
+    throw new Error('Solicitacao de coleta invalida para registrar ocorrencia.');
+  }
+
+  const scope = input.scope === 'invoice_total' ? 'invoice_total' : 'items';
+  const normalizedItems = scope === 'items'
+    ? (input.items || [])
+      .map((item) => ({
+        product_id: normalizeText(item.product_id),
+        product_description: normalizeText(item.product_description),
+        product_type: normalizeText(item.product_type).toUpperCase() || null,
+        quantity: toNumber(item.quantity, 0),
+      }))
+      .filter((item) => item.product_id && item.quantity > 0)
+    : [];
+
+  if (scope === 'items' && !normalizedItems.length) {
+    throw new Error('Selecione ao menos um item com quantidade para registrar a ocorrencia.');
+  }
+
+  if (CONTROL_TOWER_DATA_MODE === 'mock') {
+    await wait(180);
+    return { ok: true };
+  }
+
+  await axios.post(
+    `${API_URL}/collection-requests/${collectionRequestId}/occurrences`,
+    {
+      reason: input.reason,
+      scope,
+      items: normalizedItems,
+      description: normalizeText(input.description) || 'Divergencia identificada no recebimento do lote.',
+      quality_note: normalizeText(input.qualityNote || input.description) || undefined,
+    },
+    { headers: getAuthHeaders() },
+  );
+
+  return { ok: true };
+}
+
 export function exportRowsToCsv<T extends object>(rows: T[]) {
   if (!rows.length) return '';
 
@@ -1208,8 +1423,4 @@ export function exportRowsToCsv<T extends object>(rows: T[]) {
 
 export function getFilterOptions() {
   return filterOptionsStore;
-}
-
-export function getControlTowerDataMode(): ControlTowerDataMode {
-  return CONTROL_TOWER_DATA_MODE;
 }

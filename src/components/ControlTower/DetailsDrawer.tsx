@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Clock3, FileText, History, Layers3, X } from 'lucide-react';
 import Button from '../ui/Button';
-import { ReturnBatch } from '../../types/controlTower';
+import { OccurrenceReason, RegisterControlTowerOccurrenceInput, ReturnBatch } from '../../types/controlTower';
 import { currencyFmt, decimalFmt, formatDateTime, numberFmt } from './format';
 
 type DrawerTab = 'summary' | 'items' | 'history' | 'actions';
@@ -9,12 +9,9 @@ type DrawerTab = 'summary' | 'items' | 'history' | 'actions';
 interface DetailsDrawerProps {
   row: ReturnBatch | null;
   onClose: () => void;
-  canManageStatus?: boolean;
-  onRequestPickup: (id: string) => void;
-  onCancelPickup: (id: string) => void;
-  onMarkInRoute: (id: string) => void;
-  onMarkCollected: (id: string) => void;
   onAddObservation: (id: string, note: string) => void;
+  onRegisterOccurrence?: (payload: RegisterControlTowerOccurrenceInput) => Promise<void> | void;
+  registeringOccurrence?: boolean;
 }
 
 const tabMeta: Array<{ id: DrawerTab; label: string; icon: JSX.Element }> = [
@@ -24,13 +21,36 @@ const tabMeta: Array<{ id: DrawerTab; label: string; icon: JSX.Element }> = [
   { id: 'actions', label: 'Ações', icon: <Clock3 className="h-4 w-4" /> },
 ];
 
-function DetailsDrawer({ row, onClose, canManageStatus = false, onRequestPickup, onCancelPickup, onMarkInRoute, onMarkCollected, onAddObservation }: DetailsDrawerProps) {
+const OCCURRENCE_REASON_OPTIONS: Array<{ value: OccurrenceReason; label: string }> = [
+  { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
+  { value: 'faltou_na_carga', label: 'Faltou na carga' },
+  { value: 'produto_avariado', label: 'Produto avariado' },
+  { value: 'produto_invertido', label: 'Produto invertido' },
+  { value: 'produto_sem_etiqueta_ou_data', label: 'Produto sem etiqueta ou data' },
+  { value: 'legacy_outros', label: 'Outros' },
+];
+
+function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, registeringOccurrence = false }: DetailsDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('summary');
   const [note, setNote] = useState('');
+  const [isOccurrenceModalOpen, setIsOccurrenceModalOpen] = useState(false);
+  const [occurrenceScope, setOccurrenceScope] = useState<'invoice_total' | 'items'>('items');
+  const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReason>('faltou_na_carga');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+  const [occurrenceDescription, setOccurrenceDescription] = useState('');
+  const [qualityNote, setQualityNote] = useState('');
 
   useEffect(() => {
     setNote('');
-  }, [row?.id]);
+    setOccurrenceScope('items');
+    setOccurrenceReason('faltou_na_carga');
+    setSelectedProductId(row?.items[0]?.productId || '');
+    setSelectedQuantity(1);
+    setOccurrenceDescription('');
+    setQualityNote('');
+    setIsOccurrenceModalOpen(false);
+  }, [row?.id, row?.items]);
 
   const totals = useMemo(() => {
     if (!row) return { quantity: 0, weight: 0, value: 0 };
@@ -41,7 +61,59 @@ function DetailsDrawer({ row, onClose, canManageStatus = false, onRequestPickup,
     };
   }, [row]);
 
+  const selectedItem = useMemo(() => (
+    row?.items.find((item) => item.productId === selectedProductId) || null
+  ), [row?.items, selectedProductId]);
+
+  const maxSelectedQuantity = selectedItem ? Math.max(1, Number(selectedItem.quantity || 1)) : 1;
+
+  const collectionWorkflowStatus = String(row?.collectionWorkflowStatus || '').toLowerCase();
+  const collectionQualityStatus = String(row?.collectionQualityStatus || '').toLowerCase();
+  const canRegisterOccurrenceForBatchFlow = ['enviada_em_lote', 'recebida'].includes(collectionWorkflowStatus);
+  const hasOpenQualityIssue = collectionQualityStatus === 'em_tratativa' || collectionQualityStatus === 'aguardando_torre';
+
   if (!row) return null;
+
+  async function handleRegisterOccurrence() {
+    const currentRow = row;
+    if (!onRegisterOccurrence || !currentRow?.collectionRequestId) return;
+
+    if (occurrenceScope === 'items') {
+      if (!selectedItem) {
+        alert('Selecione um item para registrar a ocorrencia parcial.');
+        return;
+      }
+
+      if (!Number.isFinite(selectedQuantity) || selectedQuantity <= 0) {
+        alert('Informe uma quantidade valida para o item.');
+        return;
+      }
+
+      if (selectedQuantity > maxSelectedQuantity) {
+        alert(`A quantidade nao pode ser maior que ${maxSelectedQuantity} para este item.`);
+        return;
+      }
+    }
+
+    const payload: RegisterControlTowerOccurrenceInput = {
+      collectionRequestId: currentRow.collectionRequestId,
+      reason: occurrenceReason,
+      scope: occurrenceScope,
+      items: occurrenceScope === 'items' && selectedItem
+        ? [{
+          product_id: selectedItem.productId,
+          product_description: selectedItem.productDescription,
+          product_type: selectedItem.productType || null,
+          quantity: Number(selectedQuantity),
+        }]
+        : [],
+      description: occurrenceDescription.trim() || 'Divergencia identificada no recebimento da devolucao.',
+      qualityNote: qualityNote.trim() || occurrenceDescription.trim(),
+    };
+
+    await Promise.resolve(onRegisterOccurrence(payload));
+    setIsOccurrenceModalOpen(false);
+  }
 
   return (
     <>
@@ -116,16 +188,37 @@ function DetailsDrawer({ row, onClose, canManageStatus = false, onRequestPickup,
 
         {activeTab === 'actions' ? (
           <div className="space-y-2">
-            <Button tone="secondary" className="w-full justify-center bg-slate-800 text-slate-100" onClick={() => onRequestPickup(row.id)}>Solicitar coleta</Button>
-            {row.status !== 'COLETADA' && row.status !== 'CANCELADA' ? (
-              <Button tone="secondary" className="w-full justify-center bg-rose-900/50 text-rose-100 hover:bg-rose-800/60" onClick={() => onCancelPickup(row.id)}>Cancelar coleta</Button>
-            ) : null}
-            {canManageStatus ? (
-              <Button tone="secondary" className="w-full justify-center bg-slate-800 text-slate-100" onClick={() => onMarkInRoute(row.id)}>Marcar em rota</Button>
-            ) : null}
-            {canManageStatus ? (
-              <Button tone="secondary" className="w-full justify-center bg-slate-800 text-slate-100" onClick={() => onMarkCollected(row.id)}>Marcar coletada</Button>
-            ) : null}
+            <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2 text-xs text-slate-300">
+              <p>
+                <strong>Status da coleta:</strong> {row.collectionDisplayStatus || row.collectionWorkflowStatus || 'nao informado'}
+              </p>
+              {row.collectionQualityStatus ? (
+                <p className="mt-1"><strong>Status da tratativa:</strong> {row.collectionQualityStatus}</p>
+              ) : null}
+            </div>
+
+            {!row.collectionRequestId ? (
+              <p className="rounded-md border border-slate-700 bg-slate-900/50 p-2 text-xs text-slate-400">
+                Esta NF nao possui solicitacao de coleta vinculada para abrir ocorrencia nesta tela.
+              </p>
+            ) : !canRegisterOccurrenceForBatchFlow ? (
+              <p className="rounded-md border border-slate-700 bg-slate-900/50 p-2 text-xs text-slate-400">
+                Registrar ocorrência fica disponível quando a coleta estiver enviada em lote ou recebida pela Torre de Controle.
+              </p>
+            ) : hasOpenQualityIssue ? (
+              <p className="rounded-md border border-amber-600/50 bg-amber-900/20 p-2 text-xs text-amber-200">
+                Já existe ocorrência em tratativa para esta coleta.
+              </p>
+            ) : (
+              <Button
+                tone="secondary"
+                className="w-full justify-center bg-amber-700/80 text-amber-50 hover:bg-amber-600"
+                onClick={() => setIsOccurrenceModalOpen(true)}
+              >
+                Registrar ocorrência
+              </Button>
+            )}
+
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
@@ -146,6 +239,115 @@ function DetailsDrawer({ row, onClose, canManageStatus = false, onRequestPickup,
           </div>
         ) : null}
       </aside>
+
+      {isOccurrenceModalOpen ? (
+        <>
+          <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={() => setIsOccurrenceModalOpen(false)} />
+          <div className="fixed left-1/2 top-1/2 z-[70] w-[min(96vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-700 bg-[#0d1625] p-4 text-slate-100 shadow-[0_0_40px_rgba(0,0,0,0.55)]">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold">Registrar ocorrência da NF {row.invoiceNumber}</h4>
+                <p className="text-xs text-slate-400">A ocorrência será enviada para a transportadora resolver.</p>
+              </div>
+              <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={() => setIsOccurrenceModalOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-slate-300">Escopo</label>
+                <select
+                  value={occurrenceScope}
+                  onChange={(event) => setOccurrenceScope(event.target.value as 'invoice_total' | 'items')}
+                  className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                >
+                  <option value="invoice_total">Nota total</option>
+                  <option value="items">Parcial (itens)</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-300">Motivo</label>
+                <select
+                  value={occurrenceReason}
+                  onChange={(event) => setOccurrenceReason(event.target.value as OccurrenceReason)}
+                  className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                >
+                  {OCCURRENCE_REASON_OPTIONS.map((reason) => (
+                    <option key={reason.value} value={reason.value}>{reason.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {occurrenceScope === 'items' ? (
+              <div className="mt-2 grid gap-2 md:grid-cols-[2fr_1fr]">
+                <div>
+                  <label className="mb-1 block text-xs text-slate-300">Produto</label>
+                  <select
+                    value={selectedProductId}
+                    onChange={(event) => setSelectedProductId(event.target.value)}
+                    className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                  >
+                    {!row.items.length ? <option value="">Sem itens na NF</option> : null}
+                    {row.items.map((item, index) => (
+                      <option key={`occ-item-${item.productId}-${index}`} value={item.productId}>
+                        {item.productId} - {item.productDescription}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-slate-300">Quantidade</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxSelectedQuantity}
+                    value={selectedQuantity}
+                    onChange={(event) => setSelectedQuantity(Number(event.target.value))}
+                    className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">Máx.: {maxSelectedQuantity}</p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-2">
+              <label className="mb-1 block text-xs text-slate-300">Descrição do ocorrido</label>
+              <textarea
+                value={occurrenceDescription}
+                onChange={(event) => setOccurrenceDescription(event.target.value)}
+                className="min-h-[80px] w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm text-slate-100"
+                placeholder="Descreva o problema identificado no recebimento."
+              />
+            </div>
+
+            <div className="mt-2">
+              <label className="mb-1 block text-xs text-slate-300">Observação para tratativa (opcional)</label>
+              <textarea
+                value={qualityNote}
+                onChange={(event) => setQualityNote(event.target.value)}
+                className="min-h-[70px] w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm text-slate-100"
+                placeholder="Informações adicionais para a transportadora."
+              />
+            </div>
+
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <Button tone="secondary" className="bg-slate-800 text-slate-100" onClick={() => setIsOccurrenceModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                tone="secondary"
+                className="bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
+                disabled={registeringOccurrence}
+                onClick={handleRegisterOccurrence}
+              >
+                {registeringOccurrence ? 'Registrando...' : 'Registrar ocorrência'}
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

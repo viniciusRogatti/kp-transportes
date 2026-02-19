@@ -8,7 +8,6 @@ interface FiltersBarProps {
   options: {
     customers: string[];
     cities: string[];
-    routes: string[];
     products: string[];
   };
   updatedAgoLabel: string;
@@ -42,6 +41,8 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         ? 'Coleta'
         : filters.returnType === 'sobra'
           ? 'Sobra'
+          : filters.returnType === 'faltante'
+            ? 'Faltante'
           : 'Todos';
   const pickupStatusLabel = filters.pickupStatus === 'all'
     ? 'Todos'
@@ -53,9 +54,10 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
           ? 'Em rota'
           : filters.pickupStatus === 'COLETADA'
             ? 'Coletada'
-            : 'Cancelada';
+          : 'Cancelada';
 
   const activeFilters: Array<{ key: string; label: string; onRemove: () => void }> = [
+    ...(filters.invoiceNumber ? [{ key: 'invoiceNumber', label: `NF exata: ${filters.invoiceNumber}`, onRemove: () => onChange({ invoiceNumber: '' }) }] : []),
     ...(filters.search.trim() ? [{ key: 'search', label: `Busca: ${filters.search.trim()}`, onRemove: () => onChange({ search: '' }) }] : []),
     ...(filters.periodPreset !== '7d' ? [{
       key: 'periodPreset',
@@ -68,7 +70,6 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
     ...(filters.returnType !== 'all' ? [{ key: 'returnType', label: `Tipo devolução: ${returnTypeLabel}`, onRemove: () => onChange({ returnType: 'all' }) }] : []),
     ...(filters.pickupStatus !== 'all' ? [{ key: 'pickupStatus', label: `Status coleta: ${pickupStatusLabel}`, onRemove: () => onChange({ pickupStatus: 'all' }) }] : []),
     ...(filters.city ? [{ key: 'city', label: `Cidade: ${filters.city}`, onRemove: () => onChange({ city: '' }) }] : []),
-    ...(filters.route ? [{ key: 'route', label: `Rota: ${filters.route}`, onRemove: () => onChange({ route: '' }) }] : []),
     ...(filters.customer ? [{ key: 'customer', label: `Cliente: ${filters.customer}`, onRemove: () => onChange({ customer: '' }) }] : []),
     ...(filters.product ? [{ key: 'product', label: `Produto: ${filters.product}`, onRemove: () => onChange({ product: '' }) }] : []),
   ];
@@ -81,7 +82,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
           <Input
             value={filters.search}
             onChange={(event) => onChange({ search: event.target.value })}
-            placeholder="Buscar NF, cliente ou produto"
+            placeholder="Buscar cliente, produto ou motivo"
             className="border-accent/35 bg-[rgba(14,33,56,0.9)] pl-9 text-slate-100 focus:ring-accent/60"
           />
         </div>
@@ -155,15 +156,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         </div>
       </div>
 
-      <div className="mt-2 grid gap-2 md:grid-cols-4">
-        <select
-          value={filters.route}
-          onChange={(event) => onChange({ route: event.target.value })}
-          className="h-9 rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/60"
-        >
-          <option value="">Rota: todas</option>
-          {options.routes.map((route) => <option key={route} value={route}>{route}</option>)}
-        </select>
+      <div className="mt-2 grid gap-2 md:grid-cols-3">
         <select
           value={filters.customer}
           onChange={(event) => onChange({ customer: event.target.value })}

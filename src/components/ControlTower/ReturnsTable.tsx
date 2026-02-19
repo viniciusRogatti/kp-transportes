@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { ArrowDownUp } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import Input from '../ui/Input';
 import { ControlTowerFilters, ReturnsTableRow } from '../../types/controlTower';
 import { currencyFmt, decimalFmt, formatDateTime, numberFmt } from './format';
 
@@ -18,11 +19,13 @@ interface ReturnsTableProps {
   total: number;
   loading?: boolean;
   returnTypeFilter: ControlTowerFilters['returnType'];
+  invoiceNumber: string;
   pageIndex: number;
   pageSize: number;
   sorting: SortingState;
   onPaginationChange: (pageIndex: number) => void;
   onSortingChange: OnChangeFn<SortingState>;
+  onInvoiceNumberChange: (invoiceNumber: string) => void;
   onFilterByReturnType: (returnType: ControlTowerFilters['returnType']) => void;
   onOpenDetails: (id: string) => void;
 }
@@ -33,6 +36,7 @@ const returnTypeFilterTabs: Array<{ value: ControlTowerFilters['returnType']; la
   { value: 'partial', label: 'Parcial' },
   { value: 'coleta', label: 'Coleta' },
   { value: 'sobra', label: 'Sobra' },
+  { value: 'faltante', label: 'Faltante' },
 ];
 
 function getReturnTypeLabel(returnType: ReturnsTableRow['returnType']) {
@@ -40,7 +44,26 @@ function getReturnTypeLabel(returnType: ReturnsTableRow['returnType']) {
   if (returnType === 'partial') return 'Parcial';
   if (returnType === 'coleta') return 'Coleta';
   if (returnType === 'sobra') return 'Sobra';
+  if (returnType === 'faltante') return 'Faltante';
   return 'Nao informado';
+}
+
+function getFlowOriginLabel(flowOrigin: ReturnsTableRow['flowOrigin']) {
+  return flowOrigin === 'ocorrencia' ? 'Ocorrência' : 'Devolução';
+}
+
+function getStatusLabel(status: string) {
+  const normalized = String(status || '').trim().toUpperCase();
+  if (normalized === 'PENDENTE') return 'Pendente';
+  if (normalized === 'SOLICITADA') return 'Solicitada';
+  if (normalized === 'EM_ROTA') return 'Em rota';
+  if (normalized === 'COLETADA') return 'Coletada';
+  if (normalized === 'CANCELADA') return 'Cancelada';
+  if (normalized === 'PENDENTE_TRANSPORTADORA') return 'Pendente transportadora';
+  if (normalized === 'PENDENTE_CREDITO') return 'Pendente de crédito';
+  if (normalized === 'CREDITO_CONCLUIDO') return 'Crédito concluído';
+  if (normalized === 'FINALIZADA') return 'Finalizada';
+  return status || '-';
 }
 
 function ReturnsTable({
@@ -48,25 +71,36 @@ function ReturnsTable({
   total,
   loading,
   returnTypeFilter,
+  invoiceNumber,
   pageIndex,
   pageSize,
   sorting,
   onPaginationChange,
   onSortingChange,
+  onInvoiceNumberChange,
   onFilterByReturnType,
   onOpenDetails,
 }: ReturnsTableProps) {
   const columns = useMemo<ColumnDef<ReturnsTableRow>[]>(() => [
+    { accessorKey: 'flowOrigin', header: 'Fluxo', cell: ({ row }) => getFlowOriginLabel(row.original.flowOrigin) },
     {
       accessorKey: 'invoiceNumber',
-      header: 'NF',
-      cell: ({ row }) => <button className="text-left text-sky-300 underline" onClick={() => onOpenDetails(row.original.id)}>{row.original.invoiceNumber}</button>,
+      header: 'NF / Referência',
+      cell: ({ row }) => (
+        row.original.flowOrigin === 'devolucao'
+          ? <button className="text-left text-sky-300 underline" onClick={() => onOpenDetails(row.original.id)}>{row.original.invoiceNumber}</button>
+          : <span className="text-amber-200">{row.original.invoiceNumber}</span>
+      ),
     },
-    { accessorKey: 'batchCode', header: 'Lote' },
-    { accessorKey: 'returnType', header: 'Tipo', cell: ({ row }) => getReturnTypeLabel(row.original.returnType) },
+    { accessorKey: 'batchCode', header: 'Lote / Origem' },
+    {
+      accessorKey: 'returnType',
+      header: 'Tipo',
+      cell: ({ row }) => getReturnTypeLabel(row.original.returnType),
+    },
     { accessorKey: 'customer', header: 'Cliente' },
     { accessorKey: 'city', header: 'Cidade' },
-    { accessorKey: 'status', header: 'Status' },
+    { accessorKey: 'status', header: 'Status', cell: ({ row }) => getStatusLabel(row.original.status) },
     { accessorKey: 'quantity', header: 'Qtd', cell: ({ row }) => numberFmt.format(row.original.quantity) },
     { accessorKey: 'weightKg', header: 'Peso (kg)', cell: ({ row }) => decimalFmt.format(row.original.weightKg) },
     { accessorKey: 'valueAmount', header: 'Valor', cell: ({ row }) => currencyFmt.format(row.original.valueAmount) },
@@ -88,8 +122,18 @@ function ReturnsTable({
   return (
     <Card className="border-slate-800 bg-[#101b2b] text-slate-100">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-lg font-semibold">Detalhamento de devoluções</h3>
-        <span className="text-xs text-slate-400">{total} registros</span>
+        <h3 className="text-lg font-semibold">Fluxo operacional (devoluções e ocorrências)</h3>
+        <div className="flex items-center gap-2">
+          <Input
+            value={invoiceNumber}
+            onChange={(event) => onInvoiceNumberChange(event.target.value.replace(/\D/g, '').slice(0, 9))}
+            inputMode="numeric"
+            maxLength={9}
+            placeholder="Filtrar por NF"
+            className="h-9 w-[170px] border-accent/35 bg-[rgba(14,33,56,0.9)] text-slate-100 focus:ring-accent/60"
+          />
+          <span className="text-xs text-slate-400">{total} registros</span>
+        </div>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {returnTypeFilterTabs.map((tab) => (

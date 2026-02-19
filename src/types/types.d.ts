@@ -134,12 +134,28 @@ export interface ICar {
 export interface ICollectionRequest {
   id: number;
   invoice_number: string | null;
+  request_code?: string;
   customer_name: string;
   city: string;
   product_id: string | null;
   product_description: string;
   product_type: string | null;
   quantity: number;
+  request_scope?: 'invoice_total' | 'items';
+  urgency_level?: 'baixa' | 'media' | 'alta' | 'critica';
+  workflow_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'enviada_em_lote' | 'recebida' | 'cancelada';
+  quality_status?: 'sem_ocorrencia' | 'em_tratativa' | 'aguardando_torre' | 'resolvida';
+  display_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'enviada_em_lote' | 'recebida' | 'cancelada' | 'em_tratativa';
+  scheduled_for?: string | null;
+  accepted_at?: string | null;
+  accepted_by_user_id?: number | null;
+  collected_at?: string | null;
+  collected_by_user_id?: number | null;
+  sent_in_batch_code?: string | null;
+  sent_in_batch_at?: string | null;
+  received_at?: string | null;
+  quality_note?: string | null;
+  related_occurrence_id?: number | null;
   unit_price?: number | string;
   total_price?: number | string;
   requested_by_company: string;
@@ -156,6 +172,16 @@ export interface ICollectionRequest {
     permission: string;
   };
   completedByUser?: {
+    id: number;
+    username: string;
+    permission: string;
+  };
+  acceptedByUser?: {
+    id: number;
+    username: string;
+    permission: string;
+  };
+  collectedByUser?: {
     id: number;
     username: string;
     permission: string;
@@ -212,21 +238,15 @@ export interface IControlTowerReturn {
   items: IControlTowerReturnItem[];
 }
 
-export interface IControlTowerReturnsDashboard {
-  metrics: {
-    total_returns: number;
-    latest_count: number;
-  };
-  latest_returns: IControlTowerReturn[];
-  top_customers: Array<{
-    customer_name: string;
-    returns: number;
-  }>;
-  top_products: Array<{
-    product_id: string;
-    product_description: string;
-    quantity: number;
-  }>;
+export interface IInvoiceSearchContext {
+  occurrence_count: number;
+  occurrence_pending_count: number;
+  occurrence_resolved_count: number;
+  credit_letter_count: number;
+  credit_letter_pending_count: number;
+  credit_letter_completed_count: number;
+  return_count: number;
+  return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
 }
 
 export interface IDanfeTrip {
@@ -264,8 +284,12 @@ export interface IDanfe {
   Customer: {
     name_or_legal_entity: string;
     phone: string | null;
-    address: string;
+    address: string | null;
+    address_number?: string | null;
+    neighborhood?: string | null;
     city: string;
+    state?: string | null;
+    zip_code?: string | null;
     cnpj_or_cpf: string;
   };
   DanfeProducts: IDanfeProduct[];

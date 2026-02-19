@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, History, Pencil, Trash2 } from 'lucide-react';
+import { pdf } from '@react-pdf/renderer';
+import { CalendarDays, CheckCircle2, History, MessageSquare, Pencil, Printer, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 
 import Header from '../components/Header';
+import CollectionRequestPDF from '../components/CollectionRequestPDF';
 import IconButton from '../components/ui/IconButton';
 import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
@@ -24,7 +26,7 @@ import {
   OccurrenceCardFooter,
   OccurrenceItemContent,
 } from '../style/returnsOccurrences';
-import { IDanfe, IOccurrence } from '../types/types';
+import { ICollectionRequest, IDanfe, IOccurrence } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 
 const OCCURRENCE_REASONS = [
@@ -97,11 +99,94 @@ const formatOccurrenceQtyWithType = (quantity: number, productType?: string | nu
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
 };
+const formatUrgencyLabel = (level?: string | null) => {
+  const normalized = String(level || '').trim().toLowerCase();
+  if (normalized === 'critica') return 'Crítica';
+  if (normalized === 'alta') return 'Alta';
+  if (normalized === 'baixa') return 'Baixa';
+  return 'Média';
+};
+const COLLECTION_STATUS_LABELS: Record<string, string> = {
+  solicitada: 'Coleta solicitada',
+  aceita_agendada: 'Coleta agendada',
+  coletada: 'Coletada',
+  enviada_em_lote: 'Enviada em lote',
+  recebida: 'Recebida',
+  cancelada: 'Cancelada',
+};
+
+type AuditHistoryEntry = {
+  id: number;
+  action: string;
+  actor_user_id: number | null;
+  actor_username: string | null;
+  created_at: string;
+  metadata?: Record<string, unknown> | null;
+};
+
+const resolveCollectionStatus = (request: ICollectionRequest) => (
+  String(request.workflow_status || request.display_status || request.status || '').trim().toLowerCase()
+);
+
+const getCollectionStatusLabel = (request: ICollectionRequest) => {
+  const status = resolveCollectionStatus(request);
+  return COLLECTION_STATUS_LABELS[status] || status || 'Status nao informado';
+};
+
+const normalizeTextValue = (value: unknown) => String(value || '').trim();
+
+const buildCustomerAddress = (customer?: Partial<IDanfe['Customer']> | null) => {
+  const street = normalizeTextValue(customer?.address);
+  const number = normalizeTextValue(customer?.address_number);
+  const neighborhood = normalizeTextValue(customer?.neighborhood);
+  const state = normalizeTextValue(customer?.state);
+  const zipCode = normalizeTextValue(customer?.zip_code);
+
+  const firstBlock = [street, number && `N ${number}`, neighborhood && `Bairro ${neighborhood}`]
+    .filter(Boolean)
+    .join(', ');
+  const secondBlock = [state, zipCode && `CEP ${zipCode}`].filter(Boolean).join(' | ');
+
+  return [firstBlock, secondBlock].filter(Boolean).join(' | ') || 'Endereco nao informado';
+};
+
+const summarizeHistoryMetadata = (entry: AuditHistoryEntry) => {
+  const metadata = entry.metadata && typeof entry.metadata === 'object'
+    ? entry.metadata as Record<string, unknown>
+    : null;
+  if (!metadata) return '';
+
+  const details: string[] = [];
+  const note = normalizeTextValue(metadata.note);
+  const justification = normalizeTextValue(metadata.justification);
+  const scheduledFor = normalizeTextValue(metadata.scheduled_for);
+  const previousScheduledFor = normalizeTextValue(metadata.previous_scheduled_for);
+  const workflowStatus = normalizeTextValue(metadata.workflow_status);
+  const previousWorkflowStatus = normalizeTextValue(metadata.previous_workflow_status);
+  const batchCode = normalizeTextValue(metadata.batch_code);
+
+  if (note) details.push(`Obs: ${note}`);
+  if (justification) details.push(`Justificativa: ${justification}`);
+  if (previousScheduledFor) details.push(`Data anterior: ${previousScheduledFor}`);
+  if (scheduledFor) details.push(`Data prevista: ${scheduledFor}`);
+  if (previousWorkflowStatus) details.push(`Status anterior: ${previousWorkflowStatus}`);
+  if (workflowStatus) details.push(`Status novo: ${workflowStatus}`);
+  if (batchCode) details.push(`Lote: ${batchCode}`);
+
+  return details.join(' | ');
+};
+
+const isPendingPickupRequest = (request: ICollectionRequest) => (
+  ['solicitada', 'pending', 'aceita_agendada'].includes(
+    resolveCollectionStatus(request),
+  )
+);
 
 function Home() {
   const navigate = useNavigate();
 
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
+  const [pendingCollectionRequests, setPendingCollectionRequests] = useState<ICollectionRequest[]>([]);
   const [userPermission, setUserPermission] = useState('');
 
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
@@ -120,13 +205,20 @@ function Home() {
 
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyModalTitle, setHistoryModalTitle] = useState('');
-  const [historyEntries, setHistoryEntries] = useState<Array<{
-    id: number;
-    action: string;
-    actor_user_id: number | null;
-    actor_username: string | null;
-    created_at: string;
-  }>>([]);
+  const [historyEntries, setHistoryEntries] = useState<AuditHistoryEntry[]>([]);
+
+  const [collectionScheduleModalOpen, setCollectionScheduleModalOpen] = useState(false);
+  const [collectionScheduleRequest, setCollectionScheduleRequest] = useState<ICollectionRequest | null>(null);
+  const [collectionScheduleDate, setCollectionScheduleDate] = useState('');
+  const [collectionScheduleReason, setCollectionScheduleReason] = useState('');
+  const [collectionScheduleSaving, setCollectionScheduleSaving] = useState(false);
+
+  const [collectionNoteModalOpen, setCollectionNoteModalOpen] = useState(false);
+  const [collectionNoteRequest, setCollectionNoteRequest] = useState<ICollectionRequest | null>(null);
+  const [collectionNoteText, setCollectionNoteText] = useState('');
+  const [collectionNoteSaving, setCollectionNoteSaving] = useState(false);
+
+  const [collectionPdfPrintingId, setCollectionPdfPrintingId] = useState<number | null>(null);
 
   const isAdminUser = userPermission === 'admin';
   const canManageOccurrenceStatus = userPermission !== 'control_tower';
@@ -177,7 +269,7 @@ function Home() {
       }
 
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      await loadPendingOccurrences();
+      await loadHomePendencies();
     };
 
     fetchToken();
@@ -273,6 +365,46 @@ function Home() {
     } catch (error) {
       console.error('Erro ao carregar ocorrencias pendentes:', error);
     }
+  }
+
+  async function loadPendingCollectionRequests() {
+    try {
+      const [dashboardResponse, searchResponse] = await Promise.all([
+        axios.get(`${API_URL}/collection-requests/dashboard`),
+        axios.get(`${API_URL}/collection-requests/search`, {
+          params: {
+            workflow_status: 'all',
+            limit: 180,
+          },
+        }),
+      ]);
+
+      const dashboardPending = Array.isArray(dashboardResponse?.data?.pending) ? dashboardResponse.data.pending : [];
+      const searchRows = Array.isArray(searchResponse?.data) ? searchResponse.data : [];
+      const mergedById = new Map<number, ICollectionRequest>();
+
+      [...dashboardPending, ...searchRows].forEach((request: ICollectionRequest) => {
+        if (!request?.id) return;
+        if (isPendingPickupRequest(request)) {
+          mergedById.set(request.id, request);
+        }
+      });
+
+      const actionableRows = Array.from(mergedById.values())
+        .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+
+      setPendingCollectionRequests(actionableRows);
+    } catch (error) {
+      console.error('Erro ao carregar coletas pendentes:', error);
+      setPendingCollectionRequests([]);
+    }
+  }
+
+  async function loadHomePendencies() {
+    await Promise.all([
+      loadPendingOccurrences(),
+      loadPendingCollectionRequests(),
+    ]);
   }
 
   async function findDanfeByNf(nf: string) {
@@ -606,6 +738,151 @@ function Home() {
     }
   }
 
+  function openCollectionScheduleModal(request: ICollectionRequest) {
+    setCollectionScheduleRequest(request);
+    setCollectionScheduleDate(normalizeTextValue(request.scheduled_for));
+    setCollectionScheduleReason('');
+    setCollectionScheduleModalOpen(true);
+  }
+
+  function closeCollectionScheduleModal() {
+    setCollectionScheduleModalOpen(false);
+    setCollectionScheduleRequest(null);
+    setCollectionScheduleDate('');
+    setCollectionScheduleReason('');
+    setCollectionScheduleSaving(false);
+  }
+
+  async function handleSaveCollectionSchedule() {
+    if (!collectionScheduleRequest) return;
+    const nextDate = normalizeTextValue(collectionScheduleDate);
+    if (!nextDate) {
+      alert('Informe a data prevista da coleta.');
+      return;
+    }
+
+    const currentStatus = resolveCollectionStatus(collectionScheduleRequest);
+    const previousDate = normalizeTextValue(collectionScheduleRequest.scheduled_for);
+    const dateChanged = previousDate !== nextDate;
+    const reason = collectionScheduleReason.trim();
+
+    if (currentStatus === 'aceita_agendada' && dateChanged && !reason) {
+      alert('Informe uma justificativa para alterar a data de uma coleta ja agendada.');
+      return;
+    }
+
+    setCollectionScheduleSaving(true);
+    try {
+      await axios.patch(`${API_URL}/collection-requests/${collectionScheduleRequest.id}/schedule`, {
+        scheduled_for: nextDate,
+        reason,
+      });
+
+      closeCollectionScheduleModal();
+      await loadPendingCollectionRequests();
+      alert('Data da coleta atualizada com sucesso.');
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao atualizar data da coleta.');
+      } else {
+        alert('Erro ao atualizar data da coleta.');
+      }
+      setCollectionScheduleSaving(false);
+    }
+  }
+
+  function openCollectionNoteModal(request: ICollectionRequest) {
+    setCollectionNoteRequest(request);
+    setCollectionNoteText('');
+    setCollectionNoteModalOpen(true);
+  }
+
+  function closeCollectionNoteModal() {
+    setCollectionNoteModalOpen(false);
+    setCollectionNoteRequest(null);
+    setCollectionNoteText('');
+    setCollectionNoteSaving(false);
+  }
+
+  async function handleSaveCollectionNote() {
+    if (!collectionNoteRequest) return;
+    const note = collectionNoteText.trim();
+    if (!note) {
+      alert('Digite a observacao da coleta.');
+      return;
+    }
+
+    setCollectionNoteSaving(true);
+    try {
+      await axios.post(`${API_URL}/collection-requests/${collectionNoteRequest.id}/notes`, { note });
+      closeCollectionNoteModal();
+      await loadPendingCollectionRequests();
+      alert('Observacao registrada com sucesso.');
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao registrar observacao da coleta.');
+      } else {
+        alert('Erro ao registrar observacao da coleta.');
+      }
+      setCollectionNoteSaving(false);
+    }
+  }
+
+  async function handleViewCollectionHistory(request: ICollectionRequest) {
+    try {
+      const { data } = await axios.get(`${API_URL}/collection-requests/${request.id}/history`);
+      setHistoryModalTitle(`Historico da coleta #${request.id} | NF ${request.invoice_number || '-'}`);
+      setHistoryEntries(Array.isArray(data) ? data : []);
+      setHistoryModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao carregar historico da coleta.');
+      } else {
+        alert('Erro ao carregar historico da coleta.');
+      }
+    }
+  }
+
+  async function handlePrintCollectionPdf(request: ICollectionRequest) {
+    if (collectionPdfPrintingId === request.id) return;
+    setCollectionPdfPrintingId(request.id);
+
+    try {
+      let addressLine = buildCustomerAddress(undefined);
+      const invoiceNumber = normalizeTextValue(request.invoice_number);
+
+      if (invoiceNumber) {
+        const { data } = await axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${invoiceNumber}`);
+        if (data?.Customer) {
+          addressLine = buildCustomerAddress(data.Customer);
+        }
+      }
+
+      const pdfBlob = await pdf(
+        <CollectionRequestPDF
+          request={request}
+          addressLine={addressLine}
+        />,
+      ).toBlob();
+
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao gerar PDF da coleta.');
+      } else {
+        alert('Erro ao gerar PDF da coleta.');
+      }
+    } finally {
+      setCollectionPdfPrintingId(null);
+    }
+  }
+
   return (
     <HomeStyle>
       <Header />
@@ -613,102 +890,198 @@ function Home() {
         <Card>
           <CardHeaderRow>
             <h2>Ocorrencias Pendentes</h2>
-            <button className="secondary" onClick={loadPendingOccurrences} type="button">Atualizar lista</button>
+            <button className="secondary" onClick={loadHomePendencies} type="button">Atualizar lista</button>
           </CardHeaderRow>
 
-          {!pendingOccurrences.length ? (
-            <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia pendente no momento.</InlineText>
+          {!pendingCollectionRequests.length && !pendingOccurrences.length ? (
+            <InlineText style={{ marginTop: '12px' }}>Nenhuma pendência no momento.</InlineText>
           ) : (
-            <List>
-              {pendingOccurrences.map((occurrence) => {
-                const reasonLabel = OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros';
-                const itemsSummary = getItemsSummary(occurrence);
-
-                return (
-                  <li key={occurrence.id}>
-                    <OccurrenceItemContent>
-                      <span>
-                        <strong>NF: {occurrence.invoice_number}</strong>
-                        {` | CLIENTE: ${occurrence.customer_name || '-'}`}
-                      </span>
-                      <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
-                      <span className="flex flex-col gap-1">
-                        <strong>ITENS:</strong>
-                        {itemsSummary.length ? (
-                          itemsSummary.map((item, index) => (
-                            <span key={`home-occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
-                              {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+            <>
+              {!!pendingCollectionRequests.length && (
+                <>
+                  <InfoText style={{ marginTop: '12px' }}>
+                    Coletas da Torre de Controle (solicitadas e agendadas, com prioridade de atendimento)
+                  </InfoText>
+                  <List className="mt-2">
+                    {pendingCollectionRequests.map((request) => (
+                      <li
+                        key={`home-pickup-${request.id}`}
+                        className={resolveCollectionStatus(request) === 'aceita_agendada'
+                          ? '!border-sky-500/55 !bg-[linear-gradient(135deg,rgba(10,39,62,0.52)_0%,rgba(9,30,49,0.7)_100%)]'
+                          : '!border-amber-500/55 !bg-[linear-gradient(135deg,rgba(95,45,8,0.45)_0%,rgba(58,28,5,0.62)_100%)]'}
+                      >
+                        <OccurrenceItemContent>
+                          <span className="flex flex-wrap items-center gap-2">
+                            <strong className={resolveCollectionStatus(request) === 'aceita_agendada' ? 'text-sky-200' : 'text-amber-200'}>
+                              {resolveCollectionStatus(request) === 'aceita_agendada' ? 'COLETA AGENDADA' : 'COLETA SOLICITADA'}
+                            </strong>
+                            <span className={resolveCollectionStatus(request) === 'aceita_agendada'
+                              ? 'rounded-full border border-sky-300/35 bg-sky-300/15 px-2 py-0.5 text-[11px] font-semibold text-sky-200'
+                              : 'rounded-full border border-amber-300/35 bg-amber-300/15 px-2 py-0.5 text-[11px] font-semibold text-amber-200'}
+                            >
+                              Destaque
                             </span>
-                          ))
-                        ) : (
-                          <span className="pl-2">NF total</span>
-                        )}
-                      </span>
-                      <span>{`MOTIVO: ${reasonLabel}`}</span>
-                      {occurrence.resolution_type && (
-                        <span>
-                          Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
-                          {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
-                        </span>
-                      )}
+                          </span>
+                          <span>
+                            <strong>NF: {request.invoice_number || '-'}</strong>
+                            {` | CLIENTE: ${request.customer_name || '-'}`}
+                          </span>
+                          <span>{`CIDADE: ${request.city || '-'}`}</span>
+                          <span>{`STATUS: ${getCollectionStatusLabel(request)}`}</span>
+                          {request.scheduled_for ? <span>{`DATA PREVISTA: ${request.scheduled_for}`}</span> : null}
+                          <span>
+                            ITEM: {request.product_id ? `${request.product_id} - ` : ''}{request.product_description || '-'}
+                            {` | `}
+                            <strong>{`Qtd: ${Number(request.quantity || 0)}${normalizeProductType(request.product_type) || ''}`}</strong>
+                          </span>
+                          <span>{`URGÊNCIA: ${formatUrgencyLabel(request.urgency_level)}`}</span>
+                          {request.notes ? <span>{`OBS: ${request.notes}`}</span> : null}
 
-                      <OccurrenceCardFooter>
-                        <OccurrenceActionsRow>
-                          <OccurrenceActionsLeft>
-                            {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                              <>
+                          <OccurrenceCardFooter>
+                            <OccurrenceActionsRow>
+                              <OccurrenceActionsLeft>
                                 <button
                                   className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
-                                  onClick={() => openResolveModal(occurrence)}
+                                  onClick={() => openCollectionScheduleModal(request)}
                                   type="button"
                                 >
-                                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                                  Marcar como resolvida
+                                  <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                                  {resolveCollectionStatus(request) === 'aceita_agendada' ? 'Editar data' : 'Agendar coleta'}
                                 </button>
                                 <IconButton
-                                  icon={CheckCircle2}
-                                  label="Marcar ocorrência como resolvida"
-                                  onClick={() => openResolveModal(occurrence)}
+                                  icon={CalendarDays}
+                                  label={resolveCollectionStatus(request) === 'aceita_agendada' ? 'Editar data da coleta' : 'Agendar coleta'}
+                                  onClick={() => openCollectionScheduleModal(request)}
                                   className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
                                 />
-                              </>
-                            )}
-                          </OccurrenceActionsLeft>
+                              </OccurrenceActionsLeft>
 
-                          <OccurrenceActionsRight>
-                            {occurrence.status === 'pending' && canManageOccurrenceStatus && (
-                              <IconButton
-                                icon={Pencil}
-                                label="Editar ocorrencia"
-                                onClick={() => startEditOccurrence(occurrence)}
-                                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                              />
+                              <OccurrenceActionsRight>
+                                <IconButton
+                                  icon={MessageSquare}
+                                  label="Registrar observacao da coleta"
+                                  onClick={() => openCollectionNoteModal(request)}
+                                  className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                />
+                                <IconButton
+                                  icon={History}
+                                  label="Historico da coleta"
+                                  onClick={() => handleViewCollectionHistory(request)}
+                                  className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                />
+                                <IconButton
+                                  icon={Printer}
+                                  label="Imprimir PDF da coleta"
+                                  onClick={() => handlePrintCollectionPdf(request)}
+                                  className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                  disabled={collectionPdfPrintingId === request.id}
+                                />
+                              </OccurrenceActionsRight>
+                            </OccurrenceActionsRow>
+                          </OccurrenceCardFooter>
+                        </OccurrenceItemContent>
+                      </li>
+                    ))}
+                  </List>
+                </>
+              )}
+
+              {!!pendingOccurrences.length && (
+                <>
+                  <InfoText style={{ marginTop: '12px' }}>Ocorrências pendentes</InfoText>
+                  <List>
+                    {pendingOccurrences.map((occurrence) => {
+                      const reasonLabel = OCCURRENCE_REASON_LABELS[occurrence.reason || 'legacy_outros'] || 'Legado / outros';
+                      const itemsSummary = getItemsSummary(occurrence);
+
+                      return (
+                        <li key={occurrence.id}>
+                          <OccurrenceItemContent>
+                            <span>
+                              <strong>NF: {occurrence.invoice_number}</strong>
+                              {` | CLIENTE: ${occurrence.customer_name || '-'}`}
+                            </span>
+                            <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
+                            <span className="flex flex-col gap-1">
+                              <strong>ITENS:</strong>
+                              {itemsSummary.length ? (
+                                itemsSummary.map((item, index) => (
+                                  <span key={`home-occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
+                                    {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="pl-2">NF total</span>
+                              )}
+                            </span>
+                            <span>{`MOTIVO: ${reasonLabel}`}</span>
+                            {occurrence.resolution_type && (
+                              <span>
+                                Resolucao: {RESOLUTION_LABELS[occurrence.resolution_type] || occurrence.resolution_type}
+                                {occurrence.resolution_note ? ` | Obs: ${occurrence.resolution_note}` : ''}
+                              </span>
                             )}
-                            {isAdminUser && (
-                              <IconButton
-                                icon={History}
-                                label="Histórico da ocorrência"
-                                onClick={() => handleViewOccurrenceHistory(occurrence.id)}
-                                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                              />
-                            )}
-                            {canManageOccurrenceStatus && (
-                              <IconButton
-                                icon={Trash2}
-                                label="Excluir ocorrencia"
-                                variant="danger"
-                                onClick={() => handleDeleteOccurrence(occurrence.id)}
-                                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
-                              />
-                            )}
-                          </OccurrenceActionsRight>
-                        </OccurrenceActionsRow>
-                      </OccurrenceCardFooter>
-                    </OccurrenceItemContent>
-                  </li>
-                );
-              })}
-            </List>
+
+                            <OccurrenceCardFooter>
+                              <OccurrenceActionsRow>
+                                <OccurrenceActionsLeft>
+                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    <>
+                                      <button
+                                        className="primary hidden md:inline-flex md:items-center md:gap-1.5 md:px-3"
+                                        onClick={() => openResolveModal(occurrence)}
+                                        type="button"
+                                      >
+                                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                                        Marcar como resolvida
+                                      </button>
+                                      <IconButton
+                                        icon={CheckCircle2}
+                                        label="Marcar ocorrência como resolvida"
+                                        onClick={() => openResolveModal(occurrence)}
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
+                                      />
+                                    </>
+                                  )}
+                                </OccurrenceActionsLeft>
+
+                                <OccurrenceActionsRight>
+                                  {occurrence.status === 'pending' && canManageOccurrenceStatus && (
+                                    <IconButton
+                                      icon={Pencil}
+                                      label="Editar ocorrencia"
+                                      onClick={() => startEditOccurrence(occurrence)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                  {isAdminUser && (
+                                    <IconButton
+                                      icon={History}
+                                      label="Histórico da ocorrência"
+                                      onClick={() => handleViewOccurrenceHistory(occurrence.id)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                  {canManageOccurrenceStatus && (
+                                    <IconButton
+                                      icon={Trash2}
+                                      label="Excluir ocorrencia"
+                                      variant="danger"
+                                      onClick={() => handleDeleteOccurrence(occurrence.id)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                                    />
+                                  )}
+                                </OccurrenceActionsRight>
+                              </OccurrenceActionsRow>
+                            </OccurrenceCardFooter>
+                          </OccurrenceItemContent>
+                        </li>
+                      );
+                    })}
+                  </List>
+                </>
+              )}
+            </>
           )}
         </Card>
       </HomeContent>
@@ -872,6 +1245,96 @@ function Home() {
         </>
       )}
 
+      {collectionScheduleModalOpen && collectionScheduleRequest && (
+        <>
+          <ModalOverlay onClick={closeCollectionScheduleModal} />
+          <ModalCard>
+            <h3>
+              {resolveCollectionStatus(collectionScheduleRequest) === 'aceita_agendada'
+                ? `Reagendar coleta #${collectionScheduleRequest.id}`
+                : `Agendar coleta #${collectionScheduleRequest.id}`}
+            </h3>
+            <InlineText>
+              NF: {collectionScheduleRequest.invoice_number || '-'} | Cliente: {collectionScheduleRequest.customer_name || '-'}
+            </InlineText>
+            <InlineText style={{ marginTop: '10px' }}>Data prevista da coleta</InlineText>
+            <input
+              type="date"
+              value={collectionScheduleDate}
+              onChange={(event) => setCollectionScheduleDate(event.target.value)}
+              min={new Date().toISOString().slice(0, 10)}
+            />
+            <InlineText style={{ marginTop: '10px' }}>
+              {resolveCollectionStatus(collectionScheduleRequest) === 'aceita_agendada'
+                ? 'Justificativa da alteracao (obrigatoria ao mudar data)'
+                : 'Observacao do agendamento (opcional)'}
+            </InlineText>
+            <textarea
+              value={collectionScheduleReason}
+              onChange={(event) => setCollectionScheduleReason(event.target.value)}
+              placeholder="Ex: cliente pediu reagendamento para o periodo da tarde."
+              style={{ width: '100%', minHeight: 96, marginTop: 6 }}
+            />
+
+            <Actions style={{ marginTop: '12px' }}>
+              <button
+                className="primary"
+                onClick={handleSaveCollectionSchedule}
+                type="button"
+                disabled={collectionScheduleSaving}
+              >
+                {collectionScheduleSaving ? 'Salvando...' : 'Salvar data'}
+              </button>
+              <button
+                className="secondary"
+                onClick={closeCollectionScheduleModal}
+                type="button"
+                disabled={collectionScheduleSaving}
+              >
+                Cancelar
+              </button>
+            </Actions>
+          </ModalCard>
+        </>
+      )}
+
+      {collectionNoteModalOpen && collectionNoteRequest && (
+        <>
+          <ModalOverlay onClick={closeCollectionNoteModal} />
+          <ModalCard>
+            <h3>Registrar observacao da coleta #{collectionNoteRequest.id}</h3>
+            <InlineText>
+              NF: {collectionNoteRequest.invoice_number || '-'} | Cliente: {collectionNoteRequest.customer_name || '-'}
+            </InlineText>
+            <InlineText style={{ marginTop: '10px' }}>Observacao</InlineText>
+            <textarea
+              value={collectionNoteText}
+              onChange={(event) => setCollectionNoteText(event.target.value)}
+              placeholder="Descreva problema, bloqueio ou informacao relevante para a Torre de Controle."
+              style={{ width: '100%', minHeight: 120, marginTop: 6 }}
+            />
+            <Actions style={{ marginTop: '12px' }}>
+              <button
+                className="primary"
+                onClick={handleSaveCollectionNote}
+                type="button"
+                disabled={collectionNoteSaving}
+              >
+                {collectionNoteSaving ? 'Salvando...' : 'Registrar observacao'}
+              </button>
+              <button
+                className="secondary"
+                onClick={closeCollectionNoteModal}
+                type="button"
+                disabled={collectionNoteSaving}
+              >
+                Cancelar
+              </button>
+            </Actions>
+          </ModalCard>
+        </>
+      )}
+
       {resolvingOccurrence && (
         <>
           <ModalOverlay onClick={closeResolveModal} />
@@ -915,15 +1378,22 @@ function Home() {
               <InlineText>Nenhum evento de historico encontrado.</InlineText>
             ) : (
               <List>
-                {historyEntries.map((entry) => (
-                  <li key={entry.id}>
-                    <span>
-                      <strong>{entry.action}</strong>
-                      {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
-                      {` | Data: ${new Date(entry.created_at).toLocaleString('pt-BR')}`}
-                    </span>
-                  </li>
-                ))}
+                {historyEntries.map((entry) => {
+                  const metadataSummary = summarizeHistoryMetadata(entry);
+
+                  return (
+                    <li key={entry.id}>
+                      <div className="flex flex-col gap-1">
+                        <span>
+                          <strong>{entry.action}</strong>
+                          {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
+                          {` | Data: ${new Date(entry.created_at).toLocaleString('pt-BR')}`}
+                        </span>
+                        {metadataSummary ? <span className="text-xs text-text-accent">{metadataSummary}</span> : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </List>
             )}
 

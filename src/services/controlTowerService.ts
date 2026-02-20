@@ -28,6 +28,7 @@ import {
 } from '../types/controlTower';
 import { API_URL } from '../data';
 import { ICollectionRequest, IControlTowerReturn, IOccurrence } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 const STATUS_ORDER: BacklogStatus[] = ['PENDENTE', 'SOLICITADA', 'EM_ROTA', 'COLETADA', 'CANCELADA'];
 const RETURN_TYPES: ReturnSourceType[] = ['total', 'partial', 'coleta', 'sobra'];
@@ -224,9 +225,12 @@ const OCCURRENCES_CACHE_MS = 30 * 1000;
 
 function getInterval(filters: ControlTowerFilters) {
   const now = new Date();
-  const end = filters.endDate ? endOfDay(new Date(filters.endDate)) : endOfDay(now);
-  const start = filters.startDate
-    ? startOfDay(new Date(filters.startDate))
+  const isCustomPreset = filters.periodPreset === 'custom';
+  const end = isCustomPreset && filters.endDate ? endOfDay(new Date(filters.endDate)) : endOfDay(now);
+  const start = isCustomPreset
+    ? filters.startDate
+      ? startOfDay(new Date(filters.startDate))
+      : startOfDay(subDays(end, 6))
     : filters.periodPreset === 'today'
       ? startOfDay(now)
       : filters.periodPreset === '7d'
@@ -346,6 +350,20 @@ function mapCollectionStatus(collection: ICollectionRequest): BacklogStatus {
   return 'SOLICITADA';
 }
 
+function mapReturnStatusWithoutCollection(note: IControlTowerReturn): BacklogStatus {
+  const normalizedWorkflow = normalizeText(note.workflow_status).toLowerCase();
+
+  if (normalizedWorkflow === 'finalized' || normalizeText(note.received_by_control_tower_at)) {
+    return 'COLETADA';
+  }
+
+  if (normalizedWorkflow === 'awaiting_control_tower' || normalizeText(note.sent_to_control_tower_at)) {
+    return 'SOLICITADA';
+  }
+
+  return 'PENDENTE';
+}
+
 function parseOccurrenceDate(occurrence: IOccurrence): Date | null {
   const raw = normalizeText(occurrence.resolved_at || occurrence.created_at);
   if (!raw) return null;
@@ -378,9 +396,9 @@ function filterShortageOccurrences(
   end: Date,
   options?: { ignoreDateRange?: boolean },
 ) {
-  const term = normalizeText(filters.search).toLowerCase();
+  const exactInvoice = extractExactInvoiceFilter(filters.search, filters.invoiceNumber);
+  const term = exactInvoice ? '' : normalizeText(filters.search).toLowerCase();
   const product = normalizeText(filters.product).toLowerCase();
-  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
   const ignoreDateRange = Boolean(options?.ignoreDateRange || exactInvoice);
 
   return occurrences.filter((occurrence) => {
@@ -519,14 +537,27 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function extractInvoiceSearchHint(search: string, invoiceNumber?: string) {
-  const invoice = normalizeInvoiceNumber(invoiceNumber);
-  if (invoice) return invoice;
+function extractExactInvoiceFilter(search: string, invoiceNumber?: string) {
+  const explicitInvoice = normalizeInvoiceNumber(invoiceNumber);
+  if (explicitInvoice) return explicitInvoice;
 
   const term = normalizeText(search);
   if (!term) return '';
   if (/^\d{3,}$/.test(term)) return term;
-  if (/^SOBRA-/i.test(term)) return term;
+
+  const nfMatch = term.match(/^NF\D*(\d{3,})$/i);
+  if (nfMatch?.[1]) return nfMatch[1];
+
+  return '';
+}
+
+function extractInvoiceSearchHint(search: string, invoiceNumber?: string) {
+  const exactInvoice = extractExactInvoiceFilter(search, invoiceNumber);
+  if (exactInvoice) return exactInvoice;
+
+  const term = normalizeText(search);
+  if (!term) return '';
+  if (/^SOBRA-/i.test(term)) return term.toUpperCase();
   return '';
 }
 
@@ -558,16 +589,49 @@ function sortByNewestCreatedAt(rows: ICollectionRequest[]) {
   });
 }
 
+const EVENT_ACTORS = {
+  KP_TRANSPORTES: 'KP Transportes (Transportadora)',
+  MAR_E_RIO_TOWER: 'Torre de Controle Mar e Rio',
+  OPERACAO_KP: 'Operacao KP Transportes',
+};
+
 function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectionRequest): EventLog[] {
   const createdAt = toIsoDateTime(note.created_at, toIsoDateTime(note.return_date));
   const events: EventLog[] = [
     {
       at: createdAt,
-      actor: 'Sistema',
-      action: 'Devolucao registrada no backend',
+      actor: EVENT_ACTORS.KP_TRANSPORTES,
+      action: 'Devolucao registrada pela transportadora',
       note: `Tipo: ${mapReturnTypeReason(note.return_type)}`,
     },
   ];
+
+  if (note.return_type === 'sobra' && note.is_inversion) {
+    const inversionInvoice = normalizeText(note.inversion?.invoice_number || note.inversion_invoice_number);
+    const missingProduct = normalizeText(note.inversion?.missing_product_code || note.inversion_missing_product_code).toUpperCase();
+    events.push({
+      at: createdAt,
+      actor: EVENT_ACTORS.KP_TRANSPORTES,
+      action: 'Sobra registrada por inversao de produto',
+      note: `NF ${inversionInvoice || '-'} | Produto faltante: ${missingProduct || '-'}`,
+    });
+  }
+
+  if (normalizeText(note.sent_to_control_tower_at)) {
+    events.push({
+      at: toIsoDateTime(note.sent_to_control_tower_at, createdAt),
+      actor: normalizeText(note.sent_to_control_tower_by_username) || EVENT_ACTORS.KP_TRANSPORTES,
+      action: 'Devolucao enviada para a Torre de Controle Mar e Rio',
+    });
+  }
+
+  if (normalizeText(note.received_by_control_tower_at)) {
+    events.push({
+      at: toIsoDateTime(note.received_by_control_tower_at, createdAt),
+      actor: normalizeText(note.received_by_control_tower_username) || EVENT_ACTORS.MAR_E_RIO_TOWER,
+      action: 'Devolucao recebida e finalizada pela Torre de Controle Mar e Rio',
+    });
+  }
 
   if (!latestCollection) {
     return events;
@@ -575,8 +639,8 @@ function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectio
 
   events.push({
     at: toIsoDateTime(latestCollection.created_at, createdAt),
-    actor: 'Torre',
-    action: 'Solicitacao de coleta registrada',
+    actor: EVENT_ACTORS.MAR_E_RIO_TOWER,
+    action: 'Solicitacao de coleta registrada pela Torre',
     note: latestCollection.notes || undefined,
   });
 
@@ -585,8 +649,8 @@ function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectio
   if (normalizeText(latestCollection.scheduled_for)) {
     events.push({
       at: toIsoDateTime(latestCollection.accepted_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
-      actor: latestCollection.acceptedByUser?.username || 'Transportadora',
-      action: `Coleta aceita e agendada para ${latestCollection.scheduled_for}`,
+      actor: latestCollection.acceptedByUser?.username || EVENT_ACTORS.KP_TRANSPORTES,
+      action: `Coleta aceita e agendada para ${formatDateBR(latestCollection.scheduled_for)}`,
     });
   }
 
@@ -596,31 +660,31 @@ function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectio
         latestCollection.collected_at,
         toIsoDateTime(latestCollection.completed_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
       ),
-      actor: latestCollection.collectedByUser?.username || 'Operacao',
-      action: 'Coleta concluida',
+      actor: latestCollection.collectedByUser?.username || EVENT_ACTORS.OPERACAO_KP,
+      action: 'Coleta realizada pela transportadora',
     });
   }
 
   if (workflowStatus === 'enviada_em_lote') {
     events.push({
       at: toIsoDateTime(latestCollection.sent_in_batch_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
-      actor: 'Transportadora',
-      action: `Enviada no lote ${latestCollection.sent_in_batch_code || '-'}`,
+      actor: EVENT_ACTORS.KP_TRANSPORTES,
+      action: `Devolucao enviada para a Torre no lote ${latestCollection.sent_in_batch_code || '-'}`,
     });
   }
 
   if (workflowStatus === 'recebida') {
     events.push({
       at: toIsoDateTime(latestCollection.received_at, toIsoDateTime(latestCollection.updated_at, createdAt)),
-      actor: 'Torre',
-      action: 'Recebimento confirmado pela Torre de Controle',
+      actor: EVENT_ACTORS.MAR_E_RIO_TOWER,
+      action: 'Recebimento da devolucao confirmado pela Torre',
     });
   }
 
   if (latestCollection.display_status === 'em_tratativa') {
     events.push({
       at: toIsoDateTime(latestCollection.updated_at, createdAt),
-      actor: 'Torre',
+      actor: EVENT_ACTORS.MAR_E_RIO_TOWER,
       action: 'Ocorrencia vinculada (em tratativa)',
       note: latestCollection.quality_note || undefined,
     });
@@ -629,7 +693,7 @@ function buildApiEvents(note: IControlTowerReturn, latestCollection?: ICollectio
   if (workflowStatus === 'cancelada' || workflowStatus === 'cancelled') {
     events.push({
       at: toIsoDateTime(latestCollection.updated_at, createdAt),
-      actor: 'Operacao',
+      actor: EVENT_ACTORS.KP_TRANSPORTES,
       action: 'Coleta cancelada',
     });
   }
@@ -657,6 +721,10 @@ function mapApiReturnRow(note: IControlTowerReturn, collectionsByInvoice: Map<st
   const createdAt = toIsoDateTime(note.created_at, nowIso);
   const confirmedAt = toIsoDateTime(note.return_date, createdAt);
   const invoice = normalizeText(note.invoice_number);
+  const loadNumber = normalizeText(note.load_number);
+  const isInversion = Boolean(note.is_inversion);
+  const inversionInvoiceNumber = normalizeText(note.inversion?.invoice_number || note.inversion_invoice_number);
+  const inversionMissingProductCode = normalizeText(note.inversion?.missing_product_code || note.inversion_missing_product_code).toUpperCase();
   const city = normalizeText(note.city) || 'NAO INFORMADO';
   const collectionRows = sortByNewestCreatedAt(collectionsByInvoice.get(invoice) || []);
   const latestCollection = collectionRows[0];
@@ -672,7 +740,7 @@ function mapApiReturnRow(note: IControlTowerReturn, collectionsByInvoice: Map<st
 
   const baseStatus: BacklogStatus = latestCollection
     ? mapCollectionStatus(latestCollection)
-    : 'PENDENTE';
+    : mapReturnStatusWithoutCollection(note);
 
   const parsedConfirmed = new Date(confirmedAt);
   const ageHours = Number.isNaN(parsedConfirmed.getTime())
@@ -684,10 +752,16 @@ function mapApiReturnRow(note: IControlTowerReturn, collectionsByInvoice: Map<st
     batchCode: normalizeText(note.batch_code) || `RET-SEM-LOTE-${note.id}`,
     invoiceNumber: invoice || 'SEM_NF',
     sourceType: note.return_type,
+    loadNumber: loadNumber || undefined,
+    isInversion,
+    inversionInvoiceNumber: inversionInvoiceNumber || undefined,
+    inversionMissingProductCode: inversionMissingProductCode || undefined,
     customer: normalizeText(note.customer_name) || 'NAO INFORMADO',
     city,
     route: inferRoute(city),
-    reason: mapReturnTypeReason(note.return_type),
+    reason: note.return_type === 'sobra' && isInversion
+      ? 'Sobra (Inversao)'
+      : mapReturnTypeReason(note.return_type),
     status: baseStatus,
     createdAt,
     confirmedAt,
@@ -755,7 +829,7 @@ async function loadApiRows(filters: ControlTowerFilters): Promise<ReturnBatch[]>
     const headers = getAuthHeaders();
     const params: Record<string, string | number> = {
       limit: 300,
-      batch_workflow_status: 'all',
+      batch_workflow_status: 'sent_to_control_tower',
     };
     const permission = localStorage.getItem('user_permission') || '';
 
@@ -822,10 +896,12 @@ async function getAllRows(filters: ControlTowerFilters): Promise<ReturnBatch[]> 
 
 function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): ReturnBatch[] {
   const { start, end } = getInterval(filters);
-  const term = filters.search.trim().toLowerCase();
-  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
+  const exactInvoice = extractExactInvoiceFilter(filters.search, filters.invoiceNumber);
+  const term = exactInvoice ? '' : filters.search.trim().toLowerCase();
 
   return rows.filter((row) => {
+    if (filters.returnType === 'faltante') return false;
+
     if (exactInvoice && normalizeInvoiceNumber(row.invoiceNumber) !== exactInvoice) return false;
 
     const rowDate = new Date(row.confirmedAt);
@@ -834,7 +910,7 @@ function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): Return
 
     if (filters.returnStatus === 'pending' && row.status === 'COLETADA') return false;
     if (filters.returnStatus === 'confirmed' && row.status !== 'COLETADA') return false;
-    if (filters.returnType !== 'all' && filters.returnType !== 'faltante' && row.sourceType !== filters.returnType) return false;
+    if (filters.returnType !== 'all' && row.sourceType !== filters.returnType) return false;
 
     if (filters.pickupStatus !== 'all' && row.status !== filters.pickupStatus) return false;
     if (filters.city && row.city !== filters.city) return false;
@@ -845,7 +921,7 @@ function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): Return
     if (!hasProduct) return false;
 
     if (term) {
-      const haystack = `${row.invoiceNumber} ${row.customer} ${row.city} ${row.batchCode} ${row.reason} ${row.sourceType || ''} ${row.items.map((item) => item.productDescription).join(' ')}`.toLowerCase();
+      const haystack = `${row.invoiceNumber} ${row.customer} ${row.city} ${row.batchCode} ${row.reason} ${row.sourceType || ''} ${row.loadNumber || ''} ${row.isInversion ? 'inversao' : ''} ${row.inversionInvoiceNumber || ''} ${row.inversionMissingProductCode || ''} ${row.items.map((item) => item.productDescription).join(' ')}`.toLowerCase();
       if (!haystack.includes(term)) return false;
     }
 
@@ -855,9 +931,9 @@ function applyFilters(rows: ReturnBatch[], filters: ControlTowerFilters): Return
 
 function filterFlowOccurrences(occurrences: IOccurrence[], filters: ControlTowerFilters): IOccurrence[] {
   const { start, end } = getInterval(filters);
-  const term = normalizeText(filters.search).toLowerCase();
+  const exactInvoice = extractExactInvoiceFilter(filters.search, filters.invoiceNumber);
+  const term = exactInvoice ? '' : normalizeText(filters.search).toLowerCase();
   const product = normalizeText(filters.product).toLowerCase();
-  const exactInvoice = normalizeInvoiceNumber(filters.invoiceNumber);
 
   return occurrences.filter((occurrence) => {
     if (!isControlTowerOccurrence(occurrence)) return false;
@@ -1139,6 +1215,10 @@ function toTableRow(row: ReturnBatch): ReturnsTableRow {
     batchCode: row.batchCode,
     invoiceNumber: row.invoiceNumber,
     returnType: normalizeReturnType(row.sourceType),
+    loadNumber: row.loadNumber,
+    isInversion: Boolean(row.isInversion),
+    inversionInvoiceNumber: row.inversionInvoiceNumber,
+    inversionMissingProductCode: row.inversionMissingProductCode,
     customer: row.customer,
     city: row.city,
     route: row.route,
@@ -1162,6 +1242,20 @@ function occurrenceToTableRow(occurrence: IOccurrence): ReturnsTableRow {
     ? items.reduce((sum, item) => sum + toNumber(item.quantity, 0), 0)
     : fallbackQty;
   const productCount = items.length || (occurrence.product_id || occurrence.product_description ? 1 : 0);
+  const valueAmount = items.length
+    ? items.reduce((sum, item) => {
+      const itemQuantity = toNumber(item.quantity, 0);
+      const itemTotal = toNumber(item.total_price, 0);
+      const itemUnit = toNumber(item.unit_price, 0);
+      if (itemTotal > 0) return sum + itemTotal;
+      return sum + (itemUnit * itemQuantity);
+    }, 0)
+    : (() => {
+      const total = toNumber(occurrence.total_price, 0);
+      if (total > 0) return total;
+      const unit = toNumber(occurrence.unit_price, 0);
+      return unit * fallbackQty;
+    })();
 
   return {
     id: `occ-${occurrence.id}`,
@@ -1169,13 +1263,17 @@ function occurrenceToTableRow(occurrence: IOccurrence): ReturnsTableRow {
     batchCode: 'OCORRENCIA',
     invoiceNumber: normalizeText(occurrence.invoice_number) || 'SEM_NF',
     returnType: 'faltante',
+    loadNumber: undefined,
+    isInversion: false,
+    inversionInvoiceNumber: undefined,
+    inversionMissingProductCode: undefined,
     customer: normalizeText(occurrence.customer_name) || 'NAO INFORMADO',
     city: normalizeText(occurrence.city) || 'NAO INFORMADO',
     route: inferRoute(normalizeText(occurrence.city) || 'NAO INFORMADO'),
     productCount,
     quantity,
     weightKg: 0,
-    valueAmount: 0,
+    valueAmount: Number(valueAmount.toFixed(2)),
     reason: `Ocorrencia - ${mapOccurrenceReasonLabel(occurrence.reason)}`,
     status: mapOccurrenceTableStatus(occurrence),
     confirmedAt,
@@ -1204,8 +1302,8 @@ export async function getReturnsTable(
 
   const sorted = sorting
     ? [...rows].sort((a, b) => {
-      const left = a[sorting.id];
-      const right = b[sorting.id];
+      const left = a[sorting.id] ?? '';
+      const right = b[sorting.id] ?? '';
       if (left < right) return sorting.desc ? 1 : -1;
       if (left > right) return sorting.desc ? -1 : 1;
       return 0;

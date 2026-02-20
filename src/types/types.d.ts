@@ -56,6 +56,14 @@ export interface IInvoiceReturn {
   id: number;
   invoice_number: string;
   return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  load_number?: string | null;
+  is_inversion?: boolean;
+  inversion_invoice_number?: string | null;
+  inversion_missing_product_code?: string | null;
+  inversion?: {
+    invoice_number: string | null;
+    missing_product_code: string | null;
+  } | null;
   driver_id: number;
   vehicle_plate: string;
   return_date: string;
@@ -108,11 +116,15 @@ export interface IOccurrence {
     product_description?: string | null;
     product_type?: string | null;
     quantity: number;
+    unit_price?: number | string;
+    total_price?: number | string;
   }>;
   product_id: string | null;
   product_description: string | null;
   product_type?: string | null;
   quantity: number | null;
+  unit_price?: number | string;
+  total_price?: number | string;
   description: string;
   status: 'pending' | 'resolved';
   workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
@@ -220,6 +232,14 @@ export interface IControlTowerReturn {
   id: number;
   invoice_number: string;
   return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  load_number?: string | null;
+  is_inversion?: boolean;
+  inversion_invoice_number?: string | null;
+  inversion_missing_product_code?: string | null;
+  inversion?: {
+    invoice_number: string | null;
+    missing_product_code: string | null;
+  } | null;
   driver_id: number;
   vehicle_plate: string;
   return_date: string;

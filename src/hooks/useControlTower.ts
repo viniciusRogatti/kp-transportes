@@ -13,28 +13,54 @@ import {
 } from '../services/controlTowerService';
 import { BacklogStatus, ControlTowerFilters, PaginationInput, RegisterControlTowerOccurrenceInput, SortingInput } from '../types/controlTower';
 
-export function useControlTowerData(filters: ControlTowerFilters, pagination: PaginationInput, sorting?: SortingInput) {
+type UseControlTowerDataOptions = {
+  includeSummary?: boolean;
+  includeCharts?: boolean;
+  includeQueue?: boolean;
+  includeTable?: boolean;
+};
+
+const DEFAULT_DATA_OPTIONS: Required<UseControlTowerDataOptions> = {
+  includeSummary: true,
+  includeCharts: true,
+  includeQueue: true,
+  includeTable: true,
+};
+
+export function useControlTowerData(
+  filters: ControlTowerFilters,
+  pagination: PaginationInput,
+  sorting?: SortingInput,
+  options: UseControlTowerDataOptions = DEFAULT_DATA_OPTIONS,
+) {
   const keyFilters = useMemo(() => ({ ...filters }), [filters]);
+  const resolvedOptions = { ...DEFAULT_DATA_OPTIONS, ...options };
 
   const summary = useQuery({
     queryKey: ['ct-summary', keyFilters],
     queryFn: () => getControlTowerSummary(filters),
+    enabled: resolvedOptions.includeSummary,
   });
 
   const charts = useQuery({
     queryKey: ['ct-charts', keyFilters],
     queryFn: () => getControlTowerCharts(filters),
+    enabled: resolvedOptions.includeCharts,
   });
 
   const queue = useQuery({
     queryKey: ['ct-queue', keyFilters],
     queryFn: () => getActionQueue(filters),
+    enabled: resolvedOptions.includeQueue,
+    refetchInterval: resolvedOptions.includeQueue ? 60000 : false,
   });
 
   const table = useQuery({
     queryKey: ['ct-returns-table', keyFilters, pagination, sorting],
     queryFn: () => getReturnsTable(filters, pagination, sorting),
     placeholderData: (previousData) => previousData,
+    enabled: resolvedOptions.includeTable,
+    refetchInterval: resolvedOptions.includeTable ? 60000 : false,
   });
 
   return { summary, charts, queue, table };

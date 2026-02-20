@@ -40,6 +40,7 @@ import {
 } from '../style/returnsOccurrences';
 import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence, IProduct, IReturnBatch } from '../types/types';
 import verifyToken from '../utils/verifyToken';
+import { formatDateBR } from '../utils/dateDisplay';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 const RETURN_BATCH_LOOKBACK_OPTIONS = [
@@ -133,6 +134,18 @@ type OccurrenceCardItemSummary = {
   label: string;
   quantityWithType: string;
 };
+type SurplusInversionDraft = {
+  invoice_number: string;
+  missing_product_code: string;
+};
+type ReturnDraftNote = {
+  invoice_number: string;
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  items: IInvoiceReturnItem[];
+  load_number?: string | null;
+  is_inversion?: boolean;
+  inversion?: SurplusInversionDraft | null;
+};
 
 type ReturnBatchWorkflowStatus = 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
 
@@ -159,6 +172,13 @@ const resolveReturnBatchWorkflowStatus = (batch: IReturnBatch): ReturnBatchWorkf
 };
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
+const sanitizeSurplusReferenceToken = (value: string, fallback = 'SEMVALOR') => {
+  const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return normalized || fallback;
+};
+const buildSurplusReferenceInvoiceNumber = (loadNumber: string, productCode: string) => (
+  `SOBRA-${sanitizeSurplusReferenceToken(loadNumber, 'SEMCARGA')}-${sanitizeSurplusReferenceToken(productCode, 'SEMPRODUTO')}`
+);
 const formatOccurrenceQtyWithType = (quantity: number, productType?: string | null) => {
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
@@ -305,11 +325,14 @@ function ReturnsOccurrences() {
   const [leftoverProductCode, setLeftoverProductCode] = useState('');
   const [leftoverQuantity, setLeftoverQuantity] = useState<number>(1);
   const [leftoverProductType, setLeftoverProductType] = useState('');
-  const [draftNotes, setDraftNotes] = useState<Array<{
-    invoice_number: string;
-    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
-    items: IInvoiceReturnItem[];
-  }>>([]);
+  const [leftoverLoadNumber, setLeftoverLoadNumber] = useState('');
+  const [leftoverIsInversion, setLeftoverIsInversion] = useState(false);
+  const [leftoverInversionInvoiceNumber, setLeftoverInversionInvoiceNumber] = useState('');
+  const [leftoverInversionMissingProductCode, setLeftoverInversionMissingProductCode] = useState('');
+  const [leftoverInversionDanfe, setLeftoverInversionDanfe] = useState<IDanfe | null>(null);
+  const [leftoverInversionLookupLoading, setLeftoverInversionLookupLoading] = useState(false);
+  const [leftoverInversionLookupError, setLeftoverInversionLookupError] = useState('');
+  const [draftNotes, setDraftNotes] = useState<ReturnDraftNote[]>([]);
   const [returnDriverId, setReturnDriverId] = useState('');
   const [selectedCarId, setSelectedCarId] = useState('');
   const [returnDate, setReturnDate] = useState(getTodayDate());
@@ -357,7 +380,7 @@ function ReturnsOccurrences() {
   const isControlTowerUser = userPermission === 'control_tower';
   const canManageOccurrenceStatus = !isControlTowerUser;
   const canManageBatchTransportadora = !isControlTowerUser;
-  const canConfirmBatchReceipt = ['control_tower', 'admin', 'master'].includes(userPermission);
+  const canConfirmBatchReceipt = userPermission === 'control_tower';
   const isSelectedBatchEditableByTransportadora = Boolean(
     selectedBatch
       && selectedBatchWorkflowStatus === 'pending_transportadora'
@@ -471,6 +494,22 @@ function ReturnsOccurrences() {
   const selectedLeftoverProduct = useMemo(() => (
     products.find((product) => product.code === leftoverProductCode) || null
   ), [products, leftoverProductCode]);
+  const leftoverInversionProducts = useMemo(() => (
+    leftoverInversionDanfe?.DanfeProducts || []
+  ), [leftoverInversionDanfe]);
+  const selectedLeftoverMissingProduct = useMemo(() => (
+    leftoverInversionProducts.find((item) => item.Product.code === leftoverInversionMissingProductCode) || null
+  ), [leftoverInversionProducts, leftoverInversionMissingProductCode]);
+  const surplusInversionSummary = useMemo(() => {
+    if (!leftoverIsInversion) return '';
+
+    const surplusProductCode = leftoverProductCode.trim().toUpperCase();
+    const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
+    const invoiceNumber = leftoverInversionInvoiceNumber.trim();
+
+    if (!surplusProductCode || !missingProductCode || !invoiceNumber) return '';
+    return `Inversao: Veio ${surplusProductCode} (sobra) no lugar de ${missingProductCode} (falta) na NF ${invoiceNumber}`;
+  }, [leftoverIsInversion, leftoverProductCode, leftoverInversionMissingProductCode, leftoverInversionInvoiceNumber]);
   const leftoverTypeOptions = useMemo(() => {
     const productTypes = products.map((product) => String(product.type || '').trim().toUpperCase()).filter(Boolean);
     return Array.from(new Set([...productTypes, ...DEFAULT_RETURN_UNIT_TYPES]));
@@ -500,12 +539,85 @@ function ReturnsOccurrences() {
     if (value === 'coleta') return 'Coleta';
     return 'Sobra';
   };
-  const getNoteDisplayLabel = (note: { invoice_number: string; return_type: 'total' | 'partial' | 'sobra' | 'coleta' }) => {
+  const getNoteDisplayLabel = (note: {
+    invoice_number: string;
+    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    items?: IInvoiceReturnItem[];
+    load_number?: string | null;
+  }) => {
     if (note.return_type === 'sobra') {
-      return note.invoice_number.replace(/^SOBRA-/, 'Sobra ');
+      const surplusProductCode = String(note.items?.[0]?.product_id || '').trim().toUpperCase();
+      const loadNumber = String(note.load_number || '').trim();
+      const baseLabel = surplusProductCode
+        ? `Sobra ${surplusProductCode}`
+        : note.invoice_number.replace(/^SOBRA-/, 'Sobra ');
+      return loadNumber ? `${baseLabel} (Carga ${loadNumber})` : baseLabel;
     }
 
     return `NF ${note.invoice_number}`;
+  };
+  const getNoteInversionSummary = (note: {
+    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    is_inversion?: boolean;
+    inversion?: { invoice_number: string | null; missing_product_code: string | null } | null;
+    inversion_invoice_number?: string | null;
+    inversion_missing_product_code?: string | null;
+    items?: IInvoiceReturnItem[];
+  }) => {
+    if (note.return_type !== 'sobra' || !note.is_inversion) {
+      return '';
+    }
+
+    const inversionInvoice = String(note.inversion?.invoice_number || note.inversion_invoice_number || '').trim();
+    const missingProductCode = String(note.inversion?.missing_product_code || note.inversion_missing_product_code || '').trim().toUpperCase();
+    const surplusProductCode = String(note.items?.[0]?.product_id || '').trim().toUpperCase();
+
+    if (!inversionInvoice || !missingProductCode) {
+      return 'Inversao cadastrada';
+    }
+
+    return `Inversao: Veio ${surplusProductCode || '-'} (sobra) no lugar de ${missingProductCode} (falta) na NF ${inversionInvoice}`;
+  };
+  const serializeReturnNotePayload = (note: {
+    invoice_number: string;
+    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    load_number?: string | null;
+    is_inversion?: boolean;
+    inversion?: { invoice_number: string | null; missing_product_code: string | null } | null;
+    inversion_invoice_number?: string | null;
+    inversion_missing_product_code?: string | null;
+    items: IInvoiceReturnItem[];
+  }) => {
+    const payload = {
+      invoice_number: note.invoice_number,
+      return_type: note.return_type,
+      load_number: note.load_number || null,
+      is_inversion: Boolean(note.is_inversion),
+      items: note.items,
+    } as {
+      invoice_number: string;
+      return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+      load_number: string | null;
+      is_inversion: boolean;
+      items: IInvoiceReturnItem[];
+      inversion?: {
+        invoice_number: string;
+        missing_product_code: string;
+      };
+    };
+
+    if (payload.is_inversion) {
+      const inversionInvoice = String(note.inversion?.invoice_number || note.inversion_invoice_number || '').trim();
+      const missingProductCode = String(note.inversion?.missing_product_code || note.inversion_missing_product_code || '').trim().toUpperCase();
+      if (inversionInvoice && missingProductCode) {
+        payload.inversion = {
+          invoice_number: inversionInvoice,
+          missing_product_code: missingProductCode,
+        };
+      }
+    }
+
+    return payload;
   };
   const occurrenceProducts = useMemo(() => occurrenceDanfe?.DanfeProducts || [], [occurrenceDanfe]);
   const selectedOccurrenceProduct = useMemo(() => (
@@ -588,6 +700,32 @@ function ReturnsOccurrences() {
       setLeftoverProductType(String(selectedLeftoverProduct.type).toUpperCase());
     }
   }, [leftoverProductCode, selectedLeftoverProduct]);
+
+  useEffect(() => {
+    if (leftoverIsInversion) {
+      return;
+    }
+
+    setLeftoverInversionInvoiceNumber('');
+    setLeftoverInversionMissingProductCode('');
+    setLeftoverInversionDanfe(null);
+    setLeftoverInversionLookupError('');
+    setLeftoverInversionLookupLoading(false);
+  }, [leftoverIsInversion]);
+
+  useEffect(() => {
+    if (!leftoverIsInversion) {
+      return;
+    }
+
+    const normalizedInputInvoice = leftoverInversionInvoiceNumber.trim();
+    const loadedInvoice = String(leftoverInversionDanfe?.invoice_number || '').trim();
+    if (!normalizedInputInvoice || !loadedInvoice || loadedInvoice !== normalizedInputInvoice) {
+      setLeftoverInversionDanfe(null);
+      setLeftoverInversionMissingProductCode('');
+      setLeftoverInversionLookupError('');
+    }
+  }, [leftoverIsInversion, leftoverInversionInvoiceNumber, leftoverInversionDanfe?.invoice_number]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -712,6 +850,68 @@ function ReturnsOccurrences() {
   async function findDanfeByNf(nf: string) {
     const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
     return data;
+  }
+
+  function resetSurplusInversionBuilder() {
+    setLeftoverIsInversion(false);
+    setLeftoverInversionInvoiceNumber('');
+    setLeftoverInversionMissingProductCode('');
+    setLeftoverInversionDanfe(null);
+    setLeftoverInversionLookupError('');
+    setLeftoverInversionLookupLoading(false);
+  }
+
+  function handleChangeReturnType(nextType: 'total' | 'partial' | 'sobra' | 'coleta') {
+    setReturnType(nextType);
+
+    if (nextType === 'sobra') {
+      setReturnDanfe(null);
+      setPartialItems([]);
+      setPartialProductCode('');
+      setPartialProductType('');
+      setPartialQuantity(1);
+      return;
+    }
+
+    setLeftoverProductCode('');
+    setLeftoverQuantity(1);
+    setLeftoverProductType('');
+    setLeftoverLoadNumber('');
+    resetSurplusInversionBuilder();
+  }
+
+  async function handleSearchSurplusInversionNf() {
+    const normalizedInvoice = leftoverInversionInvoiceNumber.trim();
+    if (!normalizedInvoice) {
+      setLeftoverInversionLookupError('Informe a NF relacionada para a inversao.');
+      return;
+    }
+
+    setLeftoverInversionLookupLoading(true);
+    setLeftoverInversionLookupError('');
+    try {
+      const data = await findDanfeByNf(normalizedInvoice);
+      if (!data) {
+        setLeftoverInversionDanfe(null);
+        setLeftoverInversionMissingProductCode('');
+        setLeftoverInversionLookupError('NF relacionada nao encontrada.');
+        return;
+      }
+
+      setLeftoverInversionDanfe(data);
+      setLeftoverInversionMissingProductCode((previous) => {
+        if (!previous) return previous;
+        const stillExists = (data.DanfeProducts || []).some((item: IDanfe['DanfeProducts'][number]) => item.Product.code === previous);
+        return stillExists ? previous : '';
+      });
+    } catch (error) {
+      console.error(error);
+      setLeftoverInversionDanfe(null);
+      setLeftoverInversionMissingProductCode('');
+      setLeftoverInversionLookupError('Erro ao buscar NF relacionada.');
+    } finally {
+      setLeftoverInversionLookupLoading(false);
+    }
   }
 
   async function handleSearchReturnNf() {
@@ -908,8 +1108,53 @@ function ReturnsOccurrences() {
       return;
     }
 
+    let noteLoadNumber: string | null = null;
+    let noteIsInversion = false;
+    let noteInversion: SurplusInversionDraft | undefined;
+
+    if (returnType === 'sobra') {
+      const normalizedLoadNumber = leftoverLoadNumber.trim().toUpperCase();
+      if (!normalizedLoadNumber) {
+        alert('Informe o numero da carga da sobra.');
+        return;
+      }
+
+      noteLoadNumber = normalizedLoadNumber;
+
+      if (leftoverIsInversion) {
+        const relatedInvoice = leftoverInversionInvoiceNumber.trim();
+        if (!relatedInvoice) {
+          alert('Informe a NF relacionada da inversao.');
+          return;
+        }
+
+        if (!leftoverInversionDanfe || String(leftoverInversionDanfe.invoice_number) !== relatedInvoice) {
+          alert('Busque a NF relacionada para validar os itens da inversao.');
+          return;
+        }
+
+        const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
+        if (!missingProductCode) {
+          alert('Informe o produto que faltou na NF relacionada.');
+          return;
+        }
+
+        const belongsToInvoice = leftoverInversionDanfe.DanfeProducts.some((item) => item.Product.code === missingProductCode);
+        if (!belongsToInvoice) {
+          alert('Produto faltante nao pertence a NF relacionada.');
+          return;
+        }
+
+        noteIsInversion = true;
+        noteInversion = {
+          invoice_number: relatedInvoice,
+          missing_product_code: missingProductCode,
+        };
+      }
+    }
+
     const noteInvoiceNumber = returnType === 'sobra'
-      ? `SOBRA-${noteItems[0].product_id}`
+      ? buildSurplusReferenceInvoiceNumber(noteLoadNumber || '', noteItems[0].product_id)
       : String(returnDanfe?.invoice_number);
 
     if (selectedBatch) {
@@ -932,6 +1177,15 @@ function ReturnsOccurrences() {
           return_date: selectedBatch.return_date,
           batch_code: selectedBatch.batch_code,
           batch_status: selectedBatch.batch_status,
+          load_number: noteLoadNumber,
+          is_inversion: noteIsInversion,
+          ...(noteInversion
+            ? {
+              inversion_invoice_number: noteInversion.invoice_number,
+              inversion_missing_product_code: noteInversion.missing_product_code,
+              inversion: noteInversion,
+            }
+            : {}),
           items: noteItems,
         },
       ]));
@@ -956,6 +1210,9 @@ function ReturnsOccurrences() {
       {
         invoice_number: noteInvoiceNumber,
         return_type: returnType,
+        load_number: noteLoadNumber,
+        is_inversion: noteIsInversion,
+        ...(noteInversion ? { inversion: noteInversion } : {}),
         items: noteItems,
       },
     ]));
@@ -974,6 +1231,8 @@ function ReturnsOccurrences() {
     setLeftoverProductCode('');
     setLeftoverQuantity(1);
     setLeftoverProductType('');
+    setLeftoverLoadNumber('');
+    resetSurplusInversionBuilder();
   }
 
   function removeDraftNf(invoiceNumber: string) {
@@ -1019,13 +1278,14 @@ function ReturnsOccurrences() {
     try {
       let batchCodeForPdf = `RET-${returnDate.replace(/-/g, '')}`;
       let createdWithLegacyRoute = false;
+      const serializedDraftNotes = draftNotes.map((note) => serializeReturnNotePayload(note));
 
       try {
         const { data } = await axios.post(`${API_URL}/returns/batches/create`, {
           driver_id: Number(returnDriverId),
           vehicle_plate: selectedCar.license_plate,
           return_date: returnDate,
-          notes: draftNotes,
+          notes: serializedDraftNotes,
         });
         batchCodeForPdf = data?.batch_code || batchCodeForPdf;
       } catch (error: any) {
@@ -1034,14 +1294,12 @@ function ReturnsOccurrences() {
         }
 
         // Compatibilidade com backend antigo em producao (sem rotas de lote)
-        await Promise.all(draftNotes.map((note) => (
+        await Promise.all(serializedDraftNotes.map((note) => (
           axios.post(`${API_URL}/returns/create`, {
-            invoice_number: note.invoice_number,
-            return_type: note.return_type,
+            ...note,
             driver_id: Number(returnDriverId),
             vehicle_plate: selectedCar.license_plate,
             return_date: returnDate,
-            items: note.items,
           })
         )));
         createdWithLegacyRoute = true;
@@ -1112,11 +1370,10 @@ function ReturnsOccurrences() {
     try {
       await Promise.all(notesToRemove.map((note) => axios.delete(`${API_URL}/returns/notes/${note.id}`)));
       await Promise.all(notesToAdd.map((note) => (
-        axios.post(`${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`, {
-          invoice_number: note.invoice_number,
-          return_type: note.return_type,
-          items: note.items,
-        })
+        axios.post(
+          `${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`,
+          serializeReturnNotePayload(note),
+        )
       )));
 
       alert('Lote salvo com sucesso.');
@@ -1639,12 +1896,12 @@ function ReturnsOccurrences() {
                     {selectedBatch ? (
                       <>
                         <InlineText>
-                          Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {selectedBatch.return_date}
+                          Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {formatDateBR(selectedBatch.return_date)}
                         </InlineText>
                         <InlineText>
                           Status do lote: {RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']}
-                          {selectedBatch.sent_to_control_tower_at ? ` | Enviado em: ${new Date(selectedBatch.sent_to_control_tower_at).toLocaleString('pt-BR')}` : ''}
-                          {selectedBatch.received_by_control_tower_at ? ` | Recebido em: ${new Date(selectedBatch.received_by_control_tower_at).toLocaleString('pt-BR')}` : ''}
+                          {selectedBatch.sent_to_control_tower_at ? ` | Enviado em: ${formatDateBR(selectedBatch.sent_to_control_tower_at)}` : ''}
+                          {selectedBatch.received_by_control_tower_at ? ` | Recebido em: ${formatDateBR(selectedBatch.received_by_control_tower_at)}` : ''}
                         </InlineText>
                         {!isSelectedBatchEditableByTransportadora && selectedBatchWorkflowStatus === 'awaiting_control_tower' && (
                           <InfoText>
@@ -1657,9 +1914,14 @@ function ReturnsOccurrences() {
                           </InfoText>
                         )}
                         {isSelectedBatchEditableByTransportadora && (
-                          <InfoText>
-                            Ao confirmar o envio da devolucao, o lote sera bloqueado para edicao.
-                          </InfoText>
+                          <>
+                            <InfoText>
+                              Lote em rascunho: NFs adicionadas aqui ainda nao bloqueiam coleta/ocorrencia ate a confirmacao do envio.
+                            </InfoText>
+                            <InfoText>
+                              Ao confirmar o envio da devolucao, o lote sera bloqueado para edicao.
+                            </InfoText>
+                          </>
                         )}
                       </>
                     ) : (
@@ -1674,24 +1936,30 @@ function ReturnsOccurrences() {
                   <div className="space-y-2">
                     <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
                       <div className="min-w-0 md:w-[220px] md:shrink-0">
-                        <SearchInput
-                          type="text"
-                          inputMode="numeric"
-                          value={returnNf}
-                          onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
-                          placeholder="Digite a NF"
-                          maxLength={9}
-                          onSearch={handleSearchReturnNf}
-                          searchLabel="Buscar NF de devolucao"
-                          className="border-white/10 bg-[rgba(11,27,42,0.6)] tracking-[0.03em]"
-                        />
+                        {returnType === 'sobra' ? (
+                          <div className="rounded-md border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-[11px] text-[0.82rem] text-slate-300">
+                            Cadastro manual de sobra
+                          </div>
+                        ) : (
+                          <SearchInput
+                            type="text"
+                            inputMode="numeric"
+                            value={returnNf}
+                            onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                            placeholder="Digite a NF"
+                            maxLength={9}
+                            onSearch={handleSearchReturnNf}
+                            searchLabel="Buscar NF de devolucao"
+                            className="border-white/10 bg-[rgba(11,27,42,0.6)] tracking-[0.03em]"
+                          />
+                        )}
                       </div>
                       <ReturnSearchRow className="md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none">
                         <label>
                           <input
                             type="checkbox"
                             checked={returnType === 'total'}
-                            onChange={() => setReturnType('total')}
+                            onChange={() => handleChangeReturnType('total')}
                           />
                           Total
                         </label>
@@ -1699,7 +1967,7 @@ function ReturnsOccurrences() {
                           <input
                             type="checkbox"
                             checked={returnType === 'partial'}
-                            onChange={() => setReturnType('partial')}
+                            onChange={() => handleChangeReturnType('partial')}
                           />
                           Parcial
                         </label>
@@ -1707,7 +1975,7 @@ function ReturnsOccurrences() {
                           <input
                             type="checkbox"
                             checked={returnType === 'coleta'}
-                            onChange={() => setReturnType('coleta')}
+                            onChange={() => handleChangeReturnType('coleta')}
                           />
                           Coleta
                         </label>
@@ -1715,7 +1983,7 @@ function ReturnsOccurrences() {
                           <input
                             type="checkbox"
                             checked={returnType === 'sobra'}
-                            onChange={() => setReturnType('sobra')}
+                            onChange={() => handleChangeReturnType('sobra')}
                           />
                           Sobra
                         </label>
@@ -1813,49 +2081,140 @@ function ReturnsOccurrences() {
                       )}
 
                       {returnType === 'sobra' && (
-                        <Grid style={{ marginTop: '12px' }}>
-                          <div>
-                            <InlineText>Codigo do produto</InlineText>
-                            <input
-                              type="text"
-                              list="products-codes-list"
-                              value={leftoverProductCode}
-                              onChange={(event) => setLeftoverProductCode(event.target.value)}
-                              placeholder="Ex.: 12345"
-                            />
-                            <datalist id="products-codes-list">
-                              {products.map((product) => (
-                                <option key={`leftover-code-${product.code}`} value={product.code}>
-                                  {product.description}
-                                </option>
-                              ))}
-                            </datalist>
+                        <>
+                          <Grid style={{ marginTop: '12px' }}>
+                            <div>
+                              <InlineText>Numero da Carga *</InlineText>
+                              <input
+                                type="text"
+                                value={leftoverLoadNumber}
+                                onChange={(event) => setLeftoverLoadNumber(event.target.value.toUpperCase())}
+                                placeholder="Ex.: CARGA-123"
+                                maxLength={40}
+                              />
+                            </div>
+                            <div>
+                              <InlineText>Codigo do produto (sobra) *</InlineText>
+                              <input
+                                type="text"
+                                list="products-codes-list"
+                                value={leftoverProductCode}
+                                onChange={(event) => setLeftoverProductCode(event.target.value.toUpperCase())}
+                                placeholder="Ex.: RV001496"
+                              />
+                              <datalist id="products-codes-list">
+                                {products.map((product) => (
+                                  <option key={`leftover-code-${product.code}`} value={product.code}>
+                                    {product.description}
+                                  </option>
+                                ))}
+                              </datalist>
+                            </div>
+                            <div>
+                              <InlineText>Quantidade *</InlineText>
+                              <input
+                                type="number"
+                                min={0.1}
+                                step={0.1}
+                                value={leftoverQuantity}
+                                onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
+                              />
+                            </div>
+                            <div>
+                              <InlineText>Tipo *</InlineText>
+                              <select
+                                value={leftoverProductType}
+                                onChange={(event) => setLeftoverProductType(event.target.value)}
+                              >
+                                <option value="">Selecione</option>
+                                {leftoverTypeOptions.map((typeOption) => (
+                                  <option key={`leftover-type-${typeOption}`} value={typeOption}>
+                                    {typeOption}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </Grid>
+
+                          <div className="mt-3 rounded-md border border-white/10 bg-[rgba(11,27,42,0.45)] px-3 py-2">
+                            <label className="flex cursor-pointer items-start gap-2 text-[0.83rem] text-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={leftoverIsInversion}
+                                onChange={(event) => setLeftoverIsInversion(event.target.checked)}
+                                className="mt-[2px]"
+                              />
+                              Marcar como inversao (produto veio no lugar de outro)
+                            </label>
                           </div>
-                          <div>
-                            <InlineText>Quantidade</InlineText>
-                            <input
-                              type="number"
-                              min={0.1}
-                              step={0.1}
-                              value={leftoverQuantity}
-                              onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
-                            />
-                          </div>
-                          <div>
-                            <InlineText>Tipo</InlineText>
-                            <select
-                              value={leftoverProductType}
-                              onChange={(event) => setLeftoverProductType(event.target.value)}
-                            >
-                              <option value="">Selecione</option>
-                              {leftoverTypeOptions.map((typeOption) => (
-                                <option key={`leftover-type-${typeOption}`} value={typeOption}>
-                                  {typeOption}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </Grid>
+
+                          {leftoverIsInversion && (
+                            <>
+                              <Grid style={{ marginTop: '12px' }}>
+                                <div>
+                                  <InlineText>NF relacionada *</InlineText>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={leftoverInversionInvoiceNumber}
+                                      onChange={(event) => {
+                                        const nextValue = event.target.value.replace(/\D/g, '').slice(0, 9);
+                                        setLeftoverInversionInvoiceNumber(nextValue);
+                                      }}
+                                      placeholder="Ex.: 1694432"
+                                      maxLength={9}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={handleSearchSurplusInversionNf}
+                                      disabled={leftoverInversionLookupLoading || !leftoverInversionInvoiceNumber.trim()}
+                                      className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-3 text-[0.75rem] font-semibold text-[#1f1300] transition disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {leftoverInversionLookupLoading ? 'Buscando...' : 'Buscar NF'}
+                                    </button>
+                                  </div>
+                                  {leftoverInversionLookupError ? (
+                                    <InfoText>{leftoverInversionLookupError}</InfoText>
+                                  ) : null}
+                                  {leftoverInversionDanfe ? (
+                                    <InfoText>
+                                      NF carregada: {leftoverInversionDanfe.invoice_number}
+                                      {' | '}
+                                      Cliente: {leftoverInversionDanfe.Customer?.name_or_legal_entity || 'Nao informado'}
+                                    </InfoText>
+                                  ) : null}
+                                </div>
+                                <div>
+                                  <InlineText>Produto que faltou na NF *</InlineText>
+                                  <input
+                                    type="text"
+                                    list="leftover-inversion-products-list"
+                                    value={leftoverInversionMissingProductCode}
+                                    onChange={(event) => setLeftoverInversionMissingProductCode(event.target.value.toUpperCase())}
+                                    placeholder="Ex.: RV001899"
+                                    disabled={!leftoverInversionDanfe}
+                                  />
+                                  <datalist id="leftover-inversion-products-list">
+                                    {leftoverInversionProducts.map((item) => (
+                                      <option key={`leftover-inversion-${item.Product.code}`} value={item.Product.code}>
+                                        {item.Product.description}
+                                      </option>
+                                    ))}
+                                  </datalist>
+                                </div>
+                              </Grid>
+                              {surplusInversionSummary ? (
+                                <InfoText style={{ marginTop: '8px' }}>{surplusInversionSummary}</InfoText>
+                              ) : null}
+                              {leftoverInversionMissingProductCode && !selectedLeftoverMissingProduct ? (
+                                <InfoText style={{ marginTop: '4px' }}>
+                                  O produto informado nao pertence a NF relacionada carregada.
+                                </InfoText>
+                              ) : null}
+                            </>
+                          )}
+                        </>
                       )}
 
                       <Actions style={{ marginTop: '12px' }}>
@@ -1896,6 +2255,8 @@ function ReturnsOccurrences() {
                               <strong>{getNoteDisplayLabel(note)}</strong>
                               {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                               {` | Itens: ${note.items?.length || 0}`}
+                              {note.return_type === 'sobra' && note.is_inversion ? ' | Inversao' : ''}
+                              {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
                             </span>
                             <Actions>
                               <button
@@ -1922,6 +2283,8 @@ function ReturnsOccurrences() {
                               <strong>{getNoteDisplayLabel(note)}</strong>
                               {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                               {` | Itens: ${note.items.length}`}
+                              {note.return_type === 'sobra' && note.is_inversion ? ' | Inversao' : ''}
+                              {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
                             </span>
                             <Actions>
                               <button className="danger" onClick={() => removeDraftNf(note.invoice_number)} type="button">
@@ -2030,7 +2393,7 @@ function ReturnsOccurrences() {
                                 <strong>{batch.batch_code}</strong>
                                 {` | Motorista: ${batch.Driver?.name || batch.driver_id}`}
                                 {` | Placa: ${batch.vehicle_plate}`}
-                                {` | Data: ${batch.return_date}`}
+                                {` | Data: ${formatDateBR(batch.return_date)}`}
                                 {` | NFs: ${batch.notes.length}`}
                                 {` | Status: ${RETURN_BATCH_WORKFLOW_LABELS[batchWorkflowStatus]}`}
                               </span>
@@ -2452,7 +2815,7 @@ function ReturnsOccurrences() {
                         <span>
                           <strong>{entry.action}</strong>
                           {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
-                          {` | Data: ${new Date(entry.created_at).toLocaleString('pt-BR')}`}
+                          {` | Data: ${formatDateBR(entry.created_at)}`}
                         </span>
                       </li>
                     ))}

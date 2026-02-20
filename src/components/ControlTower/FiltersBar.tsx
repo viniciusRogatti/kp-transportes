@@ -2,6 +2,7 @@ import { RotateCw, Download, FilterX, Search, X } from 'lucide-react';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
 import { ControlTowerFilters, PeriodPreset } from '../../types/controlTower';
+import { formatDateBR } from '../../utils/dateDisplay';
 
 interface FiltersBarProps {
   filters: ControlTowerFilters;
@@ -24,7 +25,7 @@ const periodOptions: Array<{ value: PeriodPreset; label: string }> = [
   { value: 'custom', label: 'Personalizado' },
 ];
 
-const today = new Date().toISOString().slice(0, 10);
+const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 
 function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, onReset, onExport }: FiltersBarProps) {
   const periodLabel = periodOptions.find((option) => option.value === filters.periodPreset)?.label || filters.periodPreset;
@@ -62,9 +63,9 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
     ...(filters.periodPreset !== '7d' ? [{
       key: 'periodPreset',
       label: filters.periodPreset === 'custom'
-        ? `Período: ${filters.startDate || '-'} até ${filters.endDate || '-'}`
+        ? `Período: ${formatDateBR(filters.startDate)} até ${formatDateBR(filters.endDate)}`
         : `Período: ${periodLabel}`,
-      onRemove: () => onChange({ periodPreset: '7d', startDate: '', endDate: today }),
+      onRemove: () => onChange({ periodPreset: '7d', startDate: '', endDate: getTodayDateInput() }),
     }] : []),
     ...(filters.returnStatus !== 'all' ? [{ key: 'returnStatus', label: `Status devolução: ${returnStatusLabel}`, onRemove: () => onChange({ returnStatus: 'all' }) }] : []),
     ...(filters.returnType !== 'all' ? [{ key: 'returnType', label: `Tipo devolução: ${returnTypeLabel}`, onRemove: () => onChange({ returnType: 'all' }) }] : []),

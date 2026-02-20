@@ -20,8 +20,9 @@ import { useControlTowerData, useControlTowerMutations } from '../hooks/useContr
 import { BacklogStatus, ControlTowerFilters, RegisterControlTowerOccurrenceInput } from '../types/controlTower';
 import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
-const today = new Date().toISOString().slice(0, 10);
+const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
 const CREDIT_MANAGERS = ['control_tower', 'admin', 'master'];
 const NF_NOT_FOUND_MESSAGE = 'NF nao encontrada no banco de dados. Entre em contato com a expedicao da transportadora e envie o XML para cadastro.';
@@ -29,18 +30,51 @@ const NOTIFICATIONS_STORAGE_KEY = 'ct_notifications_seen_at';
 const SHOW_FILTERS_STORAGE_KEY = 'ct_show_filters';
 const SHOW_KPIS_STORAGE_KEY = 'ct_show_kpis';
 
-const defaultFilters: ControlTowerFilters = {
+const buildDefaultFilters = (): ControlTowerFilters => ({
   search: '',
   invoiceNumber: '',
   periodPreset: '7d',
   startDate: '',
-  endDate: today,
+  endDate: getTodayDateInput(),
   returnStatus: 'all',
   returnType: 'all',
   pickupStatus: 'all',
   city: '',
   customer: '',
   product: '',
+});
+
+const buildDefaultFlowFilters = (): ControlTowerFilters => ({
+  ...buildDefaultFilters(),
+  periodPreset: '30d',
+});
+
+const COLLECTION_TRACKING_STATUS_OPTIONS = [
+  { value: 'all', label: 'Todos os status' },
+  { value: 'solicitada', label: 'Solicitada' },
+  { value: 'aceita_agendada', label: 'Aceita / Agendada' },
+  { value: 'coletada', label: 'Coletada' },
+  { value: 'enviada_em_lote', label: 'Enviada em lote' },
+  { value: 'recebida', label: 'Recebida' },
+  { value: 'cancelada', label: 'Cancelada' },
+] as const;
+
+type CollectionTrackingStatus = typeof COLLECTION_TRACKING_STATUS_OPTIONS[number]['value'];
+
+const COLLECTION_WORKFLOW_LABELS: Record<Exclude<CollectionTrackingStatus, 'all'>, string> = {
+  solicitada: 'Solicitada',
+  aceita_agendada: 'Aceita / Agendada',
+  coletada: 'Coletada',
+  enviada_em_lote: 'Enviada em lote',
+  recebida: 'Recebida',
+  cancelada: 'Cancelada',
+};
+
+const COLLECTION_QUALITY_LABELS: Record<string, string> = {
+  sem_ocorrencia: 'Sem ocorrência',
+  em_tratativa: 'Em tratativa',
+  aguardando_torre: 'Aguardando torre',
+  resolvida: 'Resolvida',
 };
 
 type ManualCollectionRequestPayload = {
@@ -85,66 +119,85 @@ function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): 
   const customerName = String(danfe.Customer?.name_or_legal_entity || '').trim();
   const city = String(danfe.Customer?.city || '').trim();
   const requestCode = buildCollectionRequestCode(invoiceNumber || fallbackInvoice);
-
-  const detailedPayloads = (Array.isArray(danfe.DanfeProducts) ? danfe.DanfeProducts : [])
-    .map((item) => {
-      const quantity = parseNumericInput(item.quantity);
-      const productDescription = String(item.Product?.description || '').trim();
-
-      if (!Number.isFinite(quantity) || quantity <= 0 || !productDescription) {
-        return null;
-      }
-
-      const productId = String(item.Product?.code || '').trim();
-      const productType = String(item.type || item.Product?.type || '').trim().toUpperCase();
-
-      return {
-        invoice_number: invoiceNumber,
-        request_code: requestCode,
-        customer_name: customerName,
-        city,
-        product_id: productId || null,
-        product_description: productDescription,
-        product_type: productType || null,
-        quantity,
-        request_scope: 'items',
-        urgency_level: 'media',
-      };
-    })
-    .filter((item): item is ManualCollectionRequestPayload => item !== null);
-
-  if (detailedPayloads.length) {
-    return detailedPayloads;
-  }
-
+  const products = Array.isArray(danfe.DanfeProducts) ? danfe.DanfeProducts : [];
+  const sumItemsQuantity = products.reduce((sum, item) => {
+    const quantity = parseNumericInput(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return sum;
+    return sum + quantity;
+  }, 0);
   const totalQuantity = parseNumericInput(danfe.total_quantity);
+  const resolvedQuantity = Number.isFinite(totalQuantity) && totalQuantity > 0
+    ? totalQuantity
+    : sumItemsQuantity > 0
+      ? sumItemsQuantity
+      : 1;
+  const firstProductDescription = String(products[0]?.Product?.description || '').trim();
+  const resolvedInvoiceNumber = invoiceNumber || fallbackInvoice;
+  const productDescription = firstProductDescription
+    ? `NF ${resolvedInvoiceNumber} | ${firstProductDescription}`
+    : `NF ${resolvedInvoiceNumber}`;
+
   return [{
-    invoice_number: invoiceNumber,
+    invoice_number: resolvedInvoiceNumber,
     request_code: requestCode,
     customer_name: customerName,
     city,
     product_id: null,
-    product_description: `NF ${invoiceNumber || fallbackInvoice}`,
+    product_description: productDescription,
     product_type: null,
-    quantity: Number.isFinite(totalQuantity) && totalQuantity > 0 ? totalQuantity : 1,
+    quantity: resolvedQuantity,
     request_scope: 'invoice_total',
     urgency_level: 'media',
-    notes: 'Solicitacao manual sem detalhamento de itens na DANFE.',
+    notes: 'Solicitacao manual consolidada por NF para evitar duplicidade de coleta.',
   }];
 }
 
 function formatDateTimeLabel(value?: string | null) {
-  const parsed = value ? new Date(value) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleString('pt-BR');
+  return formatDateBR(value);
+}
+
+function normalizeCollectionWorkflowStatus(request: ICollectionRequest) {
+  const workflowStatus = String(request.workflow_status || '').trim().toLowerCase();
+  if (workflowStatus) return workflowStatus;
+
+  const legacyStatus = String(request.status || '').trim().toLowerCase();
+  if (legacyStatus === 'cancelled') return 'cancelada';
+  if (legacyStatus === 'completed') return 'coletada';
+  return 'solicitada';
+}
+
+function formatCollectionWorkflowStatus(request: ICollectionRequest) {
+  const normalized = normalizeCollectionWorkflowStatus(request) as Exclude<CollectionTrackingStatus, 'all'>;
+  return COLLECTION_WORKFLOW_LABELS[normalized] || normalized || 'Nao informado';
+}
+
+function formatCollectionQualityStatus(request: ICollectionRequest) {
+  const normalized = String(request.quality_status || '').trim().toLowerCase();
+  if (!normalized) return 'Sem ocorrência';
+  return COLLECTION_QUALITY_LABELS[normalized] || normalized;
+}
+
+function canOpenCollectionInFlow(request: ICollectionRequest) {
+  const workflowStatus = normalizeCollectionWorkflowStatus(request);
+  if (workflowStatus === 'enviada_em_lote' || workflowStatus === 'recebida') {
+    return true;
+  }
+
+  return Boolean(
+    String(request.sent_in_batch_code || '').trim()
+    || String(request.sent_in_batch_at || '').trim()
+    || String(request.received_at || '').trim(),
+  );
 }
 
 function ControlTowerCollections() {
   const navigate = useNavigate();
   const userPermission = localStorage.getItem('user_permission') || '';
   const canManageStatus = ['admin', 'master', 'expedicao'].includes(userPermission);
+  const canConfirmTowerBatchReceipt = userPermission === 'control_tower';
   const canFinalizeOccurrenceCredit = CREDIT_MANAGERS.includes(userPermission);
-  const [filters, setFilters] = useState<ControlTowerFilters>(defaultFilters);
+  const [analyticsFilters, setAnalyticsFilters] = useState<ControlTowerFilters>(() => buildDefaultFilters());
+  const [flowFilters, setFlowFilters] = useState<ControlTowerFilters>(() => buildDefaultFlowFilters());
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize] = useState(12);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'confirmedAt', desc: true }]);
@@ -152,6 +205,11 @@ function ControlTowerCollections() {
   const [topMetric, setTopMetric] = useState<TopMetric>('quantity');
   const [registerNf, setRegisterNf] = useState('');
   const [registeringPickup, setRegisteringPickup] = useState(false);
+  const [collectionTrackingRows, setCollectionTrackingRows] = useState<ICollectionRequest[]>([]);
+  const [collectionTrackingLoading, setCollectionTrackingLoading] = useState(false);
+  const [collectionTrackingError, setCollectionTrackingError] = useState('');
+  const [collectionTrackingNf, setCollectionTrackingNf] = useState('');
+  const [collectionTrackingStatus, setCollectionTrackingStatus] = useState<CollectionTrackingStatus>('all');
   const [recentOccurrences, setRecentOccurrences] = useState<IOccurrence[]>([]);
   const [pendingBatches, setPendingBatches] = useState<IReturnBatch[]>([]);
   const [receivingBatchCode, setReceivingBatchCode] = useState<string | null>(null);
@@ -172,15 +230,28 @@ function ControlTowerCollections() {
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
   const actionQueueSectionRef = useRef<HTMLDivElement | null>(null);
   const returnsTableSectionRef = useRef<HTMLDivElement | null>(null);
+  const collectionTrackingSectionRef = useRef<HTMLDivElement | null>(null);
   const occurrenceSectionRef = useRef<HTMLDivElement | null>(null);
   const pendingBatchesSectionRef = useRef<HTMLDivElement | null>(null);
   const occurrenceItemRefs = useRef<Map<number, HTMLLIElement>>(new Map());
 
   const sortingInput = sorting[0] ? { id: sorting[0].id as any, desc: sorting[0].desc ?? false } : undefined;
   const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
+  const analyticsPagination = useMemo(() => ({ pageIndex: 0, pageSize: 1 }), []);
 
-  const { summary, charts, queue, table } = useControlTowerData(filters, pagination, sortingInput);
-  const { updateStatusMutation, addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(filters, pagination, sortingInput);
+  const { summary, charts } = useControlTowerData(analyticsFilters, analyticsPagination, undefined, {
+    includeSummary: true,
+    includeCharts: true,
+    includeQueue: false,
+    includeTable: false,
+  });
+  const { queue, table } = useControlTowerData(flowFilters, pagination, sortingInput, {
+    includeSummary: false,
+    includeCharts: false,
+    includeQueue: true,
+    includeTable: true,
+  });
+  const { updateStatusMutation, addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(flowFilters, pagination, sortingInput);
 
   const selectedRow = selectedId ? getSelectedFromCache(selectedId) : null;
 
@@ -190,18 +261,22 @@ function ControlTowerCollections() {
     ? formatDistanceToNow(new Date(summary.data.updatedAt), { addSuffix: false, locale: ptBR })
     : '-';
 
-  const periodSubtitle = filters.periodPreset === 'custom'
-    ? `${filters.startDate || '-'} até ${filters.endDate || '-'}`
-    : filters.periodPreset === 'today'
+  const periodSubtitle = analyticsFilters.periodPreset === 'custom'
+    ? `${formatDateBR(analyticsFilters.startDate)} até ${formatDateBR(analyticsFilters.endDate)}`
+    : analyticsFilters.periodPreset === 'today'
       ? 'Hoje'
-      : filters.periodPreset === '7d'
+      : analyticsFilters.periodPreset === '7d'
         ? 'Últimos 7 dias'
         : 'Últimos 30 dias';
   const pendingSituationsCount = notificationTotals.occurrences + notificationTotals.batches + notificationTotals.pickups;
 
-  function handleFilterChange(next: Partial<ControlTowerFilters>) {
+  function handleAnalyticsFilterChange(next: Partial<ControlTowerFilters>) {
+    setAnalyticsFilters((prev) => ({ ...prev, ...next }));
+  }
+
+  function handleFlowFilterChange(next: Partial<ControlTowerFilters>) {
     setPageIndex(0);
-    setFilters((prev) => ({ ...prev, ...next }));
+    setFlowFilters((prev) => ({ ...prev, ...next }));
   }
 
   const loadRecentOccurrences = useCallback(async () => {
@@ -231,6 +306,49 @@ function ControlTowerCollections() {
       setRecentOccurrences([]);
     }
   }, []);
+
+  const loadCollectionTracking = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setCollectionTrackingRows([]);
+      setCollectionTrackingError('');
+      return;
+    }
+
+    setCollectionTrackingLoading(true);
+    setCollectionTrackingError('');
+
+    try {
+      const params: Record<string, string | number> = {
+        status: 'all',
+        limit: 260,
+      };
+      const normalizedNf = collectionTrackingNf.trim();
+
+      if (normalizedNf) {
+        params.invoice_number = normalizedNf;
+      }
+      if (collectionTrackingStatus !== 'all') {
+        params.workflow_status = collectionTrackingStatus;
+      }
+
+      const { data } = await axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/search`, {
+        params,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const rows = Array.isArray(data) ? data : [];
+      setCollectionTrackingRows(rows);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setCollectionTrackingError(error.response?.data?.error || 'Erro ao carregar coletas.');
+      } else {
+        setCollectionTrackingError('Erro ao carregar coletas.');
+      }
+      setCollectionTrackingRows([]);
+    } finally {
+      setCollectionTrackingLoading(false);
+    }
+  }, [collectionTrackingNf, collectionTrackingStatus]);
 
   const loadTowerNotifications = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -312,7 +430,7 @@ function ControlTowerCollections() {
       key: `pickup-${pickup.id}`,
       type: 'pickup',
       title: `Coleta com data confirmada | NF ${pickup.invoice_number || '-'}`,
-      description: `Prevista para ${pickup.scheduled_for || '-'} | Cliente: ${pickup.customer_name || '-'}`,
+      description: `Prevista para ${formatDateBR(pickup.scheduled_for)} | Cliente: ${pickup.customer_name || '-'}`,
       date: pickup.accepted_at || `${pickup.scheduled_for}T12:00:00.000Z`,
       pickupId: pickup.id,
       invoiceNumber: pickup.invoice_number || undefined,
@@ -337,6 +455,16 @@ function ControlTowerCollections() {
   useEffect(() => {
     loadRecentOccurrences();
   }, [loadRecentOccurrences]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadCollectionTracking();
+    }, 280);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [loadCollectionTracking]);
 
   useEffect(() => {
     loadTowerNotifications();
@@ -393,29 +521,32 @@ function ControlTowerCollections() {
     };
   }, [highlightedOccurrenceId]);
 
-  async function applyFilterAndOpen(next: Partial<ControlTowerFilters>) {
-    const merged = { ...filters, ...next };
+  async function applyFlowFilterAndOpen(next: Partial<ControlTowerFilters>) {
+    const merged = { ...flowFilters, ...next };
     setPageIndex(0);
-    setFilters(merged);
+    setFlowFilters(merged);
     const firstRow = await getReturnsTable(merged, { pageIndex: 0, pageSize: 1 }, sortingInput);
     setSelectedId(firstRow.rows[0]?.id || null);
   }
 
+  function applyAnalyticsFilter(next: Partial<ControlTowerFilters>) {
+    setAnalyticsFilters((prev) => ({ ...prev, ...next }));
+  }
+
   async function handleExport() {
-    const response = await getReturnsTable(filters, { pageIndex: 0, pageSize: 3000 }, sortingInput);
+    const response = await getReturnsTable(analyticsFilters, { pageIndex: 0, pageSize: 3000 }, sortingInput);
     const csv = exportRowsToCsv(response.rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `control-tower-${today}.csv`;
+    link.download = `control-tower-${getTodayDateInput()}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  function resetFilters() {
-    setPageIndex(0);
-    setFilters(defaultFilters);
+  function resetAnalyticsFilters() {
+    setAnalyticsFilters(buildDefaultFilters());
   }
 
   function logout() {
@@ -433,6 +564,14 @@ function ControlTowerCollections() {
       table.refetch(),
       loadRecentOccurrences(),
       loadTowerNotifications(),
+      loadCollectionTracking(),
+    ]);
+  }
+
+  async function refreshAnalytics() {
+    await Promise.all([
+      summary.refetch(),
+      charts.refetch(),
     ]);
   }
 
@@ -472,7 +611,11 @@ function ControlTowerCollections() {
     }
 
     if (notification.type === 'pickup') {
-      actionQueueSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const invoiceDigits = String(notification.invoiceNumber || '').replace(/\D/g, '').slice(0, 9);
+      if (invoiceDigits) {
+        setCollectionTrackingNf(invoiceDigits);
+      }
+      collectionTrackingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
 
@@ -486,21 +629,48 @@ function ControlTowerCollections() {
     const invoiceDigits = normalizedInvoice.replace(/\D/g, '').slice(0, 9);
     const firstInvoice = String(batch.notes?.[0]?.invoice_number || '').trim();
     const firstInvoiceDigits = firstInvoice.replace(/\D/g, '').slice(0, 9);
+    const normalizeInvoiceDigits = (value: string) => String(value || '').replace(/\D/g, '').slice(0, 9);
+    const matchedNote = (batch.notes || []).find((note) => (
+      normalizeInvoiceDigits(note.invoice_number) === invoiceDigits
+      || String(note.invoice_number || '').trim() === normalizedInvoice
+    ));
+    const firstBatchNote = (batch.notes || [])[0];
+    const nextReturnType = (matchedNote?.return_type || firstBatchNote?.return_type || 'all') as ControlTowerFilters['returnType'];
 
     if (invoiceDigits) {
-      applyFilterAndOpen({ invoiceNumber: invoiceDigits, search: '' });
+      applyFlowFilterAndOpen({ search: invoiceDigits, invoiceNumber: '', returnType: nextReturnType });
       return;
     }
 
     if (firstInvoiceDigits) {
-      applyFilterAndOpen({ invoiceNumber: firstInvoiceDigits, search: '' });
+      applyFlowFilterAndOpen({
+        search: firstInvoiceDigits,
+        invoiceNumber: '',
+        returnType: (firstBatchNote?.return_type || 'all') as ControlTowerFilters['returnType'],
+      });
       return;
     }
 
-    applyFilterAndOpen({ search: normalizedInvoice || firstInvoice });
+    applyFlowFilterAndOpen({
+      search: normalizedInvoice || firstInvoice,
+      invoiceNumber: '',
+      returnType: nextReturnType,
+    });
+  }
+
+  function handleOpenCollectionInvoice(invoiceNumber?: string | null) {
+    const invoiceDigits = String(invoiceNumber || '').replace(/\D/g, '').slice(0, 9);
+    if (!invoiceDigits) return;
+    applyFlowFilterAndOpen({ search: invoiceDigits, invoiceNumber: '', returnType: 'all' });
+    returnsTableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   async function handleConfirmBatchReceipt(batchCode: string) {
+    if (!canConfirmTowerBatchReceipt) {
+      alert('Somente a Torre de Controle pode confirmar o recebimento do lote.');
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) {
       alert('Sessão inválida. Faça login novamente.');
@@ -596,6 +766,22 @@ function ControlTowerCollections() {
 
     setRegisteringPickup(true);
     try {
+      const existingResponse = await axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/search`, {
+        params: {
+          invoice_number: nf,
+          status: 'all',
+          limit: 60,
+        },
+      });
+      const existingRows = Array.isArray(existingResponse.data) ? existingResponse.data : [];
+      const activeRow = existingRows.find((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada');
+      if (activeRow) {
+        setCollectionTrackingNf(nf);
+        collectionTrackingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        alert(`Ja existe coleta ativa para NF ${nf} (ID ${activeRow.id} | ${formatCollectionWorkflowStatus(activeRow)}).`);
+        return;
+      }
+
       const danfeResponse = await axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${nf}`);
       const danfe = danfeResponse?.data;
 
@@ -615,6 +801,7 @@ function ControlTowerCollections() {
 
       await Promise.all(payloads.map((payload) => axios.post(`${API_URL}/collection-requests`, payload)));
 
+      setCollectionTrackingNf(nf);
       setRegisterNf('');
       await refreshAll();
       alert(`Coleta registrada para a NF ${nf}.`);
@@ -634,6 +821,8 @@ function ControlTowerCollections() {
       setRegisteringPickup(false);
     }
   }
+
+  const visibleCollectionTrackingRows = collectionTrackingRows.slice(0, 80);
 
   return (
     <div className="min-h-screen bg-[#070f1a] px-3 py-3 text-slate-100 lg:px-4">
@@ -719,40 +908,11 @@ function ControlTowerCollections() {
           </div>
         </div>
 
-        <section className="group rounded-lg border border-slate-800 bg-[#0b1624]/60">
-          <button
-            type="button"
-            onClick={() => setShowFilters((current) => !current)}
-            className="flex w-full items-center justify-between px-3 py-2 text-left"
-          >
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Barra de filtros</span>
-            <span
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showFilters ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-                }`}
-            >
-              {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </span>
-          </button>
-          {showFilters ? (
-            <div className="border-t border-slate-800 p-2">
-              <FiltersBar
-                filters={filters}
-                options={options}
-                updatedAgoLabel={updatedAgoLabel}
-                onChange={handleFilterChange}
-                onRefresh={refreshAll}
-                onReset={resetFilters}
-                onExport={handleExport}
-              />
-            </div>
-          ) : null}
-        </section>
-
         <Card className="border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-amber-100">Registrar Coleta</h3>
-              <p className="text-xs text-amber-200/80">Use a NF para abrir rapidamente uma solicitação de coleta para a transportadora.</p>
+              <p className="text-xs text-amber-200/80">Use a NF para abrir rapidamente uma solicitação consolidada (uma coleta por NF).</p>
             </div>
           </div>
           <div className="w-full max-w-[460px]">
@@ -782,28 +942,153 @@ function ControlTowerCollections() {
           </div>
         </Card>
 
-        <section className="group rounded-lg border border-slate-800 bg-[#101b2b]/60">
-          <button
-            type="button"
-            onClick={() => setShowKpis((current) => !current)}
-            className="flex w-full items-center justify-between px-3 py-2 text-left"
-          >
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Indicadores (KPIs)</span>
-            <span
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showKpis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-                }`}
-            >
-              {showKpis ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </span>
-          </button>
-          {showKpis ? (
-            <div className="border-t border-slate-800 p-3">
-              <KpiCards summary={summary.data} />
+        <div ref={collectionTrackingSectionRef}>
+          <Card className="border-slate-700 bg-[#101b2b]">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-100">Acompanhamento de coletas</h3>
+                <p className="text-xs text-slate-400">Visualize qualquer coleta por NF e acompanhe o status em toda a esteira.</p>
+              </div>
+              <Button
+                tone="outline"
+                className="h-8 border-slate-600 bg-slate-900 text-[11px] text-slate-100 hover:bg-slate-800"
+                onClick={loadCollectionTracking}
+                disabled={collectionTrackingLoading}
+              >
+                {collectionTrackingLoading ? 'Atualizando...' : 'Atualizar'}
+              </Button>
             </div>
-          ) : null}
-        </section>
 
+            <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_1fr]">
+              <label className="text-xs text-slate-300">
+                NF
+                <input
+                  value={collectionTrackingNf}
+                  onChange={(event) => setCollectionTrackingNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                  inputMode="numeric"
+                  maxLength={9}
+                  placeholder="Buscar por NF"
+                  className="mt-1 h-9 w-full rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
+                />
+              </label>
 
+              <label className="text-xs text-slate-300">
+                Status
+                <select
+                  value={collectionTrackingStatus}
+                  onChange={(event) => setCollectionTrackingStatus(event.target.value as CollectionTrackingStatus)}
+                  className="mt-1 h-9 w-full rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
+                >
+                  {COLLECTION_TRACKING_STATUS_OPTIONS.map((option) => (
+                    <option key={`tracking-status-${option.value}`} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="flex items-end">
+                <p className="text-xs text-slate-300">
+                  {collectionTrackingLoading
+                    ? 'Carregando coletas...'
+                    : `${collectionTrackingRows.length} coleta(s) encontrada(s).`}
+                </p>
+              </div>
+            </div>
+
+            {collectionTrackingError ? (
+              <p className="mt-2 rounded-sm border border-red-500/40 bg-red-900/20 px-2 py-1 text-xs text-red-200">
+                {collectionTrackingError}
+              </p>
+            ) : null}
+
+            {!collectionTrackingLoading && !collectionTrackingError && !collectionTrackingRows.length ? (
+              <p className="mt-2 text-xs text-slate-400">Nenhuma coleta encontrada para os filtros informados.</p>
+            ) : null}
+
+            {!collectionTrackingLoading && !collectionTrackingError && !!visibleCollectionTrackingRows.length ? (
+              <ul className="mt-2 max-h-[340px] space-y-2 overflow-auto pr-1">
+                {visibleCollectionTrackingRows.map((request) => {
+                  const canOpenFlow = canOpenCollectionInFlow(request);
+
+                  return (
+                    <li key={`tracking-collection-${request.id}`} className="rounded-sm border border-slate-700 bg-slate-900/55 px-3 py-2 text-xs text-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <strong>{`#${request.id}`}</strong>
+                        {` | NF ${request.invoice_number || '-'}`}
+                        {` | ${request.customer_name || '-'}`}
+                        {` | ${request.city || '-'}`}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="rounded-md border border-sky-500/40 bg-sky-900/25 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                          {formatCollectionWorkflowStatus(request)}
+                        </span>
+                        <span className="rounded-md border border-amber-500/40 bg-amber-900/25 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                          {formatCollectionQualityStatus(request)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
+                      <span>
+                        {`Produto: ${request.product_id ? `${request.product_id} - ` : ''}${request.product_description || '-'}`}
+                        {` | Qtd: ${Number(request.quantity || 0)}`}
+                      </span>
+                      {request.scheduled_for ? (
+                        <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-100">
+                          {`Agendada para ${formatDateBR(request.scheduled_for)}`}
+                        </span>
+                      ) : null}
+                      {request.sent_in_batch_code ? (
+                        <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
+                          {`Lote: ${request.sent_in_batch_code}`}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <span>{`Criada: ${formatDateTimeLabel(request.created_at)}`}</span>
+                      <span>{`Atualizada: ${formatDateTimeLabel(request.updated_at)}`}</span>
+                      {request.invoice_number && canOpenFlow ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCollectionInvoice(request.invoice_number)}
+                          className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-amber-100 transition hover:bg-amber-900/35"
+                        >
+                          Abrir NF no fluxo
+                        </button>
+                      ) : null}
+                      {request.invoice_number && !canOpenFlow ? (
+                        <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                          Vai para o fluxo após envio em lote
+                        </span>
+                      ) : null}
+                    </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+
+            {!collectionTrackingLoading && !collectionTrackingError && collectionTrackingRows.length > visibleCollectionTrackingRows.length ? (
+              <p className="mt-2 text-[11px] text-slate-400">
+                {`Mostrando 80 de ${collectionTrackingRows.length} coleta(s). Refine por NF/status para reduzir a lista.`}
+              </p>
+            ) : null}
+          </Card>
+        </div>
+
+        <div ref={actionQueueSectionRef}>
+          <ActionQueue
+            rows={queue.data || []}
+            loading={queue.isLoading}
+            canManageStatus={canManageStatus}
+            onTogglePriority={quickTogglePriority}
+            onCancelPickup={quickCancelPickup}
+            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
+            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
+            onOpen={openById}
+          />
+        </div>
 
         <div ref={occurrenceSectionRef}>
           <Card className="border-slate-800 bg-[#101b2b]">
@@ -899,14 +1184,16 @@ function ControlTowerCollections() {
                         {` | Enviado em: ${formatDateTimeLabel(batch.sent_to_control_tower_at)}`}
                         {` | NFs: ${batch.notes?.length || 0}`}
                       </div>
-                      <Button
-                        tone="secondary"
-                        className="h-8 bg-emerald-700/80 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
-                        onClick={() => handleConfirmBatchReceipt(batch.batch_code)}
-                        disabled={receivingBatchCode === batch.batch_code}
-                      >
-                        {receivingBatchCode === batch.batch_code ? 'Confirmando...' : 'Marcar como recebido'}
-                      </Button>
+                      {canConfirmTowerBatchReceipt ? (
+                        <Button
+                          tone="secondary"
+                          className="h-8 bg-emerald-700/80 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
+                          onClick={() => handleConfirmBatchReceipt(batch.batch_code)}
+                          disabled={receivingBatchCode === batch.batch_code}
+                        >
+                          {receivingBatchCode === batch.batch_code ? 'Confirmando...' : 'Marcar como recebido'}
+                        </Button>
+                      ) : null}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {(batch.notes || []).slice(0, 10).map((note) => (
@@ -932,36 +1219,73 @@ function ControlTowerCollections() {
           </Card>
         </div>
 
-        <div ref={actionQueueSectionRef}>
-          <ActionQueue
-            rows={queue.data || []}
-            loading={queue.isLoading}
-            canManageStatus={canManageStatus}
-            onTogglePriority={quickTogglePriority}
-            onCancelPickup={quickCancelPickup}
-            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
-            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
-            onOpen={openById}
-          />
-        </div>
-
         <div ref={returnsTableSectionRef}>
           <ReturnsTable
             rows={table.data?.rows || []}
             total={table.data?.total || 0}
             loading={table.isLoading}
-            returnTypeFilter={filters.returnType}
-            invoiceNumber={filters.invoiceNumber}
+            returnTypeFilter={flowFilters.returnType}
+            search={flowFilters.search}
             pageIndex={pageIndex}
             pageSize={pageSize}
             sorting={sorting}
             onPaginationChange={setPageIndex}
             onSortingChange={setSorting}
-            onInvoiceNumberChange={(invoiceNumber) => handleFilterChange({ invoiceNumber })}
-            onFilterByReturnType={(returnType) => handleFilterChange({ returnType })}
+            onSearchChange={(search) => handleFlowFilterChange({ search, invoiceNumber: '' })}
+            onFilterByReturnType={(returnType) => handleFlowFilterChange({ returnType })}
             onOpenDetails={openById}
           />
         </div>
+
+        <section className="group rounded-lg border border-slate-800 bg-[#0b1624]/60">
+          <button
+            type="button"
+            onClick={() => setShowFilters((current) => !current)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Filtros analíticos (KPIs e gráficos)</span>
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showFilters ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                }`}
+            >
+              {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+          {showFilters ? (
+            <div className="border-t border-slate-800 p-2">
+              <FiltersBar
+                filters={analyticsFilters}
+                options={options}
+                updatedAgoLabel={updatedAgoLabel}
+                onChange={handleAnalyticsFilterChange}
+                onRefresh={refreshAnalytics}
+                onReset={resetAnalyticsFilters}
+                onExport={handleExport}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        <section className="group rounded-lg border border-slate-800 bg-[#101b2b]/60">
+          <button
+            type="button"
+            onClick={() => setShowKpis((current) => !current)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Indicadores (KPIs)</span>
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showKpis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                }`}
+            >
+              {showKpis ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+          {showKpis ? (
+            <div className="border-t border-slate-800 p-3">
+              <KpiCards summary={summary.data} />
+            </div>
+          ) : null}
+        </section>
 
         <div className="grid gap-3 xl:grid-cols-3">
           <Card className="border-slate-800 bg-[#101b2b]">
@@ -982,7 +1306,7 @@ function ControlTowerCollections() {
               data={charts.data?.topProducts || []}
               metric={topMetric}
               color="#60a5fa"
-              onBarClick={(name) => applyFilterAndOpen({ product: name })}
+              onBarClick={(name) => applyAnalyticsFilter({ product: name })}
             />
           </Card>
 
@@ -993,7 +1317,7 @@ function ControlTowerCollections() {
               data={charts.data?.topClients || []}
               metric={topMetric}
               color="#f59e0b"
-              onBarClick={(name) => applyFilterAndOpen({ customer: name })}
+              onBarClick={(name) => applyAnalyticsFilter({ customer: name })}
             />
           </Card>
 
@@ -1001,7 +1325,7 @@ function ControlTowerCollections() {
             <ReasonsDonutChart
               data={charts.data}
               subtitle={periodSubtitle}
-              onSliceClick={(reason) => applyFilterAndOpen({ search: reason })}
+              onSliceClick={(reason) => applyAnalyticsFilter({ search: reason })}
             />
           </Card>
         </div>
@@ -1014,7 +1338,7 @@ function ControlTowerCollections() {
               data={charts.data?.topSurplusProducts || []}
               metric="quantity"
               color="#34d399"
-              onBarClick={(name) => applyFilterAndOpen({ product: name, returnType: 'sobra' })}
+              onBarClick={(name) => applyAnalyticsFilter({ product: name, returnType: 'sobra' })}
             />
           </Card>
 
@@ -1025,7 +1349,7 @@ function ControlTowerCollections() {
               data={charts.data?.topShortageProducts || []}
               metric="quantity"
               color="#f87171"
-              onBarClick={(name) => applyFilterAndOpen({ product: name })}
+              onBarClick={(name) => applyAnalyticsFilter({ product: name })}
             />
           </Card>
         </div>

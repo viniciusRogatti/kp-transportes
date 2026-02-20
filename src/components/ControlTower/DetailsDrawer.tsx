@@ -123,6 +123,11 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
           <div>
             <h3 className="text-lg font-semibold">NF {row.invoiceNumber}</h3>
             <p className="text-xs text-slate-400">Lote {row.batchCode} | {row.customer}</p>
+            {row.sourceType === 'sobra' && row.isInversion ? (
+              <p className="mt-1 inline-flex rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+                Sobra com inversao
+              </p>
+            ) : null}
           </div>
           <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
@@ -150,6 +155,16 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
               <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Idade</strong><p>{row.ageHours} horas</p></div>
               <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Qtd Itens</strong><p>{numberFmt.format(totals.quantity)}</p></div>
               <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Peso</strong><p>{decimalFmt.format(totals.weight)} kg</p></div>
+              {row.loadNumber ? (
+                <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Carga</strong><p>{row.loadNumber}</p></div>
+              ) : null}
+              {row.sourceType === 'sobra' && row.isInversion ? (
+                <div className="rounded-md border border-amber-600/50 bg-amber-900/20 p-2">
+                  <strong>Inversao</strong>
+                  <p>NF: {row.inversionInvoiceNumber || '-'}</p>
+                  <p>Produto faltante: {row.inversionMissingProductCode || '-'}</p>
+                </div>
+              ) : null}
             </div>
             <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Valor estimado</strong><p>{currencyFmt.format(totals.value)}</p></div>
           </div>

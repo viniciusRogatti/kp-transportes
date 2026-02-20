@@ -76,6 +76,10 @@ export interface ReturnBatch {
   batchCode: string;
   invoiceNumber: string;
   sourceType?: ReturnSourceType;
+  loadNumber?: string;
+  isInversion?: boolean;
+  inversionInvoiceNumber?: string;
+  inversionMissingProductCode?: string;
   customer: string;
   city: string;
   route: string;
@@ -132,6 +136,10 @@ export interface ReturnsTableRow {
   batchCode: string;
   invoiceNumber: string;
   returnType: ReturnSourceType | 'faltante' | 'nao_informado';
+  loadNumber?: string;
+  isInversion?: boolean;
+  inversionInvoiceNumber?: string;
+  inversionMissingProductCode?: string;
   customer: string;
   city: string;
   route: string;

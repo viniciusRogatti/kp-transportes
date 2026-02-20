@@ -12,20 +12,20 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import { ControlTowerFilters, ReturnsTableRow } from '../../types/controlTower';
-import { currencyFmt, decimalFmt, formatDateTime, numberFmt } from './format';
+import { currencyFmt, formatDateTime, numberFmt } from './format';
 
 interface ReturnsTableProps {
   rows: ReturnsTableRow[];
   total: number;
   loading?: boolean;
   returnTypeFilter: ControlTowerFilters['returnType'];
-  invoiceNumber: string;
+  search: string;
   pageIndex: number;
   pageSize: number;
   sorting: SortingState;
   onPaginationChange: (pageIndex: number) => void;
   onSortingChange: OnChangeFn<SortingState>;
-  onInvoiceNumberChange: (invoiceNumber: string) => void;
+  onSearchChange: (search: string) => void;
   onFilterByReturnType: (returnType: ControlTowerFilters['returnType']) => void;
   onOpenDetails: (id: string) => void;
 }
@@ -71,13 +71,13 @@ function ReturnsTable({
   total,
   loading,
   returnTypeFilter,
-  invoiceNumber,
+  search,
   pageIndex,
   pageSize,
   sorting,
   onPaginationChange,
   onSortingChange,
-  onInvoiceNumberChange,
+  onSearchChange,
   onFilterByReturnType,
   onOpenDetails,
 }: ReturnsTableProps) {
@@ -96,13 +96,21 @@ function ReturnsTable({
     {
       accessorKey: 'returnType',
       header: 'Tipo',
-      cell: ({ row }) => getReturnTypeLabel(row.original.returnType),
+      cell: ({ row }) => (
+        <span className="inline-flex items-center gap-1.5">
+          <span>{getReturnTypeLabel(row.original.returnType)}</span>
+          {row.original.returnType === 'sobra' && row.original.isInversion ? (
+            <span className="rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+              Inversao
+            </span>
+          ) : null}
+        </span>
+      ),
     },
     { accessorKey: 'customer', header: 'Cliente' },
     { accessorKey: 'city', header: 'Cidade' },
     { accessorKey: 'status', header: 'Status', cell: ({ row }) => getStatusLabel(row.original.status) },
     { accessorKey: 'quantity', header: 'Qtd', cell: ({ row }) => numberFmt.format(row.original.quantity) },
-    { accessorKey: 'weightKg', header: 'Peso (kg)', cell: ({ row }) => decimalFmt.format(row.original.weightKg) },
     { accessorKey: 'valueAmount', header: 'Valor', cell: ({ row }) => currencyFmt.format(row.original.valueAmount) },
     { accessorKey: 'confirmedAt', header: 'Confirmado em', cell: ({ row }) => formatDateTime(row.original.confirmedAt) },
   ], [onOpenDetails]);
@@ -123,14 +131,12 @@ function ReturnsTable({
     <Card className="border-slate-800 bg-[#101b2b] text-slate-100">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-semibold">Fluxo operacional (devoluções e ocorrências)</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
-            value={invoiceNumber}
-            onChange={(event) => onInvoiceNumberChange(event.target.value.replace(/\D/g, '').slice(0, 9))}
-            inputMode="numeric"
-            maxLength={9}
-            placeholder="Filtrar por NF"
-            className="h-9 w-[170px] border-accent/35 bg-[rgba(14,33,56,0.9)] text-slate-100 focus:ring-accent/60"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Buscar por NF, lote, cliente, cidade ou produto"
+            className="h-9 w-[320px] border-accent/35 bg-[rgba(14,33,56,0.9)] text-slate-100 focus:ring-accent/60"
           />
           <span className="text-xs text-slate-400">{total} registros</span>
         </div>

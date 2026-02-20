@@ -27,6 +27,7 @@ import ProductListPDF from '../components/ProductListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
 import verifyToken from '../utils/verifyToken';
+import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { ICar, IDanfe, IDriver, ITrip, ITripNote } from '../types/types';
 
@@ -1213,7 +1214,7 @@ function RoutePlanning() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-text">{trip.Driver.name} | {trip.Car.license_plate}</p>
-                          <p className="text-xs text-muted">{trip.date} | saída #{trip.run_number || 1} | {trip.TripNotes.length} notas</p>
+                          <p className="text-xs text-muted">{formatDateBR(trip.date)} | saída #{trip.run_number || 1} | {trip.TripNotes.length} notas</p>
                         </div>
                         <span className="rounded-full border border-sky-700/60 bg-sky-950/30 px-2 py-1 text-xs text-sky-200">{isTripActive(trip) ? 'Ativa' : 'Finalizada'}</span>
                       </div>
@@ -1319,7 +1320,7 @@ function RoutePlanning() {
                 <h3 className="text-base font-semibold text-text">Detalhes da Rota #{detailsTrip.run_number || 1}</h3>
                 <button type="button" onClick={() => setDetailsTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
               </div>
-              <p className="text-sm text-muted">Motorista: {detailsTrip.Driver.name} | Veículo: {detailsTrip.Car.license_plate} | Data: {detailsTrip.date}</p>
+              <p className="text-sm text-muted">Motorista: {detailsTrip.Driver.name} | Veículo: {detailsTrip.Car.license_plate} | Data: {formatDateBR(detailsTrip.date)}</p>
               <ul className="scrollbar-ui mt-3 max-h-[340px] space-y-1 overflow-y-auto pr-1">
                 {detailsTrip.TripNotes.slice().sort((a, b) => a.order - b.order).map((note) => (
                   <li key={`${note.invoice_number}-${note.order}`} className="rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm text-text">

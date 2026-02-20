@@ -1,6 +1,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
 import { ITrip } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 interface TripsPDFProps {
   trips: ITrip[];
@@ -67,7 +68,7 @@ const TripsPDF: React.FC<TripsPDFProps> = ({ trips, freightValues, tollValue }) 
           {trips.map(trip => (
             <View style={styles.tableRow} key={trip.id}>
               <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{trip.date}</Text>
+                <Text style={styles.tableCell}>{formatDateBR(trip.date)}</Text>
               </View>
               <View style={styles.tableCol}>
                 <Text style={styles.tableCell}>{trip.TripNotes.map(note => note.city).join(', ')}</Text>

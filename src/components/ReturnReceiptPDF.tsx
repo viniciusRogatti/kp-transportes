@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { IInvoiceReturnItem } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 interface BatchNote {
   invoice_number: string;
@@ -123,7 +124,7 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
-        <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {returnDate}</Text>
+        <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
 
         <Text style={styles.sectionTitle}>NFs devolvidas:</Text>
         {!!totalNfs && <Text style={styles.compactRow}>total: {totalNfs}</Text>}

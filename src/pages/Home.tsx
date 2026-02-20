@@ -28,6 +28,7 @@ import {
 } from '../style/returnsOccurrences';
 import { ICollectionRequest, IDanfe, IOccurrence } from '../types/types';
 import verifyToken from '../utils/verifyToken';
+import { formatDateBR } from '../utils/dateDisplay';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -167,8 +168,8 @@ const summarizeHistoryMetadata = (entry: AuditHistoryEntry) => {
 
   if (note) details.push(`Obs: ${note}`);
   if (justification) details.push(`Justificativa: ${justification}`);
-  if (previousScheduledFor) details.push(`Data anterior: ${previousScheduledFor}`);
-  if (scheduledFor) details.push(`Data prevista: ${scheduledFor}`);
+  if (previousScheduledFor) details.push(`Data anterior: ${formatDateBR(previousScheduledFor)}`);
+  if (scheduledFor) details.push(`Data prevista: ${formatDateBR(scheduledFor)}`);
   if (previousWorkflowStatus) details.push(`Status anterior: ${previousWorkflowStatus}`);
   if (workflowStatus) details.push(`Status novo: ${workflowStatus}`);
   if (batchCode) details.push(`Lote: ${batchCode}`);
@@ -928,7 +929,7 @@ function Home() {
                           </span>
                           <span>{`CIDADE: ${request.city || '-'}`}</span>
                           <span>{`STATUS: ${getCollectionStatusLabel(request)}`}</span>
-                          {request.scheduled_for ? <span>{`DATA PREVISTA: ${request.scheduled_for}`}</span> : null}
+                          {request.scheduled_for ? <span>{`DATA PREVISTA: ${formatDateBR(request.scheduled_for)}`}</span> : null}
                           <span>
                             ITEM: {request.product_id ? `${request.product_id} - ` : ''}{request.product_description || '-'}
                             {` | `}
@@ -1387,7 +1388,7 @@ function Home() {
                         <span>
                           <strong>{entry.action}</strong>
                           {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
-                          {` | Data: ${new Date(entry.created_at).toLocaleString('pt-BR')}`}
+                          {` | Data: ${formatDateBR(entry.created_at)}`}
                         </span>
                         {metadataSummary ? <span className="text-xs text-text-accent">{metadataSummary}</span> : null}
                       </div>

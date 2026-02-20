@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { ICollectionRequest } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 interface CollectionRequestPDFProps {
   request: ICollectionRequest;
@@ -64,12 +65,7 @@ function normalizeUpper(value: unknown) {
 }
 
 function formatDateTime(value: unknown) {
-  const normalized = normalizeText(value);
-  if (!normalized) return '-';
-
-  const date = new Date(normalized);
-  if (Number.isNaN(date.getTime())) return normalized;
-  return date.toLocaleString('pt-BR');
+  return formatDateBR(value);
 }
 
 const CollectionRequestPDF: React.FC<CollectionRequestPDFProps> = ({ request, addressLine }) => {

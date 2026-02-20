@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { IDanfe } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 interface Product {
   Product: {
@@ -55,7 +56,7 @@ const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver, danfe
             <Text style={{ fontSize: 14, fontWeight: 'bold' }}>NF: {danfe.invoice_number}</Text>
             <Text>{danfe.Customer.name_or_legal_entity}</Text>
             <Text>{danfe.Customer.city}</Text>
-            <Text style={{ fontSize: 12 }}>{danfe.invoice_date}</Text>
+            <Text style={{ fontSize: 12 }}>{formatDateBR(danfe.invoice_date)}</Text>
             <Text style={{ textAlign: 'center' }}>Lista de produtos</Text>
             {danfe.DanfeProducts.map((product) => (
               <View key={product.Product.code} style={styles.listItem}>

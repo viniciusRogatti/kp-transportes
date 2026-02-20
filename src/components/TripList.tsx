@@ -2,7 +2,7 @@ import axios from 'axios';
 import { ITrip } from '../types/types';
 import ProductListPDF from './ProductListPDF';
 import { pdf } from '@react-pdf/renderer';
-import transformDate from '../utils/transformDate';
+import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { BoxButton, CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
 
@@ -85,7 +85,7 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
           <p>{trip.Car.license_plate}</p>
         </LeftHeader>
         <RightHeader>
-          <p>Data: {transformDate(trip.date)}</p>
+          <p>Data: {formatDateBR(trip.date)}</p>
           <p style={{ fontWeight: 'bold' }}>Peso: {trip.gross_weight}</p>
           <p>{`${trip.TripNotes.length} Notas`}</p>
         </RightHeader>

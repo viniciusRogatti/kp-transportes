@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { IDanfe, IInvoiceSearchContext } from '../types/types'
 import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
+import { formatDateBR } from '../utils/dateDisplay';
 
 interface CardDanfesProps {
   danfes: IDanfe[];
@@ -72,7 +73,7 @@ function CardDanfes({
                   }`}>
                     {driverName ? `Motorista: ${driverName}` : 'Sem motorista'}
                   </p>
-                  <h4>{danfe.invoice_date}</h4>
+                  <h4>{formatDateBR(danfe.invoice_date)}</h4>
                 </TitleCard>
                 <h4 className="mt-1 text-sm font-semibold leading-tight">{danfe.Customer.name_or_legal_entity}</h4>
                 <p className="text-xs text-muted">{danfe.Customer.city}</p>

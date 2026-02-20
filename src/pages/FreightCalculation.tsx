@@ -7,6 +7,7 @@ import TripsPDF from '../components/TripsPDF';
 import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
 import { ITrip } from '../types/types';
+import { formatDateBR } from '../utils/dateDisplay';
 
 const FreightSummary: React.FC = () => {
   const [driverId, setDriverId] = useState<string>('');
@@ -73,7 +74,7 @@ const FreightSummary: React.FC = () => {
             <tbody>
               {trips.map((trip) => (
                 <tr key={trip.id}>
-                  <td>{trip.date}</td>
+                  <td>{formatDateBR(trip.date)}</td>
                   <td>{trip.TripNotes.map(note => note.city).join(', ')}</td>
                   <td>
                     <input

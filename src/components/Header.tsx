@@ -29,6 +29,37 @@ type NavItem = {
   icon: JSX.Element;
 };
 
+type NotificationSummary = {
+  total: number;
+  occurrences: {
+    total: number;
+    priorityLoading: number;
+    simpleFlow: number;
+  };
+  collections: {
+    total: number;
+    awaitingSchedule: number;
+    scheduled: number;
+    collected: number;
+  };
+};
+
+const SIMPLE_OCCURRENCE_REASON = 'faltou_na_carga';
+const EMPTY_NOTIFICATION_SUMMARY: NotificationSummary = {
+  total: 0,
+  occurrences: {
+    total: 0,
+    priorityLoading: 0,
+    simpleFlow: 0,
+  },
+  collections: {
+    total: 0,
+    awaitingSchedule: 0,
+    scheduled: 0,
+    collected: 0,
+  },
+};
+
 const navItems: NavItem[] = [
   { to: '/home', label: 'Home', shortLabel: 'Home', icon: <Home className="h-4 w-4" /> },
   { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" /> },
@@ -62,6 +93,7 @@ function Header() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [notificationSummary, setNotificationSummary] = useState<NotificationSummary>(EMPTY_NOTIFICATION_SUMMARY);
   const [quickSearch, setQuickSearch] = useState('');
   const desktopSidebarRef = useRef<HTMLElement | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
@@ -93,11 +125,57 @@ function Header() {
 
     const loadPending = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/occurrences/search?status=pending`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setPendingCount(Array.isArray(data) ? data.length : 0);
+        const headers = { Authorization: `Bearer ${token}` };
+        const [occurrencesResult, collectionsResult] = await Promise.allSettled([
+          axios.get(`${API_URL}/occurrences/search?status=pending`, { headers }),
+          axios.get(`${API_URL}/collection-requests/dashboard`, { headers }),
+        ]);
+
+        let occurrencesTotal = 0;
+        let simpleFlowOccurrences = 0;
+        let priorityLoadingOccurrences = 0;
+
+        if (occurrencesResult.status === 'fulfilled') {
+          const occurrencesRows = Array.isArray(occurrencesResult.value?.data) ? occurrencesResult.value.data : [];
+          occurrencesTotal = occurrencesRows.length;
+          simpleFlowOccurrences = occurrencesRows.filter(
+            (row: { reason?: string | null }) => String(row?.reason || '').trim().toLowerCase() === SIMPLE_OCCURRENCE_REASON,
+          ).length;
+          priorityLoadingOccurrences = Math.max(occurrencesTotal - simpleFlowOccurrences, 0);
+        }
+
+        let awaitingScheduleCount = 0;
+        let scheduledCount = 0;
+        let collectedCount = 0;
+
+        if (collectionsResult.status === 'fulfilled') {
+          const metrics = collectionsResult.value?.data?.metrics || {};
+          awaitingScheduleCount = Number(metrics.pending_count || 0);
+          scheduledCount = Number(metrics.accepted_count || 0);
+          collectedCount = Number(metrics.collected_count || 0);
+        }
+
+        const collectionsTotal = awaitingScheduleCount + scheduledCount + collectedCount;
+        const total = occurrencesTotal + collectionsTotal;
+        const summary: NotificationSummary = {
+          total,
+          occurrences: {
+            total: occurrencesTotal,
+            priorityLoading: priorityLoadingOccurrences,
+            simpleFlow: simpleFlowOccurrences,
+          },
+          collections: {
+            total: collectionsTotal,
+            awaitingSchedule: awaitingScheduleCount,
+            scheduled: scheduledCount,
+            collected: collectedCount,
+          },
+        };
+
+        setNotificationSummary(summary);
+        setPendingCount(summary.total);
       } catch {
+        setNotificationSummary(EMPTY_NOTIFICATION_SUMMARY);
         setPendingCount(0);
       }
     };
@@ -260,9 +338,42 @@ function Header() {
         {isNotificationOpen ? (
           <div className="absolute right-3 top-[calc(var(--header-height)+8px)] z-[1200] w-[min(92vw,320px)] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)] md:right-4">
             <h3 className="mb-1 text-sm font-semibold text-text">Pendências</h3>
-            <p className="text-xs text-muted">Ocorrências pendentes no momento</p>
-            <p className="mt-2 text-2xl font-semibold text-text">{pendingCount}</p>
-            <p className="mt-1 text-xs text-muted">Use esse número para priorizar a operação diária.</p>
+            <p className="text-xs text-muted">Resumo por tipo para priorização diária</p>
+
+            <div className="mt-3 space-y-2">
+              <div className="rounded-md border border-border bg-surface-2/80 p-2">
+                <div className="flex items-center justify-between">
+                  <strong className="text-xs uppercase tracking-wide text-text">Ocorrências</strong>
+                  <span className="text-sm font-semibold text-text">{notificationSummary.occurrences.total}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  Prioridade de carregamento: <strong className="text-text">{notificationSummary.occurrences.priorityLoading}</strong>
+                </p>
+                <p className="text-xs text-muted">
+                  Formulário faltante: <strong className="text-text">{notificationSummary.occurrences.simpleFlow}</strong>
+                </p>
+              </div>
+
+              <div className="rounded-md border border-border bg-surface-2/80 p-2">
+                <div className="flex items-center justify-between">
+                  <strong className="text-xs uppercase tracking-wide text-text">Coletas</strong>
+                  <span className="text-sm font-semibold text-text">{notificationSummary.collections.total}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  Aguardando agendamento: <strong className="text-text">{notificationSummary.collections.awaitingSchedule}</strong>
+                </p>
+                <p className="text-xs text-muted">
+                  Agendadas: <strong className="text-text">{notificationSummary.collections.scheduled}</strong>
+                </p>
+                <p className="text-xs text-muted">
+                  Coletadas: <strong className="text-text">{notificationSummary.collections.collected}</strong>
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-2 text-xs text-muted">
+              Total geral: <strong className="text-text">{notificationSummary.total}</strong>
+            </p>
           </div>
         ) : null}
       </header>

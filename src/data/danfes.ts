@@ -52,6 +52,8 @@ export const cities: ICities = {
   "Saltinho": "Rota Piracicaba",
   "Salto de Pirapora": "Rota Sorocaba 2",
   "Santa Barbara d&amp;apos;Oeste": "Rota Americana",
+  "Santa Barbara d'Oeste": "Rota Americana",
+  "Santa Bárbara d'Oeste": "Rota Americana",
   "Santa Rita do Passa Quatro": "Rota Pirassununga",
   "Sao Joao da Boa Vista": "Rota Sorocaba 2",
   "Sao Roque": "Rota Sorocaba 2",
@@ -71,6 +73,7 @@ export const cities: ICities = {
   "Sao Paulo": "Rota São Paulo",
   "Itarare": "Rota Itapetininga",
   "Santa Clara d&amp;apos;Oeste": "Rota Americana",
+  "Santa Clara d'Oeste": "Rota Americana",
   "Rio das Pedras": "Rota Piracicaba",
 }
 

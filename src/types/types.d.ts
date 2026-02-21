@@ -198,6 +198,20 @@ export interface ICollectionRequest {
     username: string;
     permission: string;
   };
+  quantity_original?: number | null;
+  total_collected?: number | null;
+  remaining_collectable?: number | null;
+  collection_item_history?: Array<{
+    collection_request_id: number;
+    request_code: string | null;
+    quantity: number;
+    workflow_status: 'coletada' | 'enviada_em_lote' | 'recebida';
+    collected_at: string | null;
+    sent_in_batch_at: string | null;
+    received_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
 }
 
 export interface ICollectionDashboard {

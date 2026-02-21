@@ -103,6 +103,12 @@ const formatOccurrenceQtyWithType = (quantity: number, productType?: string | nu
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
 };
+const formatCollectionQuantityWithType = (quantity?: number | null, productType?: string | null) => {
+  const normalizedType = normalizeProductType(productType);
+  const parsed = Number(quantity || 0);
+  const normalizedQty = Number.isInteger(parsed) ? String(parsed) : parsed.toFixed(3).replace(/\.?0+$/, '');
+  return `${normalizedQty}${normalizedType || ''}`;
+};
 const formatUrgencyLabel = (level?: string | null) => {
   const normalized = String(level || '').trim().toLowerCase();
   if (normalized === 'critica') return 'Crítica';
@@ -141,9 +147,17 @@ type AuditHistoryEntry = {
   created_at: string;
   metadata?: Record<string, unknown> | null;
 };
+type CollectionItemHistoryEntry = NonNullable<ICollectionRequest['collection_item_history']>[number];
 
 const resolveCollectionStatus = (request: ICollectionRequest) => (
   String(request.workflow_status || request.display_status || request.status || '').trim().toLowerCase()
+);
+const resolveCollectionItemHistoryEventDate = (historyItem?: CollectionItemHistoryEntry) => (
+  historyItem?.received_at
+  || historyItem?.sent_in_batch_at
+  || historyItem?.collected_at
+  || historyItem?.created_at
+  || ''
 );
 
 const getCollectionStatusLabel = (request: ICollectionRequest) => {
@@ -202,6 +216,10 @@ const decodeXmlEntitiesDeep = (value: string) => {
   return current;
 };
 const normalizeTextValue = (value: unknown) => decodeXmlEntitiesDeep(String(value || '').trim());
+const toNullableNumber = (value: unknown) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 const normalizeCityLabel = (value: unknown) => {
   const normalized = normalizeTextValue(value);
   if (!normalized) return '';
@@ -229,6 +247,16 @@ const sanitizeCollectionRequestRecord = (request: ICollectionRequest): ICollecti
   product_description: normalizeTextValue(request.product_description),
   requested_by_company: normalizeTextValue(request.requested_by_company),
   notes: normalizeTextValue(request.notes) || null,
+  quantity_original: toNullableNumber(request.quantity_original),
+  total_collected: toNullableNumber(request.total_collected),
+  remaining_collectable: toNullableNumber(request.remaining_collectable),
+  collection_item_history: Array.isArray(request.collection_item_history)
+    ? request.collection_item_history.map((entry) => ({
+      ...entry,
+      request_code: normalizeTextValue(entry.request_code) || null,
+      quantity: Number(entry.quantity || 0),
+    }))
+    : [],
 });
 const sanitizeDanfeForDisplay = (danfe: IDanfe): IDanfe => ({
   ...danfe,
@@ -1732,10 +1760,68 @@ function Home() {
                   <>
                     {collectionDetailsRequest.product_id ? `${collectionDetailsRequest.product_id} - ` : ''}
                     {collectionDetailsRequest.product_description || '-'}
-                    {` | Qtd: ${Number(collectionDetailsRequest.quantity || 0)}${normalizeProductType(collectionDetailsRequest.product_type) || ''}`}
+                    {` | Qtd: ${formatCollectionQuantityWithType(
+                      Number(collectionDetailsRequest.quantity || 0),
+                      collectionDetailsRequest.product_type,
+                    )}`}
                   </>
                 )}
             </div>
+
+            {collectionDetailsRequest.request_scope === 'items' && (
+              <>
+                <InlineText style={{ marginTop: '10px' }}>Saldo da NF por item</InlineText>
+                <List className="mt-2">
+                  <li>
+                    <span>
+                      <strong>Qtd original:</strong>{' '}
+                      {formatCollectionQuantityWithType(
+                        collectionDetailsRequest.quantity_original,
+                        collectionDetailsRequest.product_type,
+                      )}
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      <strong>Total coletado:</strong>{' '}
+                      {formatCollectionQuantityWithType(
+                        collectionDetailsRequest.total_collected,
+                        collectionDetailsRequest.product_type,
+                      )}
+                    </span>
+                  </li>
+                  <li>
+                    <span>
+                      <strong>Restante coletavel:</strong>{' '}
+                      {formatCollectionQuantityWithType(
+                        collectionDetailsRequest.remaining_collectable,
+                        collectionDetailsRequest.product_type,
+                      )}
+                    </span>
+                  </li>
+                </List>
+
+                <InlineText style={{ marginTop: '10px' }}>Historico de coletas confirmadas do item</InlineText>
+                {Array.isArray(collectionDetailsRequest.collection_item_history)
+                && collectionDetailsRequest.collection_item_history.length ? (
+                  <List className="mt-2">
+                    {collectionDetailsRequest.collection_item_history.map((historyItem) => (
+                      <li key={`collection-item-history-${collectionDetailsRequest.id}-${historyItem.collection_request_id}-${historyItem.created_at || 'na'}`}>
+                        <span>
+                          <strong>{`#${historyItem.collection_request_id}`}</strong>
+                          {historyItem.request_code ? ` | ${historyItem.request_code}` : ''}
+                          {` | Qtd: ${formatCollectionQuantityWithType(historyItem.quantity, collectionDetailsRequest.product_type)}`}
+                          {` | Status: ${String(historyItem.workflow_status || '-').replace(/_/g, ' ')}`}
+                          {` | Data: ${formatDateBR(resolveCollectionItemHistoryEventDate(historyItem))}`}
+                        </span>
+                      </li>
+                    ))}
+                  </List>
+                  ) : (
+                    <InlineText style={{ marginTop: '6px' }}>Nenhuma coleta confirmada para este item.</InlineText>
+                  )}
+              </>
+            )}
 
             {collectionDetailsRequest.notes ? (
               <>

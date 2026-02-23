@@ -58,6 +58,9 @@ const OCCURRENCE_REASONS = [
 ] as const;
 
 const OCCURRENCE_TOTAL_OPTION = '__INVOICE_TOTAL__';
+const KG_QUANTITY_MIN = 0.01;
+const KG_QUANTITY_PRECISION = 1000;
+const QUANTITY_EPSILON = 1e-6;
 
 const RESOLUTION_LABELS: Record<string, string> = {
   enviado_posteriormente: 'Enviado posteriormente',
@@ -138,6 +141,9 @@ type SurplusInversionDraft = {
   invoice_number: string;
   missing_product_code: string;
 };
+type SurplusInversionAllocationDraft = SurplusInversionDraft & {
+  quantity: number;
+};
 type ReturnDraftNote = {
   invoice_number: string;
   return_type: 'total' | 'partial' | 'sobra' | 'coleta';
@@ -172,13 +178,33 @@ const resolveReturnBatchWorkflowStatus = (batch: IReturnBatch): ReturnBatchWorkf
 };
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
+const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
+const normalizeQtyByType = (value: number, isKg: boolean) => (
+  isKg ? Math.round(value * KG_QUANTITY_PRECISION) / KG_QUANTITY_PRECISION : value
+);
+const formatKgInputValue = (value: number) => (
+  normalizeQtyByType(value, true).toFixed(3).replace(/\.?0+$/, '')
+);
 const sanitizeSurplusReferenceToken = (value: string, fallback = 'SEMVALOR') => {
   const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   return normalized || fallback;
 };
-const buildSurplusReferenceInvoiceNumber = (loadNumber: string, productCode: string) => (
-  `SOBRA-${sanitizeSurplusReferenceToken(loadNumber, 'SEMCARGA')}-${sanitizeSurplusReferenceToken(productCode, 'SEMPRODUTO')}`
-);
+const buildSurplusReferenceInvoiceNumber = (
+  loadNumber: string,
+  productCode: string,
+  inversionInvoice?: string | null,
+  inversionMissingProductCode?: string | null,
+) => {
+  const base = `SOBRA-${sanitizeSurplusReferenceToken(loadNumber, 'SEMCARGA')}-${sanitizeSurplusReferenceToken(productCode, 'SEMPRODUTO')}`;
+  const normalizedInversionInvoice = sanitizeSurplusReferenceToken(String(inversionInvoice || '').slice(0, 14), '');
+  const normalizedMissingCode = sanitizeSurplusReferenceToken(String(inversionMissingProductCode || '').slice(0, 20), '');
+
+  if (!normalizedInversionInvoice || !normalizedMissingCode) {
+    return base;
+  }
+
+  return `${base}-${normalizedInversionInvoice}-${normalizedMissingCode}`;
+};
 const formatOccurrenceQtyWithType = (quantity: number, productType?: string | null) => {
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
@@ -320,18 +346,20 @@ function ReturnsOccurrences() {
   const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra' | 'coleta'>('total');
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialProductType, setPartialProductType] = useState('');
-  const [partialQuantity, setPartialQuantity] = useState<number>(1);
+  const [partialQuantityInput, setPartialQuantityInput] = useState('1');
   const [partialItems, setPartialItems] = useState<IInvoiceReturnItem[]>([]);
   const [leftoverProductCode, setLeftoverProductCode] = useState('');
-  const [leftoverQuantity, setLeftoverQuantity] = useState<number>(1);
+  const [leftoverQuantityInput, setLeftoverQuantityInput] = useState('1');
   const [leftoverProductType, setLeftoverProductType] = useState('');
   const [leftoverLoadNumber, setLeftoverLoadNumber] = useState('');
   const [leftoverIsInversion, setLeftoverIsInversion] = useState(false);
   const [leftoverInversionInvoiceNumber, setLeftoverInversionInvoiceNumber] = useState('');
   const [leftoverInversionMissingProductCode, setLeftoverInversionMissingProductCode] = useState('');
+  const [leftoverInversionQuantityInput, setLeftoverInversionQuantityInput] = useState('');
   const [leftoverInversionDanfe, setLeftoverInversionDanfe] = useState<IDanfe | null>(null);
   const [leftoverInversionLookupLoading, setLeftoverInversionLookupLoading] = useState(false);
   const [leftoverInversionLookupError, setLeftoverInversionLookupError] = useState('');
+  const [leftoverInversionAllocations, setLeftoverInversionAllocations] = useState<SurplusInversionAllocationDraft[]>([]);
   const [draftNotes, setDraftNotes] = useState<ReturnDraftNote[]>([]);
   const [returnDriverId, setReturnDriverId] = useState('');
   const [selectedCarId, setSelectedCarId] = useState('');
@@ -471,16 +499,10 @@ function ReturnsOccurrences() {
     return Array.from(new Set([...fromDanfe, ...DEFAULT_RETURN_UNIT_TYPES]));
   }, [selectedPartialDanfeProduct]);
 
-  const isSelectedPartialProductKg = useMemo(() => {
-    if (!selectedPartialDanfeProduct || !partialProductType) {
-      return false;
-    }
-
-    return normalizeProductType(partialProductType).includes('KG');
-  }, [selectedPartialDanfeProduct, partialProductType]);
-
-  const selectedPartialMinQty = isSelectedPartialProductKg ? 0.1 : 1;
-  const selectedPartialMaxQty = selectedPartialDanfeProduct ? Number(selectedPartialDanfeProduct.quantity) : 0;
+  const selectedPartialMaxQtyRaw = selectedPartialDanfeProduct
+    ? Number(normalizeDecimalInput(String(selectedPartialDanfeProduct.quantity ?? '0')))
+    : 0;
+  const selectedPartialMaxQty = Number.isFinite(selectedPartialMaxQtyRaw) ? selectedPartialMaxQtyRaw : 0;
   const selectedPartialAlreadyAddedQty = partialProductCode && partialProductType
     ? partialItems
       .filter((item) => (
@@ -490,7 +512,6 @@ function ReturnsOccurrences() {
       .reduce((sum, item) => sum + Number(item.quantity), 0)
     : 0;
   const selectedPartialRemainingQty = Math.max(0, selectedPartialMaxQty - selectedPartialAlreadyAddedQty);
-  const selectedPartialStep = isSelectedPartialProductKg ? 0.1 : 1;
   const selectedLeftoverProduct = useMemo(() => (
     products.find((product) => product.code === leftoverProductCode) || null
   ), [products, leftoverProductCode]);
@@ -500,8 +521,26 @@ function ReturnsOccurrences() {
   const selectedLeftoverMissingProduct = useMemo(() => (
     leftoverInversionProducts.find((item) => item.Product.code === leftoverInversionMissingProductCode) || null
   ), [leftoverInversionProducts, leftoverInversionMissingProductCode]);
+  const parsedLeftoverTotalQty = useMemo(() => {
+    const parsed = Number(normalizeDecimalInput(String(leftoverQuantityInput || '')));
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return normalizeQtyByType(parsed, true);
+  }, [leftoverQuantityInput]);
+  const leftoverInversionAllocatedQty = useMemo(() => (
+    normalizeQtyByType(
+      leftoverInversionAllocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0),
+      true,
+    )
+  ), [leftoverInversionAllocations]);
+  const leftoverInversionRemainingQty = useMemo(() => (
+    Math.max(0, normalizeQtyByType(parsedLeftoverTotalQty - leftoverInversionAllocatedQty, true))
+  ), [parsedLeftoverTotalQty, leftoverInversionAllocatedQty]);
   const surplusInversionSummary = useMemo(() => {
     if (!leftoverIsInversion) return '';
+
+    if (leftoverInversionAllocations.length) {
+      return `Inversao distribuida em ${leftoverInversionAllocations.length} NF(s) | Distribuido: ${formatKgInputValue(leftoverInversionAllocatedQty)} | Restante: ${formatKgInputValue(leftoverInversionRemainingQty)}`;
+    }
 
     const surplusProductCode = leftoverProductCode.trim().toUpperCase();
     const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
@@ -509,7 +548,15 @@ function ReturnsOccurrences() {
 
     if (!surplusProductCode || !missingProductCode || !invoiceNumber) return '';
     return `Inversao: Veio ${surplusProductCode} (sobra) no lugar de ${missingProductCode} (falta) na NF ${invoiceNumber}`;
-  }, [leftoverIsInversion, leftoverProductCode, leftoverInversionMissingProductCode, leftoverInversionInvoiceNumber]);
+  }, [
+    leftoverIsInversion,
+    leftoverProductCode,
+    leftoverInversionMissingProductCode,
+    leftoverInversionInvoiceNumber,
+    leftoverInversionAllocations,
+    leftoverInversionAllocatedQty,
+    leftoverInversionRemainingQty,
+  ]);
   const leftoverTypeOptions = useMemo(() => {
     const productTypes = products.map((product) => String(product.type || '').trim().toUpperCase()).filter(Boolean);
     return Array.from(new Set([...productTypes, ...DEFAULT_RETURN_UNIT_TYPES]));
@@ -632,9 +679,11 @@ function ReturnsOccurrences() {
   const occurrenceProductIsKg = useMemo(() => {
     return normalizeProductType(occurrenceProductType).includes('KG');
   }, [occurrenceProductType]);
-  const occurrenceQuantityStep = occurrenceProductIsKg ? 0.1 : 1;
-  const occurrenceQuantityMin = occurrenceProductIsKg ? 0.1 : 1;
-  const occurrenceProductMaxQty = selectedOccurrenceProduct ? Number(selectedOccurrenceProduct.quantity) : 0;
+  const occurrenceQuantityMin = occurrenceProductIsKg ? KG_QUANTITY_MIN : 1;
+  const occurrenceProductMaxQtyRaw = selectedOccurrenceProduct
+    ? Number(normalizeDecimalInput(String(selectedOccurrenceProduct.quantity ?? '0')))
+    : 0;
+  const occurrenceProductMaxQty = Number.isFinite(occurrenceProductMaxQtyRaw) ? occurrenceProductMaxQtyRaw : 0;
   const occurrenceProductAlreadyAddedQty = occurrenceProductCode
     ? occurrenceItems
       .filter((item) => item.product_id === occurrenceProductCode)
@@ -661,12 +710,24 @@ function ReturnsOccurrences() {
 
   useEffect(() => {
     if (!partialProductCode || !partialProductType) {
-      setPartialQuantity(1);
+      setPartialQuantityInput('1');
       return;
     }
 
-    setPartialQuantity(normalizeProductType(partialProductType).includes('KG') ? 0.1 : 1);
-  }, [partialProductCode, partialProductType]);
+    const isKgType = normalizeProductType(partialProductType).includes('KG');
+    if (!isKgType) {
+      setPartialQuantityInput('1');
+      return;
+    }
+
+    const suggestedQty = normalizeQtyByType(selectedPartialRemainingQty, true);
+    if (suggestedQty > QUANTITY_EPSILON) {
+      setPartialQuantityInput(formatKgInputValue(suggestedQty));
+      return;
+    }
+
+    setPartialQuantityInput(String(KG_QUANTITY_MIN));
+  }, [partialProductCode, partialProductType, selectedPartialRemainingQty]);
 
   useEffect(() => {
     if (!occurrenceProductCode || !selectedOccurrenceProduct || isOccurrenceTotal) {
@@ -678,7 +739,7 @@ function ReturnsOccurrences() {
     const defaultType = normalizeProductType(selectedOccurrenceProduct.type || selectedOccurrenceProduct.Product.type)
       || DEFAULT_RETURN_UNIT_TYPES[0];
     setOccurrenceProductType((current) => normalizeProductType(current) || defaultType);
-    setOccurrenceQuantityInput(defaultType.includes('KG') ? '0.1' : '1');
+    setOccurrenceQuantityInput(defaultType.includes('KG') ? String(KG_QUANTITY_MIN) : '1');
   }, [occurrenceProductCode, selectedOccurrenceProduct, isOccurrenceTotal]);
 
   useEffect(() => {
@@ -708,10 +769,26 @@ function ReturnsOccurrences() {
 
     setLeftoverInversionInvoiceNumber('');
     setLeftoverInversionMissingProductCode('');
+    setLeftoverInversionQuantityInput('');
     setLeftoverInversionDanfe(null);
     setLeftoverInversionLookupError('');
     setLeftoverInversionLookupLoading(false);
+    setLeftoverInversionAllocations([]);
   }, [leftoverIsInversion]);
+
+  useEffect(() => {
+    if (!leftoverIsInversion) return;
+    if (leftoverInversionAllocations.length) return;
+    if (leftoverInversionQuantityInput.trim()) return;
+    if (parsedLeftoverTotalQty <= QUANTITY_EPSILON) return;
+
+    setLeftoverInversionQuantityInput(formatKgInputValue(parsedLeftoverTotalQty));
+  }, [
+    leftoverIsInversion,
+    leftoverInversionAllocations.length,
+    leftoverInversionQuantityInput,
+    parsedLeftoverTotalQty,
+  ]);
 
   useEffect(() => {
     if (!leftoverIsInversion) {
@@ -856,9 +933,11 @@ function ReturnsOccurrences() {
     setLeftoverIsInversion(false);
     setLeftoverInversionInvoiceNumber('');
     setLeftoverInversionMissingProductCode('');
+    setLeftoverInversionQuantityInput('');
     setLeftoverInversionDanfe(null);
     setLeftoverInversionLookupError('');
     setLeftoverInversionLookupLoading(false);
+    setLeftoverInversionAllocations([]);
   }
 
   function handleChangeReturnType(nextType: 'total' | 'partial' | 'sobra' | 'coleta') {
@@ -869,12 +948,12 @@ function ReturnsOccurrences() {
       setPartialItems([]);
       setPartialProductCode('');
       setPartialProductType('');
-      setPartialQuantity(1);
+      setPartialQuantityInput('1');
       return;
     }
 
     setLeftoverProductCode('');
-    setLeftoverQuantity(1);
+    setLeftoverQuantityInput('1');
     setLeftoverProductType('');
     setLeftoverLoadNumber('');
     resetSurplusInversionBuilder();
@@ -914,6 +993,92 @@ function ReturnsOccurrences() {
     }
   }
 
+  function addSurplusInversionAllocation() {
+    if (!leftoverIsInversion) return;
+
+    if (parsedLeftoverTotalQty <= QUANTITY_EPSILON) {
+      alert('Informe a quantidade total da sobra antes de distribuir por NF.');
+      return;
+    }
+
+    const relatedInvoice = leftoverInversionInvoiceNumber.trim();
+    if (!relatedInvoice) {
+      alert('Informe a NF relacionada da inversao.');
+      return;
+    }
+
+    if (!leftoverInversionDanfe || String(leftoverInversionDanfe.invoice_number) !== relatedInvoice) {
+      alert('Busque a NF relacionada para validar os itens da inversao.');
+      return;
+    }
+
+    const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
+    if (!missingProductCode) {
+      alert('Informe o produto que faltou na NF relacionada.');
+      return;
+    }
+
+    const belongsToInvoice = leftoverInversionDanfe.DanfeProducts.some((item) => item.Product.code === missingProductCode);
+    if (!belongsToInvoice) {
+      alert('Produto faltante nao pertence a NF relacionada.');
+      return;
+    }
+
+    const rawAllocationQty = String(leftoverInversionQuantityInput || '').trim();
+    if (!rawAllocationQty) {
+      alert('Informe a quantidade para a NF relacionada.');
+      return;
+    }
+
+    const parsedAllocationQty = Number(normalizeDecimalInput(rawAllocationQty));
+    if (!Number.isFinite(parsedAllocationQty) || parsedAllocationQty <= 0) {
+      alert('Informe uma quantidade valida para a NF relacionada.');
+      return;
+    }
+
+    const normalizedAllocationQty = normalizeQtyByType(parsedAllocationQty, true);
+    const nextDistributedQty = normalizeQtyByType(leftoverInversionAllocatedQty + normalizedAllocationQty, true);
+    if (nextDistributedQty - parsedLeftoverTotalQty > QUANTITY_EPSILON) {
+      alert(`Quantidade distribuida excede a sobra. Restante disponivel: ${formatKgInputValue(leftoverInversionRemainingQty)}.`);
+      return;
+    }
+
+    setLeftoverInversionAllocations((previous) => {
+      const allocationIndex = previous.findIndex((item) => (
+        item.invoice_number === relatedInvoice
+        && item.missing_product_code === missingProductCode
+      ));
+
+      if (allocationIndex === -1) {
+        return [
+          ...previous,
+          {
+            invoice_number: relatedInvoice,
+            missing_product_code: missingProductCode,
+            quantity: normalizedAllocationQty,
+          },
+        ];
+      }
+
+      return previous.map((item, index) => (
+        index === allocationIndex
+          ? { ...item, quantity: normalizeQtyByType(Number(item.quantity || 0) + normalizedAllocationQty, true) }
+          : item
+      ));
+    });
+
+    const nextRemainingQty = Math.max(0, normalizeQtyByType(parsedLeftoverTotalQty - nextDistributedQty, true));
+    setLeftoverInversionQuantityInput(nextRemainingQty > QUANTITY_EPSILON ? formatKgInputValue(nextRemainingQty) : '');
+    setLeftoverInversionInvoiceNumber('');
+    setLeftoverInversionMissingProductCode('');
+    setLeftoverInversionDanfe(null);
+    setLeftoverInversionLookupError('');
+  }
+
+  function removeSurplusInversionAllocation(indexToRemove: number) {
+    setLeftoverInversionAllocations((previous) => previous.filter((_, index) => index !== indexToRemove));
+  }
+
   async function handleSearchReturnNf() {
     if (returnType === 'sobra') {
       alert('Para sobra, informe codigo, quantidade e tipo do produto.');
@@ -937,7 +1102,7 @@ function ReturnsOccurrences() {
       setPartialItems([]);
       setPartialProductCode('');
       setPartialProductType('');
-      setPartialQuantity(1);
+      setPartialQuantityInput('1');
     } catch (error) {
       console.error(error);
       alert('Erro ao buscar NF para devolucao.');
@@ -960,7 +1125,14 @@ function ReturnsOccurrences() {
       return;
     }
 
-    if (!partialQuantity || partialQuantity <= 0) {
+    const rawPartialQuantity = String(partialQuantityInput || '').trim();
+    if (!rawPartialQuantity) {
+      alert('Digite uma quantidade valida.');
+      return;
+    }
+
+    const parsedPartialQuantity = Number(normalizeDecimalInput(rawPartialQuantity));
+    if (!Number.isFinite(parsedPartialQuantity) || parsedPartialQuantity <= 0) {
       alert('Digite uma quantidade valida.');
       return;
     }
@@ -973,8 +1145,9 @@ function ReturnsOccurrences() {
 
     const normalizedType = normalizeProductType(partialProductType);
     const isKg = normalizedType.includes('KG');
-    const minAllowed = isKg ? 0.1 : 1;
-    const maxAllowed = Number(foundProduct.quantity);
+    const minAllowed = isKg ? KG_QUANTITY_MIN : 1;
+    const maxAllowedRaw = Number(normalizeDecimalInput(String(foundProduct.quantity ?? '0')));
+    const maxAllowed = Number.isFinite(maxAllowedRaw) ? maxAllowedRaw : 0;
     const existingQty = partialItems
       .filter((item) => (
         item.product_id === foundProduct.Product.code
@@ -982,21 +1155,19 @@ function ReturnsOccurrences() {
       ))
       .reduce((sum, item) => sum + Number(item.quantity), 0);
 
-    if (!isKg && !Number.isInteger(partialQuantity)) {
+    if (!isKg && !Number.isInteger(parsedPartialQuantity)) {
       alert('Para este produto, use apenas quantidades inteiras.');
       return;
     }
 
-    const normalizedQuantity = isKg
-      ? Math.round(Number(partialQuantity) * 10) / 10
-      : Number(partialQuantity);
+    const normalizedQuantity = normalizeQtyByType(parsedPartialQuantity, isKg);
 
     if (normalizedQuantity < minAllowed) {
       alert(`Quantidade minima permitida para este produto: ${minAllowed}.`);
       return;
     }
 
-    if (normalizedQuantity + existingQty > maxAllowed) {
+    if ((normalizedQuantity + existingQty) - maxAllowed > QUANTITY_EPSILON) {
       const remaining = Math.max(0, maxAllowed - existingQty);
       alert(`Quantidade excede o limite da NF, de: ${remaining}.`);
       return;
@@ -1027,7 +1198,7 @@ function ReturnsOccurrences() {
       ));
     });
 
-    setPartialQuantity(minAllowed);
+    setPartialQuantityInput(String(minAllowed));
   }
 
   function removePartialItem(productId: string, productType?: string | null) {
@@ -1048,7 +1219,14 @@ function ReturnsOccurrences() {
         return [];
       }
 
-      if (!leftoverQuantity || Number(leftoverQuantity) <= 0) {
+      const rawLeftoverQuantity = String(leftoverQuantityInput || '').trim();
+      if (!rawLeftoverQuantity) {
+        alert('Informe uma quantidade valida para sobra.');
+        return [];
+      }
+
+      const parsedLeftoverQuantity = Number(normalizeDecimalInput(rawLeftoverQuantity));
+      if (!Number.isFinite(parsedLeftoverQuantity) || parsedLeftoverQuantity <= 0) {
         alert('Informe uma quantidade valida para sobra.');
         return [];
       }
@@ -1062,7 +1240,7 @@ function ReturnsOccurrences() {
         product_id: normalizedCode,
         product_description: selectedLeftoverProduct?.description || `Sobra de produto ${normalizedCode}`,
         product_type: normalizedType,
-        quantity: Math.round(Number(leftoverQuantity) * 1000) / 1000,
+        quantity: Math.round(parsedLeftoverQuantity * 1000) / 1000,
       }];
     }
 
@@ -1108,9 +1286,7 @@ function ReturnsOccurrences() {
       return;
     }
 
-    let noteLoadNumber: string | null = null;
-    let noteIsInversion = false;
-    let noteInversion: SurplusInversionDraft | undefined;
+    let notesToCreate: ReturnDraftNote[] = [];
 
     if (returnType === 'sobra') {
       const normalizedLoadNumber = leftoverLoadNumber.trim().toUpperCase();
@@ -1119,102 +1295,164 @@ function ReturnsOccurrences() {
         return;
       }
 
-      noteLoadNumber = normalizedLoadNumber;
+      const baseItem = noteItems[0];
+      const normalizedTotalSurplusQty = normalizeQtyByType(Number(baseItem.quantity || 0), true);
+      if (normalizedTotalSurplusQty <= QUANTITY_EPSILON) {
+        alert('Informe uma quantidade valida para sobra.');
+        return;
+      }
 
       if (leftoverIsInversion) {
-        const relatedInvoice = leftoverInversionInvoiceNumber.trim();
-        if (!relatedInvoice) {
-          alert('Informe a NF relacionada da inversao.');
+        let inversionAllocations = [...leftoverInversionAllocations];
+
+        if (!inversionAllocations.length) {
+          const relatedInvoice = leftoverInversionInvoiceNumber.trim();
+          if (!relatedInvoice) {
+            alert('Informe ao menos uma NF relacionada da inversao.');
+            return;
+          }
+
+          if (!leftoverInversionDanfe || String(leftoverInversionDanfe.invoice_number) !== relatedInvoice) {
+            alert('Busque a NF relacionada para validar os itens da inversao.');
+            return;
+          }
+
+          const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
+          if (!missingProductCode) {
+            alert('Informe o produto que faltou na NF relacionada.');
+            return;
+          }
+
+          const belongsToInvoice = leftoverInversionDanfe.DanfeProducts.some((item) => item.Product.code === missingProductCode);
+          if (!belongsToInvoice) {
+            alert('Produto faltante nao pertence a NF relacionada.');
+            return;
+          }
+
+          inversionAllocations = [{
+            invoice_number: relatedInvoice,
+            missing_product_code: missingProductCode,
+            quantity: normalizedTotalSurplusQty,
+          }];
+        }
+
+        const normalizedDistributedQty = normalizeQtyByType(
+          inversionAllocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0),
+          true,
+        );
+        if (Math.abs(normalizedDistributedQty - normalizedTotalSurplusQty) > QUANTITY_EPSILON) {
+          const normalizedRemaining = Math.max(0, normalizeQtyByType(normalizedTotalSurplusQty - normalizedDistributedQty, true));
+          alert(
+            `Distribuicao incompleta da sobra por inversao. Total: ${formatKgInputValue(normalizedTotalSurplusQty)} | Distribuido: ${formatKgInputValue(normalizedDistributedQty)} | Restante: ${formatKgInputValue(normalizedRemaining)}.`,
+          );
           return;
         }
 
-        if (!leftoverInversionDanfe || String(leftoverInversionDanfe.invoice_number) !== relatedInvoice) {
-          alert('Busque a NF relacionada para validar os itens da inversao.');
-          return;
-        }
+        notesToCreate = inversionAllocations.map((allocation) => {
+          const normalizedAllocationQty = normalizeQtyByType(Number(allocation.quantity || 0), true);
+          const inversionPayload = {
+            invoice_number: allocation.invoice_number,
+            missing_product_code: allocation.missing_product_code,
+          };
 
-        const missingProductCode = leftoverInversionMissingProductCode.trim().toUpperCase();
-        if (!missingProductCode) {
-          alert('Informe o produto que faltou na NF relacionada.');
-          return;
-        }
-
-        const belongsToInvoice = leftoverInversionDanfe.DanfeProducts.some((item) => item.Product.code === missingProductCode);
-        if (!belongsToInvoice) {
-          alert('Produto faltante nao pertence a NF relacionada.');
-          return;
-        }
-
-        noteIsInversion = true;
-        noteInversion = {
-          invoice_number: relatedInvoice,
-          missing_product_code: missingProductCode,
-        };
+          return {
+            invoice_number: buildSurplusReferenceInvoiceNumber(
+              normalizedLoadNumber,
+              baseItem.product_id,
+              inversionPayload.invoice_number,
+              inversionPayload.missing_product_code,
+            ),
+            return_type: returnType,
+            load_number: normalizedLoadNumber,
+            is_inversion: true,
+            inversion: inversionPayload,
+            items: [{ ...baseItem, quantity: normalizedAllocationQty }],
+          };
+        });
+      } else {
+        notesToCreate = [
+          {
+            invoice_number: buildSurplusReferenceInvoiceNumber(normalizedLoadNumber, baseItem.product_id),
+            return_type: returnType,
+            load_number: normalizedLoadNumber,
+            is_inversion: false,
+            items: noteItems,
+          },
+        ];
       }
+    } else {
+      const noteInvoiceNumber = String(returnDanfe?.invoice_number);
+      notesToCreate = [
+        {
+          invoice_number: noteInvoiceNumber,
+          return_type: returnType,
+          items: noteItems,
+        },
+      ];
     }
 
-    const noteInvoiceNumber = returnType === 'sobra'
-      ? buildSurplusReferenceInvoiceNumber(noteLoadNumber || '', noteItems[0].product_id)
-      : String(returnDanfe?.invoice_number);
+    const duplicateInvoiceInsidePayload = notesToCreate.find((note, index) => (
+      notesToCreate.findIndex((candidate) => candidate.invoice_number === note.invoice_number) !== index
+    ));
+    if (duplicateInvoiceInsidePayload) {
+      alert('Ha NFs de inversao repetidas na distribuicao da sobra. Ajuste a lista antes de continuar.');
+      return;
+    }
 
     if (selectedBatch) {
-      const existsInBatch = batchDraftNotes.some((note) => note.invoice_number === noteInvoiceNumber);
-      if (existsInBatch) {
+      const existingInvoiceNumbers = new Set(batchDraftNotes.map((note) => note.invoice_number));
+      const conflictingNotes = notesToCreate.filter((note) => existingInvoiceNumbers.has(note.invoice_number));
+      if (conflictingNotes.length) {
         alert(returnType === 'sobra'
-          ? 'Essa sobra ja existe no lote selecionado.'
+          ? 'Uma ou mais sobras dessa distribuicao ja existem no lote selecionado.'
           : 'Essa NF ja existe no lote selecionado.');
         return;
       }
 
       setBatchDraftNotes((previous) => ([
         ...previous,
-        {
-          id: -(Date.now()),
-          invoice_number: noteInvoiceNumber,
-          return_type: returnType,
+        ...notesToCreate.map((note, index) => ({
+          id: -(Date.now() + index),
+          invoice_number: note.invoice_number,
+          return_type: note.return_type,
           driver_id: Number(selectedBatch.driver_id),
           vehicle_plate: selectedBatch.vehicle_plate,
           return_date: selectedBatch.return_date,
           batch_code: selectedBatch.batch_code,
           batch_status: selectedBatch.batch_status,
-          load_number: noteLoadNumber,
-          is_inversion: noteIsInversion,
-          ...(noteInversion
+          load_number: note.load_number || null,
+          is_inversion: Boolean(note.is_inversion),
+          ...(note.inversion
             ? {
-              inversion_invoice_number: noteInversion.invoice_number,
-              inversion_missing_product_code: noteInversion.missing_product_code,
-              inversion: noteInversion,
+              inversion_invoice_number: note.inversion.invoice_number,
+              inversion_missing_product_code: note.inversion.missing_product_code,
+              inversion: note.inversion,
             }
             : {}),
-          items: noteItems,
-        },
+          items: note.items,
+        })),
       ]));
 
+      const addedCountLabel = notesToCreate.length > 1 ? `${notesToCreate.length} sobras` : 'Sobra';
       alert(returnType === 'sobra'
-        ? 'Sobra adicionada na edicao do lote. Clique em "Salvar lote" para persistir.'
+        ? `${addedCountLabel} adicionadas na edicao do lote. Clique em "Salvar lote" para persistir.`
         : 'NF adicionada na edicao do lote. Clique em "Salvar lote" para persistir.');
       clearNfBuilder();
       return;
     }
 
-    const existsInDraft = draftNotes.some((note) => note.invoice_number === noteInvoiceNumber);
-    if (existsInDraft) {
+    const existingInvoiceNumbers = new Set(draftNotes.map((note) => note.invoice_number));
+    const conflictingNotes = notesToCreate.filter((note) => existingInvoiceNumbers.has(note.invoice_number));
+    if (conflictingNotes.length) {
       alert(returnType === 'sobra'
-        ? 'Essa sobra ja esta na lista atual.'
+        ? 'Uma ou mais sobras dessa distribuicao ja estao na lista atual.'
         : 'Essa NF ja esta na lista atual.');
       return;
     }
 
     setDraftNotes((previous) => ([
       ...previous,
-      {
-        invoice_number: noteInvoiceNumber,
-        return_type: returnType,
-        load_number: noteLoadNumber,
-        is_inversion: noteIsInversion,
-        ...(noteInversion ? { inversion: noteInversion } : {}),
-        items: noteItems,
-      },
+      ...notesToCreate,
     ]));
 
     clearNfBuilder();
@@ -1227,9 +1465,9 @@ function ReturnsOccurrences() {
     setPartialItems([]);
     setPartialProductCode('');
     setPartialProductType('');
-    setPartialQuantity(1);
+    setPartialQuantityInput('1');
     setLeftoverProductCode('');
-    setLeftoverQuantity(1);
+    setLeftoverQuantityInput('1');
     setLeftoverProductType('');
     setLeftoverLoadNumber('');
     resetSurplusInversionBuilder();
@@ -1525,7 +1763,7 @@ function ReturnsOccurrences() {
       return;
     }
 
-    const parsedQuantity = Number(rawQuantity.replace(',', '.'));
+    const parsedQuantity = Number(normalizeDecimalInput(rawQuantity));
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
       alert('Informe uma quantidade valida.');
       return;
@@ -1536,16 +1774,14 @@ function ReturnsOccurrences() {
       return;
     }
 
-    const normalizedQty = occurrenceProductIsKg
-      ? Math.round(parsedQuantity * 10) / 10
-      : parsedQuantity;
+    const normalizedQty = normalizeQtyByType(parsedQuantity, occurrenceProductIsKg);
 
     if (normalizedQty < occurrenceQuantityMin) {
       alert(`Quantidade minima permitida: ${occurrenceQuantityMin}.`);
       return;
     }
 
-    if (normalizedQty + occurrenceProductAlreadyAddedQty > occurrenceProductMaxQty) {
+    if ((normalizedQty + occurrenceProductAlreadyAddedQty) - occurrenceProductMaxQty > QUANTITY_EPSILON) {
       alert(`Quantidade excede o limite da NF. Restante disponivel: ${occurrenceProductRemainingQty}.`);
       return;
     }
@@ -2037,12 +2273,10 @@ function ReturnsOccurrences() {
                             <div>
                               <InlineText>Quantidade</InlineText>
                               <input
-                                type="number"
-                                min={selectedPartialMinQty}
-                                max={selectedPartialRemainingQty || undefined}
-                                step={selectedPartialStep}
-                                value={partialQuantity}
-                                onChange={(event) => setPartialQuantity(Number(event.target.value))}
+                                type="text"
+                                inputMode="decimal"
+                                value={partialQuantityInput}
+                                onChange={(event) => setPartialQuantityInput(event.target.value)}
                               />
                               {!!partialProductCode && (
                                 <InfoText>
@@ -2113,11 +2347,10 @@ function ReturnsOccurrences() {
                             <div>
                               <InlineText>Quantidade *</InlineText>
                               <input
-                                type="number"
-                                min={0.1}
-                                step={0.1}
-                                value={leftoverQuantity}
-                                onChange={(event) => setLeftoverQuantity(Number(event.target.value))}
+                                type="text"
+                                inputMode="decimal"
+                                value={leftoverQuantityInput}
+                                onChange={(event) => setLeftoverQuantityInput(event.target.value)}
                               />
                             </div>
                             <div>
@@ -2203,7 +2436,52 @@ function ReturnsOccurrences() {
                                     ))}
                                   </datalist>
                                 </div>
+                                <div>
+                                  <InlineText>Quantidade para esta NF *</InlineText>
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={leftoverInversionQuantityInput}
+                                    onChange={(event) => setLeftoverInversionQuantityInput(event.target.value)}
+                                    placeholder="Ex.: 3,5"
+                                  />
+                                </div>
                               </Grid>
+                              <Actions style={{ marginTop: '10px' }}>
+                                <button
+                                  type="button"
+                                  onClick={addSurplusInversionAllocation}
+                                  className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.8rem] font-semibold text-[#1f1300] transition disabled:cursor-not-allowed disabled:opacity-60"
+                                  disabled={leftoverInversionLookupLoading}
+                                >
+                                  Adicionar NF afetada
+                                </button>
+                              </Actions>
+                              {leftoverInversionAllocations.length ? (
+                                <List style={{ marginTop: '8px' }}>
+                                  {leftoverInversionAllocations.map((allocation, index) => (
+                                    <li key={`leftover-allocation-${allocation.invoice_number}-${allocation.missing_product_code}-${index}`}>
+                                      <span>
+                                        NF {allocation.invoice_number}
+                                        {` | Produto faltante: ${allocation.missing_product_code}`}
+                                        {` | Qtd: ${formatKgInputValue(allocation.quantity)}`}
+                                      </span>
+                                      <Actions>
+                                        <button
+                                          className="danger"
+                                          onClick={() => removeSurplusInversionAllocation(index)}
+                                          type="button"
+                                        >
+                                          Remover
+                                        </button>
+                                      </Actions>
+                                    </li>
+                                  ))}
+                                </List>
+                              ) : null}
+                              <InfoText style={{ marginTop: '8px' }}>
+                                {`Total sobra: ${parsedLeftoverTotalQty > QUANTITY_EPSILON ? formatKgInputValue(parsedLeftoverTotalQty) : '0'} | Distribuido: ${formatKgInputValue(leftoverInversionAllocatedQty)} | Restante: ${formatKgInputValue(leftoverInversionRemainingQty)}`}
+                              </InfoText>
                               {surplusInversionSummary ? (
                                 <InfoText style={{ marginTop: '8px' }}>{surplusInversionSummary}</InfoText>
                               ) : null}
@@ -2684,7 +2962,7 @@ function ReturnsOccurrences() {
                             onChange={(event) => {
                               const nextType = normalizeProductType(event.target.value);
                               setOccurrenceProductType(nextType);
-                              setOccurrenceQuantityInput(nextType.includes('KG') ? '0.1' : '1');
+                              setOccurrenceQuantityInput(nextType.includes('KG') ? String(KG_QUANTITY_MIN) : '1');
                             }}
                             disabled={isOccurrenceTotal || !selectedOccurrenceProduct}
                           >
@@ -2708,10 +2986,8 @@ function ReturnsOccurrences() {
                               <div className="min-w-0">
                                 <InlineText>Quantidade</InlineText>
                                 <input
-                                  type="number"
-                                  min={occurrenceQuantityMin}
-                                  max={occurrenceProductRemainingQty || undefined}
-                                  step={occurrenceQuantityStep}
+                                  type="text"
+                                  inputMode="decimal"
                                   value={occurrenceQuantityInput}
                                   onChange={(event) => setOccurrenceQuantityInput(event.target.value)}
                                   disabled={!selectedOccurrenceProduct}

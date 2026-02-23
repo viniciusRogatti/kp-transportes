@@ -30,6 +30,15 @@ const OCCURRENCE_REASON_OPTIONS: Array<{ value: OccurrenceReason; label: string 
   { value: 'legacy_outros', label: 'Outros' },
 ];
 
+const KG_QUANTITY_MIN = 0.01;
+const KG_QUANTITY_PRECISION = 1000;
+const QUANTITY_EPSILON = 1e-6;
+
+const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
+const normalizeQtyByType = (value: number, isKg: boolean) => (
+  isKg ? Math.round(value * KG_QUANTITY_PRECISION) / KG_QUANTITY_PRECISION : value
+);
+
 function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, registeringOccurrence = false }: DetailsDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('summary');
   const [note, setNote] = useState('');
@@ -37,7 +46,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
   const [occurrenceScope, setOccurrenceScope] = useState<'invoice_total' | 'items'>('items');
   const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReason>('faltou_na_carga');
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
+  const [selectedQuantityInput, setSelectedQuantityInput] = useState('1');
   const [occurrenceDescription, setOccurrenceDescription] = useState('');
   const [qualityNote, setQualityNote] = useState('');
 
@@ -46,7 +55,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
     setOccurrenceScope('items');
     setOccurrenceReason('faltou_na_carga');
     setSelectedProductId(row?.items[0]?.productId || '');
-    setSelectedQuantity(1);
+    setSelectedQuantityInput('1');
     setOccurrenceDescription('');
     setQualityNote('');
     setIsOccurrenceModalOpen(false);
@@ -65,7 +74,12 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
     row?.items.find((item) => item.productId === selectedProductId) || null
   ), [row?.items, selectedProductId]);
 
-  const maxSelectedQuantity = selectedItem ? Math.max(1, Number(selectedItem.quantity || 1)) : 1;
+  const maxSelectedQuantityRaw = selectedItem
+    ? Number(normalizeDecimalInput(String(selectedItem.quantity ?? '0')))
+    : 0;
+  const maxSelectedQuantity = Number.isFinite(maxSelectedQuantityRaw) ? maxSelectedQuantityRaw : 0;
+  const selectedItemIsKg = String(selectedItem?.productType || '').trim().toUpperCase().includes('KG');
+  const selectedQuantityMin = selectedItemIsKg ? KG_QUANTITY_MIN : 1;
 
   const collectionWorkflowStatus = String(row?.collectionWorkflowStatus || '').toLowerCase();
   const collectionQualityStatus = String(row?.collectionQualityStatus || '').toLowerCase();
@@ -78,18 +92,37 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
     const currentRow = row;
     if (!onRegisterOccurrence || !currentRow?.collectionRequestId) return;
 
+    let normalizedSelectedQuantity = 0;
     if (occurrenceScope === 'items') {
       if (!selectedItem) {
         alert('Selecione um item para registrar a ocorrencia parcial.');
         return;
       }
 
-      if (!Number.isFinite(selectedQuantity) || selectedQuantity <= 0) {
+      const rawSelectedQuantity = String(selectedQuantityInput || '').trim();
+      if (!rawSelectedQuantity) {
         alert('Informe uma quantidade valida para o item.');
         return;
       }
 
-      if (selectedQuantity > maxSelectedQuantity) {
+      const parsedSelectedQuantity = Number(normalizeDecimalInput(rawSelectedQuantity));
+      if (!Number.isFinite(parsedSelectedQuantity) || parsedSelectedQuantity <= 0) {
+        alert('Informe uma quantidade valida para o item.');
+        return;
+      }
+
+      if (!selectedItemIsKg && !Number.isInteger(parsedSelectedQuantity)) {
+        alert('Para este produto, utilize quantidade inteira.');
+        return;
+      }
+
+      normalizedSelectedQuantity = normalizeQtyByType(parsedSelectedQuantity, selectedItemIsKg);
+      if (normalizedSelectedQuantity < selectedQuantityMin) {
+        alert(`Quantidade minima permitida: ${selectedQuantityMin}.`);
+        return;
+      }
+
+      if (normalizedSelectedQuantity - maxSelectedQuantity > QUANTITY_EPSILON) {
         alert(`A quantidade nao pode ser maior que ${maxSelectedQuantity} para este item.`);
         return;
       }
@@ -104,7 +137,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
           product_id: selectedItem.productId,
           product_description: selectedItem.productDescription,
           product_type: selectedItem.productType || null,
-          quantity: Number(selectedQuantity),
+          quantity: normalizedSelectedQuantity,
         }]
         : [],
       description: occurrenceDescription.trim() || 'Divergencia identificada no recebimento da devolucao.',
@@ -315,11 +348,10 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
                 <div>
                   <label className="mb-1 block text-xs text-slate-300">Quantidade</label>
                   <input
-                    type="number"
-                    min={1}
-                    max={maxSelectedQuantity}
-                    value={selectedQuantity}
-                    onChange={(event) => setSelectedQuantity(Number(event.target.value))}
+                    type="text"
+                    inputMode="decimal"
+                    value={selectedQuantityInput}
+                    onChange={(event) => setSelectedQuantityInput(event.target.value)}
                     className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
                   />
                   <p className="mt-1 text-[11px] text-slate-400">Máx.: {maxSelectedQuantity}</p>

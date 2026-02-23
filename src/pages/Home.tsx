@@ -41,6 +41,9 @@ const OCCURRENCE_REASONS = [
 
 const OCCURRENCE_TOTAL_OPTION = '__INVOICE_TOTAL__';
 const DEFAULT_OCCURRENCE_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
+const KG_QUANTITY_MIN = 0.01;
+const KG_QUANTITY_PRECISION = 1000;
+const QUANTITY_EPSILON = 1e-6;
 
 const RESOLUTION_LABELS: Record<string, string> = {
   enviado_posteriormente: 'Enviado posteriormente',
@@ -99,6 +102,10 @@ type OccurrenceCardItemSummary = {
 };
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
+const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
+const normalizeQtyByType = (value: number, isKg: boolean) => (
+  isKg ? Math.round(value * KG_QUANTITY_PRECISION) / KG_QUANTITY_PRECISION : value
+);
 const formatOccurrenceQtyWithType = (quantity: number, productType?: string | null) => {
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
@@ -348,7 +355,7 @@ function Home() {
   const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReasonValue>('faltou_no_carregamento');
   const [occurrenceProductCode, setOccurrenceProductCode] = useState(OCCURRENCE_TOTAL_OPTION);
   const [occurrenceProductType, setOccurrenceProductType] = useState('');
-  const [occurrenceQuantity, setOccurrenceQuantity] = useState<number>(1);
+  const [occurrenceQuantityInput, setOccurrenceQuantityInput] = useState('1');
   const [occurrenceItems, setOccurrenceItems] = useState<OccurrenceDraftItem[]>([]);
 
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -387,9 +394,11 @@ function Home() {
   const occurrenceProductIsKg = useMemo(() => {
     return normalizeProductType(occurrenceProductType).includes('KG');
   }, [occurrenceProductType]);
-  const occurrenceQuantityStep = occurrenceProductIsKg ? 0.1 : 1;
-  const occurrenceQuantityMin = occurrenceProductIsKg ? 0.1 : 1;
-  const occurrenceProductMaxQty = selectedOccurrenceProduct ? Number(selectedOccurrenceProduct.quantity) : 0;
+  const occurrenceQuantityMin = occurrenceProductIsKg ? KG_QUANTITY_MIN : 1;
+  const occurrenceProductMaxQtyRaw = selectedOccurrenceProduct
+    ? Number(normalizeDecimalInput(String(selectedOccurrenceProduct.quantity ?? '0')))
+    : 0;
+  const occurrenceProductMaxQty = Number.isFinite(occurrenceProductMaxQtyRaw) ? occurrenceProductMaxQtyRaw : 0;
   const occurrenceProductAlreadyAddedQty = occurrenceProductCode
     ? occurrenceItems
       .filter((item) => item.product_id === occurrenceProductCode)
@@ -453,14 +462,14 @@ function Home() {
   useEffect(() => {
     if (!occurrenceProductCode || !selectedOccurrenceProduct || isOccurrenceTotal) {
       setOccurrenceProductType('');
-      setOccurrenceQuantity(1);
+      setOccurrenceQuantityInput('1');
       return;
     }
 
     const defaultType = normalizeProductType(selectedOccurrenceProduct.type || selectedOccurrenceProduct.Product.type)
       || DEFAULT_OCCURRENCE_UNIT_TYPES[0];
     setOccurrenceProductType((current) => normalizeProductType(current) || defaultType);
-    setOccurrenceQuantity(defaultType.includes('KG') ? 0.1 : 1);
+    setOccurrenceQuantityInput(defaultType.includes('KG') ? String(KG_QUANTITY_MIN) : '1');
   }, [occurrenceProductCode, selectedOccurrenceProduct, isOccurrenceTotal]);
 
   useEffect(() => {
@@ -635,8 +644,8 @@ function Home() {
   function renderOccurrenceActions(occurrence: IOccurrence) {
     return (
       <OccurrenceCardFooter>
-        <OccurrenceActionsRow>
-          <OccurrenceActionsLeft>
+        <OccurrenceActionsRow className="max-[420px]:gap-1">
+          <OccurrenceActionsLeft className="max-[420px]:shrink">
             {occurrence.status === 'pending' && canManageOccurrenceStatus && (
               <>
                 <button
@@ -655,19 +664,19 @@ function Home() {
                   disabled={occurrence.status !== 'pending' || !canManageOccurrenceStatus}
                   hideText
                   persistConfirmed={false}
-                  className="w-[124px] shrink-0 md:hidden"
+                  className="w-[124px] shrink-0 max-[420px]:w-[104px] md:hidden"
                 />
               </>
             )}
           </OccurrenceActionsLeft>
 
-          <OccurrenceActionsRight>
+          <OccurrenceActionsRight className="max-[420px]:gap-1">
             {occurrence.status === 'pending' && canManageOccurrenceStatus && (
               <IconButton
                 icon={Pencil}
                 label="Editar ocorrencia"
                 onClick={() => startEditOccurrence(occurrence)}
-                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 max-[420px]:!h-8 max-[420px]:!w-8 max-[420px]:!min-h-8 max-[420px]:!min-w-8"
               />
             )}
             {isAdminUser && (
@@ -675,7 +684,7 @@ function Home() {
                 icon={History}
                 label="Histórico da ocorrência"
                 onClick={() => handleViewOccurrenceHistory(occurrence.id)}
-                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 max-[420px]:!h-8 max-[420px]:!w-8 max-[420px]:!min-h-8 max-[420px]:!min-w-8"
               />
             )}
             {canManageOccurrenceStatus && (
@@ -684,7 +693,7 @@ function Home() {
                 label="Excluir ocorrencia"
                 variant="danger"
                 onClick={() => handleDeleteOccurrence(occurrence.id)}
-                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
+                className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 max-[420px]:!h-8 max-[420px]:!w-8 max-[420px]:!min-h-8 max-[420px]:!min-w-8"
               />
             )}
           </OccurrenceActionsRight>
@@ -700,7 +709,7 @@ function Home() {
     setOccurrenceReason('faltou_no_carregamento');
     setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
     setOccurrenceProductType('');
-    setOccurrenceQuantity(1);
+    setOccurrenceQuantityInput('1');
     setOccurrenceItems([]);
   }
 
@@ -726,7 +735,7 @@ function Home() {
       setOccurrenceDanfe(sanitizeDanfeForDisplay(data));
       setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
       setOccurrenceProductType('');
-      setOccurrenceQuantity(1);
+      setOccurrenceQuantityInput('1');
       setOccurrenceItems([]);
     } catch (error) {
       console.error(error);
@@ -756,26 +765,31 @@ function Home() {
       return;
     }
 
-    if (!occurrenceQuantity || occurrenceQuantity <= 0) {
+    const rawQuantity = String(occurrenceQuantityInput || '').trim();
+    if (!rawQuantity) {
       alert('Informe uma quantidade valida.');
       return;
     }
 
-    if (!occurrenceProductIsKg && !Number.isInteger(occurrenceQuantity)) {
+    const parsedQuantity = Number(normalizeDecimalInput(rawQuantity));
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      alert('Informe uma quantidade valida.');
+      return;
+    }
+
+    if (!occurrenceProductIsKg && !Number.isInteger(parsedQuantity)) {
       alert('Para este produto, utilize quantidade inteira.');
       return;
     }
 
-    const normalizedQty = occurrenceProductIsKg
-      ? Math.round(Number(occurrenceQuantity) * 10) / 10
-      : Number(occurrenceQuantity);
+    const normalizedQty = normalizeQtyByType(parsedQuantity, occurrenceProductIsKg);
 
     if (normalizedQty < occurrenceQuantityMin) {
       alert(`Quantidade minima permitida: ${occurrenceQuantityMin}.`);
       return;
     }
 
-    if (normalizedQty + occurrenceProductAlreadyAddedQty > occurrenceProductMaxQty) {
+    if ((normalizedQty + occurrenceProductAlreadyAddedQty) - occurrenceProductMaxQty > QUANTITY_EPSILON) {
       alert(`Quantidade excede o limite da NF. Restante disponivel: ${occurrenceProductRemainingQty}.`);
       return;
     }
@@ -805,7 +819,7 @@ function Home() {
       ));
     });
 
-    setOccurrenceQuantity(occurrenceQuantityMin);
+    setOccurrenceQuantityInput(String(occurrenceQuantityMin));
   }
 
   function removeOccurrenceItem(productId: string, productType: string | null = null) {
@@ -845,7 +859,7 @@ function Home() {
         : normalizeProductType(occurrence.items?.[0]?.product_type) || '',
     );
 
-    setOccurrenceQuantity(1);
+    setOccurrenceQuantityInput('1');
 
     try {
       const data = await findDanfeByNf(String(occurrence.invoice_number));
@@ -1550,7 +1564,7 @@ function Home() {
                       onChange={(event) => {
                         const nextType = normalizeProductType(event.target.value);
                         setOccurrenceProductType(nextType);
-                        setOccurrenceQuantity(nextType.includes('KG') ? 0.1 : 1);
+                        setOccurrenceQuantityInput(nextType.includes('KG') ? String(KG_QUANTITY_MIN) : '1');
                       }}
                       disabled={isOccurrenceTotal || !selectedOccurrenceProduct}
                     >
@@ -1573,12 +1587,10 @@ function Home() {
                       <div>
                         <InlineText>Quantidade</InlineText>
                         <input
-                          type="number"
-                          min={occurrenceQuantityMin}
-                          max={occurrenceProductRemainingQty || undefined}
-                          step={occurrenceQuantityStep}
-                          value={occurrenceQuantity}
-                          onChange={(event) => setOccurrenceQuantity(Number(event.target.value))}
+                          type="text"
+                          inputMode="decimal"
+                          value={occurrenceQuantityInput}
+                          onChange={(event) => setOccurrenceQuantityInput(event.target.value)}
                           disabled={!selectedOccurrenceProduct}
                         />
                         {!!selectedOccurrenceProduct && (

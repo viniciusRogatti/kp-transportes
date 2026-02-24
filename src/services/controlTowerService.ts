@@ -350,6 +350,21 @@ function mapCollectionStatus(collection: ICollectionRequest): BacklogStatus {
   return 'SOLICITADA';
 }
 
+function mapCollectionQueueIssue(status: BacklogStatus) {
+  if (status === 'SOLICITADA') {
+    return 'Coleta solicitada aguardando aceite/agendamento';
+  }
+  if (status === 'EM_ROTA') {
+    return 'Coleta agendada aguardando retirada';
+  }
+  return 'Coletada (nao enviada)';
+}
+
+function isCollectionInActionQueue(collection: ICollectionRequest) {
+  const workflowStatus = normalizeText(collection.workflow_status || collection.status).toLowerCase();
+  return ['solicitada', 'aceita_agendada', 'coletada'].includes(workflowStatus);
+}
+
 function mapReturnStatusWithoutCollection(note: IControlTowerReturn): BacklogStatus {
   const normalizedWorkflow = normalizeText(note.workflow_status).toLowerCase();
 
@@ -1176,26 +1191,120 @@ export async function getActionQueue(filters: ControlTowerFilters): Promise<Acti
     await wait(280);
   }
 
-  const rows = applyFilters(await getAllRows(filters), filters);
+  if (filters.returnType !== 'all' && filters.returnType !== 'coleta') {
+    return [];
+  }
 
-  return rows
-    .filter((row) => row.status === 'SOLICITADA' || row.status === 'EM_ROTA')
-    .map<ActionQueueItem>((row) => ({
-      id: row.id,
-      priority: row.pickupPriority ? 'critical' : row.ageHours > 48 ? 'critical' : row.ageHours > 24 ? 'high' : 'medium',
-      pickupPriority: Boolean(row.pickupPriority),
-      issue:
-        row.status === 'SOLICITADA'
-          ? 'Coleta solicitada aguardando roteirizacao'
-          : 'Coleta em rota sem baixa final',
-      batchId: row.batchCode,
-      invoiceNumber: row.invoiceNumber,
-      customer: row.customer,
-      city: row.city,
-      route: row.route,
-      status: row.status,
-      ageHours: row.ageHours,
-    }))
+  if (CONTROL_TOWER_DATA_MODE === 'mock') {
+    const rows = applyFilters(await getAllRows(filters), filters);
+
+    return rows
+      .filter((row) => row.sourceType === 'coleta')
+      .filter((row) => row.status === 'SOLICITADA' || row.status === 'EM_ROTA' || row.status === 'COLETADA')
+      .map<ActionQueueItem>((row) => ({
+        id: row.id,
+        returnType: 'coleta',
+        priority: row.pickupPriority ? 'critical' : row.ageHours > 48 ? 'critical' : row.ageHours > 24 ? 'high' : 'medium',
+        pickupPriority: Boolean(row.pickupPriority),
+        issue: mapCollectionQueueIssue(row.status),
+        batchId: row.batchCode,
+        invoiceNumber: row.invoiceNumber,
+        customer: row.customer,
+        city: row.city,
+        route: row.route,
+        status: row.status,
+        ageHours: row.ageHours,
+      }))
+      .sort((a, b) => {
+        if (a.pickupPriority && !b.pickupPriority) return -1;
+        if (!a.pickupPriority && b.pickupPriority) return 1;
+        return b.ageHours - a.ageHours;
+      })
+      .slice(0, 30);
+  }
+
+  const headers = getAuthHeaders();
+  const exactInvoice = extractExactInvoiceFilter(filters.search, filters.invoiceNumber);
+  const { start, end } = getInterval(filters);
+  const searchTerm = exactInvoice ? '' : normalizeText(filters.search).toLowerCase();
+  const productTerm = normalizeText(filters.product).toLowerCase();
+  const params: Record<string, string | number> = {
+    limit: 260,
+  };
+
+  if (exactInvoice) {
+    params.invoice_number = exactInvoice;
+  } else if (normalizeText(filters.invoiceNumber)) {
+    params.invoice_number = normalizeText(filters.invoiceNumber);
+  }
+
+  if (normalizeText(filters.customer)) {
+    params.customer_name = normalizeText(filters.customer);
+  }
+
+  if (normalizeText(filters.city)) {
+    params.city = normalizeText(filters.city);
+  }
+
+  let queueRows: ICollectionRequest[] = [];
+  try {
+    const response = await axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/action-queue`, {
+      params,
+      headers,
+    });
+    queueRows = Array.isArray(response.data) ? response.data : [];
+  } catch (error) {
+    console.error('Falha ao carregar fila de acao de coletas.', error);
+    return [];
+  }
+
+  return queueRows
+    .filter((row) => isCollectionInActionQueue(row))
+    .filter((row) => {
+      const normalizedInvoice = normalizeInvoiceNumber(row.invoice_number);
+      if (exactInvoice && normalizedInvoice !== exactInvoice) return false;
+      const createdAt = new Date(toIsoDateTime(row.created_at, new Date().toISOString()));
+      if (!exactInvoice && (createdAt < start || createdAt > end)) return false;
+      if (productTerm) {
+        const productHaystack = `${normalizeText(row.product_id)} ${normalizeText(row.product_description)}`.toLowerCase();
+        if (!productHaystack.includes(productTerm)) return false;
+      }
+      if (searchTerm) {
+        const haystack = `${normalizeText(row.invoice_number)} ${normalizeText(row.customer_name)} ${normalizeText(row.city)} ${normalizeText(row.request_code)} ${normalizeText(row.product_description)}`.toLowerCase();
+        if (!haystack.includes(searchTerm)) return false;
+      }
+      return true;
+    })
+    .map<ActionQueueItem | null>((row) => {
+      const id = `collection-${row.id}`;
+      const overlay = localOverlayStore.get(id);
+      const baseStatus = mapCollectionStatus(row);
+      const resolvedStatus = overlay?.status || baseStatus;
+      if (!['SOLICITADA', 'EM_ROTA', 'COLETADA'].includes(resolvedStatus)) {
+        return null;
+      }
+
+      const createdAt = toIsoDateTime(row.created_at, new Date().toISOString());
+      const ageHours = Math.max(0, differenceInHours(new Date(), new Date(createdAt)));
+      const pickupPriority = Boolean(overlay?.pickupPriority);
+
+      return {
+        id,
+        returnType: 'coleta',
+        priority: pickupPriority ? 'critical' : ageHours > 48 ? 'critical' : ageHours > 24 ? 'high' : 'medium',
+        pickupPriority,
+        issue: mapCollectionQueueIssue(resolvedStatus),
+        batchId: normalizeText(row.sent_in_batch_code) || normalizeText(row.request_code) || `COL-${row.id}`,
+        invoiceNumber: normalizeText(row.invoice_number) || 'SEM_NF',
+        customer: normalizeText(row.customer_name) || 'NAO INFORMADO',
+        city: normalizeText(row.city) || 'NAO INFORMADO',
+        route: inferRoute(normalizeText(row.city) || 'NAO INFORMADO'),
+        status: resolvedStatus,
+        ageHours,
+      };
+    })
+    .filter((row): row is ActionQueueItem => Boolean(row))
+    .filter((row) => (filters.pickupStatus === 'all' ? true : row.status === filters.pickupStatus))
     .sort((a, b) => {
       if (a.pickupPriority && !b.pickupPriority) return -1;
       if (!a.pickupPriority && b.pickupPriority) return 1;

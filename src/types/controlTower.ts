@@ -118,6 +118,7 @@ export interface RegisterControlTowerOccurrenceInput {
 
 export interface ActionQueueItem {
   id: string;
+  returnType: 'coleta';
   priority: 'critical' | 'high' | 'medium';
   pickupPriority: boolean;
   issue: string;

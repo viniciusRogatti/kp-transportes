@@ -38,7 +38,17 @@ import {
   TabsRow,
   TopActionBar,
 } from '../style/returnsOccurrences';
-import { ICar, IDanfe, IDriver, IInvoiceReturn, IInvoiceReturnItem, IOccurrence, IProduct, IReturnBatch } from '../types/types';
+import {
+  ICar,
+  ICollectionRequest,
+  IDanfe,
+  IDriver,
+  IInvoiceReturn,
+  IInvoiceReturnItem,
+  IOccurrence,
+  IProduct,
+  IReturnBatch,
+} from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 
@@ -344,6 +354,8 @@ function ReturnsOccurrences() {
   const [returnNf, setReturnNf] = useState('');
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
   const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra' | 'coleta'>('total');
+  const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);
+  const [returnNfCollectionLookupLoading, setReturnNfCollectionLookupLoading] = useState(false);
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialProductType, setPartialProductType] = useState('');
   const [partialQuantityInput, setPartialQuantityInput] = useState('1');
@@ -929,6 +941,19 @@ function ReturnsOccurrences() {
     return data;
   }
 
+  async function hasActionQueueCollectionForInvoice(invoiceNumber: string) {
+    const normalizedInvoice = String(invoiceNumber || '').trim();
+    if (!normalizedInvoice) return false;
+
+    const params = new URLSearchParams();
+    params.append('invoice_number', normalizedInvoice);
+    params.append('limit', '50');
+
+    const { data } = await axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/action-queue?${params.toString()}`);
+    const rows = Array.isArray(data) ? data : [];
+    return rows.some((row) => String(row.invoice_number || '').trim() === normalizedInvoice);
+  }
+
   function resetSurplusInversionBuilder() {
     setLeftoverIsInversion(false);
     setLeftoverInversionInvoiceNumber('');
@@ -941,10 +966,21 @@ function ReturnsOccurrences() {
   }
 
   function handleChangeReturnType(nextType: 'total' | 'partial' | 'sobra' | 'coleta') {
+    if (
+      isReturnNfCollection
+      && returnDanfe
+      && (nextType === 'total' || nextType === 'partial')
+    ) {
+      alert('Esta NF possui coleta solicitada pela Mar e Rio. O tipo foi travado automaticamente como Coleta.');
+      return;
+    }
+
     setReturnType(nextType);
 
     if (nextType === 'sobra') {
       setReturnDanfe(null);
+      setIsReturnNfCollection(false);
+      setReturnNfCollectionLookupLoading(false);
       setPartialItems([]);
       setPartialProductCode('');
       setPartialProductType('');
@@ -1090,10 +1126,12 @@ function ReturnsOccurrences() {
       return;
     }
 
+    setReturnNfCollectionLookupLoading(true);
     try {
       const data = await findDanfeByNf(returnNf.trim());
 
       if (!data) {
+        setIsReturnNfCollection(false);
         alert('NF nao encontrada.');
         return;
       }
@@ -1103,9 +1141,24 @@ function ReturnsOccurrences() {
       setPartialProductCode('');
       setPartialProductType('');
       setPartialQuantityInput('1');
+
+      const normalizedInvoice = String(data.invoice_number || returnNf.trim()).trim();
+      try {
+        const isCollectionInvoice = await hasActionQueueCollectionForInvoice(normalizedInvoice);
+        setIsReturnNfCollection(isCollectionInvoice);
+        if (isCollectionInvoice) {
+          setReturnType('coleta');
+        }
+      } catch (collectionError) {
+        console.error('Erro ao verificar coleta solicitada para NF:', collectionError);
+        setIsReturnNfCollection(false);
+      }
     } catch (error) {
       console.error(error);
+      setIsReturnNfCollection(false);
       alert('Erro ao buscar NF para devolucao.');
+    } finally {
+      setReturnNfCollectionLookupLoading(false);
     }
   }
 
@@ -1273,22 +1326,24 @@ function ReturnsOccurrences() {
       return;
     }
 
-    if (returnType !== 'sobra' && !returnDanfe) {
+    const effectiveReturnType = isReturnNfCollection ? 'coleta' : returnType;
+
+    if (effectiveReturnType !== 'sobra' && !returnDanfe) {
       alert('Busque uma NF para adicionar na lista.');
       return;
     }
 
     const noteItems = getCurrentNoteItems();
     if (!noteItems.length) {
-      if (returnType === 'partial' || returnType === 'coleta') {
-        alert(`Adicione ao menos um item na devolucao ${returnType === 'coleta' ? 'de coleta' : 'parcial'}.`);
+      if (effectiveReturnType === 'partial' || effectiveReturnType === 'coleta') {
+        alert(`Adicione ao menos um item na devolucao ${effectiveReturnType === 'coleta' ? 'de coleta' : 'parcial'}.`);
       }
       return;
     }
 
     let notesToCreate: ReturnDraftNote[] = [];
 
-    if (returnType === 'sobra') {
+    if (effectiveReturnType === 'sobra') {
       const normalizedLoadNumber = leftoverLoadNumber.trim().toUpperCase();
       if (!normalizedLoadNumber) {
         alert('Informe o numero da carga da sobra.');
@@ -1385,7 +1440,7 @@ function ReturnsOccurrences() {
       notesToCreate = [
         {
           invoice_number: noteInvoiceNumber,
-          return_type: returnType,
+          return_type: effectiveReturnType,
           items: noteItems,
         },
       ];
@@ -1403,7 +1458,7 @@ function ReturnsOccurrences() {
       const existingInvoiceNumbers = new Set(batchDraftNotes.map((note) => note.invoice_number));
       const conflictingNotes = notesToCreate.filter((note) => existingInvoiceNumbers.has(note.invoice_number));
       if (conflictingNotes.length) {
-        alert(returnType === 'sobra'
+        alert(effectiveReturnType === 'sobra'
           ? 'Uma ou mais sobras dessa distribuicao ja existem no lote selecionado.'
           : 'Essa NF ja existe no lote selecionado.');
         return;
@@ -1434,7 +1489,7 @@ function ReturnsOccurrences() {
       ]));
 
       const addedCountLabel = notesToCreate.length > 1 ? `${notesToCreate.length} sobras` : 'Sobra';
-      alert(returnType === 'sobra'
+      alert(effectiveReturnType === 'sobra'
         ? `${addedCountLabel} adicionadas na edicao do lote. Clique em "Salvar lote" para persistir.`
         : 'NF adicionada na edicao do lote. Clique em "Salvar lote" para persistir.');
       clearNfBuilder();
@@ -1444,7 +1499,7 @@ function ReturnsOccurrences() {
     const existingInvoiceNumbers = new Set(draftNotes.map((note) => note.invoice_number));
     const conflictingNotes = notesToCreate.filter((note) => existingInvoiceNumbers.has(note.invoice_number));
     if (conflictingNotes.length) {
-      alert(returnType === 'sobra'
+      alert(effectiveReturnType === 'sobra'
         ? 'Uma ou mais sobras dessa distribuicao ja estao na lista atual.'
         : 'Essa NF ja esta na lista atual.');
       return;
@@ -1462,6 +1517,8 @@ function ReturnsOccurrences() {
     setReturnNf('');
     setReturnDanfe(null);
     setReturnType('total');
+    setIsReturnNfCollection(false);
+    setReturnNfCollectionLookupLoading(false);
     setPartialItems([]);
     setPartialProductCode('');
     setPartialProductType('');
@@ -2195,6 +2252,7 @@ function ReturnsOccurrences() {
                           <input
                             type="checkbox"
                             checked={returnType === 'total'}
+                            disabled={Boolean(returnDanfe) && isReturnNfCollection}
                             onChange={() => handleChangeReturnType('total')}
                           />
                           Total
@@ -2203,6 +2261,7 @@ function ReturnsOccurrences() {
                           <input
                             type="checkbox"
                             checked={returnType === 'partial'}
+                            disabled={Boolean(returnDanfe) && isReturnNfCollection}
                             onChange={() => handleChangeReturnType('partial')}
                           />
                           Parcial
@@ -2232,6 +2291,16 @@ function ReturnsOccurrences() {
                       {returnDanfe && returnType !== 'sobra' && (
                         <InfoText style={{ marginTop: '12px' }}>
                           NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
+                        </InfoText>
+                      )}
+                      {returnDanfe && returnType !== 'sobra' && returnNfCollectionLookupLoading && (
+                        <InfoText style={{ marginTop: '4px' }}>
+                          Validando se a NF possui coleta solicitada pela Mar e Rio...
+                        </InfoText>
+                      )}
+                      {returnDanfe && returnType !== 'sobra' && isReturnNfCollection && (
+                        <InfoText style={{ marginTop: '4px' }}>
+                          Coleta solicitada identificada para esta NF. Tipo ajustado automaticamente para Coleta.
                         </InfoText>
                       )}
 

@@ -155,9 +155,9 @@ export interface ICollectionRequest {
   quantity: number;
   request_scope?: 'invoice_total' | 'items';
   urgency_level?: 'baixa' | 'media' | 'alta' | 'critica';
-  workflow_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'enviada_em_lote' | 'recebida' | 'cancelada';
+  workflow_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'cancelamento_solicitado' | 'enviada_em_lote' | 'recebida' | 'cancelada';
   quality_status?: 'sem_ocorrencia' | 'em_tratativa' | 'aguardando_torre' | 'resolvida';
-  display_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'enviada_em_lote' | 'recebida' | 'cancelada' | 'em_tratativa';
+  display_status?: 'solicitada' | 'aceita_agendada' | 'coletada' | 'cancelamento_solicitado' | 'enviada_em_lote' | 'recebida' | 'cancelada' | 'em_tratativa';
   scheduled_for?: string | null;
   accepted_at?: string | null;
   accepted_by_user_id?: number | null;

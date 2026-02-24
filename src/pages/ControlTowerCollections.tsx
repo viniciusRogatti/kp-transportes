@@ -25,6 +25,10 @@ import { formatDateBR } from '../utils/dateDisplay';
 const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
 const CREDIT_MANAGERS = ['control_tower', 'admin', 'master'];
+const TOWER_COLLECTION_MANAGERS = ['control_tower', 'admin', 'master'];
+const CANCELLABLE_TRACKING_WORKFLOW_STATUSES = ['solicitada'];
+const REQUEST_CANCELLATION_TRACKING_WORKFLOW_STATUSES = ['aceita_agendada'];
+const CONFIRMED_COLLECTION_WORKFLOW_STATUSES = ['coletada', 'enviada_em_lote', 'recebida'];
 const NF_NOT_FOUND_MESSAGE = 'NF nao encontrada no banco de dados. Entre em contato com a expedicao da transportadora e envie o XML para cadastro.';
 const NOTIFICATIONS_STORAGE_KEY = 'ct_notifications_seen_at';
 const SHOW_FILTERS_STORAGE_KEY = 'ct_show_filters';
@@ -33,7 +37,7 @@ const SHOW_KPIS_STORAGE_KEY = 'ct_show_kpis';
 const buildDefaultFilters = (): ControlTowerFilters => ({
   search: '',
   invoiceNumber: '',
-  periodPreset: '7d',
+  periodPreset: '30d',
   startDate: '',
   endDate: getTodayDateInput(),
   returnStatus: 'all',
@@ -54,20 +58,21 @@ const COLLECTION_TRACKING_STATUS_OPTIONS = [
   { value: 'solicitada', label: 'Solicitada' },
   { value: 'aceita_agendada', label: 'Aceita / Agendada' },
   { value: 'coletada', label: 'Coletada' },
+  { value: 'cancelamento_solicitado', label: 'Cancelamento solicitado' },
   { value: 'enviada_em_lote', label: 'Enviada em lote' },
   { value: 'recebida', label: 'Recebida' },
-  { value: 'cancelada', label: 'Cancelada' },
 ] as const;
 
 type CollectionTrackingStatus = typeof COLLECTION_TRACKING_STATUS_OPTIONS[number]['value'];
+type RegisterCollectionScope = 'invoice_total' | 'items';
 
 const COLLECTION_WORKFLOW_LABELS: Record<Exclude<CollectionTrackingStatus, 'all'>, string> = {
   solicitada: 'Solicitada',
   aceita_agendada: 'Aceita / Agendada',
   coletada: 'Coletada',
+  cancelamento_solicitado: 'Cancelamento solicitado',
   enviada_em_lote: 'Enviada em lote',
   recebida: 'Recebida',
-  cancelada: 'Cancelada',
 };
 
 const COLLECTION_QUALITY_LABELS: Record<string, string> = {
@@ -91,6 +96,17 @@ type ManualCollectionRequestPayload = {
   notes?: string;
 };
 
+type RegisterCollectionProductRow = {
+  key: string;
+  productId: string;
+  productDescription: string;
+  productType: string;
+  isKg: boolean;
+  quantityOriginal: number;
+  totalCollected: number;
+  remainingCollectable: number;
+};
+
 type TowerNotificationEntry = {
   key: string;
   type: 'occurrence' | 'batch' | 'pickup';
@@ -103,15 +119,48 @@ type TowerNotificationEntry = {
   invoiceNumber?: string;
 };
 
+type CollectionCancellationDialogState = {
+  mode: 'direct_cancel' | 'request_cancellation';
+  request: ICollectionRequest;
+};
+
 function parseNumericInput(value: unknown): number {
   const normalized = String(value ?? '').trim().replace(',', '.');
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-function buildCollectionRequestCode(invoiceNumber: string) {
+function formatCollectionQuantity(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toFixed(3).replace(/\.?0+$/, '');
+}
+
+function normalizeCollectionQuantity(value: number, isKg: boolean) {
+  if (!Number.isFinite(value)) return 0;
+  if (isKg) {
+    return Math.round((value + Number.EPSILON) * 1000) / 1000;
+  }
+  return Math.round(value);
+}
+
+function normalizeProductType(value: unknown) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function isKgProductType(value: unknown) {
+  return normalizeProductType(value).includes('KG');
+}
+
+function resolveCollectionRequestScope(request: ICollectionRequest): RegisterCollectionScope {
+  return request.request_scope === 'invoice_total' ? 'invoice_total' : 'items';
+}
+
+function buildCollectionRequestCode(invoiceNumber: string, suffix = '') {
   const normalizedInvoice = String(invoiceNumber || '').trim().replace(/\D/g, '').slice(-6) || '000000';
-  return `CR-FE-${Date.now()}-${normalizedInvoice}`;
+  const normalizedSuffix = String(suffix || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+  return `CR-FE-${Date.now()}-${normalizedInvoice}${normalizedSuffix ? `-${normalizedSuffix}` : ''}`;
 }
 
 function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): ManualCollectionRequestPayload[] {
@@ -156,6 +205,92 @@ function formatDateTimeLabel(value?: string | null) {
   return formatDateBR(value);
 }
 
+function splitCollectionNotes(notes: unknown) {
+  return String(notes || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+type CollectionNoteDetail = {
+  rawLine: string;
+  timestampLabel: string;
+  actor: string;
+  message: string;
+};
+
+function formatCollectionNoteTimestampSaoPaulo(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(parsed);
+
+  const getPart = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  const day = getPart('day');
+  const month = getPart('month');
+  const year = getPart('year');
+  const hour = getPart('hour');
+  const minute = getPart('minute');
+  const second = getPart('second');
+
+  if (!day || !month || !year || !hour || !minute || !second) return '';
+  return `${day}-${month}-${year} as ${hour}:${minute}:${second}`;
+}
+
+function parseCollectionNoteLine(line: string): CollectionNoteDetail {
+  const rawLine = String(line || '').trim();
+  const match = rawLine.match(/^\[(.+?)\]\s+([^:]+):\s*(.+)$/);
+
+  if (!match) {
+    return {
+      rawLine,
+      timestampLabel: '',
+      actor: '',
+      message: rawLine,
+    };
+  }
+
+  return {
+    rawLine,
+    timestampLabel: formatCollectionNoteTimestampSaoPaulo(String(match[1] || '').trim()),
+    actor: String(match[2] || '').trim(),
+    message: String(match[3] || '').trim(),
+  };
+}
+
+function getCollectionNoteDetails(notes: unknown) {
+  return splitCollectionNotes(notes).map(parseCollectionNoteLine);
+}
+
+function hasCollectionNotes(notes: unknown) {
+  return splitCollectionNotes(notes).length > 0;
+}
+
+function getCollectionNotesCount(notes: unknown) {
+  return splitCollectionNotes(notes).length;
+}
+
+function getLatestCollectionNote(notes: unknown) {
+  const lines = getCollectionNoteDetails(notes);
+  if (!lines.length) return '';
+  const latestLine = lines[lines.length - 1];
+  if (latestLine.actor && latestLine.message) return `${latestLine.actor}: ${latestLine.message}`;
+  return latestLine.message || latestLine.rawLine;
+}
+
+function isCollectionInvalidStatusMessage(message: string) {
+  return /status de coleta inv[aá]lido/i.test(String(message || ''));
+}
+
 function normalizeCollectionWorkflowStatus(request: ICollectionRequest) {
   const workflowStatus = String(request.workflow_status || '').trim().toLowerCase();
   if (workflowStatus) return workflowStatus;
@@ -190,10 +325,84 @@ function canOpenCollectionInFlow(request: ICollectionRequest) {
   );
 }
 
+function isConfirmedCollectionWorkflowStatus(status: string) {
+  return CONFIRMED_COLLECTION_WORKFLOW_STATUSES.includes(status);
+}
+
+function buildRegisterCollectionProductRows(danfe: IDanfe | null, existingRows: ICollectionRequest[]) {
+  if (!danfe) return [] as RegisterCollectionProductRow[];
+
+  const products = Array.isArray(danfe.DanfeProducts) ? danfe.DanfeProducts : [];
+  const byProduct = new Map<string, RegisterCollectionProductRow>();
+
+  products.forEach((product, index) => {
+    const productId = String(product.Product?.code || '').trim().toUpperCase();
+    if (!productId) return;
+    const rawQuantity = parseNumericInput(product.quantity);
+    if (!Number.isFinite(rawQuantity) || rawQuantity <= 0) return;
+
+    const productDescription = String(product.Product?.description || '').trim() || `Produto ${productId}`;
+    const productType = normalizeProductType(product.type || product.Product?.type);
+    const isKg = isKgProductType(productType);
+    const quantity = normalizeCollectionQuantity(rawQuantity, isKg);
+    const key = productId || `PROD-${index + 1}`;
+    const current = byProduct.get(key);
+
+    if (current) {
+      current.quantityOriginal = normalizeCollectionQuantity(current.quantityOriginal + quantity, current.isKg || isKg);
+      if (!current.productDescription && productDescription) current.productDescription = productDescription;
+      if (!current.productType && productType) current.productType = productType;
+      current.isKg = current.isKg || isKg;
+      return;
+    }
+
+    byProduct.set(key, {
+      key,
+      productId,
+      productDescription,
+      productType,
+      isKg,
+      quantityOriginal: quantity,
+      totalCollected: 0,
+      remainingCollectable: quantity,
+    });
+  });
+
+  const confirmedCollectedByProduct = new Map<string, number>();
+  existingRows.forEach((request) => {
+    if (resolveCollectionRequestScope(request) !== 'items') return;
+    const workflowStatus = normalizeCollectionWorkflowStatus(request);
+    if (!isConfirmedCollectionWorkflowStatus(workflowStatus)) return;
+
+    const productId = String(request.product_id || '').trim().toUpperCase();
+    if (!productId) return;
+
+    const row = byProduct.get(productId);
+    const isKg = row ? row.isKg : isKgProductType(request.product_type);
+    const quantity = normalizeCollectionQuantity(parseNumericInput(request.quantity), isKg);
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+
+    const current = confirmedCollectedByProduct.get(productId) || 0;
+    confirmedCollectedByProduct.set(productId, normalizeCollectionQuantity(current + quantity, isKg));
+  });
+
+  byProduct.forEach((row) => {
+    const totalCollected = normalizeCollectionQuantity(confirmedCollectedByProduct.get(row.productId) || 0, row.isKg);
+    row.totalCollected = totalCollected;
+    row.remainingCollectable = normalizeCollectionQuantity(
+      Math.max(0, row.quantityOriginal - totalCollected),
+      row.isKg,
+    );
+  });
+
+  return Array.from(byProduct.values()).sort((left, right) => left.productId.localeCompare(right.productId));
+}
+
 function ControlTowerCollections() {
   const navigate = useNavigate();
   const userPermission = localStorage.getItem('user_permission') || '';
   const canManageStatus = ['admin', 'master', 'expedicao'].includes(userPermission);
+  const canManageCollectionRequests = TOWER_COLLECTION_MANAGERS.includes(userPermission);
   const canConfirmTowerBatchReceipt = userPermission === 'control_tower';
   const canFinalizeOccurrenceCredit = CREDIT_MANAGERS.includes(userPermission);
   const [analyticsFilters, setAnalyticsFilters] = useState<ControlTowerFilters>(() => buildDefaultFilters());
@@ -204,15 +413,26 @@ function ControlTowerCollections() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [topMetric, setTopMetric] = useState<TopMetric>('quantity');
   const [registerNf, setRegisterNf] = useState('');
+  const [registerScope, setRegisterScope] = useState<RegisterCollectionScope>('invoice_total');
+  const [registerDanfe, setRegisterDanfe] = useState<IDanfe | null>(null);
+  const [registerExistingRows, setRegisterExistingRows] = useState<ICollectionRequest[]>([]);
+  const [registerPartialQuantities, setRegisterPartialQuantities] = useState<Record<string, string>>({});
+  const [loadingRegisterContext, setLoadingRegisterContext] = useState(false);
   const [registeringPickup, setRegisteringPickup] = useState(false);
+  const [cancellingCollectionInvoice, setCancellingCollectionInvoice] = useState<string | null>(null);
+  const [collectionCancellationDialog, setCollectionCancellationDialog] = useState<CollectionCancellationDialogState | null>(null);
+  const [collectionCancellationReason, setCollectionCancellationReason] = useState('');
   const [collectionTrackingRows, setCollectionTrackingRows] = useState<ICollectionRequest[]>([]);
   const [collectionTrackingLoading, setCollectionTrackingLoading] = useState(false);
   const [collectionTrackingError, setCollectionTrackingError] = useState('');
   const [collectionTrackingNf, setCollectionTrackingNf] = useState('');
   const [collectionTrackingStatus, setCollectionTrackingStatus] = useState<CollectionTrackingStatus>('all');
+  const [collectionTrackingOnlyWithNotes, setCollectionTrackingOnlyWithNotes] = useState(false);
+  const [collectionOccurrenceDialog, setCollectionOccurrenceDialog] = useState<ICollectionRequest | null>(null);
   const [recentOccurrences, setRecentOccurrences] = useState<IOccurrence[]>([]);
   const [pendingBatches, setPendingBatches] = useState<IReturnBatch[]>([]);
   const [receivingBatchCode, setReceivingBatchCode] = useState<string | null>(null);
+  const [receiptConfirmBatchCode, setReceiptConfirmBatchCode] = useState<string | null>(null);
   const [towerNotifications, setTowerNotifications] = useState<TowerNotificationEntry[]>([]);
   const [notificationTotals, setNotificationTotals] = useState({
     occurrences: 0,
@@ -269,6 +489,22 @@ function ControlTowerCollections() {
         ? 'Últimos 7 dias'
         : 'Últimos 30 dias';
   const pendingSituationsCount = notificationTotals.occurrences + notificationTotals.batches + notificationTotals.pickups;
+  const registerProductRows = useMemo(
+    () => buildRegisterCollectionProductRows(registerDanfe, registerExistingRows),
+    [registerDanfe, registerExistingRows],
+  );
+  const registerActiveRows = useMemo(
+    () => registerExistingRows.filter((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada'),
+    [registerExistingRows],
+  );
+  const registerHasActiveInvoiceTotal = useMemo(
+    () => registerActiveRows.some((row) => resolveCollectionRequestScope(row) === 'invoice_total'),
+    [registerActiveRows],
+  );
+  const registerHasActiveItems = useMemo(
+    () => registerActiveRows.some((row) => resolveCollectionRequestScope(row) === 'items'),
+    [registerActiveRows],
+  );
 
   function handleAnalyticsFilterChange(next: Partial<ControlTowerFilters>) {
     setAnalyticsFilters((prev) => ({ ...prev, ...next }));
@@ -337,7 +573,8 @@ function ControlTowerCollections() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const rows = Array.isArray(data) ? data : [];
-      setCollectionTrackingRows(rows);
+      const activeTrackingRows = rows.filter((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada');
+      setCollectionTrackingRows(activeTrackingRows);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         setCollectionTrackingError(error.response?.data?.error || 'Erro ao carregar coletas.');
@@ -430,13 +667,17 @@ function ControlTowerCollections() {
       key: `pickup-${pickup.id}`,
       type: 'pickup',
       title: `Coleta com data confirmada | NF ${pickup.invoice_number || '-'}`,
-      description: `Prevista para ${formatDateBR(pickup.scheduled_for)} | Cliente: ${pickup.customer_name || '-'}`,
+      description: `${`Prevista para ${formatDateBR(pickup.scheduled_for)} | Cliente: ${pickup.customer_name || '-'}`}${getLatestCollectionNote(pickup.notes) ? ` | Obs: ${getLatestCollectionNote(pickup.notes)}` : ''}`,
       date: pickup.accepted_at || `${pickup.scheduled_for}T12:00:00.000Z`,
       pickupId: pickup.id,
       invoiceNumber: pickup.invoice_number || undefined,
     }));
+    const pickupNotificationsLimited: TowerNotificationEntry[] = pickupNotifications.map((entry) => ({
+      ...entry,
+      description: entry.description.length > 160 ? `${entry.description.slice(0, 157)}...` : entry.description,
+    }));
 
-    const merged = [...occurrenceNotifications, ...batchNotifications, ...pickupNotifications]
+    const merged = [...occurrenceNotifications, ...batchNotifications, ...pickupNotificationsLimited]
       .sort((left, right) => {
         const leftDate = new Date(left.date).getTime();
         const rightDate = new Date(right.date).getTime();
@@ -520,6 +761,52 @@ function ControlTowerCollections() {
       window.clearTimeout(timeoutId);
     };
   }, [highlightedOccurrenceId]);
+
+  useEffect(() => {
+    if (!receiptConfirmBatchCode) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !receivingBatchCode) {
+        setReceiptConfirmBatchCode(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [receiptConfirmBatchCode, receivingBatchCode]);
+
+  useEffect(() => {
+    if (!collectionCancellationDialog) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !cancellingCollectionInvoice) {
+        setCollectionCancellationDialog(null);
+        setCollectionCancellationReason('');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [collectionCancellationDialog, cancellingCollectionInvoice]);
+
+  useEffect(() => {
+    if (!collectionOccurrenceDialog) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCollectionOccurrenceDialog(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [collectionOccurrenceDialog]);
 
   async function applyFlowFilterAndOpen(next: Partial<ControlTowerFilters>) {
     const merged = { ...flowFilters, ...next };
@@ -677,10 +964,24 @@ function ControlTowerCollections() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Confirma o recebimento do lote ${batchCode}? Se houver divergência em alguma NF, registre a ocorrência antes de confirmar.`,
-    );
-    if (!confirmed) return;
+    setReceiptConfirmBatchCode(batchCode);
+  }
+
+  function closeReceiptConfirmModal() {
+    if (receivingBatchCode) return;
+    setReceiptConfirmBatchCode(null);
+  }
+
+  async function confirmBatchReceiptWithModal() {
+    const batchCode = receiptConfirmBatchCode;
+    if (!batchCode) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setReceiptConfirmBatchCode(null);
+      alert('Sessão inválida. Faça login novamente.');
+      return;
+    }
 
     setReceivingBatchCode(batchCode);
     try {
@@ -697,6 +998,7 @@ function ControlTowerCollections() {
       }
     } finally {
       setReceivingBatchCode(null);
+      setReceiptConfirmBatchCode(null);
     }
   }
 
@@ -757,6 +1059,119 @@ function ControlTowerCollections() {
     }
   }
 
+  function handleRegisterNfInputChange(value: string) {
+    const normalizedNf = value.replace(/\D/g, '').slice(0, 9);
+    setRegisterNf(normalizedNf);
+    setRegisterDanfe(null);
+    setRegisterExistingRows([]);
+    setRegisterPartialQuantities({});
+  }
+
+  function handleRegisterPartialQuantityChange(productKey: string, value: string) {
+    setRegisterPartialQuantities((previous) => ({
+      ...previous,
+      [productKey]: value.replace(',', '.'),
+    }));
+  }
+
+  function clearRegisterPartialQuantities() {
+    setRegisterPartialQuantities((previous) => {
+      const next: Record<string, string> = {};
+      Object.keys(previous).forEach((key) => {
+        next[key] = '';
+      });
+      return next;
+    });
+  }
+
+  async function loadRegisterContextByNf(nf: string) {
+    const normalizedNf = nf.trim();
+    const [existingResponse, danfeResponse] = await Promise.all([
+      axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/search`, {
+        params: {
+          invoice_number: normalizedNf,
+          status: 'all',
+          limit: 260,
+        },
+      }),
+      axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${normalizedNf}`),
+    ]);
+
+    const existingRows = Array.isArray(existingResponse.data) ? existingResponse.data : [];
+    const danfe = danfeResponse?.data;
+
+    if (!danfe) {
+      throw new Error(NF_NOT_FOUND_MESSAGE);
+    }
+
+    const hasCustomerData = String(danfe.Customer?.name_or_legal_entity || '').trim();
+    const hasCityData = String(danfe.Customer?.city || '').trim();
+    if (!hasCustomerData || !hasCityData) {
+      throw new Error(
+        'A NF foi localizada, mas os dados estao incompletos. Entre em contato com a expedicao da transportadora para revisar o XML.',
+      );
+    }
+
+    const nextProductRows = buildRegisterCollectionProductRows(danfe, existingRows);
+    setRegisterDanfe(danfe);
+    setRegisterExistingRows(existingRows);
+    setRegisterPartialQuantities((previous) => {
+      const next: Record<string, string> = {};
+      nextProductRows.forEach((row) => {
+        next[row.key] = previous[row.key] || '';
+      });
+      return next;
+    });
+
+    return {
+      danfe,
+      existingRows,
+      productRows: nextProductRows,
+    };
+  }
+
+  async function handleLoadRegisterContext() {
+    if (!canManageCollectionRequests) {
+      alert('Somente a Torre de Controle pode validar NF para coleta manual.');
+      return;
+    }
+
+    const nf = registerNf.trim();
+    if (!nf) {
+      alert('Informe a NF para validar os dados da coleta.');
+      return;
+    }
+
+    setLoadingRegisterContext(true);
+    try {
+      const { existingRows } = await loadRegisterContextByNf(nf);
+      const activeCount = existingRows.filter((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada').length;
+      alert(
+        activeCount
+          ? `NF ${nf} validada. Existem ${activeCount} coleta(s) ativa(s) para acompanhamento.`
+          : `NF ${nf} validada. Pronta para registrar nova coleta.`,
+      );
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          alert(NF_NOT_FOUND_MESSAGE);
+          return;
+        }
+        alert(error.response?.data?.error || 'Erro ao validar NF para coleta.');
+        return;
+      }
+
+      if (error instanceof Error) {
+        alert(error.message || 'Erro ao validar NF para coleta.');
+        return;
+      }
+
+      alert('Erro ao validar NF para coleta.');
+    } finally {
+      setLoadingRegisterContext(false);
+    }
+  }
+
   async function handleRegisterPickupByNf() {
     const nf = registerNf.trim();
     if (!nf) {
@@ -764,47 +1179,109 @@ function ControlTowerCollections() {
       return;
     }
 
+    if (!canManageCollectionRequests) {
+      alert('Somente a Torre de Controle pode registrar coleta manual por NF.');
+      return;
+    }
+
     setRegisteringPickup(true);
     try {
-      const existingResponse = await axios.get<ICollectionRequest[]>(`${API_URL}/collection-requests/search`, {
-        params: {
-          invoice_number: nf,
-          status: 'all',
-          limit: 60,
-        },
-      });
-      const existingRows = Array.isArray(existingResponse.data) ? existingResponse.data : [];
-      const activeRow = existingRows.find((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada');
-      if (activeRow) {
+      const registerContextIsLoaded = Boolean(registerDanfe) && String(registerDanfe?.invoice_number || '').trim() === nf;
+      const context = registerContextIsLoaded
+        ? {
+          danfe: registerDanfe as IDanfe,
+          existingRows: registerExistingRows,
+          productRows: registerProductRows,
+        }
+        : await loadRegisterContextByNf(nf);
+
+      const activeRows = context.existingRows.filter((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada');
+      const hasActiveInvoiceTotal = activeRows.some((row) => resolveCollectionRequestScope(row) === 'invoice_total');
+
+      if (registerScope === 'invoice_total') {
+        if (hasActiveInvoiceTotal || activeRows.some((row) => resolveCollectionRequestScope(row) === 'items')) {
+          const activeRow = activeRows[0];
+          setCollectionTrackingNf(nf);
+          collectionTrackingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          alert(
+            `Ja existe coleta ativa para NF ${nf} (ID ${activeRow?.id || '-'} | ${activeRow ? formatCollectionWorkflowStatus(activeRow) : 'Solicitada'}). `
+            + 'Cancele/conclua a coleta atual antes de registrar NF total novamente.',
+          );
+          return;
+        }
+
+        const payloads = buildManualCollectionPayloads(context.danfe, nf);
+        await Promise.all(payloads.map((payload) => axios.post(`${API_URL}/collection-requests`, payload)));
+
+        setCollectionTrackingNf(nf);
+        await refreshAll();
+        handleRegisterNfInputChange('');
+        alert(`Coleta total registrada para a NF ${nf}.`);
+        return;
+      }
+
+      if (hasActiveInvoiceTotal) {
         setCollectionTrackingNf(nf);
         collectionTrackingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        alert(`Ja existe coleta ativa para NF ${nf} (ID ${activeRow.id} | ${formatCollectionWorkflowStatus(activeRow)}).`);
+        alert(`A NF ${nf} possui coleta total ativa. Cancele ou conclua a coleta total antes de registrar itens parciais.`);
         return;
       }
 
-      const danfeResponse = await axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${nf}`);
-      const danfe = danfeResponse?.data;
-
-      if (!danfe) {
-        alert(NF_NOT_FOUND_MESSAGE);
+      if (!context.productRows.length) {
+        alert('Nao foi possivel carregar itens da NF para coleta parcial.');
         return;
       }
 
-      const hasCustomerData = String(danfe.Customer?.name_or_legal_entity || '').trim();
-      const hasCityData = String(danfe.Customer?.city || '').trim();
-      if (!hasCustomerData || !hasCityData) {
-        alert('A NF foi localizada, mas os dados estao incompletos. Entre em contato com a expedicao da transportadora para revisar o XML.');
+      const selectedPayloads: ManualCollectionRequestPayload[] = [];
+      for (const productRow of context.productRows) {
+        const rawInput = String(registerPartialQuantities[productRow.key] || '').trim();
+        if (!rawInput) continue;
+
+        const parsedQuantity = parseNumericInput(rawInput);
+        if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+          alert(`Quantidade invalida para o produto ${productRow.productId}.`);
+          return;
+        }
+
+        if (!productRow.isKg && !Number.isInteger(parsedQuantity)) {
+          alert(`A quantidade do produto ${productRow.productId} deve ser inteira.`);
+          return;
+        }
+
+        const normalizedQuantity = normalizeCollectionQuantity(parsedQuantity, productRow.isKg);
+        if (normalizedQuantity - productRow.remainingCollectable > 0.000001) {
+          alert(
+            `Quantidade excede o saldo da NF para o produto ${productRow.productId}. `
+            + `Restante coletavel: ${formatCollectionQuantity(productRow.remainingCollectable)}.`,
+          );
+          return;
+        }
+
+        selectedPayloads.push({
+          invoice_number: nf,
+          request_code: buildCollectionRequestCode(nf, productRow.productId),
+          customer_name: String(context.danfe.Customer?.name_or_legal_entity || '').trim(),
+          city: String(context.danfe.Customer?.city || '').trim(),
+          product_id: productRow.productId,
+          product_description: productRow.productDescription || `Produto ${productRow.productId}`,
+          product_type: productRow.productType || null,
+          quantity: normalizedQuantity,
+          request_scope: 'items',
+          urgency_level: 'media',
+          notes: 'Solicitacao manual parcial registrada pela Torre de Controle.',
+        });
+      }
+
+      if (!selectedPayloads.length) {
+        alert('Informe ao menos uma quantidade de produto para registrar coleta parcial.');
         return;
       }
 
-      const payloads = buildManualCollectionPayloads(danfe, nf);
-
-      await Promise.all(payloads.map((payload) => axios.post(`${API_URL}/collection-requests`, payload)));
-
-      setCollectionTrackingNf(nf);
-      setRegisterNf('');
+      await Promise.all(selectedPayloads.map((payload) => axios.post(`${API_URL}/collection-requests`, payload)));
       await refreshAll();
-      alert(`Coleta registrada para a NF ${nf}.`);
+      handleRegisterNfInputChange('');
+      setCollectionTrackingNf(nf);
+      alert(`Coleta parcial registrada para a NF ${nf} (${selectedPayloads.length} item(ns)).`);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 404) {
@@ -816,13 +1293,162 @@ function ControlTowerCollections() {
         return;
       }
 
+      if (error instanceof Error) {
+        alert(error.message || 'Erro ao validar NF e registrar coleta.');
+        return;
+      }
+
       alert('Erro ao validar NF e registrar coleta.');
     } finally {
       setRegisteringPickup(false);
     }
   }
 
-  const visibleCollectionTrackingRows = collectionTrackingRows.slice(0, 80);
+  function closeCollectionCancellationDialog() {
+    if (cancellingCollectionInvoice) return;
+    setCollectionCancellationDialog(null);
+    setCollectionCancellationReason('');
+  }
+
+  function handleCancelCollectionRequest(request: ICollectionRequest) {
+    if (!canManageCollectionRequests) {
+      alert('Somente a Torre de Controle pode cancelar coleta manual.');
+      return;
+    }
+
+    const workflowStatus = normalizeCollectionWorkflowStatus(request);
+    if (!CANCELLABLE_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus)) {
+      alert('Cancelamento direto so e permitido enquanto a coleta ainda nao foi agendada.');
+      return;
+    }
+
+    setCollectionCancellationReason('');
+    setCollectionCancellationDialog({
+      mode: 'direct_cancel',
+      request,
+    });
+  }
+
+  function handleRequestCollectionCancellation(request: ICollectionRequest) {
+    if (!canManageCollectionRequests) {
+      alert('Somente a Torre de Controle pode solicitar cancelamento de coleta.');
+      return;
+    }
+
+    const workflowStatus = normalizeCollectionWorkflowStatus(request);
+    if (!REQUEST_CANCELLATION_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus)) {
+      alert('Solicitacao de cancelamento so pode ser feita para coletas agendadas.');
+      return;
+    }
+
+    setCollectionCancellationReason('');
+    setCollectionCancellationDialog({
+      mode: 'request_cancellation',
+      request,
+    });
+  }
+
+  async function confirmCollectionCancellationDialog() {
+    if (!collectionCancellationDialog) return;
+
+    const { request, mode } = collectionCancellationDialog;
+    const reasonText = String(collectionCancellationReason || '').trim();
+
+    if (mode === 'request_cancellation' && !reasonText) {
+      alert('Informe o motivo da solicitacao de cancelamento.');
+      return;
+    }
+
+    setCancellingCollectionInvoice(String(request.id));
+    try {
+      if (mode === 'direct_cancel') {
+        await axios.patch(`${API_URL}/collection-requests/${request.id}/status`, {
+          workflow_status: 'cancelada',
+        });
+      } else {
+        const requestCancellationPayloads = [
+          { workflow_status: 'cancelamento_solicitado', reason: reasonText },
+          { workflow_status: 'cancellation_requested', reason: reasonText },
+        ];
+        let sentCancellationRequest = false;
+        let lastError: unknown = null;
+
+        for (const payload of requestCancellationPayloads) {
+          try {
+            // Compat fallback: some environments may still recognize the legacy english alias.
+            // eslint-disable-next-line no-await-in-loop
+            await axios.patch(`${API_URL}/collection-requests/${request.id}/status`, payload);
+            sentCancellationRequest = true;
+            break;
+          } catch (error) {
+            lastError = error;
+            if (!axios.isAxiosError(error)) {
+              throw error;
+            }
+
+            const apiMessage = String(error.response?.data?.error || '');
+            if (!isCollectionInvalidStatusMessage(apiMessage)) {
+              throw error;
+            }
+          }
+        }
+
+        if (!sentCancellationRequest) {
+          throw lastError || new Error('Falha ao solicitar cancelamento da coleta.');
+        }
+      }
+
+      await refreshAll();
+
+      const registerNfValue = registerNf.trim();
+      const requestInvoice = String(request.invoice_number || '').trim();
+      if (registerNfValue && requestInvoice && registerNfValue === requestInvoice) {
+        await loadRegisterContextByNf(registerNfValue);
+      }
+
+      if (mode === 'direct_cancel') {
+        alert(`Coleta #${request.id} cancelada com sucesso.`);
+      } else {
+        alert(`Solicitacao de cancelamento enviada para a transportadora na coleta #${request.id}.`);
+      }
+
+      closeCollectionCancellationDialog();
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const apiMessage = String(error.response?.data?.error || '');
+        if (isCollectionInvalidStatusMessage(apiMessage)) {
+          alert(
+            'Nao foi possivel solicitar o cancelamento da coleta agora. '
+            + 'O status enviado nao foi reconhecido pelo backend. '
+            + 'Tente novamente em alguns instantes e, se persistir, acione o suporte para atualizar a API.',
+          );
+        } else {
+          alert(apiMessage || 'Erro ao processar cancelamento da coleta.');
+        }
+      } else {
+        alert('Erro ao processar cancelamento da coleta.');
+      }
+    } finally {
+      setCancellingCollectionInvoice(null);
+    }
+  }
+
+  const filteredCollectionTrackingRows = useMemo(
+    () => (
+      collectionTrackingOnlyWithNotes
+        ? collectionTrackingRows.filter((row) => hasCollectionNotes(row.notes))
+        : collectionTrackingRows
+    ),
+    [collectionTrackingOnlyWithNotes, collectionTrackingRows],
+  );
+  const visibleCollectionTrackingRows = filteredCollectionTrackingRows.slice(0, 80);
+  const collectionOccurrenceNotes = collectionOccurrenceDialog
+    ? getCollectionNoteDetails(collectionOccurrenceDialog.notes)
+    : [];
+  const collectionOccurrenceHasNotes = collectionOccurrenceNotes.length > 0;
+  const collectionOccurrenceLatestNote = collectionOccurrenceHasNotes
+    ? collectionOccurrenceNotes[collectionOccurrenceNotes.length - 1]
+    : null;
 
   return (
     <div className="min-h-screen bg-[#070f1a] px-3 py-3 text-slate-100 lg:px-4">
@@ -912,33 +1538,135 @@ function ControlTowerCollections() {
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-amber-100">Registrar Coleta</h3>
-              <p className="text-xs text-amber-200/80">Use a NF para abrir rapidamente uma solicitação consolidada (uma coleta por NF).</p>
+              <p className="text-xs text-amber-200/80">Selecione NF total ou parcial por itens, com controle de saldo por produto.</p>
             </div>
           </div>
-          <div className="w-full max-w-[460px]">
-            <label htmlFor="register-pickup-nf" className="mb-1 block text-xs font-medium text-slate-200">
-              NF para coleta
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="register-pickup-nf"
-                value={registerNf}
-                onChange={(event) => setRegisterNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
-                inputMode="numeric"
-                maxLength={9}
-                placeholder="Digite a NF"
-                className="h-10 w-full max-w-[220px] rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
-              />
-              <Button
-                tone="secondary"
-                className="h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
-                onClick={handleRegisterPickupByNf}
-                disabled={registeringPickup}
-              >
-                {registeringPickup ? 'Validando...' : 'Registrar coleta'}
-              </Button>
+          <div className="space-y-2">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,190px)_auto]">
+              <label htmlFor="register-pickup-nf" className="text-xs font-medium text-slate-200">
+                NF para coleta
+                <input
+                  id="register-pickup-nf"
+                  value={registerNf}
+                  onChange={(event) => handleRegisterNfInputChange(event.target.value)}
+                  inputMode="numeric"
+                  maxLength={9}
+                  placeholder="Digite a NF"
+                  className="mt-1 h-10 w-full rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
+                />
+              </label>
+              <label className="text-xs font-medium text-slate-200">
+                Escopo
+                <select
+                  value={registerScope}
+                  onChange={(event) => setRegisterScope(event.target.value as RegisterCollectionScope)}
+                  className="mt-1 h-10 w-full rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
+                >
+                  <option value="invoice_total">NF total</option>
+                  <option value="items">Parcial por itens</option>
+                </select>
+              </label>
+              <div className="flex flex-wrap items-end gap-2">
+                <Button
+                  tone="outline"
+                  className="h-10 border-amber-500/45 bg-slate-900 text-amber-100 hover:bg-slate-800 disabled:opacity-60"
+                  onClick={handleLoadRegisterContext}
+                  disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
+                >
+                  {loadingRegisterContext ? 'Validando...' : 'Validar NF'}
+                </Button>
+                <Button
+                  tone="secondary"
+                  className="h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
+                  onClick={handleRegisterPickupByNf}
+                  disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
+                >
+                  {registeringPickup ? 'Registrando...' : 'Registrar coleta'}
+                </Button>
+              </div>
             </div>
-            <p className="mt-1 text-xs text-slate-300">A NF será validada no banco antes do registro da coleta.</p>
+            <p className="text-xs text-slate-300">
+              A coleta parcial respeita o saldo por item da NF (qtd original - total já coletado em status confirmado).
+            </p>
+
+            {!canManageCollectionRequests ? (
+              <p className="rounded-sm border border-rose-500/50 bg-rose-900/25 px-2 py-1 text-xs text-rose-100">
+                Seu perfil não possui permissão para registrar/cancelar coleta manual.
+              </p>
+            ) : null}
+
+            {registerDanfe ? (
+              <div className="rounded-sm border border-amber-500/35 bg-slate-900/55 px-3 py-2 text-xs text-slate-200">
+                <div>
+                  <strong>{`NF ${registerDanfe.invoice_number || registerNf}`}</strong>
+                  {` | Cliente: ${registerDanfe.Customer?.name_or_legal_entity || '-'}`}
+                  {` | Cidade: ${registerDanfe.Customer?.city || '-'}`}
+                </div>
+                <div className="mt-1 text-slate-300">
+                  {`Coletas ativas na NF: ${registerActiveRows.length}`}
+                  {registerHasActiveInvoiceTotal ? ' | Existe coleta NF total ativa' : ''}
+                  {registerHasActiveItems ? ' | Existe coleta parcial ativa' : ''}
+                </div>
+              </div>
+            ) : null}
+
+            {registerScope === 'items' && registerDanfe ? (
+              <div className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-100">Itens da NF para coleta parcial</p>
+                  <button
+                    type="button"
+                    onClick={clearRegisterPartialQuantities}
+                    className="rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200 transition hover:bg-slate-700"
+                  >
+                    Limpar quantidades
+                  </button>
+                </div>
+
+                {!registerProductRows.length ? (
+                  <p className="text-xs text-slate-300">Nenhum item da NF disponível para coleta parcial.</p>
+                ) : (
+                  <ul className="max-h-[260px] space-y-2 overflow-auto pr-1">
+                    {registerProductRows.map((productRow) => (
+                      <li key={`register-product-${productRow.key}`} className="rounded-sm border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate font-semibold text-slate-100">
+                              {`${productRow.productId} - ${productRow.productDescription}`}
+                            </div>
+                            <div className="text-[11px] text-slate-300">
+                              {`Tipo: ${productRow.productType || 'N/A'}`}
+                              {` | Original: ${formatCollectionQuantity(productRow.quantityOriginal)}`}
+                              {` | Coletado: ${formatCollectionQuantity(productRow.totalCollected)}`}
+                              {` | Restante: ${formatCollectionQuantity(productRow.remainingCollectable)}`}
+                            </div>
+                          </div>
+                          <label className="text-[11px] text-slate-300">
+                            Qtd a coletar
+                            <input
+                              value={registerPartialQuantities[productRow.key] || ''}
+                              onChange={(event) => handleRegisterPartialQuantityChange(productRow.key, event.target.value)}
+                              inputMode={productRow.isKg ? 'decimal' : 'numeric'}
+                              step={productRow.isKg ? '0.001' : '1'}
+                              min={productRow.isKg ? '0.001' : '1'}
+                              placeholder="0"
+                              disabled={productRow.remainingCollectable <= 0 || registerHasActiveInvoiceTotal}
+                              className="mt-1 h-8 w-[110px] rounded-sm border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </label>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {registerHasActiveInvoiceTotal ? (
+                  <p className="mt-2 rounded-sm border border-rose-500/40 bg-rose-900/20 px-2 py-1 text-xs text-rose-200">
+                    Existe uma coleta NF total ativa. Para registrar parcial, cancele/conclua a coleta total primeiro.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Card>
 
@@ -959,7 +1687,7 @@ function ControlTowerCollections() {
               </Button>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_1fr]">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_minmax(0,220px)_1fr]">
               <label className="text-xs text-slate-300">
                 NF
                 <input
@@ -985,11 +1713,21 @@ function ControlTowerCollections() {
                 </select>
               </label>
 
+              <label className="flex items-end gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={collectionTrackingOnlyWithNotes}
+                  onChange={(event) => setCollectionTrackingOnlyWithNotes(event.target.checked)}
+                  className="h-4 w-4 rounded border border-slate-600 bg-slate-900"
+                />
+                Somente com ocorrência
+              </label>
+
               <div className="flex items-end">
                 <p className="text-xs text-slate-300">
                   {collectionTrackingLoading
                     ? 'Carregando coletas...'
-                    : `${collectionTrackingRows.length} coleta(s) encontrada(s).`}
+                    : `${filteredCollectionTrackingRows.length} coleta(s) encontrada(s).`}
                 </p>
               </div>
             </div>
@@ -1000,78 +1738,125 @@ function ControlTowerCollections() {
               </p>
             ) : null}
 
-            {!collectionTrackingLoading && !collectionTrackingError && !collectionTrackingRows.length ? (
-              <p className="mt-2 text-xs text-slate-400">Nenhuma coleta encontrada para os filtros informados.</p>
+            {!collectionTrackingLoading && !collectionTrackingError && !filteredCollectionTrackingRows.length ? (
+              <p className="mt-2 text-xs text-slate-400">
+                {collectionTrackingOnlyWithNotes
+                  ? 'Nenhuma coleta com ocorrência encontrada para os filtros informados.'
+                  : 'Nenhuma coleta encontrada para os filtros informados.'}
+              </p>
             ) : null}
 
             {!collectionTrackingLoading && !collectionTrackingError && !!visibleCollectionTrackingRows.length ? (
               <ul className="mt-2 max-h-[340px] space-y-2 overflow-auto pr-1">
                 {visibleCollectionTrackingRows.map((request) => {
                   const canOpenFlow = canOpenCollectionInFlow(request);
+                  const workflowStatus = normalizeCollectionWorkflowStatus(request);
+                  const canCancelCollectionDirectly = canManageCollectionRequests
+                    && CANCELLABLE_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus);
+                  const canRequestCollectionCancellation = canManageCollectionRequests
+                    && REQUEST_CANCELLATION_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus);
+                  const notesCount = getCollectionNotesCount(request.notes);
+                  const hasNotes = notesCount > 0;
+                  const occurrenceLabel = hasNotes
+                    ? `Com ocorrência${notesCount > 1 ? ` (${notesCount})` : ''}`
+                    : 'Sem ocorrência';
+                  const quantityWithType = `${formatCollectionQuantity(Number(request.quantity || 0))}${normalizeProductType(request.product_type) || ''}`;
+                  const scopeLabel = resolveCollectionRequestScope(request) === 'invoice_total'
+                    ? 'NF total'
+                    : 'Parcial (itens)';
 
                   return (
                     <li key={`tracking-collection-${request.id}`} className="rounded-sm border border-slate-700 bg-slate-900/55 px-3 py-2 text-xs text-slate-200">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <strong>{`#${request.id}`}</strong>
-                        {` | NF ${request.invoice_number || '-'}`}
-                        {` | ${request.customer_name || '-'}`}
-                        {` | ${request.city || '-'}`}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <strong>{`#${request.id}`}</strong>
+                          {` | NF ${request.invoice_number || '-'}`}
+                          {` | ${request.customer_name || '-'}`}
+                          {` | ${request.city || '-'}`}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="rounded-md border border-sky-500/40 bg-sky-900/25 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                            {formatCollectionWorkflowStatus(request)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCollectionOccurrenceDialog(request)}
+                            className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
+                              hasNotes
+                                ? 'border-amber-400/60 bg-amber-700/25 text-amber-100 hover:bg-amber-700/35'
+                                : 'border-slate-600 bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
+                            }`}
+                          >
+                            {occurrenceLabel}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="rounded-md border border-sky-500/40 bg-sky-900/25 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
-                          {formatCollectionWorkflowStatus(request)}
+
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
+                        <span>
+                          {`Produto: ${request.product_id ? `${request.product_id} - ` : ''}${request.product_description || '-'}`}
+                          {` | Qtd: ${quantityWithType}`}
+                          {` | Escopo: ${scopeLabel}`}
                         </span>
-                        <span className="rounded-md border border-amber-500/40 bg-amber-900/25 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
-                          {formatCollectionQualityStatus(request)}
-                        </span>
+                        {request.scheduled_for ? (
+                          <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-100">
+                            {`Agendada para ${formatDateBR(request.scheduled_for)}`}
+                          </span>
+                        ) : null}
+                        {request.sent_in_batch_code ? (
+                          <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
+                            {`Lote: ${request.sent_in_batch_code}`}
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
-                      <span>
-                        {`Produto: ${request.product_id ? `${request.product_id} - ` : ''}${request.product_description || '-'}`}
-                        {` | Qtd: ${Number(request.quantity || 0)}`}
-                      </span>
-                      {request.scheduled_for ? (
-                        <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-100">
-                          {`Agendada para ${formatDateBR(request.scheduled_for)}`}
-                        </span>
-                      ) : null}
-                      {request.sent_in_batch_code ? (
-                        <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
-                          {`Lote: ${request.sent_in_batch_code}`}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                      <span>{`Criada: ${formatDateTimeLabel(request.created_at)}`}</span>
-                      <span>{`Atualizada: ${formatDateTimeLabel(request.updated_at)}`}</span>
-                      {request.invoice_number && canOpenFlow ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenCollectionInvoice(request.invoice_number)}
-                          className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-amber-100 transition hover:bg-amber-900/35"
-                        >
-                          Abrir NF no fluxo
-                        </button>
-                      ) : null}
-                      {request.invoice_number && !canOpenFlow ? (
-                        <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
-                          Vai para o fluxo após envio em lote
-                        </span>
-                      ) : null}
-                    </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                        <span>{`Criada: ${formatDateTimeLabel(request.created_at)}`}</span>
+                        <span>{`Atualizada: ${formatDateTimeLabel(request.updated_at)}`}</span>
+                        {request.invoice_number && canOpenFlow ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCollectionInvoice(request.invoice_number)}
+                            className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-amber-100 transition hover:bg-amber-900/35"
+                          >
+                            Abrir NF no fluxo
+                          </button>
+                        ) : null}
+                        {request.invoice_number && !canOpenFlow ? (
+                          <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                            Vai para o fluxo após envio em lote
+                          </span>
+                        ) : null}
+                        {canCancelCollectionDirectly ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelCollectionRequest(request)}
+                            disabled={cancellingCollectionInvoice === String(request.id)}
+                            className="inline-flex h-7 items-center rounded-md border border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 px-2.5 text-[11px] font-bold tracking-wide text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] transition hover:from-rose-600 hover:to-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {cancellingCollectionInvoice === String(request.id) ? 'Cancelando...' : 'Cancelar coleta'}
+                          </button>
+                        ) : null}
+                        {canRequestCollectionCancellation ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRequestCollectionCancellation(request)}
+                            disabled={cancellingCollectionInvoice === String(request.id)}
+                            className="inline-flex h-7 items-center rounded-md border border-amber-300/70 bg-gradient-to-r from-amber-700/85 to-amber-600/80 px-2.5 text-[11px] font-bold tracking-wide text-amber-50 shadow-[0_8px_16px_rgba(217,119,6,0.26)] transition hover:from-amber-600 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {cancellingCollectionInvoice === String(request.id) ? 'Enviando...' : 'Solicitar cancelamento'}
+                          </button>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}
               </ul>
             ) : null}
 
-            {!collectionTrackingLoading && !collectionTrackingError && collectionTrackingRows.length > visibleCollectionTrackingRows.length ? (
+            {!collectionTrackingLoading && !collectionTrackingError && filteredCollectionTrackingRows.length > visibleCollectionTrackingRows.length ? (
               <p className="mt-2 text-[11px] text-slate-400">
-                {`Mostrando 80 de ${collectionTrackingRows.length} coleta(s). Refine por NF/status para reduzir a lista.`}
+                {`Mostrando 80 de ${filteredCollectionTrackingRows.length} coleta(s). Refine por NF/status para reduzir a lista.`}
               </p>
             ) : null}
           </Card>
@@ -1353,6 +2138,175 @@ function ControlTowerCollections() {
             />
           </Card>
         </div>
+
+        {collectionCancellationDialog ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-3">
+            <button
+              type="button"
+              aria-label="Fechar confirmação de cancelamento"
+              className="absolute inset-0 bg-slate-950/75"
+              onClick={closeCollectionCancellationDialog}
+            />
+            <div className="relative z-[81] w-full max-w-[580px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+              <h3 className="text-base font-semibold">
+                {collectionCancellationDialog.mode === 'direct_cancel'
+                  ? 'Confirmar cancelamento da coleta'
+                  : 'Solicitar cancelamento da coleta'}
+              </h3>
+              <p className="mt-2 text-sm text-slate-300">
+                {`Coleta #${collectionCancellationDialog.request.id} | NF ${collectionCancellationDialog.request.invoice_number || '-'}`}
+              </p>
+              <p className="mt-0.5 text-sm text-slate-300">
+                {`Cliente: ${collectionCancellationDialog.request.customer_name || '-'} | Cidade: ${collectionCancellationDialog.request.city || '-'}`}
+              </p>
+
+              {collectionCancellationDialog.mode === 'request_cancellation' ? (
+                <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-amber-200">
+                  Motivo da solicitação (obrigatório)
+                  <textarea
+                    value={collectionCancellationReason}
+                    onChange={(event) => setCollectionCancellationReason(event.target.value)}
+                    placeholder="Ex.: Cliente solicitou reagendamento para outra transportadora."
+                    className="mt-1 min-h-[92px] w-full rounded-md border border-amber-500/45 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    disabled={Boolean(cancellingCollectionInvoice)}
+                  />
+                </label>
+              ) : (
+                <p className="mt-3 rounded-md border border-rose-500/45 bg-rose-900/20 px-3 py-2 text-xs font-semibold text-rose-100">
+                  Esta ação cancela a coleta e estorna a contagem de saldo da NF.
+                </p>
+              )}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  tone="secondary"
+                  className="h-9 bg-slate-800 text-slate-100"
+                  onClick={closeCollectionCancellationDialog}
+                  disabled={Boolean(cancellingCollectionInvoice)}
+                >
+                  Fechar
+                </Button>
+                <Button
+                  tone="primary"
+                  className={`${collectionCancellationDialog.mode === 'direct_cancel'
+                    ? 'h-9 bg-rose-700/90 text-rose-50 hover:bg-rose-600'
+                    : 'h-9 bg-amber-700/90 text-amber-50 hover:bg-amber-600'
+                    } disabled:opacity-60`}
+                  onClick={confirmCollectionCancellationDialog}
+                  disabled={Boolean(cancellingCollectionInvoice)}
+                >
+                  {cancellingCollectionInvoice
+                    ? (collectionCancellationDialog.mode === 'direct_cancel' ? 'Cancelando...' : 'Enviando...')
+                    : (collectionCancellationDialog.mode === 'direct_cancel' ? 'Confirmar cancelamento' : 'Enviar solicitação')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {collectionOccurrenceDialog ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-3">
+            <button
+              type="button"
+              aria-label="Fechar detalhes de ocorrência da coleta"
+              className="absolute inset-0 bg-slate-950/75"
+              onClick={() => setCollectionOccurrenceDialog(null)}
+            />
+            <div className="relative z-[81] w-full max-w-[640px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+              <h3 className="text-base font-semibold">Detalhes da ocorrência da coleta</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                {`Coleta #${collectionOccurrenceDialog.id} | NF ${collectionOccurrenceDialog.invoice_number || '-'}`}
+              </p>
+              <p className="mt-0.5 text-sm text-slate-300">
+                {`Cliente: ${collectionOccurrenceDialog.customer_name || '-'} | Cidade: ${collectionOccurrenceDialog.city || '-'}`}
+              </p>
+              <p className="mt-0.5 text-sm text-slate-300">
+                {`Status da coleta: ${formatCollectionWorkflowStatus(collectionOccurrenceDialog)}`}
+                {` | Qualidade: ${formatCollectionQualityStatus(collectionOccurrenceDialog)}`}
+              </p>
+
+              {collectionOccurrenceHasNotes ? (
+                <div className="mt-3 rounded-md border border-amber-500/45 bg-amber-900/20 px-3 py-2 text-xs text-amber-100">
+                  <p className="font-semibold">
+                    {collectionOccurrenceNotes.length === 1
+                      ? '1 observação registrada'
+                      : `${collectionOccurrenceNotes.length} observações registradas`}
+                  </p>
+                  <p className="mt-1 text-amber-200/90">
+                    {collectionOccurrenceLatestNote
+                      ? `Última: ${collectionOccurrenceLatestNote.timestampLabel ? `${collectionOccurrenceLatestNote.timestampLabel} | ` : ''}${collectionOccurrenceLatestNote.actor ? `${collectionOccurrenceLatestNote.actor}: ` : ''}${collectionOccurrenceLatestNote.message || collectionOccurrenceLatestNote.rawLine}`
+                      : 'Última: -'}
+                  </p>
+                  <ul className="mt-2 max-h-[220px] space-y-1.5 overflow-auto rounded border border-amber-400/35 bg-slate-950/60 p-2">
+                    {collectionOccurrenceNotes.map((note, index) => (
+                      <li key={`collection-note-${collectionOccurrenceDialog.id}-${index}`} className="rounded border border-amber-500/20 bg-slate-900/55 px-2 py-1">
+                        <p className="text-[10px] font-semibold text-amber-200/95">
+                          {note.timestampLabel ? `${note.timestampLabel} | ` : ''}
+                          {note.actor || 'usuario'}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-100/95">
+                          {note.message || note.rawLine}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="mt-3 rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+                  Sem observações registradas para esta coleta até o momento.
+                </p>
+              )}
+
+              <div className="mt-4 flex justify-end">
+                <Button
+                  tone="secondary"
+                  className="h-9 bg-slate-800 text-slate-100"
+                  onClick={() => setCollectionOccurrenceDialog(null)}
+                >
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {receiptConfirmBatchCode ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-3">
+            <button
+              type="button"
+              aria-label="Fechar confirmação de recebimento"
+              className="absolute inset-0 bg-slate-950/75"
+              onClick={closeReceiptConfirmModal}
+            />
+            <div className="relative z-[81] w-full max-w-[560px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+              <h3 className="text-base font-semibold">Confirmar recebimento do lote</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                {`Confirma o recebimento do lote ${receiptConfirmBatchCode}?`}
+              </p>
+              <p className="mt-2 rounded-md border border-amber-500/45 bg-amber-900/20 px-3 py-2 text-xs font-medium text-amber-200">
+                Se houver divergência em alguma NF, registre a ocorrência antes de confirmar.
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  tone="secondary"
+                  className="h-9 bg-slate-800 text-slate-100"
+                  onClick={closeReceiptConfirmModal}
+                  disabled={Boolean(receivingBatchCode)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  tone="primary"
+                  className="h-9 bg-emerald-700/90 text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
+                  onClick={confirmBatchReceiptWithModal}
+                  disabled={Boolean(receivingBatchCode)}
+                >
+                  {receivingBatchCode === receiptConfirmBatchCode ? 'Confirmando...' : 'Confirmar recebimento'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {selectedRow ? (
           <DetailsDrawer

@@ -32,17 +32,19 @@ function statusBadge(status: ActionQueueItem['status']) {
 }
 
 function ActionQueue({ rows, loading, canManageStatus = false, onTogglePriority, onCancelPickup, onMarkInRoute, onMarkCollected, onOpen }: ActionQueueProps) {
+  const collectionRows = rows.filter((item) => item.returnType === 'coleta');
+
   return (
     <Card className="border-slate-800 bg-[#101b2b] text-slate-100">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-lg font-semibold">Fila de ação</h3>
-        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{rows.length} itens</span>
+        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{collectionRows.length} itens</span>
       </div>
 
       {loading ? <p className="text-sm text-slate-400">Carregando fila...</p> : null}
 
       <div className="max-h-[360px] space-y-2 overflow-auto pr-1">
-        {rows.map((item) => (
+        {collectionRows.map((item) => (
           <div
             key={item.id}
             className={`rounded-md border p-3 ${item.pickupPriority ? 'border-rose-500/70 bg-rose-950/20 shadow-[0_0_0_1px_rgba(244,63,94,0.25)]' : 'border-slate-700 bg-slate-900/60'}`}
@@ -87,7 +89,7 @@ function ActionQueue({ rows, loading, canManageStatus = false, onTogglePriority,
             </div>
           </div>
         ))}
-        {!rows.length && !loading ? (
+        {!collectionRows.length && !loading ? (
           <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900/60 p-3 text-sm text-slate-300">
             <AlertTriangle className="h-4 w-4" /> Nenhum item pendente na fila.
           </div>

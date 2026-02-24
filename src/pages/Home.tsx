@@ -140,6 +140,7 @@ const COLLECTION_STATUS_LABELS: Record<string, string> = {
   solicitada: 'Coleta solicitada',
   aceita_agendada: 'Coleta agendada',
   coletada: 'Coletada',
+  cancelamento_solicitado: 'Cancelamento solicitado',
   enviada_em_lote: 'Enviada em lote',
   recebida: 'Recebida',
   cancelada: 'Cancelada',
@@ -331,7 +332,7 @@ const summarizeHistoryMetadata = (entry: AuditHistoryEntry) => {
 };
 
 const isPendingPickupRequest = (request: ICollectionRequest) => (
-  ['solicitada', 'pending', 'aceita_agendada', 'coletada'].includes(
+  ['solicitada', 'pending', 'aceita_agendada', 'coletada', 'cancelamento_solicitado'].includes(
     resolveCollectionStatus(request),
   )
 );
@@ -421,6 +422,10 @@ function Home() {
     () => pendingCollectionRequests.filter((request) => isScheduledCollectionRequest(request)),
     [pendingCollectionRequests],
   );
+  const cancellationRequestedCollectionRequests = useMemo(
+    () => pendingCollectionRequests.filter((request) => resolveCollectionStatus(request) === 'cancelamento_solicitado'),
+    [pendingCollectionRequests],
+  );
   const collectedCollectionRequests = useMemo(
     () => pendingCollectionRequests.filter((request) => resolveCollectionStatus(request) === 'coletada'),
     [pendingCollectionRequests],
@@ -428,7 +433,7 @@ function Home() {
   const unscheduledCollectionRequests = useMemo(
     () => pendingCollectionRequests.filter((request) => {
       const status = resolveCollectionStatus(request);
-      return !['aceita_agendada', 'coletada'].includes(status);
+      return ['solicitada', 'pending'].includes(status);
     }),
     [pendingCollectionRequests],
   );
@@ -1087,6 +1092,64 @@ function Home() {
     await updateCollectionWorkflowStatusToCollected(request);
   }
 
+  async function handleApproveCollectionCancellation(request: ICollectionRequest) {
+    const confirmed = window.confirm(
+      `Aprovar cancelamento da coleta #${request.id} (NF ${request.invoice_number || '-'})?`,
+    );
+    if (!confirmed) return;
+
+    setCollectionStatusUpdatingId(request.id);
+    try {
+      await axios.patch(`${API_URL}/collection-requests/${request.id}/status`, {
+        workflow_status: 'cancelada',
+        reason: 'Cancelamento aprovado pela transportadora.',
+      });
+      await loadPendingCollectionRequests();
+      alert('Cancelamento aprovado e coleta encerrada.');
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao aprovar cancelamento da coleta.');
+      } else {
+        alert('Erro ao aprovar cancelamento da coleta.');
+      }
+    } finally {
+      setCollectionStatusUpdatingId(null);
+    }
+  }
+
+  async function handleRejectCollectionCancellation(request: ICollectionRequest) {
+    const reason = window.prompt(
+      `Motivo para manter a coleta #${request.id} (obrigatorio)`,
+      '',
+    );
+    if (reason === null) return;
+    const trimmedReason = String(reason || '').trim();
+    if (!trimmedReason) {
+      alert('Informe a justificativa para manter a coleta agendada.');
+      return;
+    }
+
+    setCollectionStatusUpdatingId(request.id);
+    try {
+      await axios.patch(`${API_URL}/collection-requests/${request.id}/status`, {
+        workflow_status: 'aceita_agendada',
+        reason: trimmedReason,
+      });
+      await loadPendingCollectionRequests();
+      alert('Solicitação recusada. Coleta mantida como agendada.');
+    } catch (error) {
+      console.error(error);
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao manter coleta agendada.');
+      } else {
+        alert('Erro ao manter coleta agendada.');
+      }
+    } finally {
+      setCollectionStatusUpdatingId(null);
+    }
+  }
+
   function openCollectionDetailsModal(request: ICollectionRequest) {
     setCollectionDetailsRequest(request);
   }
@@ -1190,7 +1253,7 @@ function Home() {
               {!!pendingCollectionRequests.length && (
                 <>
                   <InfoText style={{ marginTop: '12px' }}>
-                    Coletas da Torre de Controle (solicitadas, agendadas e coletadas)
+                    Coletas da Torre de Controle (solicitadas, agendadas, solicitações de cancelamento e coletadas)
                   </InfoText>
                   {!!unscheduledCollectionRequests.length && (
                     <>
@@ -1264,6 +1327,76 @@ function Home() {
                                       onClick={() => handlePrintCollectionPdf(request)}
                                       className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
                                       disabled={collectionPdfPrintingId === request.id}
+                                    />
+                                  </OccurrenceActionsRight>
+                                </OccurrenceActionsRow>
+                              </OccurrenceCardFooter>
+                            </OccurrenceItemContent>
+                          </li>
+                        ))}
+                      </List>
+                    </>
+                  )}
+
+                  {!!cancellationRequestedCollectionRequests.length && (
+                    <>
+                      <InfoText className="mt-2">Solicitações de cancelamento da Torre de Controle</InfoText>
+                      <List className="mt-2">
+                        {cancellationRequestedCollectionRequests.map((request) => (
+                          <li
+                            key={`home-pickup-cancellation-request-${request.id}`}
+                            className="!border-rose-500/55 !bg-[rgba(58,10,10,0.72)]"
+                          >
+                            <OccurrenceItemContent className="gap-1.5">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <strong className="text-rose-200">CANCELAMENTO SOLICITADO</strong>
+                                <span className="rounded-full border border-rose-300/35 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-rose-100">
+                                  {`Em: ${formatDateBR(request.updated_at)}`}
+                                </span>
+                              </span>
+                              <span>
+                                <strong>NF: {request.invoice_number || '-'}</strong>
+                                {` | CLIENTE: ${request.customer_name || '-'} | CIDADE: ${request.city || '-'}`}
+                              </span>
+                              <span>
+                                ITEM: {request.product_id ? `${request.product_id} - ` : ''}{request.product_description || '-'}
+                                {` | `}
+                                <strong>{`Qtd: ${Number(request.quantity || 0)}${normalizeProductType(request.product_type) || ''}`}</strong>
+                              </span>
+                              {request.notes ? <span>{`OBS: ${request.notes}`}</span> : null}
+
+                              <OccurrenceCardFooter>
+                                <OccurrenceActionsRow>
+                                  <OccurrenceActionsLeft>
+                                    <span className="text-xs text-muted">
+                                      A Torre solicitou cancelamento de uma coleta já agendada. Defina se a coleta será cancelada ou mantida.
+                                    </span>
+                                  </OccurrenceActionsLeft>
+
+                                  <OccurrenceActionsRight>
+                                    {canManageCollectionWorkflowStatus && (
+                                      <>
+                                        <IconButton
+                                          icon={CheckCircle2}
+                                          label="Aprovar cancelamento"
+                                          onClick={() => handleApproveCollectionCancellation(request)}
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-rose-400/55 !bg-rose-400/15 !text-rose-100 hover:!bg-rose-400/25"
+                                          disabled={collectionStatusUpdatingId === request.id}
+                                        />
+                                        <IconButton
+                                          icon={CalendarDays}
+                                          label="Manter coleta agendada"
+                                          onClick={() => handleRejectCollectionCancellation(request)}
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-amber-400/55 !bg-amber-400/15 !text-amber-100 hover:!bg-amber-400/25"
+                                          disabled={collectionStatusUpdatingId === request.id}
+                                        />
+                                      </>
+                                    )}
+                                    <IconButton
+                                      icon={Info}
+                                      label="Informacoes da coleta"
+                                      onClick={() => openCollectionDetailsModal(request)}
+                                      className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
                                     />
                                   </OccurrenceActionsRight>
                                 </OccurrenceActionsRow>

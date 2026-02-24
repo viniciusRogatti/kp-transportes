@@ -17,7 +17,7 @@ export function DescriptionColumns({ className, ...props }: DivProps) {
 }
 
 export function ContainerItems({ className, ...props }: DivProps) {
-  return <div className={cn('scrollbar-ui mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain rounded-md border border-border bg-surface-2/65 p-s2 touch-pan-y [-webkit-overflow-scrolling:touch]', className)} {...props} />;
+  return <div className={cn('danfe-items-scroll scrollbar-ui mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain rounded-md border border-border bg-surface-2/65 p-s2 touch-pan-y [-webkit-overflow-scrolling:touch] max-[768px]:overflow-y-scroll max-[768px]:pr-1 max-[768px]:[scrollbar-gutter:stable]', className)} {...props} />;
 }
 
 export function ListItems({ className, ...props }: UlProps) {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { IDanfe, IInvoiceSearchContext } from '../types/types'
 import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
 import { formatDateBR } from '../utils/dateDisplay';
+import { normalizeCityLabel, normalizeTextValue } from '../utils/textNormalization';
 
 interface CardDanfesProps {
   danfes: IDanfe[];
@@ -50,6 +51,9 @@ function CardDanfes({
         const isFlipped = Boolean(flippedCards[key]);
         const driverName = driverByInvoice[String(danfe.invoice_number)];
         const invoiceContext = invoiceContextByNf[String(danfe.invoice_number)] || null;
+        const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity) || '-';
+        const cityName = normalizeCityLabel(danfe.Customer?.city) || '-';
+        const customerAddress = normalizeTextValue(danfe.Customer?.address) || '-';
         const returnTypeLabels = invoiceContext?.return_types?.length
           ? invoiceContext.return_types.map((type) => RETURN_TYPE_LABELS[type] || type)
           : [];
@@ -75,8 +79,8 @@ function CardDanfes({
                   </p>
                   <h4>{formatDateBR(danfe.invoice_date)}</h4>
                 </TitleCard>
-                <h4 className="mt-1 text-sm font-semibold leading-tight">{danfe.Customer.name_or_legal_entity}</h4>
-                <p className="text-xs text-muted">{danfe.Customer.city}</p>
+                <h4 className="mt-1 text-sm font-semibold leading-tight">{customerName}</h4>
+                <p className="text-xs text-muted">{cityName}</p>
                 {invoiceContext && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {invoiceContext.occurrence_count > 0 && (
@@ -100,6 +104,11 @@ function CardDanfes({
                   </div>
                 )}
                 <ContainerItems>
+                  {danfe.DanfeProducts.length > 4 && (
+                    <p className="hidden rounded-md border border-border/60 bg-surface-2/85 px-2 py-1 text-[10px] font-medium text-muted max-[768px]:block">
+                      Deslize para baixo para ver todos os itens.
+                    </p>
+                  )}
                   <DescriptionColumns>
                     <span>Código</span>
                     <span>Descrição</span>
@@ -108,7 +117,7 @@ function CardDanfes({
                   {danfe.DanfeProducts.map((item) => (
                     <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
                         <li>{item.Product.code}</li>
-                        <li title={item.Product.description}>{item.Product.description}</li>
+                        <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
                         <li>{formatQuantity(item.quantity, item.type)}</li>
                     </ListItems>
                   ))}
@@ -135,10 +144,10 @@ function CardDanfes({
                   <h4>Detalhes</h4>
                 </TitleCard>
                 <div className="mt-2 space-y-2 text-sm">
-                  <p><strong>Cliente:</strong> {danfe.Customer.name_or_legal_entity}</p>
-                  <p><strong>Endereço:</strong> {danfe.Customer.address}</p>
-                  <p><strong>Cidade:</strong> {danfe.Customer.city}</p>
-                  <p><strong>Telefone:</strong> {danfe.Customer.phone || '-'}</p>
+                  <p><strong>Cliente:</strong> {customerName}</p>
+                  <p><strong>Endereço:</strong> {customerAddress}</p>
+                  <p><strong>Cidade:</strong> {cityName}</p>
+                  <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                   <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                   <p><strong>Motorista:</strong> {driverName || 'Sem motorista'}</p>
                   {invoiceContext ? (

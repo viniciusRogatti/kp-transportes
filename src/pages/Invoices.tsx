@@ -15,6 +15,7 @@ import { cities, routes } from "../data/danfes";
 import { useNavigate } from "react-router";
 import verifyToken from "../utils/verifyToken";
 import { useSearchParams } from "react-router-dom";
+import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 registerLocale('ptBR', ptBR);
 
 function Invoices() {
@@ -130,11 +131,14 @@ function Invoices() {
       try {
         const url = `${API_URL}/danfes/date/?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}`;      
         const { data } = await axios.get(url);
-        setDanfes(data);
+        const sanitizedRows = Array.isArray(data)
+          ? data.map((danfe: IDanfe) => sanitizeDanfeTextFields(danfe))
+          : [];
+        setDanfes(sanitizedRows);
         setStartDate(null);
         setEndDate(null);
-        setDataDanfes(data);
-        await loadInvoiceContext(Array.isArray(data) ? data : []);
+        setDataDanfes(sanitizedRows);
+        await loadInvoiceContext(sanitizedRows);
       } catch (error) {
         console.error('Não foi possível encontrar notas com essas datas', error);
       }
@@ -156,8 +160,9 @@ function Invoices() {
         const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
         
         if (data) {
-          await loadInvoiceContext([data]);
-          setDanfes([...danfes, data]);
+          const sanitizedDanfe = sanitizeDanfeTextFields(data);
+          await loadInvoiceContext([sanitizedDanfe]);
+          setDanfes([...danfes, sanitizedDanfe]);
         }
         
       } catch (error) {
@@ -177,9 +182,10 @@ function Invoices() {
       try {
         const { data } = await axios.get(`${API_URL}/danfes/nf/${queryNf}`);
         if (!data) return;
-        setDanfes([data]);
-        setDataDanfes([data]);
-        await loadInvoiceContext([data]);
+        const sanitizedDanfe = sanitizeDanfeTextFields(data);
+        setDanfes([sanitizedDanfe]);
+        setDataDanfes([sanitizedDanfe]);
+        await loadInvoiceContext([sanitizedDanfe]);
       } catch (error) {
         console.error('Algo deu errado ao tentar buscar essa nf', error);
       }

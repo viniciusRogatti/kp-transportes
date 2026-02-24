@@ -29,6 +29,7 @@ import {
 import { API_URL } from '../data';
 import { ICollectionRequest, IControlTowerReturn, IOccurrence } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
+import { normalizeTextValue } from '../utils/textNormalization';
 
 const STATUS_ORDER: BacklogStatus[] = ['PENDENTE', 'SOLICITADA', 'EM_ROTA', 'COLETADA', 'CANCELADA'];
 const RETURN_TYPES: ReturnSourceType[] = ['total', 'partial', 'coleta', 'sobra'];
@@ -243,7 +244,7 @@ function getInterval(filters: ControlTowerFilters) {
 }
 
 function normalizeText(value: unknown) {
-  return String(value || '').trim();
+  return normalizeTextValue(value);
 }
 
 function normalizeInvoiceNumber(value: unknown) {

@@ -21,6 +21,7 @@ import { BacklogStatus, ControlTowerFilters, RegisterControlTowerOccurrenceInput
 import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
+import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 
 const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
@@ -164,9 +165,9 @@ function buildCollectionRequestCode(invoiceNumber: string, suffix = '') {
 }
 
 function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): ManualCollectionRequestPayload[] {
-  const invoiceNumber = String(danfe.invoice_number || fallbackInvoice || '').trim();
-  const customerName = String(danfe.Customer?.name_or_legal_entity || '').trim();
-  const city = String(danfe.Customer?.city || '').trim();
+  const invoiceNumber = normalizeTextValue(danfe.invoice_number || fallbackInvoice || '');
+  const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity);
+  const city = normalizeCityLabel(danfe.Customer?.city);
   const requestCode = buildCollectionRequestCode(invoiceNumber || fallbackInvoice);
   const products = Array.isArray(danfe.DanfeProducts) ? danfe.DanfeProducts : [];
   const sumItemsQuantity = products.reduce((sum, item) => {
@@ -197,7 +198,6 @@ function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): 
     quantity: resolvedQuantity,
     request_scope: 'invoice_total',
     urgency_level: 'media',
-    notes: 'Solicitacao manual consolidada por NF para evitar duplicidade de coleta.',
   }];
 }
 
@@ -218,6 +218,22 @@ type CollectionNoteDetail = {
   actor: string;
   message: string;
 };
+
+const SYSTEM_GENERATED_COLLECTION_NOTES = new Set([
+  'solicitacao manual consolidada por nf para evitar duplicidade de coleta.',
+  'solicitacao manual parcial registrada pela torre de controle.',
+]);
+
+function normalizeCollectionNoteKey(value: unknown) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isSystemGeneratedCollectionNote(message: unknown) {
+  return SYSTEM_GENERATED_COLLECTION_NOTES.has(normalizeCollectionNoteKey(message));
+}
 
 function formatCollectionNoteTimestampSaoPaulo(value: string) {
   const parsed = new Date(value);
@@ -268,15 +284,17 @@ function parseCollectionNoteLine(line: string): CollectionNoteDetail {
 }
 
 function getCollectionNoteDetails(notes: unknown) {
-  return splitCollectionNotes(notes).map(parseCollectionNoteLine);
+  return splitCollectionNotes(notes)
+    .map(parseCollectionNoteLine)
+    .filter((entry) => !isSystemGeneratedCollectionNote(entry.message || entry.rawLine));
 }
 
 function hasCollectionNotes(notes: unknown) {
-  return splitCollectionNotes(notes).length > 0;
+  return getCollectionNoteDetails(notes).length > 0;
 }
 
 function getCollectionNotesCount(notes: unknown) {
-  return splitCollectionNotes(notes).length;
+  return getCollectionNoteDetails(notes).length;
 }
 
 function getLatestCollectionNote(notes: unknown) {
@@ -289,6 +307,19 @@ function getLatestCollectionNote(notes: unknown) {
 
 function isCollectionInvalidStatusMessage(message: string) {
   return /status de coleta inv[aá]lido/i.test(String(message || ''));
+}
+
+function sanitizeCollectionRequestRecord(request: ICollectionRequest): ICollectionRequest {
+  return {
+    ...request,
+    invoice_number: normalizeTextValue(request.invoice_number) || null,
+    customer_name: normalizeTextValue(request.customer_name),
+    city: normalizeCityLabel(request.city),
+    product_id: normalizeTextValue(request.product_id) || null,
+    product_description: normalizeTextValue(request.product_description),
+    requested_by_company: normalizeTextValue(request.requested_by_company),
+    notes: normalizeTextValue(request.notes) || null,
+  };
 }
 
 function normalizeCollectionWorkflowStatus(request: ICollectionRequest) {
@@ -572,7 +603,7 @@ function ControlTowerCollections() {
         params,
         headers: { Authorization: `Bearer ${token}` },
       });
-      const rows = Array.isArray(data) ? data : [];
+      const rows = Array.isArray(data) ? data.map(sanitizeCollectionRequestRecord) : [];
       const activeTrackingRows = rows.filter((row) => normalizeCollectionWorkflowStatus(row) !== 'cancelada');
       setCollectionTrackingRows(activeTrackingRows);
     } catch (error) {
@@ -657,7 +688,7 @@ function ControlTowerCollections() {
     }));
 
     const pickupRows = pickupResult.status === 'fulfilled' && Array.isArray(pickupResult.value.data)
-      ? pickupResult.value.data
+      ? pickupResult.value.data.map(sanitizeCollectionRequestRecord)
       : [];
     const scheduledPickupRows = pickupRows.filter((pickup) => (
       String(pickup.workflow_status || '').toLowerCase() === 'aceita_agendada'
@@ -1097,8 +1128,10 @@ function ControlTowerCollections() {
       axios.get<IDanfe | null>(`${API_URL}/danfes/nf/${normalizedNf}`),
     ]);
 
-    const existingRows = Array.isArray(existingResponse.data) ? existingResponse.data : [];
-    const danfe = danfeResponse?.data;
+    const existingRows = Array.isArray(existingResponse.data)
+      ? existingResponse.data.map(sanitizeCollectionRequestRecord)
+      : [];
+    const danfe = danfeResponse?.data ? sanitizeDanfeTextFields(danfeResponse.data) : null;
 
     if (!danfe) {
       throw new Error(NF_NOT_FOUND_MESSAGE);
@@ -1260,15 +1293,14 @@ function ControlTowerCollections() {
         selectedPayloads.push({
           invoice_number: nf,
           request_code: buildCollectionRequestCode(nf, productRow.productId),
-          customer_name: String(context.danfe.Customer?.name_or_legal_entity || '').trim(),
-          city: String(context.danfe.Customer?.city || '').trim(),
+          customer_name: normalizeTextValue(context.danfe.Customer?.name_or_legal_entity),
+          city: normalizeCityLabel(context.danfe.Customer?.city),
           product_id: productRow.productId,
           product_description: productRow.productDescription || `Produto ${productRow.productId}`,
           product_type: productRow.productType || null,
           quantity: normalizedQuantity,
           request_scope: 'items',
           urgency_level: 'media',
-          notes: 'Solicitacao manual parcial registrada pela Torre de Controle.',
         });
       }
 

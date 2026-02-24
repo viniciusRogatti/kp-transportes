@@ -15,6 +15,7 @@ import { useNavigate } from "react-router";
 import { pdf } from "@react-pdf/renderer";
 import { LoaderPrinting } from "../style/Loaders";
 import { format } from "date-fns";
+import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
@@ -51,7 +52,10 @@ function TodayInvoices() {
   async function loadTodayData() {
     try {
       const response = await axios.get(`${API_URL}/danfes`);
-      setDataDanfes(response.data);
+      const sanitizedRows = Array.isArray(response.data)
+        ? response.data.map((danfe) => sanitizeDanfeTextFields(danfe))
+        : [];
+      setDataDanfes(sanitizedRows);
       await loadTodayDrivers();
     } catch (error) {
       console.error('Erro ao buscar notas do dia atual:', error);

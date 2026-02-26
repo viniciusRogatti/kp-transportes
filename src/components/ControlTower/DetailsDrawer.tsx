@@ -85,6 +85,32 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
   const collectionQualityStatus = String(row?.collectionQualityStatus || '').toLowerCase();
   const canRegisterOccurrenceForBatchFlow = ['enviada_em_lote', 'recebida'].includes(collectionWorkflowStatus);
   const hasOpenQualityIssue = collectionQualityStatus === 'em_tratativa' || collectionQualityStatus === 'aguardando_torre';
+  const sortedHistoryEvents = useMemo(() => {
+    const rawEvents = row?.events || [];
+
+    return rawEvents
+      .map((event, index) => ({
+        event,
+        index,
+        timestamp: new Date(event.at).getTime(),
+      }))
+      .sort((left, right) => {
+        const leftValid = Number.isFinite(left.timestamp);
+        const rightValid = Number.isFinite(right.timestamp);
+
+        if (leftValid && rightValid) {
+          if (left.timestamp === right.timestamp) {
+            return right.index - left.index;
+          }
+          return right.timestamp - left.timestamp;
+        }
+
+        if (leftValid) return -1;
+        if (rightValid) return 1;
+        return right.index - left.index;
+      })
+      .map((item) => item.event);
+  }, [row?.events]);
 
   if (!row) return null;
 
@@ -223,7 +249,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
 
         {activeTab === 'history' ? (
           <ol className="space-y-2 border-l border-slate-700 pl-3">
-            {row.events.map((event, index) => (
+            {sortedHistoryEvents.map((event, index) => (
               <li key={`${event.at}-${index}`} className="relative rounded-md border border-slate-700 bg-slate-900/60 p-2 text-sm">
                 <span className="absolute -left-[14px] top-3 h-2 w-2 rounded-full bg-sky-400" />
                 <p className="text-xs text-slate-400">{formatDateTime(event.at)} | {event.actor}</p>

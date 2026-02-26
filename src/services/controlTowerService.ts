@@ -1287,7 +1287,8 @@ export async function getActionQueue(filters: ControlTowerFilters): Promise<Acti
 
       const createdAt = toIsoDateTime(row.created_at, new Date().toISOString());
       const ageHours = Math.max(0, differenceInHours(new Date(), new Date(createdAt)));
-      const pickupPriority = Boolean(overlay?.pickupPriority);
+      const priorityByUrgency = ['alta', 'critica'].includes(normalizeText(row.urgency_level).toLowerCase());
+      const pickupPriority = overlay?.pickupPriority ?? priorityByUrgency;
 
       return {
         id,
@@ -1566,10 +1567,19 @@ export async function setPickupPriority(returnId: string, pickupPriority: boolea
     return { ok: true };
   }
 
-  saveOverlay(returnId, { pickupPriority }, {
-    at: new Date().toISOString(),
-    actor: 'Operador',
-    action: pickupPriority ? 'Coleta marcada como prioritaria' : 'Prioridade da coleta removida',
+  const normalizedId = normalizeText(returnId);
+  const collectionRequestId = normalizedId.startsWith('collection-')
+    ? normalizedId.slice('collection-'.length)
+    : normalizedId;
+
+  if (!collectionRequestId) {
+    throw new Error('Solicitacao de coleta invalida para atualizar prioridade.');
+  }
+
+  await axios.patch(`${API_URL}/collection-requests/${collectionRequestId}/status`, {
+    pickup_priority: pickupPriority,
+  }, {
+    headers: getAuthHeaders(),
   });
 
   return { ok: true };

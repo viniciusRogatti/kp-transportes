@@ -12,12 +12,11 @@ import FiltersBar from '../components/ControlTower/FiltersBar';
 import KpiCards from '../components/ControlTower/KpiCards';
 import TopHorizontalChart, { TopMetric } from '../components/ControlTower/charts/TopHorizontalChart';
 import ReasonsDonutChart from '../components/ControlTower/charts/ReasonsDonutChart';
-import ActionQueue from '../components/ControlTower/ActionQueue';
 import ReturnsTable from '../components/ControlTower/ReturnsTable';
 import DetailsDrawer from '../components/ControlTower/DetailsDrawer';
 import { exportRowsToCsv, getFilterOptions, getReturnsTable } from '../services/controlTowerService';
 import { useControlTowerData, useControlTowerMutations } from '../hooks/useControlTower';
-import { BacklogStatus, ControlTowerFilters, RegisterControlTowerOccurrenceInput } from '../types/controlTower';
+import { ControlTowerFilters, RegisterControlTowerOccurrenceInput } from '../types/controlTower';
 import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
@@ -360,6 +359,19 @@ function isConfirmedCollectionWorkflowStatus(status: string) {
   return CONFIRMED_COLLECTION_WORKFLOW_STATUSES.includes(status);
 }
 
+function normalizeCollectionUrgencyLevel(request: ICollectionRequest) {
+  const urgency = String(request.urgency_level || '').trim().toLowerCase();
+  if (urgency === 'baixa' || urgency === 'media' || urgency === 'alta' || urgency === 'critica') {
+    return urgency;
+  }
+  return 'media';
+}
+
+function isCollectionPriority(request: ICollectionRequest) {
+  const urgency = normalizeCollectionUrgencyLevel(request);
+  return urgency === 'alta' || urgency === 'critica';
+}
+
 function buildRegisterCollectionProductRows(danfe: IDanfe | null, existingRows: ICollectionRequest[]) {
   if (!danfe) return [] as RegisterCollectionProductRow[];
 
@@ -432,7 +444,6 @@ function buildRegisterCollectionProductRows(danfe: IDanfe | null, existingRows: 
 function ControlTowerCollections() {
   const navigate = useNavigate();
   const userPermission = localStorage.getItem('user_permission') || '';
-  const canManageStatus = ['admin', 'master', 'expedicao'].includes(userPermission);
   const canManageCollectionRequests = TOWER_COLLECTION_MANAGERS.includes(userPermission);
   const canConfirmTowerBatchReceipt = userPermission === 'control_tower';
   const canFinalizeOccurrenceCredit = CREDIT_MANAGERS.includes(userPermission);
@@ -451,6 +462,7 @@ function ControlTowerCollections() {
   const [loadingRegisterContext, setLoadingRegisterContext] = useState(false);
   const [registeringPickup, setRegisteringPickup] = useState(false);
   const [cancellingCollectionInvoice, setCancellingCollectionInvoice] = useState<string | null>(null);
+  const [prioritizingCollectionId, setPrioritizingCollectionId] = useState<string | null>(null);
   const [collectionCancellationDialog, setCollectionCancellationDialog] = useState<CollectionCancellationDialogState | null>(null);
   const [collectionCancellationReason, setCollectionCancellationReason] = useState('');
   const [collectionTrackingRows, setCollectionTrackingRows] = useState<ICollectionRequest[]>([]);
@@ -479,7 +491,6 @@ function ControlTowerCollections() {
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
   const [highlightedOccurrenceId, setHighlightedOccurrenceId] = useState<number | null>(null);
   const notificationMenuRef = useRef<HTMLDivElement | null>(null);
-  const actionQueueSectionRef = useRef<HTMLDivElement | null>(null);
   const returnsTableSectionRef = useRef<HTMLDivElement | null>(null);
   const collectionTrackingSectionRef = useRef<HTMLDivElement | null>(null);
   const occurrenceSectionRef = useRef<HTMLDivElement | null>(null);
@@ -496,13 +507,13 @@ function ControlTowerCollections() {
     includeQueue: false,
     includeTable: false,
   });
-  const { queue, table } = useControlTowerData(flowFilters, pagination, sortingInput, {
+  const { table } = useControlTowerData(flowFilters, pagination, sortingInput, {
     includeSummary: false,
     includeCharts: false,
-    includeQueue: true,
+    includeQueue: false,
     includeTable: true,
   });
-  const { updateStatusMutation, addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(flowFilters, pagination, sortingInput);
+  const { addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(flowFilters, pagination, sortingInput);
 
   const selectedRow = selectedId ? getSelectedFromCache(selectedId) : null;
 
@@ -878,7 +889,6 @@ function ControlTowerCollections() {
     await Promise.all([
       summary.refetch(),
       charts.refetch(),
-      queue.refetch(),
       table.refetch(),
       loadRecentOccurrences(),
       loadTowerNotifications(),
@@ -1037,19 +1047,40 @@ function ControlTowerCollections() {
     setSelectedId(id);
   }
 
-  function quickUpdateStatus(id: string, status: BacklogStatus) {
-    if (!canManageStatus) return;
-    updateStatusMutation.mutate({ pickupId: id, status });
-  }
+  async function handleToggleCollectionPriority(request: ICollectionRequest) {
+    if (!canManageCollectionRequests) {
+      alert('Somente a Torre de Controle pode alterar prioridade da coleta.');
+      return;
+    }
 
-  function quickCancelPickup(id: string) {
-    const row = getSelectedFromCache(id);
-    if (row?.status === 'COLETADA') return;
-    updateStatusMutation.mutate({ pickupId: id, status: 'CANCELADA' });
-  }
+    const workflowStatus = normalizeCollectionWorkflowStatus(request);
+    if (!['solicitada', 'aceita_agendada'].includes(workflowStatus)) {
+      alert('Prioridade só pode ser alterada para coletas solicitadas ou agendadas.');
+      return;
+    }
 
-  function quickTogglePriority(id: string, pickupPriority: boolean) {
-    prioritizePickupMutation.mutate({ returnId: id, pickupPriority });
+    const isPriority = isCollectionPriority(request);
+    setPrioritizingCollectionId(String(request.id));
+    try {
+      await prioritizePickupMutation.mutateAsync({
+        returnId: `collection-${request.id}`,
+        pickupPriority: !isPriority,
+      });
+      await refreshAll();
+      alert(
+        !isPriority
+          ? `Coleta #${request.id} marcada como prioridade.`
+          : `Prioridade removida da coleta #${request.id}.`,
+      );
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        alert(error.response?.data?.error || 'Erro ao atualizar prioridade da coleta.');
+      } else {
+        alert('Erro ao atualizar prioridade da coleta.');
+      }
+    } finally {
+      setPrioritizingCollectionId(null);
+    }
   }
 
   async function handleRegisterOccurrenceFromDrawer(payload: RegisterControlTowerOccurrenceInput) {
@@ -1706,8 +1737,8 @@ function ControlTowerCollections() {
           <Card className="border-slate-700 bg-[#101b2b]">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">Acompanhamento de coletas</h3>
-                <p className="text-xs text-slate-400">Visualize qualquer coleta por NF e acompanhe o status em toda a esteira.</p>
+                <h3 className="text-sm font-semibold text-slate-100">Fila de ação e acompanhamento de coletas</h3>
+                <p className="text-xs text-slate-400">Tela única para acompanhar, priorizar e tratar cancelamentos das coletas.</p>
               </div>
               <Button
                 tone="outline"
@@ -1787,6 +1818,9 @@ function ControlTowerCollections() {
                     && CANCELLABLE_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus);
                   const canRequestCollectionCancellation = canManageCollectionRequests
                     && REQUEST_CANCELLATION_TRACKING_WORKFLOW_STATUSES.includes(workflowStatus);
+                  const canTogglePriority = canManageCollectionRequests
+                    && ['solicitada', 'aceita_agendada'].includes(workflowStatus);
+                  const requestIsPriority = isCollectionPriority(request);
                   const notesCount = getCollectionNotesCount(request.notes);
                   const hasNotes = notesCount > 0;
                   const occurrenceLabel = hasNotes
@@ -1809,6 +1843,14 @@ function ControlTowerCollections() {
                         <div className="flex flex-wrap items-center gap-1">
                           <span className="rounded-md border border-sky-500/40 bg-sky-900/25 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
                             {formatCollectionWorkflowStatus(request)}
+                          </span>
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                            requestIsPriority
+                              ? 'border-rose-400/70 bg-rose-700/25 text-rose-100'
+                              : 'border-emerald-400/55 bg-emerald-700/20 text-emerald-100'
+                          }`}
+                          >
+                            {requestIsPriority ? 'Prioridade alta' : 'Prioridade média'}
                           </span>
                           <button
                             type="button"
@@ -1859,6 +1901,22 @@ function ControlTowerCollections() {
                             Vai para o fluxo após envio em lote
                           </span>
                         ) : null}
+                        {canTogglePriority ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCollectionPriority(request)}
+                            disabled={prioritizingCollectionId === String(request.id)}
+                            className={`inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-bold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                              requestIsPriority
+                                ? 'border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] hover:from-rose-600 hover:to-rose-500'
+                                : 'border-slate-500/70 bg-slate-800/90 text-slate-100 hover:bg-slate-700'
+                            }`}
+                          >
+                            {prioritizingCollectionId === String(request.id)
+                              ? 'Salvando...'
+                              : (requestIsPriority ? 'Remover prioridade' : 'Priorizar coleta')}
+                          </button>
+                        ) : null}
                         {canCancelCollectionDirectly ? (
                           <button
                             type="button"
@@ -1892,19 +1950,6 @@ function ControlTowerCollections() {
               </p>
             ) : null}
           </Card>
-        </div>
-
-        <div ref={actionQueueSectionRef}>
-          <ActionQueue
-            rows={queue.data || []}
-            loading={queue.isLoading}
-            canManageStatus={canManageStatus}
-            onTogglePriority={quickTogglePriority}
-            onCancelPickup={quickCancelPickup}
-            onMarkInRoute={(id) => quickUpdateStatus(id, 'EM_ROTA')}
-            onMarkCollected={(id) => quickUpdateStatus(id, 'COLETADA')}
-            onOpen={openById}
-          />
         </div>
 
         <div ref={occurrenceSectionRef}>

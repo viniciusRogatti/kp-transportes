@@ -26,6 +26,7 @@ const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
 const CREDIT_MANAGERS = ['control_tower', 'admin', 'master'];
 const TOWER_COLLECTION_MANAGERS = ['control_tower', 'admin', 'master'];
+const TOWER_BATCH_RECEIPT_MANAGERS = ['control_tower', 'admin', 'master'];
 const CANCELLABLE_TRACKING_WORKFLOW_STATUSES = ['solicitada'];
 const REQUEST_CANCELLATION_TRACKING_WORKFLOW_STATUSES = ['aceita_agendada'];
 const CONFIRMED_COLLECTION_WORKFLOW_STATUSES = ['coletada', 'enviada_em_lote', 'recebida'];
@@ -443,9 +444,9 @@ function buildRegisterCollectionProductRows(danfe: IDanfe | null, existingRows: 
 
 function ControlTowerCollections() {
   const navigate = useNavigate();
-  const userPermission = localStorage.getItem('user_permission') || '';
+  const userPermission = String(localStorage.getItem('user_permission') || '').trim().toLowerCase();
   const canManageCollectionRequests = TOWER_COLLECTION_MANAGERS.includes(userPermission);
-  const canConfirmTowerBatchReceipt = userPermission === 'control_tower';
+  const canConfirmTowerBatchReceipt = TOWER_BATCH_RECEIPT_MANAGERS.includes(userPermission);
   const canFinalizeOccurrenceCredit = CREDIT_MANAGERS.includes(userPermission);
   const [analyticsFilters, setAnalyticsFilters] = useState<ControlTowerFilters>(() => buildDefaultFilters());
   const [flowFilters, setFlowFilters] = useState<ControlTowerFilters>(() => buildDefaultFlowFilters());
@@ -995,7 +996,7 @@ function ControlTowerCollections() {
 
   async function handleConfirmBatchReceipt(batchCode: string) {
     if (!canConfirmTowerBatchReceipt) {
-      alert('Somente a Torre de Controle pode confirmar o recebimento do lote.');
+      alert('Seu perfil nao possui permissao para confirmar o recebimento do lote.');
       return;
     }
 

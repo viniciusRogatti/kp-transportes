@@ -17,11 +17,24 @@ export function DescriptionColumns({ className, ...props }: DivProps) {
 }
 
 export function ContainerItems({ className, ...props }: DivProps) {
-  return <div className={cn('danfe-items-scroll scrollbar-ui mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-y-contain rounded-md border border-border bg-surface-2/65 p-s2 touch-pan-y [-webkit-overflow-scrolling:touch] max-[768px]:overflow-y-scroll max-[768px]:pr-1 max-[768px]:[scrollbar-gutter:stable]', className)} {...props} />;
+  return <div className={cn('mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-surface-2/65 p-s2', className)} {...props} />;
+}
+
+export function ItemsScrollArea({ className, ...props }: DivProps) {
+  return (
+    <div
+      className={cn(
+        'danfe-items-scroll scrollbar-ui min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] max-[768px]:select-none',
+        'max-h-[min(40vh,240px)] max-[768px]:max-h-[min(42dvh,270px)]',
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export function ListItems({ className, ...props }: UlProps) {
-  return <ul className={cn('flex list-none items-center justify-between gap-1 border-b border-border/60 py-0.5 text-[12px] font-medium text-text [&>li:nth-child(1)]:min-w-[78px] [&>li:nth-child(2)]:max-w-[165px] [&>li:nth-child(2)]:overflow-hidden [&>li:nth-child(2)]:text-ellipsis [&>li:nth-child(2)]:whitespace-nowrap [&>li:nth-child(2)]:font-normal [&>li:nth-child(2)]:text-muted [&>li:nth-child(3)]:whitespace-nowrap', className)} {...props} />;
+  return <ul className={cn('touch-pan-y flex list-none items-center justify-between gap-1 border-b border-border/60 py-0.5 text-[12px] font-medium text-text [&>li:nth-child(1)]:min-w-[78px] [&>li:nth-child(2)]:max-w-[165px] [&>li:nth-child(2)]:overflow-hidden [&>li:nth-child(2)]:text-ellipsis [&>li:nth-child(2)]:whitespace-nowrap [&>li:nth-child(2)]:font-normal [&>li:nth-child(2)]:text-muted [&>li:nth-child(3)]:whitespace-nowrap', className)} {...props} />;
 }
 
 export function TitleCard({ className, ...props }: DivProps) {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { IDanfe, IInvoiceSearchContext } from '../types/types'
-import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
+import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ItemsScrollArea, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
 import { formatDateBR } from '../utils/dateDisplay';
 import { normalizeCityLabel, normalizeTextValue } from '../utils/textNormalization';
 
@@ -62,7 +62,7 @@ function CardDanfes({
           <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
             <div
               className="relative h-full w-full transition-transform duration-500"
-              style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
+              style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none' }}
             >
               <CardsDanfe
                 className={!driverName ? 'absolute inset-0 select-text overflow-hidden border-accent/55 shadow-[0_0_0_1px_rgba(1,87,163,0.25)]' : 'absolute inset-0 select-text overflow-hidden'}
@@ -109,18 +109,20 @@ function CardDanfes({
                       Deslize para baixo para ver todos os itens.
                     </p>
                   )}
-                  <DescriptionColumns>
+                  <DescriptionColumns className="shrink-0 pr-1">
                     <span>Código</span>
                     <span>Descrição</span>
                     <span>Qtd</span>
                   </DescriptionColumns>
-                  {danfe.DanfeProducts.map((item) => (
-                    <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
-                        <li>{item.Product.code}</li>
-                        <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
-                        <li>{formatQuantity(item.quantity, item.type)}</li>
-                    </ListItems>
-                  ))}
+                  <ItemsScrollArea aria-label={`Itens da NF ${danfe.invoice_number}`}>
+                    {danfe.DanfeProducts.map((item) => (
+                      <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
+                          <li>{item.Product.code}</li>
+                          <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
+                          <li>{formatQuantity(item.quantity, item.type)}</li>
+                      </ListItems>
+                    ))}
+                  </ItemsScrollArea>
                 </ContainerItems>
                 <TotalQuantity className="mt-auto flex items-center justify-between gap-2">
                   <p className="min-w-0 truncate">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>

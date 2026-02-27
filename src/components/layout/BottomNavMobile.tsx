@@ -1,6 +1,7 @@
 import { Building2, Home, NotebookText, Package, Undo2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/cn';
+import { useTheme } from '../../context/ThemeContext';
 
 type BottomNavItem = {
   key: string;
@@ -56,6 +57,7 @@ function BottomNavMobile() {
   const navigate = useNavigate();
   const location = useLocation();
   const permission = localStorage.getItem('user_permission') || '';
+  const { isLightTheme } = useTheme();
 
   if (permission === 'control_tower' || location.pathname.startsWith('/control-tower')) {
     return null;
@@ -67,7 +69,7 @@ function BottomNavMobile() {
   return (
     <nav
       aria-label="Menu principal mobile"
-      className="fixed inset-x-0 bottom-0 z-[1160] hidden border-t border-border bg-[rgba(6,13,25,0.96)] shadow-[0_-10px_28px_rgba(1,8,20,0.55)] backdrop-blur-xl max-[768px]:block"
+      className="app-shell-bottom-nav fixed inset-x-0 bottom-0 z-[1160] hidden border-t border-border backdrop-blur-xl max-[768px]:block"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
     >
       <div className="mx-auto grid h-[var(--mobile-bottom-nav-height)] max-w-[720px] grid-cols-5 items-end px-1">
@@ -86,7 +88,7 @@ function BottomNavMobile() {
               className={cn(
                 'group relative flex min-h-[44px] flex-col items-center justify-center rounded-xl px-1 pb-2 pt-1 text-[10px] font-semibold transition duration-150 active:scale-[0.98]',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/80',
-                isActive ? 'text-white' : 'text-muted',
+                isActive ? (isLightTheme ? 'text-sky-900' : 'text-white') : 'text-muted',
                 item.isHome ? '-mt-5 pb-1' : '',
               )}
             >
@@ -96,7 +98,7 @@ function BottomNavMobile() {
                     'relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border transition-transform duration-150',
                     isActive
                       ? 'border-sky-400/70 bg-gradient-to-b from-[#1674d8] to-[#0157a3] text-white shadow-[0_10px_24px_rgba(4,87,163,0.55)]'
-                      : 'border-border bg-surface-2 text-white shadow-[0_7px_16px_rgba(1,8,20,0.35)]',
+                      : 'border-border bg-surface-2 text-text shadow-[0_7px_16px_rgba(1,8,20,0.22)]',
                     'group-hover:-translate-y-0.5 group-active:translate-y-0',
                   )}
                 >
@@ -109,7 +111,7 @@ function BottomNavMobile() {
                     'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-150',
                     isActive
                       ? 'border-sky-400/70 bg-gradient-to-b from-[#1674d8] to-[#0157a3] text-white -translate-y-0.5 shadow-[0_8px_20px_rgba(4,87,163,0.45)]'
-                      : 'border-border bg-surface-2/70 text-white group-hover:-translate-y-0.5 group-hover:text-white',
+                      : 'border-border bg-surface-2/70 text-text group-hover:-translate-y-0.5 group-hover:text-text',
                   )}
                 >
                   {item.icon}

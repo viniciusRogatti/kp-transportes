@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import {
   Bell,
   CalendarDays,
@@ -12,15 +11,15 @@ import {
   Menu,
   Route,
   Search,
-  Truck,
   Upload,
   User,
   Users,
   X,
 } from 'lucide-react';
 import { cn } from '../lib/cn';
-import { API_URL } from '../data';
 import BottomNavMobile from './layout/BottomNavMobile';
+import ThemeToggleButton from './ui/ThemeToggleButton';
+import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 
 type NavItem = {
   to: string;
@@ -29,35 +28,23 @@ type NavItem = {
   icon: JSX.Element;
 };
 
-type NotificationSummary = {
-  total: number;
-  occurrences: {
-    total: number;
-    priorityLoading: number;
-    simpleFlow: number;
-  };
-  collections: {
-    total: number;
-    awaitingSchedule: number;
-    scheduled: number;
-    collected: number;
-  };
+const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  COLLECTION_CREATED: 'Coleta solicitada',
+  COLLECTION_SCHEDULED: 'Coleta agendada',
+  RETURN_BATCH_SENT: 'Lote enviado',
+  OCCURRENCE_CREATED: 'Ocorrencia para credito',
+  OCCURRENCE_ON_BATCH: 'Ocorrencia no lote',
 };
 
-const SIMPLE_OCCURRENCE_REASON = 'faltou_na_carga';
-const EMPTY_NOTIFICATION_SUMMARY: NotificationSummary = {
-  total: 0,
-  occurrences: {
-    total: 0,
-    priorityLoading: 0,
-    simpleFlow: 0,
-  },
-  collections: {
-    total: 0,
-    awaitingSchedule: 0,
-    scheduled: 0,
-    collected: 0,
-  },
+const formatNotificationTime = (value: string) => {
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return 'agora';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
 };
 
 const navItems: NavItem[] = [
@@ -67,7 +54,6 @@ const navItems: NavItem[] = [
   { to: '/products', label: 'Itens Cadastrados', shortLabel: 'Itens', icon: <ClipboardList className="h-4 w-4" /> },
   { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" /> },
   { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" /> },
-  { to: '/trips', label: 'Trips', shortLabel: 'Trips', icon: <Truck className="h-4 w-4" /> },
   { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" /> },
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" /> },
 ];
@@ -79,7 +65,7 @@ const routeTitles: Record<string, string> = {
   '/products': 'Itens Cadastrados',
   '/customers': 'Clientes',
   '/routePlanning': 'Roteirização',
-  '/trips': 'Trips',
+  '/trips': 'Roteirização',
   '/returns-occurrences': 'Devoluções e Ocorrências',
   '/uploadFiles': 'Envio de XML',
   '/control-tower/coletas': 'Torre de Controle',
@@ -88,12 +74,16 @@ const routeTitles: Record<string, string> = {
 function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const {
+    notifications,
+    unreadCount,
+    connected,
+    markAsRead,
+  } = useRealtimeNotifications();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [notificationSummary, setNotificationSummary] = useState<NotificationSummary>(EMPTY_NOTIFICATION_SUMMARY);
   const [quickSearch, setQuickSearch] = useState('');
   const desktopSidebarRef = useRef<HTMLElement | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
@@ -101,6 +91,7 @@ function Header() {
   const currentTitle = routeTitles[location.pathname] || 'KP Transportes';
   const currentSection = location.pathname.startsWith('/control-tower') ? 'Control Tower' : 'Operação';
   const permission = localStorage.getItem('user_permission') || 'user';
+  const latestNotifications = notifications.slice(0, 10);
 
   useEffect(() => {
     document.body.classList.add('with-app-shell');
@@ -117,70 +108,6 @@ function Header() {
 
   useEffect(() => {
     setIsMobileDrawerOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    const loadPending = async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const [occurrencesResult, collectionsResult] = await Promise.allSettled([
-          axios.get(`${API_URL}/occurrences/search?status=pending`, { headers }),
-          axios.get(`${API_URL}/collection-requests/dashboard`, { headers }),
-        ]);
-
-        let occurrencesTotal = 0;
-        let simpleFlowOccurrences = 0;
-        let priorityLoadingOccurrences = 0;
-
-        if (occurrencesResult.status === 'fulfilled') {
-          const occurrencesRows = Array.isArray(occurrencesResult.value?.data) ? occurrencesResult.value.data : [];
-          occurrencesTotal = occurrencesRows.length;
-          simpleFlowOccurrences = occurrencesRows.filter(
-            (row: { reason?: string | null }) => String(row?.reason || '').trim().toLowerCase() === SIMPLE_OCCURRENCE_REASON,
-          ).length;
-          priorityLoadingOccurrences = Math.max(occurrencesTotal - simpleFlowOccurrences, 0);
-        }
-
-        let awaitingScheduleCount = 0;
-        let scheduledCount = 0;
-        let collectedCount = 0;
-
-        if (collectionsResult.status === 'fulfilled') {
-          const metrics = collectionsResult.value?.data?.metrics || {};
-          awaitingScheduleCount = Number(metrics.pending_count || 0);
-          scheduledCount = Number(metrics.accepted_count || 0);
-          collectedCount = Number(metrics.collected_count || 0);
-        }
-
-        const collectionsTotal = awaitingScheduleCount + scheduledCount + collectedCount;
-        const total = occurrencesTotal + collectionsTotal;
-        const summary: NotificationSummary = {
-          total,
-          occurrences: {
-            total: occurrencesTotal,
-            priorityLoading: priorityLoadingOccurrences,
-            simpleFlow: simpleFlowOccurrences,
-          },
-          collections: {
-            total: collectionsTotal,
-            awaitingSchedule: awaitingScheduleCount,
-            scheduled: scheduledCount,
-            collected: collectedCount,
-          },
-        };
-
-        setNotificationSummary(summary);
-        setPendingCount(summary.total);
-      } catch {
-        setNotificationSummary(EMPTY_NOTIFICATION_SUMMARY);
-        setPendingCount(0);
-      }
-    };
-
-    loadPending();
   }, [location.pathname]);
 
   useEffect(() => {
@@ -221,7 +148,7 @@ function Header() {
       <aside
         ref={desktopSidebarRef}
         className={cn(
-          'fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.94)_0%,rgba(8,16,30,0.96)_100%)] px-3 py-3 shadow-[var(--shadow-2)] backdrop-blur md:flex md:flex-col md:transition-[width] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
+          'app-shell-sidebar fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border px-3 py-3 shadow-[var(--shadow-2)] backdrop-blur md:flex md:flex-col md:transition-[width] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
           isSidebarCollapsed ? 'w-[var(--app-sidebar-width-collapsed)]' : 'w-[var(--app-sidebar-width)]',
         )}
       >
@@ -251,13 +178,16 @@ function Header() {
                   'group flex items-center rounded-md border py-2 text-sm transition',
                   isSidebarCollapsed ? 'justify-center px-1' : 'gap-2 px-2.5',
                   isActive
-                    ? 'border-sky-700/70 bg-sky-900/30 text-sky-100'
+                    ? 'border-sky-500/70 bg-gradient-to-r from-[#1674d8]/85 to-[#0157a3]/85 text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
                     : 'border-transparent text-muted hover:border-border hover:bg-surface/70 hover:text-text',
                 )}
                 title={item.label}
               >
                 <span className={cn(
-                  'inline-flex items-center justify-center rounded-md border border-border bg-surface-2',
+                  'inline-flex items-center justify-center rounded-md border',
+                  isActive
+                    ? 'border-sky-300/70 bg-gradient-to-b from-[#1c7fe0] to-[#0157a3] text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
+                    : 'border-border bg-surface-2 text-text',
                   isSidebarCollapsed ? 'h-9 w-9' : 'h-8 w-8',
                 )}>
                   {item.icon}
@@ -273,13 +203,13 @@ function Header() {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 inline-flex h-10 items-center justify-center rounded-md border border-rose-800/70 bg-rose-950/35 px-3 text-sm font-medium text-rose-200 hover:bg-rose-900/45"
+          className="mt-2 inline-flex h-10 items-center justify-center rounded-md border border-rose-500/80 bg-gradient-to-r from-rose-700 to-rose-600 px-3 text-sm font-semibold text-rose-50 shadow-[0_10px_20px_rgba(190,24,93,0.35)] transition hover:from-rose-600 hover:to-rose-500"
         >
           {isSidebarCollapsed ? 'Sair' : 'Sair da sessão'}
         </button>
       </aside>
 
-      <header ref={topbarRef} className="fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border bg-[rgba(6,13,25,0.86)] px-3 backdrop-blur-xl md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]">
+      <header ref={topbarRef} className="app-shell-topbar fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border px-3 backdrop-blur-xl md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]">
         <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <button
@@ -310,6 +240,7 @@ function Header() {
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggleButton iconOnly />
             <button
               type="button"
               onClick={() => setIsNotificationOpen((prev) => !prev)}
@@ -317,9 +248,9 @@ function Header() {
               aria-label="Abrir notificações"
             >
               <Bell className="h-4 w-4" />
-              {pendingCount > 0 ? (
+              {unreadCount > 0 ? (
                 <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">
-                  {pendingCount > 99 ? '99+' : pendingCount}
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               ) : null}
             </button>
@@ -336,44 +267,59 @@ function Header() {
         </div>
 
         {isNotificationOpen ? (
-          <div className="absolute right-3 top-[calc(var(--header-height)+8px)] z-[1200] w-[min(92vw,320px)] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)] md:right-4">
-            <h3 className="mb-1 text-sm font-semibold text-text">Pendências</h3>
-            <p className="text-xs text-muted">Resumo por tipo para priorização diária</p>
-
-            <div className="mt-3 space-y-2">
-              <div className="rounded-md border border-border bg-surface-2/80 p-2">
-                <div className="flex items-center justify-between">
-                  <strong className="text-xs uppercase tracking-wide text-text">Ocorrências</strong>
-                  <span className="text-sm font-semibold text-text">{notificationSummary.occurrences.total}</span>
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  Prioridade de carregamento: <strong className="text-text">{notificationSummary.occurrences.priorityLoading}</strong>
-                </p>
-                <p className="text-xs text-muted">
-                  Formulário faltante: <strong className="text-text">{notificationSummary.occurrences.simpleFlow}</strong>
-                </p>
-              </div>
-
-              <div className="rounded-md border border-border bg-surface-2/80 p-2">
-                <div className="flex items-center justify-between">
-                  <strong className="text-xs uppercase tracking-wide text-text">Coletas</strong>
-                  <span className="text-sm font-semibold text-text">{notificationSummary.collections.total}</span>
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  Aguardando agendamento: <strong className="text-text">{notificationSummary.collections.awaitingSchedule}</strong>
-                </p>
-                <p className="text-xs text-muted">
-                  Agendadas: <strong className="text-text">{notificationSummary.collections.scheduled}</strong>
-                </p>
-                <p className="text-xs text-muted">
-                  Coletadas: <strong className="text-text">{notificationSummary.collections.collected}</strong>
-                </p>
-              </div>
+          <div className="absolute right-3 top-[calc(var(--header-height)+8px)] z-[1200] w-[min(92vw,360px)] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)] md:right-4">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-text">Notificações</h3>
+              <span className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                connected
+                  ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-500'
+                  : 'border-amber-500/60 bg-amber-500/10 text-amber-500',
+              )}>
+                <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
+                {connected ? 'Realtime ON' : 'Fallback polling'}
+              </span>
             </div>
 
-            <p className="mt-2 text-xs text-muted">
-              Total geral: <strong className="text-text">{notificationSummary.total}</strong>
+            <p className="mt-1 text-xs text-muted">
+              {unreadCount > 0
+                ? `${unreadCount} notificação(ões) não lida(s)`
+                : 'Sem notificações não lidas.'}
             </p>
+
+            {!latestNotifications.length ? (
+              <p className="mt-3 rounded-md border border-border bg-surface-2/70 px-2 py-2 text-xs text-muted">
+                Nenhuma notificação disponível.
+              </p>
+            ) : (
+              <ul className="mt-3 max-h-[340px] space-y-1 overflow-auto pr-1">
+                {latestNotifications.map((notification) => {
+                  const typeLabel = NOTIFICATION_TYPE_LABELS[notification.type] || notification.type;
+                  const isUnread = !notification.read;
+                  return (
+                    <li key={`notif-${notification.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => markAsRead(notification.id)}
+                        className={cn(
+                          'w-full rounded-md border px-2 py-2 text-left transition',
+                          isUnread
+                            ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
+                            : 'border-border bg-surface-2/70 hover:bg-surface-2',
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-text">{typeLabel}</span>
+                          <span className="text-[11px] text-muted">{formatNotificationTime(notification.createdAt)}</span>
+                        </div>
+                        <p className="mt-1 text-xs font-semibold text-text">{notification.title}</p>
+                        <p className="mt-0.5 text-xs text-muted">{notification.message}</p>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         ) : null}
       </header>
@@ -388,7 +334,7 @@ function Header() {
 
       <aside
         className={cn(
-          'fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border bg-[linear-gradient(180deg,rgba(12,23,40,0.97)_0%,rgba(8,16,30,0.98)_100%)] p-3 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
+          'app-shell-mobile-drawer fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border p-3 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
           isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -406,6 +352,8 @@ function Header() {
           </button>
         </div>
 
+        <ThemeToggleButton className="mb-3 w-full justify-center" />
+
         <nav className="scrollbar-ui space-y-1 overflow-auto pb-3">
           {navItems.map((item) => {
             const isActive = location.pathname === item.to;
@@ -415,10 +363,17 @@ function Header() {
                 to={item.to}
                 className={cn(
                   'flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm',
-                  isActive ? 'border-sky-700/70 bg-sky-900/30 text-sky-100' : 'border-transparent text-muted',
+                  isActive
+                    ? 'border-sky-500/70 bg-gradient-to-r from-[#1674d8]/85 to-[#0157a3]/85 text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
+                    : 'border-transparent text-muted',
                 )}
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface-2">
+                <span className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-md border',
+                  isActive
+                    ? 'border-sky-300/70 bg-gradient-to-b from-[#1c7fe0] to-[#0157a3] text-white'
+                    : 'border-border bg-surface-2 text-text',
+                )}>
                   {item.icon}
                 </span>
                 {item.label}
@@ -430,7 +385,7 @@ function Header() {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md border border-rose-800/70 bg-rose-950/35 text-sm font-medium text-rose-200"
+          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md border border-rose-500/80 bg-gradient-to-r from-rose-700 to-rose-600 text-sm font-semibold text-rose-50 shadow-[0_10px_20px_rgba(190,24,93,0.35)] transition hover:from-rose-600 hover:to-rose-500"
         >
           Sair
         </button>

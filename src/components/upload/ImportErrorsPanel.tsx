@@ -48,7 +48,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
 
   if (!errors.length) {
     return (
-      <div className="rounded-xl border border-emerald-500/25 bg-emerald-900/20 p-4 text-sm text-emerald-100">
+      <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/12 p-4 text-sm text-[color:var(--color-success)]">
         Nenhum erro encontrado no processamento.
       </div>
     );
@@ -56,28 +56,28 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-rose-500/25 bg-rose-900/20 p-4 text-sm text-rose-100">
+      <div className="rounded-xl border border-rose-500/35 bg-rose-500/12 p-4 text-sm text-[color:var(--color-danger)]">
         Falhou em {errors.length} arquivo(s) — {successCount} foi/foram importado(s) normalmente.
       </div>
 
       <div className="space-y-2">
         {errors.map((item) => (
-          <div key={`${item.fileKey || item.fileName}-error`} className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4">
+          <div key={`${item.fileKey || item.fileName}-error`} className="rounded-xl border border-border bg-surface/80 p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-text">{item.fileName}</p>
-                <p className="mt-1 text-xs text-rose-200">
+                <p className="mt-1 text-xs text-[color:var(--color-danger)]">
                   {getErrorCodeLabel(item.error?.code)} • {item.error?.message || 'Erro inesperado ao processar arquivo.'}
                 </p>
                 {item.error?.hint ? (
-                  <p className="mt-1 text-xs text-sky-200">Dica: {item.error.hint}</p>
+                  <p className="mt-1 text-xs text-[color:var(--color-text-accent)]">Dica: {item.error.hint}</p>
                 ) : null}
               </div>
 
               <button
                 type="button"
                 onClick={() => navigator.clipboard.writeText(buildClipboardPayload(item))}
-                className="inline-flex h-8 items-center rounded-md border border-white/15 bg-surface-2 px-3 text-xs font-semibold text-text hover:border-accent/60"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-text hover:border-accent/60"
               >
                 Copiar detalhes
               </button>
@@ -92,7 +92,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
                   </p>
                 ) : null}
                 {item.error?.stack ? (
-                  <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-white/10 bg-black/30 p-2 text-[11px] text-slate-200">
+                  <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-border bg-surface-2/90 p-2 text-[11px] text-text">
                     {item.error.stack}
                   </pre>
                 ) : null}

@@ -2094,8 +2094,8 @@ function ReturnsOccurrences() {
             <Tabs className="w-auto">
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
-                  ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
-                  : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
+                  ? 'z-10 border-border border-b-transparent bg-card text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-card after:content-[""]'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
                   }`}
                 onClick={() => setTab('returns')}
                 type="button"
@@ -2104,8 +2104,8 @@ function ReturnsOccurrences() {
               </button>
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'occurrences'
-                  ? 'z-10 border-border border-b-transparent bg-surface/70 text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-surface/70 after:content-[""]'
-                  : 'border-white/10 bg-[rgba(6,14,25,0.95)] text-muted shadow-[0_6px_12px_rgba(2,8,16,0.28)] hover:text-text'
+                  ? 'z-10 border-border border-b-transparent bg-card text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-card after:content-[""]'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
                   }`}
                 onClick={() => setTab('occurrences')}
                 type="button"
@@ -2119,7 +2119,7 @@ function ReturnsOccurrences() {
                   <select
                     value={batchLookbackDays}
                     onChange={(event) => setBatchLookbackDays(event.target.value as ReturnBatchLookbackValue)}
-                    className="h-10 w-full rounded-sm border border-white/15 bg-[rgba(11,27,42,0.7)] px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                    className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
                     aria-label="Periodo de devolucoes"
                   >
                     {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
@@ -2230,7 +2230,7 @@ function ReturnsOccurrences() {
                     <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
                       <div className="min-w-0 md:w-[220px] md:shrink-0">
                         {returnType === 'sobra' ? (
-                          <div className="rounded-md border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-[11px] text-[0.82rem] text-slate-300">
+                          <div className="rounded-md border border-border bg-card px-3 py-[11px] text-[0.82rem] text-muted">
                             Cadastro manual de sobra
                           </div>
                         ) : (
@@ -2243,7 +2243,7 @@ function ReturnsOccurrences() {
                             maxLength={9}
                             onSearch={handleSearchReturnNf}
                             searchLabel="Buscar NF de devolucao"
-                            className="border-white/10 bg-[rgba(11,27,42,0.6)] tracking-[0.03em]"
+                            className="border-border bg-card tracking-[0.03em]"
                           />
                         )}
                       </div>
@@ -2438,8 +2438,8 @@ function ReturnsOccurrences() {
                             </div>
                           </Grid>
 
-                          <div className="mt-3 rounded-md border border-white/10 bg-[rgba(11,27,42,0.45)] px-3 py-2">
-                            <label className="flex cursor-pointer items-start gap-2 text-[0.83rem] text-slate-200">
+                          <div className="mt-3 rounded-md border border-border bg-surface/75 px-3 py-2">
+                            <label className="flex cursor-pointer items-start gap-2 text-[0.83rem] text-text">
                               <input
                                 type="checkbox"
                                 checked={leftoverIsInversion}
@@ -2694,7 +2694,7 @@ function ReturnsOccurrences() {
                             type="date"
                             value={returnDate}
                             onChange={(event) => setReturnDate(event.target.value)}
-                            className="w-full rounded-sm border border-white/10 bg-[rgba(11,27,42,0.6)] px-3 py-2 text-text"
+                            className="w-full rounded-sm border border-border bg-card px-3 py-2 text-text"
                           />
                         </div>
                         <Actions className="md:justify-end">
@@ -3063,7 +3063,7 @@ function ReturnsOccurrences() {
                                 />
                               </div>
                               <button
-                                className="mb-3 h-[42px] shrink-0 whitespace-nowrap rounded-md border-none bg-white/15 px-3 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45 max-[430px]:px-2 max-[430px]:text-[0.8rem]"
+                                className="mb-3 h-[42px] shrink-0 whitespace-nowrap rounded-md border border-border bg-surface px-3 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45 max-[430px]:px-2 max-[430px]:text-[0.8rem]"
                                 onClick={addOccurrenceItem}
                                 type="button"
                                 disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}

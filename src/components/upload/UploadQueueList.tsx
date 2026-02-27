@@ -30,10 +30,10 @@ const statusLabel: Record<UploadQueueStatus, string> = {
 };
 
 const statusClassName: Record<UploadQueueStatus, string> = {
-  ready: 'border-slate-600 bg-slate-900/70 text-slate-200',
-  uploading: 'border-sky-500/45 bg-sky-900/40 text-sky-200',
-  success: 'border-emerald-500/45 bg-emerald-900/35 text-emerald-200',
-  error: 'border-rose-500/45 bg-rose-900/35 text-rose-200',
+  ready: 'border-border bg-surface text-text',
+  uploading: 'border-sky-500/45 bg-sky-500/15 text-[color:var(--color-text-accent)]',
+  success: 'border-emerald-500/45 bg-emerald-500/15 text-[color:var(--color-success)]',
+  error: 'border-rose-500/45 bg-rose-500/15 text-[color:var(--color-danger)]',
 };
 
 const formatBytes = (value: number) => {
@@ -58,19 +58,19 @@ function UploadQueueList({ items, disabled = false, onRemove }: UploadQueueListP
   }, [items, scrollTop]);
 
   return (
-    <div className="w-full rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4 shadow-[var(--shadow-1)]">
+    <div className="w-full rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text">Fila de envio</h3>
         <span className="text-xs text-muted">{items.length} arquivo(s)</span>
       </div>
 
       {!items.length ? (
-        <div className="rounded-md border border-white/10 bg-surface/50 px-3 py-5 text-center text-sm text-muted">
+        <div className="rounded-md border border-border bg-card px-3 py-5 text-center text-sm text-muted">
           Nenhum arquivo selecionado.
         </div>
       ) : (
         <div
-          className="scrollbar-ui w-full overflow-y-auto rounded-md border border-white/10 bg-[rgba(5,14,22,0.4)]"
+          className="scrollbar-ui w-full overflow-y-auto rounded-md border border-border bg-card"
           style={{ height: VIEWPORT_HEIGHT }}
           onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         >
@@ -83,7 +83,7 @@ function UploadQueueList({ items, disabled = false, onRemove }: UploadQueueListP
                 <div
                   key={item.id}
                   style={{ top, height: ROW_HEIGHT }}
-                  className="absolute left-0 right-0 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-white/10 px-3"
+                  className="absolute left-0 right-0 grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-border px-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-[0.84rem] font-medium text-text">{item.file.name}</p>
@@ -106,7 +106,7 @@ function UploadQueueList({ items, disabled = false, onRemove }: UploadQueueListP
                     type="button"
                     disabled={disabled || item.status === 'uploading'}
                     onClick={() => onRemove(item.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/15 bg-surface/80 text-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-muted hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
                     aria-label={`Remover ${item.file.name}`}
                     title="Remover arquivo"
                   >

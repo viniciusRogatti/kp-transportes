@@ -19,7 +19,7 @@ export function BoxSearch({ className, ...props }: DivProps) {
       className={cn(
         'flex w-full min-w-0 items-center gap-s2',
         '[&_.react-datepicker-wrapper]:w-full [&_.react-datepicker__input-container]:w-full',
-        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-text [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-card [&_input]:px-3 [&_input]:text-text [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         className,
       )}
       {...props}

@@ -100,6 +100,25 @@ type OccurrenceCardItemSummary = {
   label: string;
   quantityWithType: string;
 };
+type ConfirmDialogState = {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  resolve: ((value: boolean) => void) | null;
+};
+type TextPromptDialogState = {
+  open: boolean;
+  title: string;
+  message: string;
+  inputLabel: string;
+  placeholder: string;
+  value: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  resolve: ((value: string | null) => void) | null;
+};
 
 const normalizeProductType = (value?: string | null) => String(value || '').trim().toUpperCase();
 const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
@@ -133,8 +152,8 @@ const getCollectionUrgencyBadgeLabel = (level?: string | null) => (
 );
 const getCollectionUrgencyBadgeClass = (level?: string | null) => (
   resolveCollectionUrgencyTier(level) === 'prioritaria'
-    ? 'rounded-full border border-rose-300/35 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-rose-100'
-    : 'rounded-full border border-emerald-300/35 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-100'
+    ? 'rounded-full border border-rose-300/45 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-danger)]'
+    : 'rounded-full border border-emerald-300/45 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-success)]'
 );
 const COLLECTION_STATUS_LABELS: Record<string, string> = {
   solicitada: 'Coleta solicitada',
@@ -377,6 +396,25 @@ function Home() {
   const [collectionDetailsRequest, setCollectionDetailsRequest] = useState<ICollectionRequest | null>(null);
 
   const [collectionPdfPrintingId, setCollectionPdfPrintingId] = useState<number | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
+    open: false,
+    title: 'Confirmar acao',
+    message: '',
+    confirmLabel: 'Confirmar',
+    cancelLabel: 'Cancelar',
+    resolve: null,
+  });
+  const [textPromptDialog, setTextPromptDialog] = useState<TextPromptDialogState>({
+    open: false,
+    title: 'Informacao obrigatoria',
+    message: '',
+    inputLabel: 'Digite abaixo',
+    placeholder: '',
+    value: '',
+    confirmLabel: 'Confirmar',
+    cancelLabel: 'Cancelar',
+    resolve: null,
+  });
 
   const isAdminUser = userPermission === 'admin';
   const canManageOccurrenceStatus = userPermission !== 'control_tower';
@@ -437,6 +475,96 @@ function Home() {
     }),
     [pendingCollectionRequests],
   );
+
+  function askConfirmation({
+    message,
+    title = 'Confirmar acao',
+    confirmLabel = 'Confirmar',
+    cancelLabel = 'Cancelar',
+  }: {
+    message: string;
+    title?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+  }) {
+    return new Promise<boolean>((resolve) => {
+      setConfirmDialog({
+        open: true,
+        title,
+        message,
+        confirmLabel,
+        cancelLabel,
+        resolve,
+      });
+    });
+  }
+
+  function resolveConfirmation(value: boolean) {
+    setConfirmDialog((previous) => {
+      if (previous.resolve) {
+        previous.resolve(value);
+      }
+      return {
+        open: false,
+        title: 'Confirmar acao',
+        message: '',
+        confirmLabel: 'Confirmar',
+        cancelLabel: 'Cancelar',
+        resolve: null,
+      };
+    });
+  }
+
+  function askTextPrompt({
+    message,
+    title = 'Informacao obrigatoria',
+    inputLabel = 'Digite abaixo',
+    placeholder = '',
+    confirmLabel = 'Confirmar',
+    cancelLabel = 'Cancelar',
+    initialValue = '',
+  }: {
+    message: string;
+    title?: string;
+    inputLabel?: string;
+    placeholder?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    initialValue?: string;
+  }) {
+    return new Promise<string | null>((resolve) => {
+      setTextPromptDialog({
+        open: true,
+        title,
+        message,
+        inputLabel,
+        placeholder,
+        value: initialValue,
+        confirmLabel,
+        cancelLabel,
+        resolve,
+      });
+    });
+  }
+
+  function resolveTextPrompt(value: string | null) {
+    setTextPromptDialog((previous) => {
+      if (previous.resolve) {
+        previous.resolve(value);
+      }
+      return {
+        open: false,
+        title: 'Informacao obrigatoria',
+        message: '',
+        inputLabel: 'Digite abaixo',
+        placeholder: '',
+        value: '',
+        confirmLabel: 'Confirmar',
+        cancelLabel: 'Cancelar',
+        resolve: null,
+      };
+    });
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -963,7 +1091,12 @@ function Home() {
   }
 
   async function handleDeleteOccurrence(id: number) {
-    const confirmed = window.confirm('Deseja realmente excluir esta ocorrencia? O historico sera preservado.');
+    const confirmed = await askConfirmation({
+      title: 'Excluir ocorrencia',
+      message: 'Deseja realmente excluir esta ocorrencia? O historico sera preservado.',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+    });
     if (!confirmed) {
       return;
     }
@@ -1085,17 +1218,23 @@ function Home() {
   }
 
   async function handleMarkCollectionAsCollected(request: ICollectionRequest) {
-    const confirmed = window.confirm(
-      `Confirmar coleta da NF ${request.invoice_number || '-'}? Esta acao atualiza o status para coletada.`,
-    );
+    const confirmed = await askConfirmation({
+      title: 'Confirmar coleta',
+      message: `Confirmar coleta da NF ${request.invoice_number || '-'}? Esta acao atualiza o status para coletada.`,
+      confirmLabel: 'Confirmar coleta',
+      cancelLabel: 'Cancelar',
+    });
     if (!confirmed) return;
     await updateCollectionWorkflowStatusToCollected(request);
   }
 
   async function handleApproveCollectionCancellation(request: ICollectionRequest) {
-    const confirmed = window.confirm(
-      `Aprovar cancelamento da coleta #${request.id} (NF ${request.invoice_number || '-'})?`,
-    );
+    const confirmed = await askConfirmation({
+      title: 'Aprovar cancelamento',
+      message: `Aprovar cancelamento da coleta #${request.id} (NF ${request.invoice_number || '-'})?`,
+      confirmLabel: 'Aprovar',
+      cancelLabel: 'Manter',
+    });
     if (!confirmed) return;
 
     setCollectionStatusUpdatingId(request.id);
@@ -1119,10 +1258,14 @@ function Home() {
   }
 
   async function handleRejectCollectionCancellation(request: ICollectionRequest) {
-    const reason = window.prompt(
-      `Motivo para manter a coleta #${request.id} (obrigatorio)`,
-      '',
-    );
+    const reason = await askTextPrompt({
+      title: 'Manter coleta agendada',
+      message: `Motivo para manter a coleta #${request.id} (obrigatorio).`,
+      inputLabel: 'Justificativa',
+      placeholder: 'Ex: coleta mantida por disponibilidade do cliente na data atual.',
+      confirmLabel: 'Manter coleta',
+      cancelLabel: 'Cancelar',
+    });
     if (reason === null) return;
     const trimmedReason = String(reason || '').trim();
     if (!trimmedReason) {
@@ -1260,13 +1403,13 @@ function Home() {
                       <InfoText className="mt-2">Coletas aguardando agendamento</InfoText>
                       <List className="mt-2">
                         {unscheduledCollectionRequests.map((request) => (
-                          <li
-                            key={`home-pickup-unscheduled-${request.id}`}
-                            className="!border-amber-500/55 !bg-[linear-gradient(135deg,rgba(95,45,8,0.45)_0%,rgba(58,28,5,0.62)_100%)]"
-                          >
+                            <li
+                              key={`home-pickup-unscheduled-${request.id}`}
+                              className="!border-amber-500/55 !bg-amber-500/15"
+                            >
                             <OccurrenceItemContent>
                               <span className="flex flex-wrap items-center gap-2">
-                                <strong className="text-amber-200">COLETA SOLICITADA</strong>
+                                <strong className="text-[color:var(--color-warning)]">COLETA SOLICITADA</strong>
                                 <span className={getCollectionUrgencyBadgeClass(request.urgency_level)}>
                                   {getCollectionUrgencyBadgeLabel(request.urgency_level)}
                                 </span>
@@ -1343,14 +1486,14 @@ function Home() {
                       <InfoText className="mt-2">Solicitações de cancelamento da Torre de Controle</InfoText>
                       <List className="mt-2">
                         {cancellationRequestedCollectionRequests.map((request) => (
-                          <li
-                            key={`home-pickup-cancellation-request-${request.id}`}
-                            className="!border-rose-500/55 !bg-[rgba(58,10,10,0.72)]"
-                          >
+                            <li
+                              key={`home-pickup-cancellation-request-${request.id}`}
+                              className="!border-rose-500/55 !bg-rose-500/18"
+                            >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
-                                <strong className="text-rose-200">CANCELAMENTO SOLICITADO</strong>
-                                <span className="rounded-full border border-rose-300/35 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-rose-100">
+                                <strong className="text-[color:var(--color-danger)]">CANCELAMENTO SOLICITADO</strong>
+                                <span className="rounded-full border border-rose-300/45 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-danger)]">
                                   {`Em: ${formatDateBR(request.updated_at)}`}
                                 </span>
                               </span>
@@ -1380,14 +1523,14 @@ function Home() {
                                           icon={CheckCircle2}
                                           label="Aprovar cancelamento"
                                           onClick={() => handleApproveCollectionCancellation(request)}
-                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-rose-400/55 !bg-rose-400/15 !text-rose-100 hover:!bg-rose-400/25"
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-rose-400/55 !bg-rose-400/15 !text-[color:var(--color-danger)] hover:!bg-rose-400/25"
                                           disabled={collectionStatusUpdatingId === request.id}
                                         />
                                         <IconButton
                                           icon={CalendarDays}
                                           label="Manter coleta agendada"
                                           onClick={() => handleRejectCollectionCancellation(request)}
-                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-amber-400/55 !bg-amber-400/15 !text-amber-100 hover:!bg-amber-400/25"
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-amber-400/55 !bg-amber-400/15 !text-[color:var(--color-warning)] hover:!bg-amber-400/25"
                                           disabled={collectionStatusUpdatingId === request.id}
                                         />
                                       </>
@@ -1413,14 +1556,14 @@ function Home() {
                       <InfoText className="mt-2">Coletas agendadas</InfoText>
                       <List className="mt-2">
                         {scheduledCollectionRequests.map((request) => (
-                          <li
-                            key={`home-pickup-scheduled-${request.id}`}
-                            className="!border-sky-500/45 !bg-[rgba(8,30,48,0.72)]"
-                          >
+                            <li
+                              key={`home-pickup-scheduled-${request.id}`}
+                              className="!border-sky-500/45 !bg-sky-500/15"
+                            >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
-                                <strong className="text-sky-200">COLETA AGENDADA</strong>
-                                <span className="rounded-full border border-sky-300/35 bg-sky-300/15 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                                <strong className="text-[color:var(--color-text-accent)]">COLETA AGENDADA</strong>
+                                <span className="rounded-full border border-sky-300/45 bg-sky-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-text-accent)]">
                                   {`Data: ${formatDateBR(request.scheduled_for)}`}
                                 </span>
                                 <span className={getCollectionUrgencyBadgeClass(request.urgency_level)}>
@@ -1463,7 +1606,7 @@ function Home() {
                                         icon={CheckCircle2}
                                         label="Confirmar coleta"
                                         onClick={() => handleMarkCollectionAsCollected(request)}
-                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-emerald-400/45 !bg-emerald-400/15 !text-emerald-100 hover:!bg-emerald-400/25"
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-emerald-400/45 !bg-emerald-400/15 !text-[color:var(--color-success)] hover:!bg-emerald-400/25"
                                         disabled={collectionStatusUpdatingId === request.id}
                                       />
                                     )}
@@ -1488,14 +1631,14 @@ function Home() {
                       <InfoText className="mt-2">Coletas coletadas aguardando envio em lote</InfoText>
                       <List className="mt-2">
                         {collectedCollectionRequests.map((request) => (
-                          <li
-                            key={`home-pickup-collected-${request.id}`}
-                            className="!border-emerald-500/45 !bg-[rgba(5,36,31,0.72)]"
-                          >
+                            <li
+                              key={`home-pickup-collected-${request.id}`}
+                              className="!border-emerald-500/45 !bg-emerald-500/15"
+                            >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
-                                <strong className="text-emerald-200">COLETA COLETADA</strong>
-                                <span className="rounded-full border border-emerald-300/35 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
+                                <strong className="text-[color:var(--color-success)]">COLETA COLETADA</strong>
+                                <span className="rounded-full border border-emerald-300/45 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-success)]">
                                   {`Confirmada em: ${formatDateBR(request.collected_at || request.updated_at)}`}
                                 </span>
                               </span>
@@ -1544,7 +1687,7 @@ function Home() {
                           return (
                             <li
                               key={occurrence.id}
-                              className="!border-accent/45 !bg-[rgba(6,18,29,0.78)]"
+                              className="!border-accent/45 !bg-accent/12"
                             >
                               <OccurrenceItemContent className="gap-1.5">
                                 <span className="w-fit rounded-full border border-accent/35 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text-accent">
@@ -1552,7 +1695,7 @@ function Home() {
                                 </span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
-                                <span className="flex flex-col gap-1 rounded-md border border-white/10 bg-[rgba(3,10,16,0.35)] px-2 py-2">
+                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">
                                   <strong>Produtos faltantes:</strong>
                                   {itemsSummary.length ? (
                                     itemsSummary.map((item, index) => (
@@ -1584,15 +1727,15 @@ function Home() {
                           return (
                             <li
                               key={occurrence.id}
-                              className="!border-slate-500/35 !bg-[rgba(9,17,25,0.74)]"
+                              className="!border-border !bg-surface-2/70"
                             >
                               <OccurrenceItemContent className="gap-1.5">
-                                <span className="w-fit rounded-full border border-slate-300/25 bg-slate-300/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-100">
+                                <span className="w-fit rounded-full border border-border bg-surface-2/85 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text">
                                   Formulario de faltante
                                 </span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
-                                <span className="flex flex-col gap-1 rounded-md border border-white/10 bg-[rgba(3,10,16,0.35)] px-2 py-2">
+                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">
                                   <strong>Produtos faltantes:</strong>
                                   {itemsSummary.length ? (
                                     itemsSummary.map((item, index) => (
@@ -1669,12 +1812,17 @@ function Home() {
                     <InlineText>Produto</InlineText>
                     <select
                       value={occurrenceProductCode}
-                      onChange={(event) => {
+                      onChange={async (event) => {
                         const nextProductCode = event.target.value;
                         const switchingToTotal = nextProductCode === OCCURRENCE_TOTAL_OPTION;
 
                         if (editingOccurrenceId && switchingToTotal && occurrenceItems.length) {
-                          const confirmed = window.confirm('Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.');
+                          const confirmed = await askConfirmation({
+                            title: 'Trocar escopo da ocorrencia',
+                            message: 'Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.',
+                            confirmLabel: 'Trocar para NF total',
+                            cancelLabel: 'Cancelar',
+                          });
                           if (!confirmed) return;
                         }
 
@@ -1733,7 +1881,7 @@ function Home() {
                         )}
                       </div>
                       <button
-                        className="secondary h-[42px] shrink-0 rounded-md border-none bg-white/15 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                        className="secondary h-[42px] shrink-0 rounded-md border-none bg-surface-2/85 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
                         onClick={addOccurrenceItem}
                         type="button"
                         disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}
@@ -1898,7 +2046,7 @@ function Home() {
             </List>
 
             <InlineText style={{ marginTop: '10px' }}>Itens da coleta</InlineText>
-            <div className="mt-2 rounded-md border border-white/10 bg-[rgba(5,14,22,0.5)] px-3 py-2 text-sm text-text">
+            <div className="mt-2 rounded-md border border-border bg-surface-2/75 px-3 py-2 text-sm text-text">
               {collectionDetailsRequest.request_scope === 'invoice_total'
                 ? 'NF total'
                 : (
@@ -1971,7 +2119,7 @@ function Home() {
             {collectionDetailsRequest.notes ? (
               <>
                 <InlineText style={{ marginTop: '10px' }}>Observacao</InlineText>
-                <div className="mt-2 rounded-md border border-white/10 bg-[rgba(5,14,22,0.5)] px-3 py-2 text-sm text-text">
+                <div className="mt-2 rounded-md border border-border bg-surface-2/75 px-3 py-2 text-sm text-text">
                   {collectionDetailsRequest.notes}
                 </div>
               </>
@@ -2056,6 +2204,58 @@ function Home() {
             <Actions style={{ marginTop: '12px' }}>
               <button className="secondary" onClick={() => setHistoryModalOpen(false)} type="button">
                 Fechar
+              </button>
+            </Actions>
+          </ModalCard>
+        </>
+      )}
+
+      {confirmDialog.open && (
+        <>
+          <ModalOverlay onClick={() => resolveConfirmation(false)} />
+          <ModalCard>
+            <h3>{confirmDialog.title}</h3>
+            <InlineText style={{ marginTop: '10px' }}>{confirmDialog.message}</InlineText>
+
+            <Actions style={{ marginTop: '12px' }}>
+              <button className="primary" type="button" onClick={() => resolveConfirmation(true)}>
+                {confirmDialog.confirmLabel}
+              </button>
+              <button className="secondary" type="button" onClick={() => resolveConfirmation(false)}>
+                {confirmDialog.cancelLabel}
+              </button>
+            </Actions>
+          </ModalCard>
+        </>
+      )}
+
+      {textPromptDialog.open && (
+        <>
+          <ModalOverlay onClick={() => resolveTextPrompt(null)} />
+          <ModalCard>
+            <h3>{textPromptDialog.title}</h3>
+            <InlineText style={{ marginTop: '10px' }}>{textPromptDialog.message}</InlineText>
+            <InlineText style={{ marginTop: '10px' }}>{textPromptDialog.inputLabel}</InlineText>
+            <input
+              type="text"
+              value={textPromptDialog.value}
+              onChange={(event) => setTextPromptDialog((previous) => ({ ...previous, value: event.target.value }))}
+              placeholder={textPromptDialog.placeholder}
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  resolveTextPrompt(textPromptDialog.value);
+                }
+              }}
+            />
+
+            <Actions style={{ marginTop: '12px' }}>
+              <button className="primary" type="button" onClick={() => resolveTextPrompt(textPromptDialog.value)}>
+                {textPromptDialog.confirmLabel}
+              </button>
+              <button className="secondary" type="button" onClick={() => resolveTextPrompt(null)}>
+                {textPromptDialog.cancelLabel}
               </button>
             </Actions>
           </ModalCard>

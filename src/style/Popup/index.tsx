@@ -36,7 +36,7 @@ export function InputBox({ className, ...props }: LabelProps) {
     <label
       className={cn(
         'mb-2 flex w-full flex-col gap-1.5 text-sm text-muted',
-        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-surface-2/85 [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         className,
       )}
       {...props}

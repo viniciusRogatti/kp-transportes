@@ -10,7 +10,7 @@ interface ImportSummaryProps {
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-[rgba(8,21,33,0.72)] p-3">
+    <div className="rounded-lg border border-border bg-card p-3">
       <p className="text-[0.72rem] uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 text-[1.05rem] font-semibold text-text">{value}</p>
     </div>
@@ -26,7 +26,7 @@ function ImportSummary({
 }: ImportSummaryProps) {
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-4 shadow-[var(--shadow-1)]">
+      <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-text">Progresso de processamento</h3>
           <span className="text-xs text-muted">{processedLabel}</span>

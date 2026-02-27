@@ -433,19 +433,19 @@ function FileUploadPage() {
       <Header />
       <Container className="pb-s3 max-[768px]:pb-s3">
         <div className="w-full max-w-[1200px] space-y-3">
-          <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
             <h2 className="text-[1.1rem] font-semibold text-text">Importação de XML</h2>
             <p className="mt-1 text-sm text-muted">Arraste arquivos, acompanhe o processamento e consulte o relatório completo.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-white/10 bg-surface/60 p-3">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <p className="text-[0.72rem] uppercase tracking-wide text-muted">Selecionados</p>
                 <p className="mt-1 text-[1.05rem] font-semibold text-text">{selectedCount} arquivos</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-surface/60 p-3">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <p className="text-[0.72rem] uppercase tracking-wide text-muted">Tamanho total</p>
                 <p className="mt-1 text-[1.05rem] font-semibold text-text">{formatBytes(totalBytes)}</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-surface/60 p-3">
+              <div className="rounded-lg border border-border bg-card p-3">
                 <p className="text-[0.72rem] uppercase tracking-wide text-muted">Estado</p>
                 <p className="mt-1 text-[1.05rem] font-semibold text-text">{selectedCount ? 'Prontos para enviar' : 'Sem arquivos'}</p>
               </div>
@@ -460,14 +460,14 @@ function FileUploadPage() {
           />
 
           {!!selectionIssues.length && (
-            <div className="space-y-1 rounded-xl border border-amber-500/30 bg-amber-900/15 p-3">
+            <div className="space-y-1 rounded-xl border border-amber-500/35 bg-amber-500/12 p-3">
               {selectionIssues.map((message) => (
-                <p key={message} className="text-xs text-amber-200">{message}</p>
+                <p key={message} className="text-xs text-[color:var(--color-warning)]">{message}</p>
               ))}
             </div>
           )}
 
-          <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -481,7 +481,7 @@ function FileUploadPage() {
                 type="button"
                 onClick={clearSelection}
                 disabled={!queue.length || isUploading}
-                className="inline-flex h-10 items-center rounded-md border border-white/15 bg-surface-2 px-4 text-sm font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Limpar seleção
               </button>
@@ -489,7 +489,7 @@ function FileUploadPage() {
                 type="button"
                 onClick={handleRetryFailed}
                 disabled={!failedItems.length || isUploading}
-                className="inline-flex h-10 items-center rounded-md border border-rose-400/40 bg-rose-900/35 px-4 text-sm font-semibold text-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border border-rose-400/40 bg-rose-500/15 px-4 text-sm font-semibold text-[color:var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Reenviar apenas com erro
               </button>
@@ -497,7 +497,7 @@ function FileUploadPage() {
                 type="button"
                 onClick={downloadReport}
                 disabled={!report}
-                className="inline-flex h-10 items-center rounded-md border border-sky-400/35 bg-sky-900/25 px-4 text-sm font-semibold text-sky-100 disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border border-sky-400/35 bg-sky-500/15 px-4 text-sm font-semibold text-[color:var(--color-text-accent)] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Baixar relatório (JSON)
               </button>
@@ -523,11 +523,11 @@ function FileUploadPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-3 shadow-[var(--shadow-1)]">
+          <div className="rounded-xl border border-border bg-surface/80 p-3 shadow-[var(--shadow-1)]">
             <button
               type="button"
               onClick={() => setIsQueueOpen((previous) => !previous)}
-              className="flex w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-surface/60 px-3 py-2 text-left"
+              className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 text-left"
               aria-expanded={isQueueOpen}
             >
               <div>
@@ -555,32 +555,32 @@ function FileUploadPage() {
           </div>
 
           {report && (
-            <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.78)] p-3 shadow-[var(--shadow-1)]">
+            <div className="rounded-xl border border-border bg-surface/80 p-3 shadow-[var(--shadow-1)]">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'summary' ? 'border-accent/60 bg-accent/20 text-text' : 'border-white/10 bg-surface/70 text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'summary' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('summary')}
                 >
                   Resumo
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'success' ? 'border-accent/60 bg-accent/20 text-text' : 'border-white/10 bg-surface/70 text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'success' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('success')}
                 >
                   Sucessos
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'errors' ? 'border-accent/60 bg-accent/20 text-text' : 'border-white/10 bg-surface/70 text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'errors' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('errors')}
                 >
                   Erros
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'products' ? 'border-accent/60 bg-accent/20 text-text' : 'border-white/10 bg-surface/70 text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'products' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('products')}
                 >
                   Novos produtos
@@ -601,14 +601,14 @@ function FileUploadPage() {
                 {activeTab === 'success' && (
                   <div className="space-y-2">
                     {!successResults.length ? (
-                      <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4 text-sm text-muted">
+                      <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted">
                         Nenhum arquivo processado com sucesso.
                       </div>
                     ) : successResults.map((item) => (
-                      <div key={`${item.fileKey || item.fileName}-success`} className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4">
+                      <div key={`${item.fileKey || item.fileName}-success`} className="rounded-xl border border-border bg-card p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-text">{item.fileName}</p>
-                          <span className="inline-flex h-7 items-center rounded-full border border-emerald-500/45 bg-emerald-900/30 px-2 text-[0.68rem] font-semibold uppercase tracking-wide text-emerald-200">
+                          <span className="inline-flex h-7 items-center rounded-full border border-emerald-500/45 bg-emerald-500/15 px-2 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--color-success)]">
                             Sucesso
                           </span>
                         </div>
@@ -618,7 +618,7 @@ function FileUploadPage() {
                         {item.warnings?.length ? (
                           <div className="mt-2 space-y-1">
                             {item.warnings.map((warning) => (
-                              <p key={`${item.fileName}-${warning.code}-${warning.message}`} className="text-xs text-amber-200">
+                              <p key={`${item.fileName}-${warning.code}-${warning.message}`} className="text-xs text-[color:var(--color-warning)]">
                                 Atenção: {warning.message}
                               </p>
                             ))}

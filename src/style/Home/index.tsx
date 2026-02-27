@@ -14,7 +14,7 @@ export function HomeContent({ className, ...props }: DivProps) {
 }
 
 export function OccurrenceCard({ className, ...props }: SectionProps) {
-  return <section className={cn('rounded-lg border border-white/10 bg-[rgba(8,21,33,0.75)] p-s4 shadow-elevated', className)} {...props} />;
+  return <section className={cn('rounded-lg border border-border bg-surface/80 p-s4 shadow-elevated', className)} {...props} />;
 }
 
 export function OccurrenceList({ className, ...props }: UlProps) {
@@ -22,7 +22,7 @@ export function OccurrenceList({ className, ...props }: UlProps) {
     <ul
       className={cn(
         'flex list-none flex-col gap-s2',
-        '[&_li]:flex [&_li]:items-center [&_li]:justify-between [&_li]:gap-s3 [&_li]:rounded-sm [&_li]:border [&_li]:border-white/10 [&_li]:bg-[rgba(4,14,22,0.45)] [&_li]:px-s3 [&_li]:py-s2',
+        '[&_li]:flex [&_li]:items-center [&_li]:justify-between [&_li]:gap-s3 [&_li]:rounded-sm [&_li]:border [&_li]:border-border [&_li]:bg-surface-2/70 [&_li]:px-s3 [&_li]:py-s2',
         '[&_small]:text-muted [&_button]:rounded-sm [&_button]:bg-gradient-to-r [&_button]:from-accent [&_button]:to-accent-strong [&_button]:px-3 [&_button]:py-2 [&_button]:font-semibold [&_button]:text-[#04131e]',
         'max-[768px]:[&_li]:flex-col max-[768px]:[&_li]:items-start',
         className,

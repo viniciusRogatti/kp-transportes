@@ -933,13 +933,13 @@ function RoutePlanning() {
       <Container className="h-[calc(100dvh-var(--header-height)-var(--space-2))] min-h-0 overflow-hidden pb-2 pt-[calc(var(--header-height)+var(--space-2))]">
         <div className="flex h-full w-full max-w-[1280px] min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
-            <div className="relative inline-flex items-end rounded-t-xl border border-border bg-[linear-gradient(180deg,rgba(14,24,40,0.92)_0%,rgba(10,18,32,0.95)_100%)] px-1 pt-1">
+            <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
               <button
                 type="button"
                 onClick={() => setTab('routing')}
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'routing'
-                  ? 'border-border border-b-transparent bg-surface text-text shadow-[0_12px_20px_rgba(2,8,16,0.35)]'
-                  : 'border-transparent bg-surface-2/70 text-muted shadow-[0_6px_12px_rgba(2,8,16,0.2)] hover:text-text'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
                 }`}
               >
                 Roteirização
@@ -948,8 +948,8 @@ function RoutePlanning() {
                 type="button"
                 onClick={() => setTab('trips')}
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'trips'
-                  ? 'border-border border-b-transparent bg-surface text-text shadow-[0_12px_20px_rgba(2,8,16,0.35)]'
-                  : 'border-transparent bg-surface-2/70 text-muted shadow-[0_6px_12px_rgba(2,8,16,0.2)] hover:text-text'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
                 }`}
               >
                 Trips
@@ -959,22 +959,22 @@ function RoutePlanning() {
             {activeTab === 'routing' ? (
               <>
                 <div className="hidden items-center gap-1 md:flex">
-                  <button type="button" onClick={() => addDriverOrCar('driver')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface-2/85 px-2.5 text-xs text-text"><UserPlus className="h-4 w-4" />Motorista</button>
-                  <button type="button" onClick={() => addDriverOrCar('car')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface-2/85 px-2.5 text-xs text-text"><CarFront className="h-4 w-4" />Veículo</button>
-                  <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-700/70 bg-amber-950/25 px-2.5 text-xs text-amber-200"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
-                  <button type="button" onClick={sendTripsToBackend} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-3 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
+                  <button type="button" onClick={() => addDriverOrCar('driver')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><UserPlus className="h-4 w-4" />Motorista</button>
+                  <button type="button" onClick={() => addDriverOrCar('car')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><CarFront className="h-4 w-4" />Veículo</button>
+                  <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2.5 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
+                  <button type="button" onClick={sendTripsToBackend} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
 
                 <div className="relative md:hidden">
-                  <button type="button" onClick={() => setIsMobileToolbarOpen((prev) => !prev)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface-2/85 text-text">
+                  <button type="button" onClick={() => setIsMobileToolbarOpen((prev) => !prev)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text">
                     <MoreVertical className="h-4 w-4" />
                   </button>
                   {isMobileToolbarOpen ? (
                     <div className="absolute right-0 top-10 z-20 w-52 rounded-md border border-border bg-surface p-2 shadow-[var(--shadow-3)]">
-                      <button type="button" onClick={() => { addDriverOrCar('driver'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-surface-2/80 px-2 text-xs text-text"><UserPlus className="h-4 w-4" />Adicionar motorista</button>
-                      <button type="button" onClick={() => { addDriverOrCar('car'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-surface-2/80 px-2 text-xs text-text"><CarFront className="h-4 w-4" />Adicionar veículo</button>
-                      <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-amber-700/70 bg-amber-950/25 px-2 text-xs text-amber-200"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
-                      <button type="button" onClick={() => { sendTripsToBackend(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-2 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
+                      <button type="button" onClick={() => { addDriverOrCar('driver'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><UserPlus className="h-4 w-4" />Adicionar motorista</button>
+                      <button type="button" onClick={() => { addDriverOrCar('car'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><CarFront className="h-4 w-4" />Adicionar veículo</button>
+                      <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
+                      <button type="button" onClick={() => { sendTripsToBackend(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-2 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
                     </div>
                   ) : null}
                 </div>
@@ -1127,7 +1127,7 @@ function RoutePlanning() {
                 </BoxSelectDanfe>
                 <ActionButton
                   $tone="secondary"
-                  className="w-full border-accent/45 bg-[rgba(14,33,56,0.95)] px-3 py-2 text-sm text-sky-100 hover:bg-[rgba(18,43,72,0.98)] md:w-auto"
+                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
                   onClick={handleAddNote}
                   disabled={selectedDriver === 'null' || selectedCar === 'null'}
                 >
@@ -1190,7 +1190,7 @@ function RoutePlanning() {
                   onChange={(date) => setTripDateFilter(date)}
                   dateFormat="dd/MM/yyyy"
                   locale={ptBR}
-                  className="h-10 rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text"
+                  className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
                 />
                 <IconButton
                   icon={Search}
@@ -1253,7 +1253,7 @@ function RoutePlanning() {
                 <button type="button" className="rounded-md border border-sky-700/70 bg-sky-950/30 px-3 py-2 text-left text-sm text-sky-200" onClick={resolveConflictSwap}>
                   A) Trocar com outra rota (Swap) - Recomendado
                 </button>
-                <button type="button" className="rounded-md border border-amber-700/70 bg-amber-950/25 px-3 py-2 text-left text-sm text-amber-200" onClick={resolveConflictSecondRun}>
+                <button type="button" className="rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-3 py-2 text-left text-sm font-semibold text-[#1f1300] hover:brightness-105" onClick={resolveConflictSecondRun}>
                   B) Definir como 2ª saída
                 </button>
                 <button type="button" className="rounded-md border border-border bg-surface-2 px-3 py-2 text-left text-sm text-text" onClick={resolveConflictCancel}>
@@ -1273,7 +1273,7 @@ function RoutePlanning() {
               </div>
               <div className="mb-2">
                 <label className="mb-1 block text-xs uppercase tracking-wide text-muted">Rota alvo</label>
-                <select value={swapTargetTripId} onChange={(event) => setSwapTargetTripId(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text">
+                <select value={swapTargetTripId} onChange={(event) => setSwapTargetTripId(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text">
                   <option value="">Selecione a rota para trocar</option>
                   {availableSwapTrips.map((trip) => (
                     <option key={trip.id} value={trip.id}>Rota #{trip.id} | {trip.Driver.name} | {trip.Car.license_plate}</option>
@@ -1296,13 +1296,13 @@ function RoutePlanning() {
               </div>
               <div className="mb-3">
                 <label className="mb-1 block text-xs uppercase tracking-wide text-muted">Motivo (opcional)</label>
-                <input value={swapReason} onChange={(event) => setSwapReason(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text" placeholder="Ex.: ajuste operacional" />
+                <input value={swapReason} onChange={(event) => setSwapReason(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text" placeholder="Ex.: ajuste operacional" />
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" className="rounded border border-border bg-surface-2 px-3 py-2 text-sm text-text" onClick={() => setIsSwapModalOpen(false)}>Cancelar</button>
                 <button
                   type="button"
-                  className="rounded border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                  className="rounded border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
                   disabled={!swapTargetTripId || isSwapping}
                   onClick={() => executeSwap(Number(swapTargetTripId), swapMode, swapReason)}
                 >
@@ -1355,7 +1355,7 @@ function RoutePlanning() {
 
                 <div>
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas disponíveis</p>
-                  <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text" />
+                  <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text" />
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {filteredAvailableDanfes.map((danfe) => (
                       <li key={danfe.invoice_number} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm">
@@ -1369,7 +1369,7 @@ function RoutePlanning() {
 
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">Cancelar</button>
-                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
+                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
                   {isSavingEdit ? 'Salvando...' : 'Salvar alterações'}
                 </button>
               </div>

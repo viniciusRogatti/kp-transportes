@@ -150,7 +150,7 @@ export function BoxDriverVehicle({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-10 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-accent/35 [&_select]:bg-[rgba(14,33,56,0.9)] [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:ring-2 [&_select:focus]:ring-accent/60 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-10 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-accent/35 [&_select]:bg-card [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:ring-2 [&_select:focus]:ring-accent/60 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         className,
       )}
       {...props}
@@ -162,7 +162,7 @@ export function BoxSelectDanfe({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         className,
       )}
       {...props}

@@ -29,7 +29,7 @@ function ProductRows({
       <h4 className="text-sm font-semibold text-text">{title}</h4>
       <div className="space-y-2">
         {products.map((product) => (
-          <div key={`${badgeLabel}-${product.code}-${product.sourceFile}`} className="rounded-lg border border-white/10 bg-[rgba(8,21,33,0.72)] p-3">
+          <div key={`${badgeLabel}-${product.code}-${product.sourceFile}`} className="rounded-lg border border-border bg-card p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-text">
                 {product.code} - {product.description}
@@ -51,7 +51,7 @@ function ProductRows({
 function NewProductsPanel({ newProducts, updatedProducts }: NewProductsPanelProps) {
   if (!newProducts.length && !updatedProducts.length) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4 text-sm text-muted">
+      <div className="rounded-xl border border-border bg-surface/80 p-4 text-sm text-muted">
         Nenhum produto novo/atualizado neste processamento.
       </div>
     );
@@ -63,13 +63,13 @@ function NewProductsPanel({ newProducts, updatedProducts }: NewProductsPanelProp
         title="Novos produtos cadastrados"
         products={newProducts}
         badgeLabel="Novo"
-        badgeClassName="border-emerald-500/45 bg-emerald-900/30 text-emerald-200"
+        badgeClassName="border-emerald-500/45 bg-emerald-500/15 text-[color:var(--color-success)]"
       />
       <ProductRows
         title="Produtos atualizados"
         products={updatedProducts}
         badgeLabel="Atualizado"
-        badgeClassName="border-amber-500/45 bg-amber-900/30 text-amber-200"
+        badgeClassName="border-amber-500/45 bg-amber-500/15 text-[color:var(--color-warning)]"
       />
     </div>
   );

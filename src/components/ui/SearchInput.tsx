@@ -31,7 +31,7 @@ function SearchInput({
         {...props}
         onKeyDown={handleKeyDown}
         className={cn(
-          'h-10 w-full rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] pl-4 pr-12 text-sm text-text placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+          'h-10 w-full rounded-sm border border-accent/35 bg-card pl-4 pr-12 text-sm text-text placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
           className,
         )}
       />

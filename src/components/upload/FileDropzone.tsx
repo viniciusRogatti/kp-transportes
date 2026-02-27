@@ -47,7 +47,7 @@ function FileDropzone({
   }
 
   return (
-    <div className="w-full rounded-xl border border-white/10 bg-[rgba(8,21,33,0.72)] p-4 shadow-[var(--shadow-1)]">
+    <div className="w-full rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
       <input
         ref={inputRef}
         type="file"
@@ -77,10 +77,10 @@ function FileDropzone({
         className={cn(
           'flex min-h-[170px] w-full flex-col items-center justify-center rounded-xl border border-dashed px-4 py-6 text-center transition',
           isDragOver
-            ? 'border-accent bg-[rgba(14,33,56,0.78)]'
+            ? 'border-accent/65 bg-accent/10'
             : hasSelection
-              ? 'border-emerald-500/45 bg-[rgba(16,50,36,0.35)]'
-              : 'border-white/20 bg-[rgba(6,16,27,0.4)]',
+              ? 'border-emerald-500/45 bg-emerald-500/12'
+              : 'border-border bg-surface/60',
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         )}
         onClick={openFilePicker}
@@ -95,7 +95,7 @@ function FileDropzone({
         }}
       >
         {hasSelection ? (
-          <CheckCircle2 className="mb-3 h-10 w-10 text-emerald-300" />
+          <CheckCircle2 className="mb-3 h-10 w-10 text-[color:var(--color-success)]" />
         ) : (
           <UploadCloud className="mb-3 h-10 w-10 text-text-accent" />
         )}
@@ -114,7 +114,7 @@ function FileDropzone({
             event.stopPropagation();
             openFilePicker();
           }}
-          className="mt-4 inline-flex h-9 items-center rounded-md border border-accent/40 bg-surface-2 px-3 text-xs font-semibold text-text hover:border-accent/70 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-4 inline-flex h-9 items-center rounded-md border border-accent/40 bg-card px-3 text-xs font-semibold text-text hover:border-accent/70 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {hasSelection ? 'Adicionar mais arquivos' : 'Selecionar arquivos'}
         </button>

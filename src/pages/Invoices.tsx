@@ -9,6 +9,7 @@ import { API_URL } from "../data";
 import Header from "../components/Header";
 import IconButton from "../components/ui/IconButton";
 import SearchInput from "../components/ui/SearchInput";
+import ScrollToTopButton from "../components/ScrollToTopButton";
 import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchRow } from "../style/invoices";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { cities, routes } from "../data/danfes";
@@ -290,7 +291,7 @@ function Invoices() {
               />
               <select
                 onChange={filterByRoute}
-                className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:min-w-0 max-[768px]:flex-1"
+                className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:min-w-0 max-[768px]:flex-1"
                 defaultValue="Todas"
               >
                 {routes.map((route, index) => (
@@ -311,6 +312,7 @@ function Invoices() {
         </FilterBar>
         <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
         <CardDanfes danfes={danfes} animationKey={notesSignature} invoiceContextByNf={invoiceContextByNf} />
+        <ScrollToTopButton />
       </Container>
     </div>
   )

@@ -9,7 +9,7 @@ export function ContainerCards({ className, ...props }: DivProps) {
 }
 
 export function CardsDanfe({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-[#0C243B] px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
+  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
 }
 
 export function DescriptionColumns({ className, ...props }: DivProps) {

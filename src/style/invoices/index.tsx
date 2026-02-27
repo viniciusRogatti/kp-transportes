@@ -31,7 +31,7 @@ export function FilterBar({ className, ...props }: DivProps) {
 }
 
 export function FilterInput({ className, ...props }: InputProps) {
-  return <input className={cn('h-10 w-full rounded-sm border border-accent/35 bg-[rgba(14,33,56,0.9)] px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60', className)} {...props} />;
+  return <input className={cn('h-10 w-full rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60', className)} {...props} />;
 }
 
 export function SearchBar({ className, ...props }: DivProps) {
@@ -39,7 +39,7 @@ export function SearchBar({ className, ...props }: DivProps) {
     <div
       className={cn(
         'mb-s5 flex w-full max-w-[1100px] flex-nowrap items-end gap-s3 max-[768px]:flex-col max-[768px]:gap-s2',
-        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-[rgba(14,33,56,0.9)] [&_input]:px-3 [&_input]:text-text [&_input]:placeholder:text-muted [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-surface-2/85 [&_input]:px-3 [&_input]:text-text [&_input]:placeholder:text-muted [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
         '[&_.react-datepicker-wrapper_input]:h-10',
         className,
       )}

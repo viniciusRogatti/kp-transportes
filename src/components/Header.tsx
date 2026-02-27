@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   ClipboardList,
   FileArchive,
   Home,
@@ -13,6 +14,7 @@ import {
   Search,
   Upload,
   User,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -20,12 +22,19 @@ import { cn } from '../lib/cn';
 import BottomNavMobile from './layout/BottomNavMobile';
 import ThemeToggleButton from './ui/ThemeToggleButton';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import { logoutSession } from '../utils/logoutSession';
+import {
+  ADMIN_MASTER_PERMISSIONS,
+  TRANSPORT_INTERNAL_PERMISSIONS,
+  USER_ALLOWED_PERMISSIONS,
+} from '../utils/permissions';
 
 type NavItem = {
   to: string;
   label: string;
   shortLabel: string;
   icon: JSX.Element;
+  allowedPermissions: string[];
 };
 
 const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
@@ -48,14 +57,16 @@ const formatNotificationTime = (value: string) => {
 };
 
 const navItems: NavItem[] = [
-  { to: '/home', label: 'Home', shortLabel: 'Home', icon: <Home className="h-4 w-4" /> },
-  { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" /> },
-  { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" /> },
-  { to: '/products', label: 'Itens Cadastrados', shortLabel: 'Itens', icon: <ClipboardList className="h-4 w-4" /> },
-  { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" /> },
-  { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" /> },
-  { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" /> },
-  { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" /> },
+  { to: '/home', label: 'Home', shortLabel: 'Home', icon: <Home className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/products', label: 'Itens Cadastrados', shortLabel: 'Itens', icon: <ClipboardList className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/users', label: 'Usuários', shortLabel: 'Usuários', icon: <UserPlus className="h-4 w-4" />, allowedPermissions: [...ADMIN_MASTER_PERMISSIONS] },
+  { to: '/user-sessions', label: 'Horários', shortLabel: 'Horários', icon: <Clock3 className="h-4 w-4" />, allowedPermissions: ['master'] },
 ];
 
 const routeTitles: Record<string, string> = {
@@ -68,6 +79,8 @@ const routeTitles: Record<string, string> = {
   '/trips': 'Roteirização',
   '/returns-occurrences': 'Devoluções e Ocorrências',
   '/uploadFiles': 'Envio de XML',
+  '/users': 'Gerenciamento de Usuários',
+  '/user-sessions': 'Horário de Sessões',
   '/control-tower/coletas': 'Torre de Controle',
 };
 
@@ -90,8 +103,10 @@ function Header() {
 
   const currentTitle = routeTitles[location.pathname] || 'KP Transportes';
   const currentSection = location.pathname.startsWith('/control-tower') ? 'Control Tower' : 'Operação';
-  const permission = localStorage.getItem('user_permission') || 'user';
+  const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
+  const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permission || 'Usuário').trim();
   const latestNotifications = notifications.slice(0, 10);
+  const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission));
 
   useEffect(() => {
     document.body.classList.add('with-app-shell');
@@ -130,9 +145,8 @@ function Header() {
     };
   }, [isSidebarCollapsed]);
 
-  function handleLogout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_permission');
+  async function handleLogout() {
+    await logoutSession();
     navigate('/');
   }
 
@@ -168,7 +182,7 @@ function Header() {
         </div>
 
         <nav className="scrollbar-ui flex-1 space-y-1 overflow-auto pr-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.to;
             return (
               <Link
@@ -260,7 +274,7 @@ function Header() {
               </span>
               <div>
                 <p className="text-xs text-muted">Usuário</p>
-                <p className="text-sm font-medium text-text">{permission}</p>
+                <p className="text-sm font-medium text-text">{userDisplayName}</p>
               </div>
             </div>
           </div>
@@ -355,7 +369,7 @@ function Header() {
         <ThemeToggleButton className="mb-3 w-full justify-center" />
 
         <nav className="scrollbar-ui space-y-1 overflow-auto pb-3">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.to;
             return (
               <Link

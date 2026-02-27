@@ -21,6 +21,7 @@ import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { logoutSession } from '../utils/logoutSession';
 import ThemeToggleButton from '../components/ui/ThemeToggleButton';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import { useTheme } from '../context/ThemeContext';
@@ -895,10 +896,8 @@ function ControlTowerCollections() {
     setAnalyticsFilters(buildDefaultFilters());
   }
 
-  function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_permission');
-    delete axios.defaults.headers.common.Authorization;
+  async function logout() {
+    await logoutSession();
     navigate('/');
   }
 

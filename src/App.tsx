@@ -9,13 +9,20 @@ import FileUploadPage from './pages/FileUploadPage';
 import Login from './pages/Login';
 import ReturnsOccurrences from './pages/ReturnsOccurrences';
 import ControlTowerCollections from './pages/ControlTowerCollections';
+import UserManagement from './pages/UserManagement';
+import UserSessions from './pages/UserSessions';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
+import {
+  ADMIN_MASTER_PERMISSIONS,
+  CONTROL_TOWER_PERMISSION,
+  TRANSPORT_INTERNAL_PERMISSIONS,
+  USER_ALLOWED_PERMISSIONS,
+  getDefaultRouteByPermission,
+} from './utils/permissions';
 import axios from 'axios';
 // import FreightSummary from './pages/FreightCalculation';
-
-const INTERNAL_PERMISSIONS = ['admin', 'user', 'master', 'expedicao'];
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
   const token = localStorage.getItem('token');
@@ -26,15 +33,7 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
   }
 
   if (!allowedPermissions.includes(permission)) {
-    if (permission === 'control_tower') {
-      return <Navigate to="/control-tower/coletas" replace />;
-    }
-
-    if (INTERNAL_PERMISSIONS.includes(permission)) {
-      return <Navigate to="/home" replace />;
-    }
-
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultRouteByPermission(permission)} replace />;
   }
 
   return children;
@@ -55,16 +54,18 @@ function App() {
         <GlobalAlertHost />
         <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/home" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Home /></ProtectedRoute>} />
-          <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><TodayInvoices /></ProtectedRoute>} />
-          <Route path="/invoices" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Invoices /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Products /></ProtectedRoute>} />
-          <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><RoutePlanning /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><Customers /></ProtectedRoute>} />
-          <Route path="/trips" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><RoutePlanning /></ProtectedRoute>} />
-          <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={INTERNAL_PERMISSIONS}><FileUploadPage /></ProtectedRoute>} />
-          <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...INTERNAL_PERMISSIONS, 'control_tower']}><ReturnsOccurrences /></ProtectedRoute>} />
-          <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={['control_tower', 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
+          <Route path="/home" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><Home /></ProtectedRoute>} />
+          <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><TodayInvoices /></ProtectedRoute>} />
+          <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Invoices /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Products /></ProtectedRoute>} />
+          <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Customers /></ProtectedRoute>} />
+          <Route path="/trips" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
+          <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><FileUploadPage /></ProtectedRoute>} />
+          <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnsOccurrences /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedPermissions={[...ADMIN_MASTER_PERMISSIONS]}><UserManagement /></ProtectedRoute>} />
+          <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={['master']}><UserSessions /></ProtectedRoute>} />
+          <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={[CONTROL_TOWER_PERMISSION, 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
           <Route path="*" element={<Login />} />
         </Routes>
       </RealtimeNotificationsProvider>

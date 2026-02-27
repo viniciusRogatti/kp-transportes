@@ -28,6 +28,7 @@ import axios from 'axios';
 import { API_URL } from '../data';
 import { useNavigate } from 'react-router-dom';
 import verifyToken from '../utils/verifyToken';
+import { getDefaultRouteByPermission } from '../utils/permissions';
 
 const CAPTCHA_REQUIRED_ERROR = 'Conclua a verificação de segurança para continuar.';
 const INVALID_CREDENTIALS_ERROR = 'Usuário ou senha inválidos.';
@@ -62,7 +63,9 @@ function Login() {
   }, []);
 
   const handleEnter = async () => {
-    if (!state.username.trim() || !state.password.trim()) {
+    const normalizedUsername = state.username.trim();
+
+    if (!normalizedUsername || !state.password.trim()) {
       setErrorMessage('Preencha usuário e senha para continuar.');
       return;
     }
@@ -105,7 +108,8 @@ function Login() {
       }
 
       const response = await axios.post(`${API_URL}/login`, {
-        ...state,
+        username: normalizedUsername,
+        password: state.password,
         captchaToken,
         captchaProvider,
         captchaProof: proofToUse,
@@ -113,6 +117,8 @@ function Login() {
       if (response) {
         const token = response.data.token;
         const permission = response.data?.data?.permission;
+        const userName = response.data?.data?.name;
+        const username = response.data?.data?.username;
         const isValidToken = await verifyToken(token);
         if (isValidToken) {
           localStorage.setItem('token', token);
@@ -121,7 +127,18 @@ function Login() {
           } else {
             localStorage.removeItem('user_permission');
           }
-          navigate(permission === 'control_tower' ? '/control-tower/coletas' : '/home');
+          if (userName) {
+            localStorage.setItem('user_name', String(userName));
+          } else {
+            localStorage.removeItem('user_name');
+          }
+          if (username) {
+            localStorage.setItem('user_login', String(username));
+          } else {
+            localStorage.removeItem('user_login');
+          }
+
+          navigate(getDefaultRouteByPermission(permission || ''));
           return;
         }
       }

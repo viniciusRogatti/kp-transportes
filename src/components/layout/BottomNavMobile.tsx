@@ -1,4 +1,4 @@
-import { Building2, Home, NotebookText, Package, Undo2 } from 'lucide-react';
+import { Building2, Home, NotebookText, Package, Search, Undo2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../../lib/cn';
 import { useTheme } from '../../context/ThemeContext';
@@ -12,7 +12,7 @@ type BottomNavItem = {
   isHome?: boolean;
 };
 
-const bottomNavItems: BottomNavItem[] = [
+const defaultBottomNavItems: BottomNavItem[] = [
   {
     key: 'today',
     to: '/todayInvoices',
@@ -51,20 +51,52 @@ const bottomNavItems: BottomNavItem[] = [
   },
 ];
 
-const navPaths = new Set(bottomNavItems.map((item) => item.to));
+const userBottomNavItems: BottomNavItem[] = [
+  {
+    key: 'today',
+    to: '/todayInvoices',
+    label: 'Hoje',
+    ariaLabel: 'Ir para Notas do dia',
+    icon: <NotebookText className="h-[1.1rem] w-[1.1rem]" />,
+  },
+  {
+    key: 'search',
+    to: '/invoices',
+    label: 'Notas',
+    ariaLabel: 'Ir para Pesquisar Notas',
+    icon: <Search className="h-[1.1rem] w-[1.1rem]" />,
+  },
+  {
+    key: 'products',
+    to: '/products',
+    label: 'Produtos',
+    ariaLabel: 'Ir para Produtos',
+    icon: <Package className="h-[1.1rem] w-[1.1rem]" />,
+  },
+  {
+    key: 'customers',
+    to: '/customers',
+    label: 'Clientes',
+    ariaLabel: 'Ir para Clientes',
+    icon: <Building2 className="h-[1.1rem] w-[1.1rem]" />,
+  },
+];
 
 function BottomNavMobile() {
   const navigate = useNavigate();
   const location = useLocation();
-  const permission = localStorage.getItem('user_permission') || '';
+  const permission = String(localStorage.getItem('user_permission') || '').trim().toLowerCase();
   const { isLightTheme } = useTheme();
 
   if (permission === 'control_tower' || location.pathname.startsWith('/control-tower')) {
     return null;
   }
 
+  const bottomNavItems = permission === 'user' ? userBottomNavItems : defaultBottomNavItems;
+  const navPaths = new Set(bottomNavItems.map((item) => item.to));
+  const defaultPath = permission === 'user' ? '/invoices' : '/home';
   const hasActiveItem = navPaths.has(location.pathname);
-  const activePath = hasActiveItem ? location.pathname : '/home';
+  const activePath = hasActiveItem ? location.pathname : defaultPath;
 
   return (
     <nav
@@ -72,7 +104,10 @@ function BottomNavMobile() {
       className="app-shell-bottom-nav fixed inset-x-0 bottom-0 z-[1160] hidden border-t border-border backdrop-blur-xl max-[768px]:block"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
     >
-      <div className="mx-auto grid h-[var(--mobile-bottom-nav-height)] max-w-[720px] grid-cols-5 items-end px-1">
+      <div className={cn(
+        'mx-auto grid h-[var(--mobile-bottom-nav-height)] max-w-[720px] items-end px-1',
+        bottomNavItems.length === 4 ? 'grid-cols-4' : 'grid-cols-5',
+      )}>
         {bottomNavItems.map((item) => {
           const isActive = activePath === item.to;
 

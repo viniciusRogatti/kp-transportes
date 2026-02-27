@@ -21,6 +21,9 @@ import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import ThemeToggleButton from '../components/ui/ThemeToggleButton';
+import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import { useTheme } from '../context/ThemeContext';
 
 const getTodayDateInput = () => new Date().toISOString().slice(0, 10);
 const CONTROL_TOWER_OCCURRENCE_RESOLUTION = 'talao_mercadoria_faltante';
@@ -444,6 +447,8 @@ function buildRegisterCollectionProductRows(danfe: IDanfe | null, existingRows: 
 
 function ControlTowerCollections() {
   const navigate = useNavigate();
+  const { lastReceivedAt } = useRealtimeNotifications();
+  const { isLightTheme } = useTheme();
   const userPermission = String(localStorage.getItem('user_permission') || '').trim().toLowerCase();
   const canManageCollectionRequests = TOWER_COLLECTION_MANAGERS.includes(userPermission);
   const canConfirmTowerBatchReceipt = TOWER_BATCH_RECEIPT_MANAGERS.includes(userPermission);
@@ -497,6 +502,7 @@ function ControlTowerCollections() {
   const occurrenceSectionRef = useRef<HTMLDivElement | null>(null);
   const pendingBatchesSectionRef = useRef<HTMLDivElement | null>(null);
   const occurrenceItemRefs = useRef<Map<number, HTMLLIElement>>(new Map());
+  const lastRealtimeSyncRef = useRef<string | null>(null);
 
   const sortingInput = sorting[0] ? { id: sorting[0].id as any, desc: sorting[0].desc ?? false } : undefined;
   const pagination = useMemo(() => ({ pageIndex, pageSize }), [pageIndex, pageSize]);
@@ -760,6 +766,16 @@ function ControlTowerCollections() {
       window.clearInterval(intervalId);
     };
   }, [loadTowerNotifications]);
+
+  useEffect(() => {
+    if (!lastReceivedAt) return;
+    if (lastRealtimeSyncRef.current === lastReceivedAt) return;
+
+    lastRealtimeSyncRef.current = lastReceivedAt;
+    loadTowerNotifications();
+    loadRecentOccurrences();
+    loadCollectionTracking();
+  }, [lastReceivedAt, loadTowerNotifications, loadRecentOccurrences, loadCollectionTracking]);
 
   useEffect(() => {
     localStorage.setItem(SHOW_FILTERS_STORAGE_KEY, showFilters ? '1' : '0');
@@ -1515,45 +1531,53 @@ function ControlTowerCollections() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#070f1a] px-3 py-3 text-slate-100 lg:px-4">
+    <div className="control-tower-theme min-h-screen bg-bg px-3 py-3 text-text lg:px-4">
       <div className="mx-auto max-w-[1550px] space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Control Tower | KP Transportes + Mar e Rio</h1>
-            <p className="text-sm text-slate-400">Visão ampla de volume, tendência, gargalo e ação imediata.</p>
+            <p className="text-sm text-muted">Visão ampla de volume, tendência, gargalo e ação imediata.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggleButton className="rounded-full" iconOnly />
             <div ref={notificationMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setIsNotificationMenuOpen((current) => !current)}
-                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/80 text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
+                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-text transition hover:border-border hover:bg-surface-2"
                 title="Abrir notificações"
                 aria-label="Abrir notificações"
                 aria-expanded={isNotificationMenuOpen}
               >
                 <Bell className="h-5 w-5" />
                 {pendingSituationsCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full border border-amber-300/70 bg-amber-500 px-1 py-0.5 text-[10px] font-bold leading-none text-slate-950">
+                  <span className={`absolute -right-1 -top-1 min-w-[18px] rounded-full border px-1 py-0.5 text-[10px] font-bold leading-none ${isLightTheme
+                    ? 'border-sky-500/80 bg-sky-600 text-white'
+                    : 'border-amber-300/70 bg-amber-500 text-slate-950'
+                    }`}
+                  >
                     {pendingSituationsCount > 99 ? '99+' : pendingSituationsCount}
                   </span>
                 ) : null}
               </button>
 
               {isNotificationMenuOpen ? (
-                <div className="absolute right-0 top-11 z-50 w-[360px] max-w-[calc(100vw-1.5rem)] rounded-lg border border-slate-700 bg-[#0b1624] shadow-[0_16px_36px_rgba(2,6,23,0.65)]">
-                  <div className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-200">Notificações</span>
+                <div className="absolute right-0 top-11 z-50 w-[360px] max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-surface shadow-[0_16px_36px_rgba(2,6,23,0.65)]">
+                  <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-text">Notificações</span>
                     <button
                       type="button"
                       onClick={markNotificationsAsRead}
-                      className="text-[11px] font-semibold text-sky-300 hover:text-sky-200"
+                      className={`text-[11px] font-semibold ${isLightTheme
+                        ? 'text-sky-700 hover:text-sky-800'
+                        : 'text-sky-300 hover:text-[color:var(--color-text-accent)]'
+                        }`}
                     >
                       Marcar lidas
                     </button>
                   </div>
                   {!towerNotifications.length ? (
-                    <p className="px-3 py-3 text-xs text-slate-400">Sem notificações no momento.</p>
+                    <p className="px-3 py-3 text-xs text-muted">Sem notificações no momento.</p>
                   ) : (
                     <ul className="max-h-[320px] space-y-1 overflow-auto p-2">
                       {towerNotifications.map((notification) => {
@@ -1571,20 +1595,20 @@ function ControlTowerCollections() {
                               type="button"
                               onClick={() => handleNotificationClick(notification)}
                               className={`w-full rounded-md border px-2.5 py-2 text-left transition ${isUnread
-                                ? 'border-sky-500/60 bg-sky-900/20 hover:bg-sky-900/30'
-                                : 'border-slate-700 bg-slate-900/50 hover:bg-slate-900/80'
+                                ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
+                                : 'border-border bg-card hover:bg-card'
                                 }`}
                             >
                               <div className="flex items-center justify-between gap-2 text-[11px]">
-                                <span className="font-semibold text-slate-100">{typeLabel}</span>
+                                <span className="font-semibold text-text">{typeLabel}</span>
                                 {isUnread ? (
-                                  <span className="rounded-full border border-sky-400/60 px-2 py-0.5 font-semibold text-sky-200">
+                                  <span className="rounded-full border border-sky-400/60 px-2 py-0.5 font-semibold text-[color:var(--color-text-accent)]">
                                     Novo
                                   </span>
                                 ) : null}
                               </div>
-                              <div className="mt-1 text-xs font-medium text-slate-100">{notification.title}</div>
-                              <div className="mt-0.5 text-xs text-slate-300">{notification.description}</div>
+                              <div className="mt-1 text-xs font-medium text-text">{notification.title}</div>
+                              <div className="mt-0.5 text-xs text-muted">{notification.description}</div>
                             </button>
                           </li>
                         );
@@ -1594,20 +1618,29 @@ function ControlTowerCollections() {
                 </div>
               ) : null}
             </div>
-            <Button tone="outline" className="border-slate-600 bg-slate-900 text-slate-100" onClick={logout}>Sair</Button>
+            <Button
+              tone="outline"
+              className="border-[#7f1d1d] bg-[#be123c] text-white ring-1 ring-[#fecdd3]/80 shadow-[0_12px_26px_rgba(127,29,29,0.45)] hover:bg-[#9f1239]"
+              onClick={logout}
+            >
+              Sair
+            </Button>
           </div>
         </div>
 
-        <Card className="border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]">
+        <Card className={isLightTheme
+          ? 'border-sky-500/70 bg-gradient-to-br from-[#b9dcff] via-[#d9ecff] to-[#eef6ff] shadow-[0_0_0_1px_rgba(29,78,216,0.22)]'
+          : 'border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]'}
+        >
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-amber-100">Registrar Coleta</h3>
-              <p className="text-xs text-amber-200/80">Selecione NF total ou parcial por itens, com controle de saldo por produto.</p>
+              <h3 className={isLightTheme ? 'text-sm font-semibold text-slate-950' : 'text-sm font-semibold text-[color:var(--color-warning)]'}>Registrar Coleta</h3>
+              <p className={isLightTheme ? 'text-xs text-slate-800' : 'text-xs text-[color:var(--color-warning)]/80'}>Selecione NF total ou parcial por itens, com controle de saldo por produto.</p>
             </div>
           </div>
           <div className="space-y-2">
             <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,190px)_auto]">
-              <label htmlFor="register-pickup-nf" className="text-xs font-medium text-slate-200">
+              <label htmlFor="register-pickup-nf" className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-medium text-text'}>
                 NF para coleta
                 <input
                   id="register-pickup-nf"
@@ -1616,15 +1649,15 @@ function ControlTowerCollections() {
                   inputMode="numeric"
                   maxLength={9}
                   placeholder="Digite a NF"
-                  className="mt-1 h-10 w-full rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
+                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${isLightTheme ? 'border-sky-400/45' : 'border-amber-500/35'}`}
                 />
               </label>
-              <label className="text-xs font-medium text-slate-200">
+              <label className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-medium text-text'}>
                 Escopo
                 <select
                   value={registerScope}
                   onChange={(event) => setRegisterScope(event.target.value as RegisterCollectionScope)}
-                  className="mt-1 h-10 w-full rounded-sm border border-amber-500/35 bg-slate-900 px-3 text-sm text-slate-100"
+                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${isLightTheme ? 'border-sky-400/45' : 'border-amber-500/35'}`}
                 >
                   <option value="invoice_total">NF total</option>
                   <option value="items">Parcial por itens</option>
@@ -1633,7 +1666,9 @@ function ControlTowerCollections() {
               <div className="flex flex-wrap items-end gap-2">
                 <Button
                   tone="outline"
-                  className="h-10 border-amber-500/45 bg-slate-900 text-amber-100 hover:bg-slate-800 disabled:opacity-60"
+                  className={isLightTheme
+                    ? 'h-10 border-sky-500/55 bg-sky-100 text-sky-900 hover:bg-sky-200 disabled:opacity-60'
+                    : 'h-10 border-amber-500/45 bg-card text-[color:var(--color-warning)] hover:bg-surface-2 disabled:opacity-60'}
                   onClick={handleLoadRegisterContext}
                   disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
                 >
@@ -1641,7 +1676,9 @@ function ControlTowerCollections() {
                 </Button>
                 <Button
                   tone="secondary"
-                  className="h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
+                  className={isLightTheme
+                    ? 'h-10 border border-sky-700/75 bg-gradient-to-r from-sky-700 to-blue-700 text-sky-50 shadow-[0_10px_22px_rgba(29,78,216,0.35)] hover:from-sky-600 hover:to-blue-600 disabled:opacity-60'
+                    : 'h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60'}
                   onClick={handleRegisterPickupByNf}
                   disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
                 >
@@ -1649,24 +1686,24 @@ function ControlTowerCollections() {
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-slate-300">
+            <p className={isLightTheme ? 'text-xs text-slate-700' : 'text-xs text-muted'}>
               A coleta parcial respeita o saldo por item da NF (qtd original - total já coletado em status confirmado).
             </p>
 
             {!canManageCollectionRequests ? (
-              <p className="rounded-sm border border-rose-500/50 bg-rose-900/25 px-2 py-1 text-xs text-rose-100">
+              <p className="rounded-sm border border-rose-500/50 bg-rose-100 px-2 py-1 text-xs text-[color:var(--color-danger)]">
                 Seu perfil não possui permissão para registrar/cancelar coleta manual.
               </p>
             ) : null}
 
             {registerDanfe ? (
-              <div className="rounded-sm border border-amber-500/35 bg-slate-900/55 px-3 py-2 text-xs text-slate-200">
+              <div className={`rounded-sm border bg-card px-3 py-2 text-xs ${isLightTheme ? 'border-sky-500/45 text-slate-900' : 'border-amber-500/35 text-text'}`}>
                 <div>
                   <strong>{`NF ${registerDanfe.invoice_number || registerNf}`}</strong>
                   {` | Cliente: ${registerDanfe.Customer?.name_or_legal_entity || '-'}`}
                   {` | Cidade: ${registerDanfe.Customer?.city || '-'}`}
                 </div>
-                <div className="mt-1 text-slate-300">
+                <div className={`mt-1 ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
                   {`Coletas ativas na NF: ${registerActiveRows.length}`}
                   {registerHasActiveInvoiceTotal ? ' | Existe coleta NF total ativa' : ''}
                   {registerHasActiveItems ? ' | Existe coleta parcial ativa' : ''}
@@ -1675,37 +1712,39 @@ function ControlTowerCollections() {
             ) : null}
 
             {registerScope === 'items' && registerDanfe ? (
-              <div className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2">
+              <div className={`rounded-sm border bg-card px-3 py-2 ${isLightTheme ? 'border-sky-500/45' : 'border-border'}`}>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-slate-100">Itens da NF para coleta parcial</p>
+                  <p className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-text'}>Itens da NF para coleta parcial</p>
                   <button
                     type="button"
                     onClick={clearRegisterPartialQuantities}
-                    className="rounded-md border border-slate-600 bg-slate-800/70 px-2 py-0.5 text-[11px] font-semibold text-slate-200 transition hover:bg-slate-700"
+                    className={isLightTheme
+                      ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900 transition hover:bg-sky-200'
+                      : 'rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text transition hover:bg-surface-2'}
                   >
                     Limpar quantidades
                   </button>
                 </div>
 
                 {!registerProductRows.length ? (
-                  <p className="text-xs text-slate-300">Nenhum item da NF disponível para coleta parcial.</p>
+                  <p className="text-xs text-muted">Nenhum item da NF disponível para coleta parcial.</p>
                 ) : (
                   <ul className="max-h-[260px] space-y-2 overflow-auto pr-1">
                     {registerProductRows.map((productRow) => (
-                      <li key={`register-product-${productRow.key}`} className="rounded-sm border border-slate-700 bg-slate-900/70 px-2 py-2 text-xs">
+                      <li key={`register-product-${productRow.key}`} className={`rounded-sm border bg-card px-2 py-2 text-xs ${isLightTheme ? 'border-sky-500/35' : 'border-border'}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="truncate font-semibold text-slate-100">
+                            <div className={`truncate font-semibold ${isLightTheme ? 'text-slate-900' : 'text-text'}`}>
                               {`${productRow.productId} - ${productRow.productDescription}`}
                             </div>
-                            <div className="text-[11px] text-slate-300">
+                            <div className={`text-[11px] ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
                               {`Tipo: ${productRow.productType || 'N/A'}`}
                               {` | Original: ${formatCollectionQuantity(productRow.quantityOriginal)}`}
                               {` | Coletado: ${formatCollectionQuantity(productRow.totalCollected)}`}
                               {` | Restante: ${formatCollectionQuantity(productRow.remainingCollectable)}`}
                             </div>
                           </div>
-                          <label className="text-[11px] text-slate-300">
+                          <label className={`text-[11px] ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
                             Qtd a coletar
                             <input
                               value={registerPartialQuantities[productRow.key] || ''}
@@ -1715,7 +1754,7 @@ function ControlTowerCollections() {
                               min={productRow.isKg ? '0.001' : '1'}
                               placeholder="0"
                               disabled={productRow.remainingCollectable <= 0 || registerHasActiveInvoiceTotal}
-                              className="mt-1 h-8 w-[110px] rounded-sm border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className={`mt-1 h-8 w-[110px] rounded-sm border bg-card px-2 text-xs text-text disabled:cursor-not-allowed disabled:opacity-50 ${isLightTheme ? 'border-sky-500/40' : 'border-border'}`}
                             />
                           </label>
                         </div>
@@ -1725,7 +1764,7 @@ function ControlTowerCollections() {
                 )}
 
                 {registerHasActiveInvoiceTotal ? (
-                  <p className="mt-2 rounded-sm border border-rose-500/40 bg-rose-900/20 px-2 py-1 text-xs text-rose-200">
+                  <p className="mt-2 rounded-sm border border-rose-500/40 bg-rose-100 px-2 py-1 text-xs text-[color:var(--color-danger)]">
                     Existe uma coleta NF total ativa. Para registrar parcial, cancele/conclua a coleta total primeiro.
                   </p>
                 ) : null}
@@ -1735,15 +1774,15 @@ function ControlTowerCollections() {
         </Card>
 
         <div ref={collectionTrackingSectionRef}>
-          <Card className="border-slate-700 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">Fila de ação e acompanhamento de coletas</h3>
-                <p className="text-xs text-slate-400">Tela única para acompanhar, priorizar e tratar cancelamentos das coletas.</p>
+                <h3 className="text-sm font-semibold text-text">Fila de ação e acompanhamento de coletas</h3>
+                <p className="text-xs text-muted">Tela única para acompanhar, priorizar e tratar cancelamentos das coletas.</p>
               </div>
               <Button
                 tone="outline"
-                className="h-8 border-slate-600 bg-slate-900 text-[11px] text-slate-100 hover:bg-slate-800"
+                className="h-8 border-border bg-card text-[11px] text-text hover:bg-surface-2"
                 onClick={loadCollectionTracking}
                 disabled={collectionTrackingLoading}
               >
@@ -1752,7 +1791,7 @@ function ControlTowerCollections() {
             </div>
 
             <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,220px)_minmax(0,220px)_1fr]">
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-muted">
                 NF
                 <input
                   value={collectionTrackingNf}
@@ -1760,16 +1799,16 @@ function ControlTowerCollections() {
                   inputMode="numeric"
                   maxLength={9}
                   placeholder="Buscar por NF"
-                  className="mt-1 h-9 w-full rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
+                  className="mt-1 h-9 w-full rounded-sm border border-border bg-card px-2 text-xs text-text"
                 />
               </label>
 
-              <label className="text-xs text-slate-300">
+              <label className="text-xs text-muted">
                 Status
                 <select
                   value={collectionTrackingStatus}
                   onChange={(event) => setCollectionTrackingStatus(event.target.value as CollectionTrackingStatus)}
-                  className="mt-1 h-9 w-full rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs text-slate-100"
+                  className="mt-1 h-9 w-full rounded-sm border border-border bg-card px-2 text-xs text-text"
                 >
                   {COLLECTION_TRACKING_STATUS_OPTIONS.map((option) => (
                     <option key={`tracking-status-${option.value}`} value={option.value}>{option.label}</option>
@@ -1777,18 +1816,18 @@ function ControlTowerCollections() {
                 </select>
               </label>
 
-              <label className="flex items-end gap-2 text-xs text-slate-300">
+              <label className="flex items-end gap-2 text-xs text-muted">
                 <input
                   type="checkbox"
                   checked={collectionTrackingOnlyWithNotes}
                   onChange={(event) => setCollectionTrackingOnlyWithNotes(event.target.checked)}
-                  className="h-4 w-4 rounded border border-slate-600 bg-slate-900"
+                  className="h-4 w-4 rounded border border-border bg-card"
                 />
                 Somente com ocorrência
               </label>
 
               <div className="flex items-end">
-                <p className="text-xs text-slate-300">
+                <p className="text-xs text-muted">
                   {collectionTrackingLoading
                     ? 'Carregando coletas...'
                     : `${filteredCollectionTrackingRows.length} coleta(s) encontrada(s).`}
@@ -1803,7 +1842,7 @@ function ControlTowerCollections() {
             ) : null}
 
             {!collectionTrackingLoading && !collectionTrackingError && !filteredCollectionTrackingRows.length ? (
-              <p className="mt-2 text-xs text-slate-400">
+              <p className="mt-2 text-xs text-muted">
                 {collectionTrackingOnlyWithNotes
                   ? 'Nenhuma coleta com ocorrência encontrada para os filtros informados.'
                   : 'Nenhuma coleta encontrada para os filtros informados.'}
@@ -1833,7 +1872,7 @@ function ControlTowerCollections() {
                     : 'Parcial (itens)';
 
                   return (
-                    <li key={`tracking-collection-${request.id}`} className="rounded-sm border border-slate-700 bg-slate-900/55 px-3 py-2 text-xs text-slate-200">
+                    <li key={`tracking-collection-${request.id}`} className="rounded-sm border border-border bg-card px-3 py-2 text-xs text-text">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <strong>{`#${request.id}`}</strong>
@@ -1842,13 +1881,13 @@ function ControlTowerCollections() {
                           {` | ${request.city || '-'}`}
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
-                          <span className="rounded-md border border-sky-500/40 bg-sky-900/25 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                          <span className="rounded-md border border-sky-500/40 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-text-accent)]">
                             {formatCollectionWorkflowStatus(request)}
                           </span>
                           <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
                             requestIsPriority
-                              ? 'border-rose-400/70 bg-rose-700/25 text-rose-100'
-                              : 'border-emerald-400/55 bg-emerald-700/20 text-emerald-100'
+                              ? 'border-rose-400/70 bg-rose-700/25 text-[color:var(--color-danger)]'
+                              : 'border-emerald-400/55 bg-emerald-100 text-[color:var(--color-success)]'
                           }`}
                           >
                             {requestIsPriority ? 'Prioridade alta' : 'Prioridade média'}
@@ -1858,8 +1897,8 @@ function ControlTowerCollections() {
                             onClick={() => setCollectionOccurrenceDialog(request)}
                             className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
                               hasNotes
-                                ? 'border-amber-400/60 bg-amber-700/25 text-amber-100 hover:bg-amber-700/35'
-                                : 'border-slate-600 bg-slate-800/70 text-slate-200 hover:bg-slate-700/80'
+                                ? 'border-amber-400/60 bg-amber-700/25 text-[color:var(--color-warning)] hover:bg-amber-700/35'
+                                : 'border-border bg-surface-2 text-text hover:bg-surface-2'
                             }`}
                           >
                             {occurrenceLabel}
@@ -1867,38 +1906,40 @@ function ControlTowerCollections() {
                         </div>
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-300">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                         <span>
                           {`Produto: ${request.product_id ? `${request.product_id} - ` : ''}${request.product_description || '-'}`}
                           {` | Qtd: ${quantityWithType}`}
                           {` | Escopo: ${scopeLabel}`}
                         </span>
                         {request.scheduled_for ? (
-                          <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-emerald-100">
+                          <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-[color:var(--color-success)]">
                             {`Agendada para ${formatDateBR(request.scheduled_for)}`}
                           </span>
                         ) : null}
                         {request.sent_in_batch_code ? (
-                          <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-200">
+                          <span className="rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text">
                             {`Lote: ${request.sent_in_batch_code}`}
                           </span>
                         ) : null}
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
                         <span>{`Criada: ${formatDateTimeLabel(request.created_at)}`}</span>
                         <span>{`Atualizada: ${formatDateTimeLabel(request.updated_at)}`}</span>
                         {request.invoice_number && canOpenFlow ? (
                           <button
                             type="button"
                             onClick={() => handleOpenCollectionInvoice(request.invoice_number)}
-                            className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-amber-100 transition hover:bg-amber-900/35"
+                            className={isLightTheme
+                              ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 font-semibold text-sky-900 transition hover:bg-sky-200'
+                              : 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35'}
                           >
                             Abrir NF no fluxo
                           </button>
                         ) : null}
                         {request.invoice_number && !canOpenFlow ? (
-                          <span className="rounded-md border border-slate-600 bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+                          <span className="rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">
                             Vai para o fluxo após envio em lote
                           </span>
                         ) : null}
@@ -1910,7 +1951,7 @@ function ControlTowerCollections() {
                             className={`inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-bold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60 ${
                               requestIsPriority
                                 ? 'border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] hover:from-rose-600 hover:to-rose-500'
-                                : 'border-slate-500/70 bg-slate-800/90 text-slate-100 hover:bg-slate-700'
+                                : 'border-border bg-surface-2 text-text hover:bg-surface-2'
                             }`}
                           >
                             {prioritizingCollectionId === String(request.id)
@@ -1946,7 +1987,7 @@ function ControlTowerCollections() {
             ) : null}
 
             {!collectionTrackingLoading && !collectionTrackingError && filteredCollectionTrackingRows.length > visibleCollectionTrackingRows.length ? (
-              <p className="mt-2 text-[11px] text-slate-400">
+              <p className="mt-2 text-[11px] text-muted">
                 {`Mostrando 80 de ${filteredCollectionTrackingRows.length} coleta(s). Refine por NF/status para reduzir a lista.`}
               </p>
             ) : null}
@@ -1954,13 +1995,13 @@ function ControlTowerCollections() {
         </div>
 
         <div ref={occurrenceSectionRef}>
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-100">Ocorrências com talão (pendentes de crédito)</h3>
-              <span className="text-xs text-slate-400">Pendências até confirmação do crédito</span>
+              <h3 className="text-sm font-semibold text-text">Ocorrências com talão (pendentes de crédito)</h3>
+              <span className="text-xs text-muted">Pendências até confirmação do crédito</span>
             </div>
             {!recentOccurrences.length ? (
-              <p className="text-xs text-slate-400">Nenhuma ocorrência com talão pendente de crédito.</p>
+              <p className="text-xs text-muted">Nenhuma ocorrência com talão pendente de crédito.</p>
             ) : (
               <ul className="space-y-2">
                 {recentOccurrences.map((occurrence) => (
@@ -1970,9 +2011,9 @@ function ControlTowerCollections() {
                       if (element) occurrenceItemRefs.current.set(occurrence.id, element);
                       else occurrenceItemRefs.current.delete(occurrence.id);
                     }}
-                    className={`rounded-sm border px-3 py-2 text-xs text-slate-200 transition ${highlightedOccurrenceId === occurrence.id
-                      ? 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40'
-                      : 'border-slate-700 bg-slate-900/50'
+                    className={`rounded-sm border px-3 py-2 text-xs text-text transition ${highlightedOccurrenceId === occurrence.id
+                      ? (isLightTheme ? 'border-sky-500/60 bg-sky-100 ring-1 ring-sky-300/45' : 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40')
+                      : 'border-border bg-card'
                       }`}
                   >
                     <div>
@@ -1982,8 +2023,8 @@ function ControlTowerCollections() {
                       {' | Status Torre: pendente de crédito'}
                     </div>
                     {occurrence.scope === 'items' && !!occurrence.items?.length ? (
-                      <div className="mt-1 space-y-1 text-slate-300">
-                        <div className="font-medium text-slate-200">Itens:</div>
+                      <div className="mt-1 space-y-1 text-muted">
+                        <div className="font-medium text-text">Itens:</div>
                         {occurrence.items.map((item, index) => {
                           const itemCode = String(item.product_id || '').trim();
                           const itemDescription = String(item.product_description || '').trim();
@@ -2000,10 +2041,10 @@ function ControlTowerCollections() {
                         })}
                       </div>
                     ) : (
-                      <div className="mt-1 text-slate-300">Itens: NF total</div>
+                      <div className="mt-1 text-muted">Itens: NF total</div>
                     )}
                     {occurrence.resolution_type === CONTROL_TOWER_OCCURRENCE_RESOLUTION ? (
-                      <div className="mt-1 text-slate-300">
+                      <div className="mt-1 text-muted">
                         Resolução: Transportadora identificou a falta e solicita o crédito do valor para o cliente.
                         {occurrence.resolution_note ? ` | ${occurrence.resolution_note}` : ''}
                       </div>
@@ -2013,7 +2054,7 @@ function ControlTowerCollections() {
                         <button
                           type="button"
                           onClick={() => handleFinalizeOccurrenceCredit(occurrence.id)}
-                          className="rounded-md border border-emerald-500/60 bg-emerald-700/25 px-3 py-1 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-700/40"
+                          className="rounded-md border border-emerald-500/60 bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-[color:var(--color-success)] transition hover:bg-emerald-100"
                         >
                           Confirmar crédito para o cliente
                         </button>
@@ -2027,20 +2068,20 @@ function ControlTowerCollections() {
         </div>
 
         <div ref={pendingBatchesSectionRef}>
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-100">Lotes de devolução pendentes de aprovação</h3>
-              <span className="text-xs text-slate-400">{pendingBatches.length} pendente(s)</span>
+              <h3 className="text-sm font-semibold text-text">Lotes de devolução pendentes de aprovação</h3>
+              <span className="text-xs text-muted">{pendingBatches.length} pendente(s)</span>
             </div>
-            <p className="mb-2 text-xs text-slate-400">
+            <p className="mb-2 text-xs text-muted">
               Abra a NF do lote para registrar ocorrência, se necessário. Depois disso, confirme o recebimento do lote.
             </p>
             {!pendingBatches.length ? (
-              <p className="text-xs text-slate-400">Nenhum lote aguardando recebimento pela Torre de Controle.</p>
+              <p className="text-xs text-muted">Nenhum lote aguardando recebimento pela Torre de Controle.</p>
             ) : (
               <ul className="space-y-2">
                 {pendingBatches.map((batch) => (
-                  <li key={`pending-batch-${batch.batch_code}`} className="rounded-sm border border-slate-700 bg-slate-900/50 px-3 py-2 text-xs text-slate-200">
+                  <li key={`pending-batch-${batch.batch_code}`} className="rounded-sm border border-border bg-card px-3 py-2 text-xs text-text">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <strong>{batch.batch_code}</strong>
@@ -2064,13 +2105,15 @@ function ControlTowerCollections() {
                           key={`pending-batch-note-${batch.batch_code}-${note.id}`}
                           type="button"
                           onClick={() => handleOpenBatchInvoice(batch, note.invoice_number)}
-                          className="rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-1 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-900/35"
+                          className={isLightTheme
+                            ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-900 transition hover:bg-sky-200'
+                            : 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-1 text-[11px] font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35'}
                         >
                           {`Abrir NF ${note.invoice_number}`}
                         </button>
                       ))}
                       {(batch.notes?.length || 0) > 10 ? (
-                        <span className="self-center text-[11px] text-slate-400">
+                        <span className="self-center text-[11px] text-muted">
                           {`+${(batch.notes?.length || 0) - 10} NF(s)`}
                         </span>
                       ) : null}
@@ -2100,22 +2143,22 @@ function ControlTowerCollections() {
           />
         </div>
 
-        <section className="group rounded-lg border border-slate-800 bg-[#0b1624]/60">
+        <section className="group rounded-lg border border-border bg-surface/60">
           <button
             type="button"
             onClick={() => setShowFilters((current) => !current)}
             className="flex w-full items-center justify-between px-3 py-2 text-left"
           >
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Filtros analíticos (KPIs e gráficos)</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">Filtros analíticos (KPIs e gráficos)</span>
             <span
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showFilters ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted transition ${showFilters ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                 }`}
             >
               {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </span>
           </button>
           {showFilters ? (
-            <div className="border-t border-slate-800 p-2">
+            <div className="border-t border-border p-2">
               <FiltersBar
                 filters={analyticsFilters}
                 options={options}
@@ -2129,34 +2172,34 @@ function ControlTowerCollections() {
           ) : null}
         </section>
 
-        <section className="group rounded-lg border border-slate-800 bg-[#101b2b]/60">
+        <section className="group rounded-lg border border-border bg-card/60">
           <button
             type="button"
             onClick={() => setShowKpis((current) => !current)}
             className="flex w-full items-center justify-between px-3 py-2 text-left"
           >
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-300">Indicadores (KPIs)</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">Indicadores (KPIs)</span>
             <span
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-900/75 text-slate-300 transition ${showKpis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted transition ${showKpis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                 }`}
             >
               {showKpis ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </span>
           </button>
           {showKpis ? (
-            <div className="border-t border-slate-800 p-3">
+            <div className="border-t border-border p-3">
               <KpiCards summary={summary.data} />
             </div>
           ) : null}
         </section>
 
         <div className="grid gap-3 xl:grid-cols-3">
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <div className="mb-2 flex items-center justify-end">
               <select
                 value={topMetric}
                 onChange={(event) => setTopMetric(event.target.value as TopMetric)}
-                className="h-8 rounded-sm border border-slate-700 bg-slate-900 px-2 text-xs"
+                className="h-8 rounded-sm border border-border bg-card px-2 text-xs"
               >
                 <option value="quantity">Quantidade</option>
                 <option value="weightKg">Peso (kg)</option>
@@ -2173,7 +2216,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <TopHorizontalChart
               title="Top clientes que devolvem"
               subtitle={periodSubtitle}
@@ -2184,7 +2227,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <ReasonsDonutChart
               data={charts.data}
               subtitle={periodSubtitle}
@@ -2194,7 +2237,7 @@ function ControlTowerCollections() {
         </div>
 
         <div className="grid gap-3 xl:grid-cols-2">
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <TopHorizontalChart
               title="Produtos com mais sobras"
               subtitle={periodSubtitle}
@@ -2205,7 +2248,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-slate-800 bg-[#101b2b]">
+          <Card className="border-border bg-card">
             <TopHorizontalChart
               title="Produtos com mais faltas (talão)"
               subtitle={periodSubtitle}
@@ -2222,35 +2265,35 @@ function ControlTowerCollections() {
             <button
               type="button"
               aria-label="Fechar confirmação de cancelamento"
-              className="absolute inset-0 bg-slate-950/75"
+              className="absolute inset-0 bg-black/65"
               onClick={closeCollectionCancellationDialog}
             />
-            <div className="relative z-[81] w-full max-w-[580px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+            <div className="relative z-[81] w-full max-w-[580px] rounded-lg border border-border bg-card p-4 text-text shadow-2xl">
               <h3 className="text-base font-semibold">
                 {collectionCancellationDialog.mode === 'direct_cancel'
                   ? 'Confirmar cancelamento da coleta'
                   : 'Solicitar cancelamento da coleta'}
               </h3>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-muted">
                 {`Coleta #${collectionCancellationDialog.request.id} | NF ${collectionCancellationDialog.request.invoice_number || '-'}`}
               </p>
-              <p className="mt-0.5 text-sm text-slate-300">
+              <p className="mt-0.5 text-sm text-muted">
                 {`Cliente: ${collectionCancellationDialog.request.customer_name || '-'} | Cidade: ${collectionCancellationDialog.request.city || '-'}`}
               </p>
 
               {collectionCancellationDialog.mode === 'request_cancellation' ? (
-                <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-amber-200">
+                <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-[color:var(--color-warning)]">
                   Motivo da solicitação (obrigatório)
                   <textarea
                     value={collectionCancellationReason}
                     onChange={(event) => setCollectionCancellationReason(event.target.value)}
                     placeholder="Ex.: Cliente solicitou reagendamento para outra transportadora."
-                    className="mt-1 min-h-[92px] w-full rounded-md border border-amber-500/45 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    className="mt-1 min-h-[92px] w-full rounded-md border border-amber-500/45 bg-card px-3 py-2 text-sm text-text"
                     disabled={Boolean(cancellingCollectionInvoice)}
                   />
                 </label>
               ) : (
-                <p className="mt-3 rounded-md border border-rose-500/45 bg-rose-900/20 px-3 py-2 text-xs font-semibold text-rose-100">
+                <p className="mt-3 rounded-md border border-rose-500/45 bg-rose-100 px-3 py-2 text-xs font-semibold text-[color:var(--color-danger)]">
                   Esta ação cancela a coleta e estorna a contagem de saldo da NF.
                 </p>
               )}
@@ -2258,7 +2301,7 @@ function ControlTowerCollections() {
               <div className="mt-4 flex justify-end gap-2">
                 <Button
                   tone="secondary"
-                  className="h-9 bg-slate-800 text-slate-100"
+                  className="h-9 bg-surface-2 text-text"
                   onClick={closeCollectionCancellationDialog}
                   disabled={Boolean(cancellingCollectionInvoice)}
                 >
@@ -2287,42 +2330,42 @@ function ControlTowerCollections() {
             <button
               type="button"
               aria-label="Fechar detalhes de ocorrência da coleta"
-              className="absolute inset-0 bg-slate-950/75"
+              className="absolute inset-0 bg-black/65"
               onClick={() => setCollectionOccurrenceDialog(null)}
             />
-            <div className="relative z-[81] w-full max-w-[640px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+            <div className="relative z-[81] w-full max-w-[640px] rounded-lg border border-border bg-card p-4 text-text shadow-2xl">
               <h3 className="text-base font-semibold">Detalhes da ocorrência da coleta</h3>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-muted">
                 {`Coleta #${collectionOccurrenceDialog.id} | NF ${collectionOccurrenceDialog.invoice_number || '-'}`}
               </p>
-              <p className="mt-0.5 text-sm text-slate-300">
+              <p className="mt-0.5 text-sm text-muted">
                 {`Cliente: ${collectionOccurrenceDialog.customer_name || '-'} | Cidade: ${collectionOccurrenceDialog.city || '-'}`}
               </p>
-              <p className="mt-0.5 text-sm text-slate-300">
+              <p className="mt-0.5 text-sm text-muted">
                 {`Status da coleta: ${formatCollectionWorkflowStatus(collectionOccurrenceDialog)}`}
                 {` | Qualidade: ${formatCollectionQualityStatus(collectionOccurrenceDialog)}`}
               </p>
 
               {collectionOccurrenceHasNotes ? (
-                <div className="mt-3 rounded-md border border-amber-500/45 bg-amber-900/20 px-3 py-2 text-xs text-amber-100">
+                <div className="mt-3 rounded-md border border-amber-500/45 bg-amber-100 px-3 py-2 text-xs text-[color:var(--color-warning)]">
                   <p className="font-semibold">
                     {collectionOccurrenceNotes.length === 1
                       ? '1 observação registrada'
                       : `${collectionOccurrenceNotes.length} observações registradas`}
                   </p>
-                  <p className="mt-1 text-amber-200/90">
+                  <p className="mt-1 text-[color:var(--color-warning)]/90">
                     {collectionOccurrenceLatestNote
                       ? `Última: ${collectionOccurrenceLatestNote.timestampLabel ? `${collectionOccurrenceLatestNote.timestampLabel} | ` : ''}${collectionOccurrenceLatestNote.actor ? `${collectionOccurrenceLatestNote.actor}: ` : ''}${collectionOccurrenceLatestNote.message || collectionOccurrenceLatestNote.rawLine}`
                       : 'Última: -'}
                   </p>
-                  <ul className="mt-2 max-h-[220px] space-y-1.5 overflow-auto rounded border border-amber-400/35 bg-slate-950/60 p-2">
+                  <ul className="mt-2 max-h-[220px] space-y-1.5 overflow-auto rounded border border-amber-400/35 bg-card p-2">
                     {collectionOccurrenceNotes.map((note, index) => (
-                      <li key={`collection-note-${collectionOccurrenceDialog.id}-${index}`} className="rounded border border-amber-500/20 bg-slate-900/55 px-2 py-1">
-                        <p className="text-[10px] font-semibold text-amber-200/95">
+                      <li key={`collection-note-${collectionOccurrenceDialog.id}-${index}`} className="rounded border border-amber-500/20 bg-card px-2 py-1">
+                        <p className="text-[10px] font-semibold text-[color:var(--color-warning)]/95">
                           {note.timestampLabel ? `${note.timestampLabel} | ` : ''}
                           {note.actor || 'usuario'}
                         </p>
-                        <p className="mt-0.5 text-[11px] leading-relaxed text-amber-100/95">
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-[color:var(--color-warning)]/95">
                           {note.message || note.rawLine}
                         </p>
                       </li>
@@ -2330,7 +2373,7 @@ function ControlTowerCollections() {
                   </ul>
                 </div>
               ) : (
-                <p className="mt-3 rounded-md border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
+                <p className="mt-3 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted">
                   Sem observações registradas para esta coleta até o momento.
                 </p>
               )}
@@ -2338,7 +2381,7 @@ function ControlTowerCollections() {
               <div className="mt-4 flex justify-end">
                 <Button
                   tone="secondary"
-                  className="h-9 bg-slate-800 text-slate-100"
+                  className="h-9 bg-surface-2 text-text"
                   onClick={() => setCollectionOccurrenceDialog(null)}
                 >
                   Fechar
@@ -2353,21 +2396,21 @@ function ControlTowerCollections() {
             <button
               type="button"
               aria-label="Fechar confirmação de recebimento"
-              className="absolute inset-0 bg-slate-950/75"
+              className="absolute inset-0 bg-black/65"
               onClick={closeReceiptConfirmModal}
             />
-            <div className="relative z-[81] w-full max-w-[560px] rounded-lg border border-slate-700 bg-[#101b2b] p-4 text-slate-100 shadow-2xl">
+            <div className="relative z-[81] w-full max-w-[560px] rounded-lg border border-border bg-card p-4 text-text shadow-2xl">
               <h3 className="text-base font-semibold">Confirmar recebimento do lote</h3>
-              <p className="mt-2 text-sm text-slate-300">
+              <p className="mt-2 text-sm text-muted">
                 {`Confirma o recebimento do lote ${receiptConfirmBatchCode}?`}
               </p>
-              <p className="mt-2 rounded-md border border-amber-500/45 bg-amber-900/20 px-3 py-2 text-xs font-medium text-amber-200">
+              <p className="mt-2 rounded-md border border-amber-500/45 bg-amber-100 px-3 py-2 text-xs font-medium text-[color:var(--color-warning)]">
                 Se houver divergência em alguma NF, registre a ocorrência antes de confirmar.
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <Button
                   tone="secondary"
-                  className="h-9 bg-slate-800 text-slate-100"
+                  className="h-9 bg-surface-2 text-text"
                   onClick={closeReceiptConfirmModal}
                   disabled={Boolean(receivingBatchCode)}
                 >

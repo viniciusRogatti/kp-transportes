@@ -34,7 +34,7 @@ function Sparkline({ values }: { values: number[] }) {
 
 function KpiCards({ summary }: { summary?: DashboardSummary | null }) {
   if (!summary) {
-    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Card key={index} className="h-[150px] animate-pulse border-slate-800 bg-slate-900/70" />)}</div>;
+    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Card key={index} className="h-[150px] animate-pulse border-border bg-card" />)}</div>;
   }
 
   return (
@@ -42,10 +42,10 @@ function KpiCards({ summary }: { summary?: DashboardSummary | null }) {
       {summary.metrics.map((metric) => {
         const isNegative = metric.variationPct < 0;
         return (
-          <Card key={metric.id} className="border-slate-800 bg-[#101b2b] text-slate-100">
+          <Card key={metric.id} className="border-border bg-card text-text">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">{metric.label}</p>
+                <p className="text-xs uppercase tracking-wide text-muted">{metric.label}</p>
                 <div className="mt-1 flex items-end gap-2">
                   <strong className="text-3xl font-semibold">{numberFmt.format(metric.value)}{metricSuffix(metric)}</strong>
                   <span className={`text-sm font-semibold ${isNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -55,13 +55,13 @@ function KpiCards({ summary }: { summary?: DashboardSummary | null }) {
               </div>
               <button
                 type="button"
-                className="group relative inline-flex items-center text-slate-400 focus:outline-none focus-visible:text-slate-200"
+                className="group relative inline-flex items-center text-muted focus:outline-none focus-visible:text-text"
                 aria-label={`Ajuda sobre ${metric.label}`}
               >
                 <CircleHelp className="h-4 w-4" />
                 <span
                   role="tooltip"
-                  className="pointer-events-none absolute right-0 top-6 z-20 w-64 rounded-md border border-slate-700 bg-slate-950/95 p-2 text-left text-[11px] leading-relaxed text-slate-200 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 group-focus-visible:opacity-100"
+                  className="pointer-events-none absolute right-0 top-6 z-20 w-64 rounded-md border border-border bg-card p-2 text-left text-[11px] leading-relaxed text-text opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus:opacity-100 group-focus-visible:opacity-100"
                 >
                   {metric.helpText}
                 </span>

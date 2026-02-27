@@ -89,7 +89,7 @@ function ReturnsTable({
       cell: ({ row }) => (
         row.original.flowOrigin === 'devolucao'
           ? <button className="text-left text-sky-300 underline" onClick={() => onOpenDetails(row.original.id)}>{row.original.invoiceNumber}</button>
-          : <span className="text-amber-200">{row.original.invoiceNumber}</span>
+          : <span className="text-[color:var(--color-warning)]">{row.original.invoiceNumber}</span>
       ),
     },
     { accessorKey: 'batchCode', header: 'Lote / Origem' },
@@ -100,7 +100,7 @@ function ReturnsTable({
         <span className="inline-flex items-center gap-1.5">
           <span>{getReturnTypeLabel(row.original.returnType)}</span>
           {row.original.returnType === 'sobra' && row.original.isInversion ? (
-            <span className="rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+            <span className="rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-warning)]">
               Inversao
             </span>
           ) : null}
@@ -128,7 +128,7 @@ function ReturnsTable({
   const canNext = (pageIndex + 1) * pageSize < total;
 
   return (
-    <Card className="border-slate-800 bg-[#101b2b] text-slate-100">
+    <Card className="border-border bg-card text-text">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-semibold">Fluxo operacional (devoluções e ocorrências)</h3>
         <div className="flex flex-wrap items-center gap-2">
@@ -136,9 +136,9 @@ function ReturnsTable({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Buscar por NF, lote, cliente, cidade ou produto"
-            className="h-9 w-[320px] border-accent/35 bg-[rgba(14,33,56,0.9)] text-slate-100 focus:ring-accent/60"
+            className="h-9 w-[320px] border-accent/35 bg-surface-2/85 text-text focus:ring-accent/60"
           />
-          <span className="text-xs text-slate-400">{total} registros</span>
+          <span className="text-xs text-muted">{total} registros</span>
         </div>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
@@ -149,23 +149,23 @@ function ReturnsTable({
             onClick={() => onFilterByReturnType(tab.value)}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               returnTypeFilter === tab.value
-                ? 'border-sky-600 bg-sky-900/35 text-sky-100'
-                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+                ? 'border-sky-600 bg-sky-100 text-[color:var(--color-text-accent)]'
+                : 'border-border bg-card text-muted hover:border-border'
             }`}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      {loading ? <p className="mb-2 text-sm text-slate-400">Atualizando tabela...</p> : null}
+      {loading ? <p className="mb-2 text-sm text-muted">Atualizando tabela...</p> : null}
 
-      <div className="max-h-[360px] overflow-auto rounded-md border border-slate-700">
+      <div className="max-h-[360px] overflow-auto rounded-md border border-border">
         <table className="w-full min-w-[1060px] text-sm">
-          <thead className="bg-slate-900/80">
+          <thead className="bg-card">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  <th key={header.id} className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     {header.isPlaceholder ? null : (
                       <button
                         type="button"
@@ -173,7 +173,7 @@ function ReturnsTable({
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <ArrowDownUp className="h-3 w-3 text-slate-500" />
+                        <ArrowDownUp className="h-3 w-3 text-muted" />
                       </button>
                     )}
                   </th>
@@ -183,9 +183,9 @@ function ReturnsTable({
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-t border-slate-800/80 hover:bg-slate-900/70">
+              <tr key={row.id} className="border-t border-border hover:bg-card">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-2 py-1.5 text-slate-200">
+                  <td key={cell.id} className="px-2 py-1.5 text-text">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -193,7 +193,7 @@ function ReturnsTable({
             ))}
             {!rows.length ? (
               <tr>
-                <td className="px-2 py-6 text-center text-slate-400" colSpan={columns.length}>Nenhum registro com os filtros atuais.</td>
+                <td className="px-2 py-6 text-center text-muted" colSpan={columns.length}>Nenhum registro com os filtros atuais.</td>
               </tr>
             ) : null}
           </tbody>
@@ -201,9 +201,9 @@ function ReturnsTable({
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-        <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={() => onPaginationChange(pageIndex - 1)} disabled={!canPrev}>Anterior</Button>
-        <span className="text-slate-300">Página {pageIndex + 1}</span>
-        <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={() => onPaginationChange(pageIndex + 1)} disabled={!canNext}>Próxima</Button>
+        <Button tone="secondary" className="h-8 bg-surface-2 text-text" onClick={() => onPaginationChange(pageIndex - 1)} disabled={!canPrev}>Anterior</Button>
+        <span className="text-muted">Página {pageIndex + 1}</span>
+        <Button tone="secondary" className="h-8 bg-surface-2 text-text" onClick={() => onPaginationChange(pageIndex + 1)} disabled={!canNext}>Próxima</Button>
       </div>
     </Card>
   );

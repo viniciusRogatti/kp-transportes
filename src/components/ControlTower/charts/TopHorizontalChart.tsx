@@ -35,22 +35,22 @@ function TopHorizontalChart({ title, subtitle, data, metric, color, onBarClick }
       subtext: subtitle,
       top: 6,
       left: 12,
-      textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 700 },
-      subtextStyle: { color: '#94a3b8', fontSize: 11 },
+      textStyle: { color: 'var(--chart-title)', fontSize: 14, fontWeight: 700 },
+      subtextStyle: { color: 'var(--chart-subtitle)', fontSize: 11 },
     },
     legend: {
       top: 44,
       left: 12,
       data: [metricLabel(metric)],
-      textStyle: { color: '#cbd5e1' },
+      textStyle: { color: 'var(--chart-legend-label)' },
       selectedMode: true,
     },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: 'rgba(2,6,23,0.95)',
-      borderColor: '#1e293b',
-      textStyle: { color: '#e2e8f0' },
+      backgroundColor: 'var(--chart-tooltip-bg)',
+      borderColor: 'var(--chart-tooltip-border)',
+      textStyle: { color: 'var(--chart-tooltip-text)' },
       formatter: (params: any[]) => {
         const item = params?.[0];
         return `${item?.name}<br/>${item?.marker} ${metricLabel(metric)}: <b>${formatValue(metric, Number(item?.value || 0))}</b>`;
@@ -60,15 +60,15 @@ function TopHorizontalChart({ title, subtitle, data, metric, color, onBarClick }
     xAxis: {
       type: 'value',
       name: metricLabel(metric),
-      axisLabel: { color: '#94a3b8' },
-      axisLine: { lineStyle: { color: '#334155' } },
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+      axisLabel: { color: 'var(--chart-axis-label)' },
+      axisLine: { lineStyle: { color: 'var(--chart-axis-line)' } },
+      splitLine: { lineStyle: { color: 'var(--chart-grid-line)' } },
     },
     yAxis: {
       type: 'category',
       data: names,
-      axisLabel: { color: '#cbd5e1' },
-      axisLine: { lineStyle: { color: '#334155' } },
+      axisLabel: { color: 'var(--chart-legend-label)' },
+      axisLine: { lineStyle: { color: 'var(--chart-axis-line)' } },
     },
     series: [
       {

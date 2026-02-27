@@ -176,19 +176,19 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-slate-950/70" onClick={onClose} />
-      <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-[520px] overflow-auto border-l border-slate-700 bg-[#0d1625] p-4 text-slate-100 shadow-[0_0_30px_rgba(0,0,0,0.45)]">
+      <div className="fixed inset-0 z-40 bg-black/65" onClick={onClose} />
+      <aside className="fixed right-0 top-0 z-50 h-screen w-full max-w-[520px] overflow-auto border-l border-border bg-surface p-4 text-text shadow-[0_0_30px_rgba(0,0,0,0.45)]">
         <div className="mb-4 flex items-start justify-between gap-2">
           <div>
             <h3 className="text-lg font-semibold">NF {row.invoiceNumber}</h3>
-            <p className="text-xs text-slate-400">Lote {row.batchCode} | {row.customer}</p>
+            <p className="text-xs text-muted">Lote {row.batchCode} | {row.customer}</p>
             {row.sourceType === 'sobra' && row.isInversion ? (
-              <p className="mt-1 inline-flex rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-amber-100">
+              <p className="mt-1 inline-flex rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-warning)]">
                 Sobra com inversao
               </p>
             ) : null}
           </div>
-          <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={onClose}><X className="h-4 w-4" /></Button>
+          <Button tone="secondary" className="h-8 bg-surface-2 text-text" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">
@@ -197,7 +197,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs ${activeTab === tab.id ? 'bg-sky-900/60 text-sky-200' : 'bg-slate-800 text-slate-300'}`}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs ${activeTab === tab.id ? 'bg-sky-900/60 text-[color:var(--color-text-accent)]' : 'bg-surface-2 text-muted'}`}
             >
               {tab.icon}
               {tab.label}
@@ -208,34 +208,34 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
         {activeTab === 'summary' ? (
           <div className="space-y-2 text-sm">
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Status</strong><p>{row.status}</p></div>
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Motivo</strong><p>{row.reason}</p></div>
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Cidade/Rota</strong><p>{row.city} / {row.route}</p></div>
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Idade</strong><p>{row.ageHours} horas</p></div>
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Qtd Itens</strong><p>{numberFmt.format(totals.quantity)}</p></div>
-              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Peso</strong><p>{decimalFmt.format(totals.weight)} kg</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Status</strong><p>{row.status}</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Motivo</strong><p>{row.reason}</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Cidade/Rota</strong><p>{row.city} / {row.route}</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Idade</strong><p>{row.ageHours} horas</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Qtd Itens</strong><p>{numberFmt.format(totals.quantity)}</p></div>
+              <div className="rounded-md border border-border bg-card p-2"><strong>Peso</strong><p>{decimalFmt.format(totals.weight)} kg</p></div>
               {row.loadNumber ? (
-                <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Carga</strong><p>{row.loadNumber}</p></div>
+                <div className="rounded-md border border-border bg-card p-2"><strong>Carga</strong><p>{row.loadNumber}</p></div>
               ) : null}
               {row.sourceType === 'sobra' && row.isInversion ? (
-                <div className="rounded-md border border-amber-600/50 bg-amber-900/20 p-2">
+                <div className="rounded-md border border-amber-600/50 bg-amber-100 p-2">
                   <strong>Inversao</strong>
                   <p>NF: {row.inversionInvoiceNumber || '-'}</p>
                   <p>Produto faltante: {row.inversionMissingProductCode || '-'}</p>
                 </div>
               ) : null}
             </div>
-            <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2"><strong>Valor estimado</strong><p>{currencyFmt.format(totals.value)}</p></div>
+            <div className="rounded-md border border-border bg-card p-2"><strong>Valor estimado</strong><p>{currencyFmt.format(totals.value)}</p></div>
           </div>
         ) : null}
 
         {activeTab === 'items' ? (
-          <div className="overflow-hidden rounded-md border border-slate-700">
+          <div className="overflow-hidden rounded-md border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-slate-900 text-slate-300"><tr><th className="px-2 py-1 text-left">Produto</th><th className="text-left">Tipo</th><th className="text-right">Qtd</th><th className="pr-2 text-right">Kg</th></tr></thead>
+              <thead className="bg-card text-muted"><tr><th className="px-2 py-1 text-left">Produto</th><th className="text-left">Tipo</th><th className="text-right">Qtd</th><th className="pr-2 text-right">Kg</th></tr></thead>
               <tbody>
                 {row.items.map((item, index) => (
-                  <tr key={`${item.productId}-${index}`} className="border-t border-slate-800">
+                  <tr key={`${item.productId}-${index}`} className="border-t border-border">
                     <td className="px-2 py-1">{item.productDescription}</td>
                     <td>{item.productType}</td>
                     <td className="text-right">{numberFmt.format(item.quantity)}</td>
@@ -248,13 +248,13 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
         ) : null}
 
         {activeTab === 'history' ? (
-          <ol className="space-y-2 border-l border-slate-700 pl-3">
+          <ol className="space-y-2 border-l border-border pl-3">
             {sortedHistoryEvents.map((event, index) => (
-              <li key={`${event.at}-${index}`} className="relative rounded-md border border-slate-700 bg-slate-900/60 p-2 text-sm">
+              <li key={`${event.at}-${index}`} className="relative rounded-md border border-border bg-card p-2 text-sm">
                 <span className="absolute -left-[14px] top-3 h-2 w-2 rounded-full bg-sky-400" />
-                <p className="text-xs text-slate-400">{formatDateTime(event.at)} | {event.actor}</p>
+                <p className="text-xs text-muted">{formatDateTime(event.at)} | {event.actor}</p>
                 <p>{event.action}</p>
-                {event.note ? <p className="text-xs text-slate-400">{event.note}</p> : null}
+                {event.note ? <p className="text-xs text-muted">{event.note}</p> : null}
               </li>
             ))}
           </ol>
@@ -262,7 +262,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
 
         {activeTab === 'actions' ? (
           <div className="space-y-2">
-            <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2 text-xs text-slate-300">
+            <div className="rounded-md border border-border bg-card p-2 text-xs text-muted">
               <p>
                 <strong>Status da coleta:</strong> {row.collectionDisplayStatus || row.collectionWorkflowStatus || 'nao informado'}
               </p>
@@ -272,15 +272,15 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
             </div>
 
             {!row.collectionRequestId ? (
-              <p className="rounded-md border border-slate-700 bg-slate-900/50 p-2 text-xs text-slate-400">
+              <p className="rounded-md border border-border bg-card p-2 text-xs text-muted">
                 Esta NF nao possui solicitacao de coleta vinculada para abrir ocorrencia nesta tela.
               </p>
             ) : !canRegisterOccurrenceForBatchFlow ? (
-              <p className="rounded-md border border-slate-700 bg-slate-900/50 p-2 text-xs text-slate-400">
+              <p className="rounded-md border border-border bg-card p-2 text-xs text-muted">
                 Registrar ocorrência fica disponível quando a coleta estiver enviada em lote ou recebida pela Torre de Controle.
               </p>
             ) : hasOpenQualityIssue ? (
-              <p className="rounded-md border border-amber-600/50 bg-amber-900/20 p-2 text-xs text-amber-200">
+              <p className="rounded-md border border-amber-600/50 bg-amber-100 p-2 text-xs text-[color:var(--color-warning)]">
                 Já existe ocorrência em tratativa para esta coleta.
               </p>
             ) : (
@@ -296,12 +296,12 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              className="min-h-[96px] w-full rounded-md border border-slate-700 bg-slate-900 p-2 text-sm text-slate-100"
+              className="min-h-[96px] w-full rounded-md border border-border bg-card p-2 text-sm text-text"
               placeholder="Adicionar observacao operacional"
             />
             <Button
               tone="secondary"
-              className="w-full justify-center bg-slate-800 text-slate-100"
+              className="w-full justify-center bg-surface-2 text-text"
               onClick={() => {
                 if (!note.trim()) return;
                 onAddObservation(row.id, note.trim());
@@ -316,36 +316,36 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
 
       {isOccurrenceModalOpen ? (
         <>
-          <div className="fixed inset-0 z-[60] bg-slate-950/70" onClick={() => setIsOccurrenceModalOpen(false)} />
-          <div className="fixed left-1/2 top-1/2 z-[70] w-[min(96vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-700 bg-[#0d1625] p-4 text-slate-100 shadow-[0_0_40px_rgba(0,0,0,0.55)]">
+          <div className="fixed inset-0 z-[60] bg-black/65" onClick={() => setIsOccurrenceModalOpen(false)} />
+          <div className="fixed left-1/2 top-1/2 z-[70] w-[min(96vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-surface p-4 text-text shadow-[0_0_40px_rgba(0,0,0,0.55)]">
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
                 <h4 className="text-sm font-semibold">Registrar ocorrência da NF {row.invoiceNumber}</h4>
-                <p className="text-xs text-slate-400">A ocorrência será enviada para a transportadora resolver.</p>
+                <p className="text-xs text-muted">A ocorrência será enviada para a transportadora resolver.</p>
               </div>
-              <Button tone="secondary" className="h-8 bg-slate-800 text-slate-100" onClick={() => setIsOccurrenceModalOpen(false)}>
+              <Button tone="secondary" className="h-8 bg-surface-2 text-text" onClick={() => setIsOccurrenceModalOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
 
             <div className="grid gap-2 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs text-slate-300">Escopo</label>
+                <label className="mb-1 block text-xs text-muted">Escopo</label>
                 <select
                   value={occurrenceScope}
                   onChange={(event) => setOccurrenceScope(event.target.value as 'invoice_total' | 'items')}
-                  className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                  className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                 >
                   <option value="invoice_total">Nota total</option>
                   <option value="items">Parcial (itens)</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-300">Motivo</label>
+                <label className="mb-1 block text-xs text-muted">Motivo</label>
                 <select
                   value={occurrenceReason}
                   onChange={(event) => setOccurrenceReason(event.target.value as OccurrenceReason)}
-                  className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                  className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                 >
                   {OCCURRENCE_REASON_OPTIONS.map((reason) => (
                     <option key={reason.value} value={reason.value}>{reason.label}</option>
@@ -357,11 +357,11 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
             {occurrenceScope === 'items' ? (
               <div className="mt-2 grid gap-2 md:grid-cols-[2fr_1fr]">
                 <div>
-                  <label className="mb-1 block text-xs text-slate-300">Produto</label>
+                  <label className="mb-1 block text-xs text-muted">Produto</label>
                   <select
                     value={selectedProductId}
                     onChange={(event) => setSelectedProductId(event.target.value)}
-                    className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                    className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                   >
                     {!row.items.length ? <option value="">Sem itens na NF</option> : null}
                     {row.items.map((item, index) => (
@@ -372,41 +372,41 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-300">Quantidade</label>
+                  <label className="mb-1 block text-xs text-muted">Quantidade</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={selectedQuantityInput}
                     onChange={(event) => setSelectedQuantityInput(event.target.value)}
-                    className="h-10 w-full rounded-sm border border-slate-700 bg-slate-900 px-3 text-sm text-slate-100"
+                    className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                   />
-                  <p className="mt-1 text-[11px] text-slate-400">Máx.: {maxSelectedQuantity}</p>
+                  <p className="mt-1 text-[11px] text-muted">Máx.: {maxSelectedQuantity}</p>
                 </div>
               </div>
             ) : null}
 
             <div className="mt-2">
-              <label className="mb-1 block text-xs text-slate-300">Descrição do ocorrido</label>
+              <label className="mb-1 block text-xs text-muted">Descrição do ocorrido</label>
               <textarea
                 value={occurrenceDescription}
                 onChange={(event) => setOccurrenceDescription(event.target.value)}
-                className="min-h-[80px] w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm text-slate-100"
+                className="min-h-[80px] w-full rounded-sm border border-border bg-card p-2 text-sm text-text"
                 placeholder="Descreva o problema identificado no recebimento."
               />
             </div>
 
             <div className="mt-2">
-              <label className="mb-1 block text-xs text-slate-300">Observação para tratativa (opcional)</label>
+              <label className="mb-1 block text-xs text-muted">Observação para tratativa (opcional)</label>
               <textarea
                 value={qualityNote}
                 onChange={(event) => setQualityNote(event.target.value)}
-                className="min-h-[70px] w-full rounded-sm border border-slate-700 bg-slate-900 p-2 text-sm text-slate-100"
+                className="min-h-[70px] w-full rounded-sm border border-border bg-card p-2 text-sm text-text"
                 placeholder="Informações adicionais para a transportadora."
               />
             </div>
 
             <div className="mt-3 flex items-center justify-end gap-2">
-              <Button tone="secondary" className="bg-slate-800 text-slate-100" onClick={() => setIsOccurrenceModalOpen(false)}>
+              <Button tone="secondary" className="bg-surface-2 text-text" onClick={() => setIsOccurrenceModalOpen(false)}>
                 Cancelar
               </Button>
               <Button

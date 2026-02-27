@@ -45,6 +45,15 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   OCCURRENCE_ON_BATCH: 'Ocorrencia no lote',
 };
 
+const PERMISSION_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  master: 'Master',
+  user: 'User',
+  expedicao: 'Expedição',
+  conferente: 'Conferente',
+  control_tower: 'Torre de Controle',
+};
+
 const formatNotificationTime = (value: string) => {
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return 'agora';
@@ -100,11 +109,14 @@ function Header() {
   const [quickSearch, setQuickSearch] = useState('');
   const desktopSidebarRef = useRef<HTMLElement | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
+  const notificationPanelRef = useRef<HTMLDivElement | null>(null);
+  const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const currentTitle = routeTitles[location.pathname] || 'KP Transportes';
   const currentSection = location.pathname.startsWith('/control-tower') ? 'Control Tower' : 'Operação';
   const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
   const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permission || 'Usuário').trim();
+  const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';
   const latestNotifications = notifications.slice(0, 10);
   const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission));
 
@@ -144,6 +156,27 @@ function Header() {
       document.removeEventListener('mousedown', handleClickOutsideShell);
     };
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!isNotificationOpen) return undefined;
+
+    const handleClickOutsideNotifications = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      const clickedNotificationButton = notificationButtonRef.current?.contains(target);
+      const clickedNotificationPanel = notificationPanelRef.current?.contains(target);
+
+      if (!clickedNotificationButton && !clickedNotificationPanel) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutsideNotifications);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutsideNotifications);
+    };
+  }, [isNotificationOpen]);
 
   async function handleLogout() {
     await logoutSession();
@@ -256,6 +289,7 @@ function Header() {
           <div className="flex items-center gap-2">
             <ThemeToggleButton iconOnly />
             <button
+              ref={notificationButtonRef}
               type="button"
               onClick={() => setIsNotificationOpen((prev) => !prev)}
               className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface/80 text-text"
@@ -272,16 +306,19 @@ function Header() {
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2">
                 <User className="h-4 w-4" />
               </span>
-              <div>
-                <p className="text-xs text-muted">Usuário</p>
+              <div className="leading-tight">
                 <p className="text-sm font-medium text-text">{userDisplayName}</p>
+                <p className="text-[10px] text-muted">{permissionLabel}</p>
               </div>
             </div>
           </div>
         </div>
 
         {isNotificationOpen ? (
-          <div className="absolute right-3 top-[calc(var(--header-height)+8px)] z-[1200] w-[min(92vw,360px)] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)] md:right-4">
+          <div
+            ref={notificationPanelRef}
+            className="absolute right-3 top-[calc(var(--header-height)+8px)] z-[1200] w-[min(92vw,360px)] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)] md:right-4"
+          >
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-text">Notificações</h3>
               <span className={cn(

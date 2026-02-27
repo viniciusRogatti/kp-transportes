@@ -43,6 +43,8 @@ function UserManagement() {
     username: '',
     name: '',
     password: '',
+    passwordConfirmation: '',
+    actorPassword: '',
     permission: 'user',
   });
 
@@ -104,8 +106,13 @@ function UserManagement() {
     const username = form.username.trim();
     const name = form.name.trim();
 
-    if (!username || !name || !form.password.trim()) {
-      setErrorMessage('Preencha login, nome e senha.');
+    if (!username || !name || !form.password.trim() || !form.passwordConfirmation.trim() || !form.actorPassword.trim()) {
+      setErrorMessage('Preencha login, nome, senha, confirmação e sua senha.');
+      return;
+    }
+
+    if (form.password !== form.passwordConfirmation) {
+      setErrorMessage('A confirmação da senha do novo usuário não confere.');
       return;
     }
 
@@ -118,6 +125,8 @@ function UserManagement() {
         username,
         name,
         password: form.password,
+        password_confirmation: form.passwordConfirmation,
+        actor_password: form.actorPassword,
         permission: form.permission,
       });
 
@@ -125,6 +134,8 @@ function UserManagement() {
         username: '',
         name: '',
         password: '',
+        passwordConfirmation: '',
+        actorPassword: '',
         permission: 'user',
       });
       setSuccessMessage('Usuário criado com sucesso.');
@@ -149,12 +160,13 @@ function UserManagement() {
               Disponível apenas para perfis Admin e Master.
             </p>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-4">
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
               <input
                 type="text"
                 value={form.username}
                 onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
                 placeholder="Login"
+                autoComplete="new-username"
                 className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
               <input
@@ -162,13 +174,31 @@ function UserManagement() {
                 value={form.name}
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Nome"
+                autoComplete="off"
                 className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
               <input
                 type="password"
                 value={form.password}
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-                placeholder="Senha"
+                placeholder="Senha do novo usuário"
+                autoComplete="new-password"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+              />
+              <input
+                type="password"
+                value={form.passwordConfirmation}
+                onChange={(event) => setForm((prev) => ({ ...prev, passwordConfirmation: event.target.value }))}
+                placeholder="Confirme a senha do novo usuário"
+                autoComplete="new-password"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+              />
+              <input
+                type="password"
+                value={form.actorPassword}
+                onChange={(event) => setForm((prev) => ({ ...prev, actorPassword: event.target.value }))}
+                placeholder="Sua senha para confirmar"
+                autoComplete="off"
                 className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
               <select
@@ -245,4 +275,3 @@ function UserManagement() {
 }
 
 export default UserManagement;
-

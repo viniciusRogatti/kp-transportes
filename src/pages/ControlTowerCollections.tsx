@@ -87,6 +87,69 @@ const COLLECTION_QUALITY_LABELS: Record<string, string> = {
   resolvida: 'Resolvida',
 };
 
+const CONTROL_TOWER_THEME_CLASSES = {
+  light: {
+    mainCard: 'border-sky-500/35 bg-[#edf5ff] shadow-[0_0_0_1px_rgba(59,130,246,0.14)]',
+    filterSection: 'group rounded-lg border border-sky-400/35 bg-[#f3f8ff]',
+    kpiSection: 'group rounded-lg border border-sky-400/35 bg-[#eff6ff]',
+    notificationBadge: 'border-[#014d92] bg-[#0157a3] text-white',
+    notificationMarkRead: 'text-sky-700 hover:text-sky-800',
+    register: {
+      card: 'border-[#014d92] bg-[#0157a3] shadow-[0_0_0_1px_rgba(1,77,146,0.45)]',
+      title: 'text-sm font-semibold text-white',
+      description: 'text-xs text-[#dbeafe]',
+      label: 'text-xs font-semibold text-white',
+      inputBorder: 'border-sky-400/45',
+      validateButton: 'h-10 border-[#dbeafe] bg-white text-[#0157a3] hover:bg-[#eff6ff] disabled:opacity-60',
+      submitButton: 'h-10 border border-[#dbeafe] bg-white text-[#0157a3] shadow-[0_10px_22px_rgba(2,44,84,0.22)] hover:bg-[#eff6ff] disabled:opacity-60',
+      hint: 'text-xs text-[#dbeafe]',
+      contextBox: 'border-sky-500/45 text-slate-900',
+      contextMeta: 'text-slate-700',
+      itemsBox: 'border-sky-500/45',
+      itemsTitle: 'text-xs font-semibold text-slate-900',
+      clearButton: 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900 transition hover:bg-sky-200',
+      itemRow: 'border-sky-500/35',
+      itemTitle: 'text-slate-900',
+      itemMeta: 'text-slate-700',
+      itemLabel: 'text-slate-700',
+      itemInputBorder: 'border-sky-500/40',
+      openInvoiceButton: 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 font-semibold text-sky-900 transition hover:bg-sky-200',
+      highlightedOccurrence: 'border-sky-500/60 bg-sky-100 ring-1 ring-sky-300/45',
+      collectionStatusBadge: 'ct-light-contrast-badge border-sky-500/40 bg-sky-100 text-[color:var(--color-text-accent)]',
+    },
+  },
+  dark: {
+    mainCard: 'border-border bg-card',
+    filterSection: 'group rounded-lg border border-border bg-surface/60',
+    kpiSection: 'group rounded-lg border border-border bg-card/60',
+    notificationBadge: 'border-amber-300/70 bg-amber-500 text-slate-950',
+    notificationMarkRead: 'text-sky-300 hover:text-[color:var(--color-text-accent)]',
+    register: {
+      card: 'border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]',
+      title: 'text-sm font-semibold text-[color:var(--color-warning)]',
+      description: 'text-xs text-[color:var(--color-warning)]/80',
+      label: 'text-xs font-medium text-text',
+      inputBorder: 'border-amber-500/35',
+      validateButton: 'h-10 border-amber-500/45 bg-card text-[color:var(--color-warning)] hover:bg-surface-2 disabled:opacity-60',
+      submitButton: 'h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60',
+      hint: 'text-xs text-muted',
+      contextBox: 'border-amber-500/35 text-text',
+      contextMeta: 'text-muted',
+      itemsBox: 'border-border',
+      itemsTitle: 'text-xs font-semibold text-text',
+      clearButton: 'rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text transition hover:bg-surface-2',
+      itemRow: 'border-border',
+      itemTitle: 'text-text',
+      itemMeta: 'text-muted',
+      itemLabel: 'text-muted',
+      itemInputBorder: 'border-border',
+      openInvoiceButton: 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35',
+      highlightedOccurrence: 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40',
+      collectionStatusBadge: 'border-sky-500/55 bg-sky-900/55 text-sky-100',
+    },
+  },
+} as const;
+
 type ManualCollectionRequestPayload = {
   invoice_number: string;
   request_code: string;
@@ -539,6 +602,10 @@ function ControlTowerCollections() {
         ? 'Últimos 7 dias'
         : 'Últimos 30 dias';
   const pendingSituationsCount = notificationTotals.occurrences + notificationTotals.batches + notificationTotals.pickups;
+  const themeStyles = isLightTheme ? CONTROL_TOWER_THEME_CLASSES.light : CONTROL_TOWER_THEME_CLASSES.dark;
+  const mainCardClass = themeStyles.mainCard;
+  const filterSectionClass = themeStyles.filterSection;
+  const kpiSectionClass = themeStyles.kpiSection;
   const registerProductRows = useMemo(
     () => buildRegisterCollectionProductRows(registerDanfe, registerExistingRows),
     [registerDanfe, registerExistingRows],
@@ -1550,10 +1617,7 @@ function ControlTowerCollections() {
               >
                 <Bell className="h-5 w-5" />
                 {pendingSituationsCount > 0 ? (
-                  <span className={`absolute -right-1 -top-1 min-w-[18px] rounded-full border px-1 py-0.5 text-[10px] font-bold leading-none ${isLightTheme
-                    ? 'border-sky-500/80 bg-sky-600 text-white'
-                    : 'border-amber-300/70 bg-amber-500 text-slate-950'
-                    }`}
+                  <span className={`absolute -right-1 -top-1 min-w-[18px] rounded-full border px-1 py-0.5 text-[10px] font-bold leading-none ${themeStyles.notificationBadge}`}
                   >
                     {pendingSituationsCount > 99 ? '99+' : pendingSituationsCount}
                   </span>
@@ -1567,10 +1631,7 @@ function ControlTowerCollections() {
                     <button
                       type="button"
                       onClick={markNotificationsAsRead}
-                      className={`text-[11px] font-semibold ${isLightTheme
-                        ? 'text-sky-700 hover:text-sky-800'
-                        : 'text-sky-300 hover:text-[color:var(--color-text-accent)]'
-                        }`}
+                      className={`text-[11px] font-semibold ${themeStyles.notificationMarkRead}`}
                     >
                       Marcar lidas
                     </button>
@@ -1627,19 +1688,16 @@ function ControlTowerCollections() {
           </div>
         </div>
 
-        <Card className={isLightTheme
-          ? 'border-sky-500/70 bg-gradient-to-br from-[#b9dcff] via-[#d9ecff] to-[#eef6ff] shadow-[0_0_0_1px_rgba(29,78,216,0.22)]'
-          : 'border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]'}
-        >
+        <Card className={themeStyles.register.card}>
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <h3 className={isLightTheme ? 'text-sm font-semibold text-slate-950' : 'text-sm font-semibold text-[color:var(--color-warning)]'}>Registrar Coleta</h3>
-              <p className={isLightTheme ? 'text-xs text-slate-800' : 'text-xs text-[color:var(--color-warning)]/80'}>Selecione NF total ou parcial por itens, com controle de saldo por produto.</p>
+              <h3 className={themeStyles.register.title}>Registrar Coleta</h3>
+              <p className={themeStyles.register.description}>Selecione NF total ou parcial por itens, com controle de saldo por produto.</p>
             </div>
           </div>
           <div className="space-y-2">
             <div className="grid gap-2 md:grid-cols-[minmax(0,220px)_minmax(0,190px)_auto]">
-              <label htmlFor="register-pickup-nf" className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-medium text-text'}>
+              <label htmlFor="register-pickup-nf" className={themeStyles.register.label}>
                 NF para coleta
                 <input
                   id="register-pickup-nf"
@@ -1648,15 +1706,15 @@ function ControlTowerCollections() {
                   inputMode="numeric"
                   maxLength={9}
                   placeholder="Digite a NF"
-                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${isLightTheme ? 'border-sky-400/45' : 'border-amber-500/35'}`}
+                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${themeStyles.register.inputBorder}`}
                 />
               </label>
-              <label className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-medium text-text'}>
+              <label className={themeStyles.register.label}>
                 Escopo
                 <select
                   value={registerScope}
                   onChange={(event) => setRegisterScope(event.target.value as RegisterCollectionScope)}
-                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${isLightTheme ? 'border-sky-400/45' : 'border-amber-500/35'}`}
+                  className={`mt-1 h-10 w-full rounded-sm border bg-card px-3 text-sm text-text ${themeStyles.register.inputBorder}`}
                 >
                   <option value="invoice_total">NF total</option>
                   <option value="items">Parcial por itens</option>
@@ -1665,9 +1723,7 @@ function ControlTowerCollections() {
               <div className="flex flex-wrap items-end gap-2">
                 <Button
                   tone="outline"
-                  className={isLightTheme
-                    ? 'h-10 border-sky-500/55 bg-sky-100 text-sky-900 hover:bg-sky-200 disabled:opacity-60'
-                    : 'h-10 border-amber-500/45 bg-card text-[color:var(--color-warning)] hover:bg-surface-2 disabled:opacity-60'}
+                  className={themeStyles.register.validateButton}
                   onClick={handleLoadRegisterContext}
                   disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
                 >
@@ -1675,9 +1731,7 @@ function ControlTowerCollections() {
                 </Button>
                 <Button
                   tone="secondary"
-                  className={isLightTheme
-                    ? 'h-10 border border-sky-700/75 bg-gradient-to-r from-sky-700 to-blue-700 text-sky-50 shadow-[0_10px_22px_rgba(29,78,216,0.35)] hover:from-sky-600 hover:to-blue-600 disabled:opacity-60'
-                    : 'h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60'}
+                  className={themeStyles.register.submitButton}
                   onClick={handleRegisterPickupByNf}
                   disabled={!canManageCollectionRequests || loadingRegisterContext || registeringPickup}
                 >
@@ -1685,7 +1739,7 @@ function ControlTowerCollections() {
                 </Button>
               </div>
             </div>
-            <p className={isLightTheme ? 'text-xs text-slate-700' : 'text-xs text-muted'}>
+            <p className={themeStyles.register.hint}>
               A coleta parcial respeita o saldo por item da NF (qtd original - total já coletado em status confirmado).
             </p>
 
@@ -1696,13 +1750,13 @@ function ControlTowerCollections() {
             ) : null}
 
             {registerDanfe ? (
-              <div className={`rounded-sm border bg-card px-3 py-2 text-xs ${isLightTheme ? 'border-sky-500/45 text-slate-900' : 'border-amber-500/35 text-text'}`}>
+              <div className={`rounded-sm border bg-card px-3 py-2 text-xs ${themeStyles.register.contextBox}`}>
                 <div>
                   <strong>{`NF ${registerDanfe.invoice_number || registerNf}`}</strong>
                   {` | Cliente: ${registerDanfe.Customer?.name_or_legal_entity || '-'}`}
                   {` | Cidade: ${registerDanfe.Customer?.city || '-'}`}
                 </div>
-                <div className={`mt-1 ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
+                <div className={`mt-1 ${themeStyles.register.contextMeta}`}>
                   {`Coletas ativas na NF: ${registerActiveRows.length}`}
                   {registerHasActiveInvoiceTotal ? ' | Existe coleta NF total ativa' : ''}
                   {registerHasActiveItems ? ' | Existe coleta parcial ativa' : ''}
@@ -1711,15 +1765,13 @@ function ControlTowerCollections() {
             ) : null}
 
             {registerScope === 'items' && registerDanfe ? (
-              <div className={`rounded-sm border bg-card px-3 py-2 ${isLightTheme ? 'border-sky-500/45' : 'border-border'}`}>
+              <div className={`rounded-sm border bg-card px-3 py-2 ${themeStyles.register.itemsBox}`}>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className={isLightTheme ? 'text-xs font-semibold text-slate-900' : 'text-xs font-semibold text-text'}>Itens da NF para coleta parcial</p>
+                  <p className={themeStyles.register.itemsTitle}>Itens da NF para coleta parcial</p>
                   <button
                     type="button"
                     onClick={clearRegisterPartialQuantities}
-                    className={isLightTheme
-                      ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900 transition hover:bg-sky-200'
-                      : 'rounded-md border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-text transition hover:bg-surface-2'}
+                    className={themeStyles.register.clearButton}
                   >
                     Limpar quantidades
                   </button>
@@ -1730,20 +1782,20 @@ function ControlTowerCollections() {
                 ) : (
                   <ul className="max-h-[260px] space-y-2 overflow-auto pr-1">
                     {registerProductRows.map((productRow) => (
-                      <li key={`register-product-${productRow.key}`} className={`rounded-sm border bg-card px-2 py-2 text-xs ${isLightTheme ? 'border-sky-500/35' : 'border-border'}`}>
+                      <li key={`register-product-${productRow.key}`} className={`rounded-sm border bg-card px-2 py-2 text-xs ${themeStyles.register.itemRow}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className={`truncate font-semibold ${isLightTheme ? 'text-slate-900' : 'text-text'}`}>
+                            <div className={`truncate font-semibold ${themeStyles.register.itemTitle}`}>
                               {`${productRow.productId} - ${productRow.productDescription}`}
                             </div>
-                            <div className={`text-[11px] ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
+                            <div className={`text-[11px] ${themeStyles.register.itemMeta}`}>
                               {`Tipo: ${productRow.productType || 'N/A'}`}
                               {` | Original: ${formatCollectionQuantity(productRow.quantityOriginal)}`}
                               {` | Coletado: ${formatCollectionQuantity(productRow.totalCollected)}`}
                               {` | Restante: ${formatCollectionQuantity(productRow.remainingCollectable)}`}
                             </div>
                           </div>
-                          <label className={`text-[11px] ${isLightTheme ? 'text-slate-700' : 'text-muted'}`}>
+                          <label className={`text-[11px] ${themeStyles.register.itemLabel}`}>
                             Qtd a coletar
                             <input
                               value={registerPartialQuantities[productRow.key] || ''}
@@ -1753,7 +1805,7 @@ function ControlTowerCollections() {
                               min={productRow.isKg ? '0.001' : '1'}
                               placeholder="0"
                               disabled={productRow.remainingCollectable <= 0 || registerHasActiveInvoiceTotal}
-                              className={`mt-1 h-8 w-[110px] rounded-sm border bg-card px-2 text-xs text-text disabled:cursor-not-allowed disabled:opacity-50 ${isLightTheme ? 'border-sky-500/40' : 'border-border'}`}
+                              className={`mt-1 h-8 w-[110px] rounded-sm border bg-card px-2 text-xs text-text disabled:cursor-not-allowed disabled:opacity-50 ${themeStyles.register.itemInputBorder}`}
                             />
                           </label>
                         </div>
@@ -1773,7 +1825,7 @@ function ControlTowerCollections() {
         </Card>
 
         <div ref={collectionTrackingSectionRef}>
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold text-text">Fila de ação e acompanhamento de coletas</h3>
@@ -1880,25 +1932,23 @@ function ControlTowerCollections() {
                           {` | ${request.city || '-'}`}
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
-                          <span className="rounded-md border border-sky-500/40 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-text-accent)]">
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${themeStyles.register.collectionStatusBadge}`}>
                             {formatCollectionWorkflowStatus(request)}
                           </span>
-                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
-                            requestIsPriority
-                              ? 'border-rose-400/70 bg-rose-700/25 text-[color:var(--color-danger)]'
-                              : 'border-emerald-400/55 bg-emerald-100 text-[color:var(--color-success)]'
-                          }`}
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${requestIsPriority
+                            ? 'border-rose-400/70 bg-rose-700/25 text-[color:var(--color-danger)]'
+                            : 'border-emerald-400/55 bg-emerald-100 text-[color:var(--color-success)]'
+                            }`}
                           >
                             {requestIsPriority ? 'Prioridade alta' : 'Prioridade média'}
                           </span>
                           <button
                             type="button"
                             onClick={() => setCollectionOccurrenceDialog(request)}
-                            className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${
-                              hasNotes
-                                ? 'border-amber-400/60 bg-amber-700/25 text-[color:var(--color-warning)] hover:bg-amber-700/35'
-                                : 'border-border bg-surface-2 text-text hover:bg-surface-2'
-                            }`}
+                            className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${hasNotes
+                              ? 'border-amber-400/60 bg-amber-700/25 text-[color:var(--color-warning)] hover:bg-amber-700/35'
+                              : 'border-border bg-surface-2 text-text hover:bg-surface-2'
+                              }`}
                           >
                             {occurrenceLabel}
                           </button>
@@ -1930,9 +1980,7 @@ function ControlTowerCollections() {
                           <button
                             type="button"
                             onClick={() => handleOpenCollectionInvoice(request.invoice_number)}
-                            className={isLightTheme
-                              ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-0.5 font-semibold text-sky-900 transition hover:bg-sky-200'
-                              : 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35'}
+                            className={themeStyles.register.openInvoiceButton}
                           >
                             Abrir NF no fluxo
                           </button>
@@ -1947,11 +1995,10 @@ function ControlTowerCollections() {
                             type="button"
                             onClick={() => handleToggleCollectionPriority(request)}
                             disabled={prioritizingCollectionId === String(request.id)}
-                            className={`inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-bold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              requestIsPriority
-                                ? 'border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] hover:from-rose-600 hover:to-rose-500'
-                                : 'border-border bg-surface-2 text-text hover:bg-surface-2'
-                            }`}
+                            className={`inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-bold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60 ${requestIsPriority
+                              ? 'border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] hover:from-rose-600 hover:to-rose-500'
+                              : 'border-border bg-surface-2 text-text hover:bg-surface-2'
+                              }`}
                           >
                             {prioritizingCollectionId === String(request.id)
                               ? 'Salvando...'
@@ -1994,7 +2041,7 @@ function ControlTowerCollections() {
         </div>
 
         <div ref={occurrenceSectionRef}>
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text">Ocorrências com talão (pendentes de crédito)</h3>
               <span className="text-xs text-muted">Pendências até confirmação do crédito</span>
@@ -2011,7 +2058,7 @@ function ControlTowerCollections() {
                       else occurrenceItemRefs.current.delete(occurrence.id);
                     }}
                     className={`rounded-sm border px-3 py-2 text-xs text-text transition ${highlightedOccurrenceId === occurrence.id
-                      ? (isLightTheme ? 'border-sky-500/60 bg-sky-100 ring-1 ring-sky-300/45' : 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40')
+                      ? themeStyles.register.highlightedOccurrence
                       : 'border-border bg-card'
                       }`}
                   >
@@ -2067,7 +2114,7 @@ function ControlTowerCollections() {
         </div>
 
         <div ref={pendingBatchesSectionRef}>
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-text">Lotes de devolução pendentes de aprovação</h3>
               <span className="text-xs text-muted">{pendingBatches.length} pendente(s)</span>
@@ -2104,9 +2151,7 @@ function ControlTowerCollections() {
                           key={`pending-batch-note-${batch.batch_code}-${note.id}`}
                           type="button"
                           onClick={() => handleOpenBatchInvoice(batch, note.invoice_number)}
-                          className={isLightTheme
-                            ? 'rounded-md border border-sky-500/45 bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-900 transition hover:bg-sky-200'
-                            : 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-1 text-[11px] font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35'}
+                          className={themeStyles.register.openInvoiceButton}
                         >
                           {`Abrir NF ${note.invoice_number}`}
                         </button>
@@ -2142,7 +2187,7 @@ function ControlTowerCollections() {
           />
         </div>
 
-        <section className="group rounded-lg border border-border bg-surface/60">
+        <section className={filterSectionClass}>
           <button
             type="button"
             onClick={() => setShowFilters((current) => !current)}
@@ -2171,7 +2216,7 @@ function ControlTowerCollections() {
           ) : null}
         </section>
 
-        <section className="group rounded-lg border border-border bg-card/60">
+        <section className={kpiSectionClass}>
           <button
             type="button"
             onClick={() => setShowKpis((current) => !current)}
@@ -2193,7 +2238,7 @@ function ControlTowerCollections() {
         </section>
 
         <div className="grid gap-3 xl:grid-cols-3">
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <div className="mb-2 flex items-center justify-end">
               <select
                 value={topMetric}
@@ -2215,7 +2260,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <TopHorizontalChart
               title="Top clientes que devolvem"
               subtitle={periodSubtitle}
@@ -2226,7 +2271,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <ReasonsDonutChart
               data={charts.data}
               subtitle={periodSubtitle}
@@ -2236,7 +2281,7 @@ function ControlTowerCollections() {
         </div>
 
         <div className="grid gap-3 xl:grid-cols-2">
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <TopHorizontalChart
               title="Produtos com mais sobras"
               subtitle={periodSubtitle}
@@ -2247,7 +2292,7 @@ function ControlTowerCollections() {
             />
           </Card>
 
-          <Card className="border-border bg-card">
+          <Card className={mainCardClass}>
             <TopHorizontalChart
               title="Produtos com mais faltas (talão)"
               subtitle={periodSubtitle}

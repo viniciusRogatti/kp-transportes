@@ -13,6 +13,7 @@ import Card from '../ui/Card';
 import Input from '../ui/Input';
 import { ControlTowerFilters, ReturnsTableRow } from '../../types/controlTower';
 import { currencyFmt, formatDateTime, numberFmt } from './format';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ReturnsTableProps {
   rows: ReturnsTableRow[];
@@ -81,6 +82,11 @@ function ReturnsTable({
   onFilterByReturnType,
   onOpenDetails,
 }: ReturnsTableProps) {
+  const { isLightTheme } = useTheme();
+  const selectedReturnTypeFilterClass = isLightTheme
+    ? 'ct-light-active-filter border-sky-600 bg-sky-100 text-[color:var(--color-text-accent)]'
+    : 'border-sky-500/65 bg-sky-900/55 text-sky-100';
+
   const columns = useMemo<ColumnDef<ReturnsTableRow>[]>(() => [
     { accessorKey: 'flowOrigin', header: 'Fluxo', cell: ({ row }) => getFlowOriginLabel(row.original.flowOrigin) },
     {
@@ -149,7 +155,7 @@ function ReturnsTable({
             onClick={() => onFilterByReturnType(tab.value)}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               returnTypeFilter === tab.value
-                ? 'border-sky-600 bg-sky-100 text-[color:var(--color-text-accent)]'
+                ? selectedReturnTypeFilterClass
                 : 'border-border bg-card text-muted hover:border-border'
             }`}
           >

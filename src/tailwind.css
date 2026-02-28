@@ -275,6 +275,18 @@ body.with-app-shell #root {
   color: var(--color-text-accent) !important;
 }
 
+:root[data-theme='light'] .control-tower-theme .ct-light-contrast-badge {
+  background-color: #d8e8ff !important;
+  border-color: #8fb2dd !important;
+  color: #0b4f84 !important;
+}
+
+:root[data-theme='light'] .control-tower-theme .ct-light-active-filter {
+  background-color: #d4e5ff !important;
+  border-color: #7fa8d8 !important;
+  color: #0a497c !important;
+}
+
 :root[data-theme='light'] .control-tower-theme [class*='bg-amber-'] {
   background-color: #f7dfbb !important;
   background-image: none !important;

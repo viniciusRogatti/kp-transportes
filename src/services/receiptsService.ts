@@ -2,7 +2,7 @@ import axios from 'axios';
 import {
   IDriver,
   IPendingReceiptsListResponse,
-  IReceiptRow,
+  IReceiptUploadResponse,
   IReceiptsListResponse,
   IReceiptSignedUrlResponse,
 } from '../types/types';
@@ -17,6 +17,7 @@ type ReceiptListFilters = {
   limit?: number;
   offset?: number;
   includeUrls?: boolean;
+  needsManualReview?: boolean;
 };
 
 const toQueryParams = (filters: ReceiptListFilters = {}) => {
@@ -30,6 +31,7 @@ const toQueryParams = (filters: ReceiptListFilters = {}) => {
   if (typeof filters.limit === 'number') params.set('limit', String(filters.limit));
   if (typeof filters.offset === 'number') params.set('offset', String(filters.offset));
   if (typeof filters.includeUrls === 'boolean') params.set('includeUrls', filters.includeUrls ? '1' : '0');
+  if (typeof filters.needsManualReview === 'boolean') params.set('needsManualReview', filters.needsManualReview ? '1' : '0');
 
   return params;
 };
@@ -46,8 +48,8 @@ export async function listPendingReceipts(filters: ReceiptListFilters = {}): Pro
   return data;
 }
 
-export async function uploadReceipt(formData: FormData): Promise<IReceiptRow> {
-  const { data } = await axios.post<IReceiptRow>(`${API_URL}/api/receipts`, formData, {
+export async function uploadReceipt(formData: FormData): Promise<IReceiptUploadResponse> {
+  const { data } = await axios.post<IReceiptUploadResponse>(`${API_URL}/api/receipts`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

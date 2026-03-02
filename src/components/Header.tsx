@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   Bell,
   CalendarDays,
   ChevronLeft,
@@ -75,7 +76,8 @@ const navItems: NavItem[] = [
   { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/receipts', label: 'Canhotos', shortLabel: 'Canhotos', icon: <FileImage className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS, 'control_tower'] },
+  { to: '/receipts', label: 'Canhotos', shortLabel: 'Canhotos', icon: <FileImage className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/alerts', label: 'Alertas', shortLabel: 'Alertas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/users', label: 'Usuários', shortLabel: 'Usuários', icon: <UserPlus className="h-4 w-4" />, allowedPermissions: [...ADMIN_MASTER_PERMISSIONS] },
   { to: '/user-sessions', label: 'Horários', shortLabel: 'Horários', icon: <Clock3 className="h-4 w-4" />, allowedPermissions: ['master'] },
@@ -91,6 +93,7 @@ const routeTitles: Record<string, string> = {
   '/trips': 'Roteirização',
   '/returns-occurrences': 'Devoluções e Ocorrências',
   '/receipts': 'Canhotos',
+  '/alerts': 'Alertas',
   '/uploadFiles': 'Envio de XML',
   '/users': 'Gerenciamento de Usuários',
   '/user-sessions': 'Horário de Sessões',

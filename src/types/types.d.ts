@@ -297,6 +297,14 @@ export interface IReceiptRow {
   status: 'POSTED' | 'PENDING';
   delivered_at?: string | null;
   legibility_blur_score?: number | null;
+  date_ok?: boolean;
+  sign_ok?: boolean;
+  nfe_ok?: boolean;
+  brand_ok?: boolean;
+  nf_detected?: string | null;
+  needs_manual_review?: boolean;
+  anchor_score?: number | null;
+  anchor_rotation?: number | null;
   created_at: string;
   updated_at?: string | null;
   preview_url?: string;
@@ -323,6 +331,10 @@ export interface IReceiptsListResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface IReceiptUploadResponse {
+  receiptId: number;
 }
 
 export interface IPendingReceiptRow {
@@ -352,6 +364,45 @@ export interface IReceiptSignedUrlResponse {
   id: number;
   signed_url: string;
   expires_in_seconds: number;
+}
+
+export interface IAlertRow {
+  id: number;
+  company_id: number;
+  user_id?: number | null;
+  receipt_id?: number | null;
+  nf_number?: string | null;
+  code: string;
+  title: string;
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  status: 'OPEN' | 'RESOLVED';
+  metadata?: Record<string, unknown> | null;
+  resolved_at?: string | null;
+  resolved_by_user_id?: number | null;
+  created_at: string;
+  updated_at?: string | null;
+  receipt?: {
+    id: number;
+    nf_id: string | null;
+    needs_manual_review: boolean;
+  } | null;
+  created_by_user?: {
+    id: number;
+    name: string;
+    username: string;
+  } | null;
+  resolved_by_user?: {
+    id: number;
+    name: string;
+    username: string;
+  } | null;
+}
+
+export interface IAlertsListResponse {
+  rows: IAlertRow[];
+  total: number;
+  limit: number;
 }
 
 export interface IDanfeTrip {

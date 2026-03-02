@@ -12,6 +12,7 @@ import ControlTowerCollections from './pages/ControlTowerCollections';
 import UserManagement from './pages/UserManagement';
 import UserSessions from './pages/UserSessions';
 import Receipts from './pages/Receipts';
+import AlertsPage from './pages/Alerts';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
@@ -58,7 +59,8 @@ function App() {
           <Route path="/home" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><Home /></ProtectedRoute>} />
           <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><TodayInvoices /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Invoices /></ProtectedRoute>} />
-          <Route path="/receipts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><Receipts /></ProtectedRoute>} />
+          <Route path="/receipts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Receipts /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><AlertsPage /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Products /></ProtectedRoute>} />
           <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
           <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Customers /></ProtectedRoute>} />

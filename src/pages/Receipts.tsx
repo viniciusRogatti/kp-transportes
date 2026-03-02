@@ -38,8 +38,8 @@ type UploadPreviewReport = {
   usedCompression: boolean;
 };
 
-const MIN_WIDTH = 1600;
-const MIN_AREA = 1920000;
+const MIN_WIDTH = 1000;
+const MIN_AREA = 1000000;
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return '-';
@@ -347,7 +347,7 @@ function Receipts() {
       const formData = new FormData();
       formData.append('file', prepared.file);
 
-      if (uploadNfId.trim()) formData.append('nfId', uploadNfId.trim());
+      if (uploadNfId.trim()) formData.append('nfNumber', uploadNfId.trim());
       if (uploadTripId.trim()) formData.append('rotaId', uploadTripId.trim());
       if (uploadMotoristaId.trim()) formData.append('motoristaId', uploadMotoristaId.trim());
       if (uploadDeliveryDate.trim()) formData.append('dataEntrega', uploadDeliveryDate.trim());
@@ -368,6 +368,36 @@ function Receipts() {
 
         if (statusCode === 422 && errorCode === 'UNREADABLE_IMAGE') {
           setUploadError(`${errorMessage || 'Imagem ilegível.'} Dica: boa iluminação, sem tremor e canhoto inteiro no enquadramento.`);
+          return;
+        }
+
+        if (statusCode === 422 && errorCode === 'UNREADABLE_OR_WRONG_CROP') {
+          setUploadError('Não foi possível validar o canhoto: imagem ilegível ou recorte incorreto.');
+          return;
+        }
+
+        if (statusCode === 422 && errorCode === 'MISSING_REQUIRED_FIELDS') {
+          setUploadError('Campos obrigatórios não detectados no canhoto (DATA, ASSINATURA e NF-e).');
+          return;
+        }
+
+        if (statusCode === 422 && errorCode === 'NF_NOT_FOUND') {
+          setUploadError('NF não encontrada para a empresa autenticada.');
+          return;
+        }
+
+        if (statusCode === 422 && errorCode === 'NF_MISMATCH') {
+          setUploadError('A NF detectada no canhoto é diferente da NF informada no upload.');
+          return;
+        }
+
+        if (statusCode === 422 && errorCode === 'NF_NOT_DETECTED') {
+          setUploadError('Não foi possível extrair o número da NF no bloco de NF-e.');
+          return;
+        }
+
+        if (statusCode === 409 && errorCode === 'RECEIPT_ALREADY_EXISTS') {
+          setUploadError('A NF já possui canhoto postado.');
           return;
         }
 
@@ -547,6 +577,9 @@ function Receipts() {
                         <p className="text-muted">Dimensão: {receipt.width}x{receipt.height}</p>
                         <p className="text-muted">Tamanho: {formatSizeKb(receipt.size_bytes)}</p>
                         <p className="text-muted">Enviado em: {formatDateTime(receipt.created_at)}</p>
+                        {receipt.needs_manual_review ? (
+                          <p className="font-semibold text-amber-200">Revisão manual pendente</p>
+                        ) : null}
                       </div>
 
                       <div className="mt-2 flex items-center gap-2">

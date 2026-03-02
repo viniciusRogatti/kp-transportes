@@ -94,6 +94,8 @@ const CONTROL_TOWER_THEME_CLASSES = {
     kpiSection: 'group rounded-lg border border-sky-400/35 bg-[#eff6ff]',
     notificationBadge: 'border-[#014d92] bg-[#0157a3] text-white',
     notificationMarkRead: 'text-sky-700 hover:text-sky-800',
+    notificationUnreadCard: 'border-sky-500/60 bg-sky-100 hover:bg-sky-100',
+    notificationUnreadPill: 'border-sky-400/60 text-[color:var(--color-text-accent)]',
     register: {
       card: 'border-[#014d92] bg-[#0157a3] shadow-[0_0_0_1px_rgba(1,77,146,0.45)]',
       title: 'text-sm font-semibold text-white',
@@ -124,6 +126,8 @@ const CONTROL_TOWER_THEME_CLASSES = {
     kpiSection: 'group rounded-lg border border-border bg-card/60',
     notificationBadge: 'border-amber-300/70 bg-amber-500 text-slate-950',
     notificationMarkRead: 'text-sky-300 hover:text-[color:var(--color-text-accent)]',
+    notificationUnreadCard: 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70',
+    notificationUnreadPill: 'border-sky-400/55 bg-sky-900/55 text-sky-100',
     register: {
       card: 'border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]',
       title: 'text-sm font-semibold text-[color:var(--color-warning)]',
@@ -1655,14 +1659,14 @@ function ControlTowerCollections() {
                               type="button"
                               onClick={() => handleNotificationClick(notification)}
                               className={`w-full rounded-md border px-2.5 py-2 text-left transition ${isUnread
-                                ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
+                                ? themeStyles.notificationUnreadCard
                                 : 'border-border bg-card hover:bg-card'
                                 }`}
                             >
                               <div className="flex items-center justify-between gap-2 text-[11px]">
                                 <span className="font-semibold text-text">{typeLabel}</span>
                                 {isUnread ? (
-                                  <span className="rounded-full border border-sky-400/60 px-2 py-0.5 font-semibold text-[color:var(--color-text-accent)]">
+                                  <span className={`rounded-full border px-2 py-0.5 font-semibold ${themeStyles.notificationUnreadPill}`}>
                                     Novo
                                   </span>
                                 ) : null}

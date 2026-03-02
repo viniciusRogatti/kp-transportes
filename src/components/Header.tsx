@@ -21,6 +21,7 @@ import {
 import { cn } from '../lib/cn';
 import BottomNavMobile from './layout/BottomNavMobile';
 import ThemeToggleButton from './ui/ThemeToggleButton';
+import { useTheme } from '../context/ThemeContext';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import { logoutSession } from '../utils/logoutSession';
 import {
@@ -96,6 +97,7 @@ const routeTitles: Record<string, string> = {
 function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isLightTheme } = useTheme();
   const {
     notifications,
     unreadCount,
@@ -118,6 +120,9 @@ function Header() {
   const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permission || 'Usuário').trim();
   const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';
   const latestNotifications = notifications.slice(0, 10);
+  const unreadNotificationClass = isLightTheme
+    ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
+    : 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70';
   const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission));
 
   useEffect(() => {
@@ -355,7 +360,7 @@ function Header() {
                         className={cn(
                           'w-full rounded-md border px-2 py-2 text-left transition',
                           isUnread
-                            ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
+                            ? unreadNotificationClass
                             : 'border-border bg-surface-2/70 hover:bg-surface-2',
                         )}
                       >

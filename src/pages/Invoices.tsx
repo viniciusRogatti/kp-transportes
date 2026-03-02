@@ -258,7 +258,7 @@ function Invoices() {
               searchLabel="Pesquisar NF"
             />
           </SearchRow>
-          <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-1">
+          <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-[minmax(0,1fr)_auto]">
             <DateGroup>
               <DatePicker
                 selected={startDate}
@@ -281,7 +281,7 @@ function Invoices() {
                 withPortal
               />
             </DateGroup>
-            <DateAction className="justify-end gap-2 max-[768px]:justify-start">
+            <DateAction className="justify-end max-[768px]:w-auto">
               <IconButton
                 icon={Search}
                 label="Buscar notas por periodo"
@@ -289,19 +289,21 @@ function Invoices() {
                 className="h-10 w-10 min-h-10 min-w-10 rounded-md"
                 size="lg"
               />
-              <select
-                onChange={filterByRoute}
-                className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:min-w-0 max-[768px]:flex-1"
-                defaultValue="Todas"
-              >
-                {routes.map((route, index) => (
-                  <option value={route} key={`rota-${index}`}>
-                    {route}
-                  </option>
-                ))}
-              </select>
             </DateAction>
           </DateRow>
+          <div className="mt-2 flex w-full justify-end">
+            <select
+              onChange={filterByRoute}
+              className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:w-full max-[768px]:min-w-0"
+              defaultValue="Todas"
+            >
+              {routes.map((route, index) => (
+                <option value={route} key={`rota-${index}`}>
+                  {route}
+                </option>
+              ))}
+            </select>
+          </div>
         </SearchBar>
 
         <FilterBar>

@@ -283,6 +283,77 @@ export interface IInvoiceSearchContext {
   return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
 }
 
+export interface IReceiptRow {
+  id: number;
+  nf_id: string | null;
+  trip_id: number | null;
+  motorista_id: number | null;
+  r2_key: string;
+  mime_type: string;
+  size_bytes: number;
+  width: number;
+  height: number;
+  checksum_sha256?: string | null;
+  status: 'POSTED' | 'PENDING';
+  delivered_at?: string | null;
+  legibility_blur_score?: number | null;
+  created_at: string;
+  updated_at?: string | null;
+  preview_url?: string;
+  metrics?: {
+    blurScore: number;
+    meanLuminance: number;
+    minBlurScore: number;
+  };
+  driver?: {
+    id: number;
+    name: string;
+  } | null;
+  danfe?: {
+    invoice_number: string;
+    status?: string;
+    invoice_date?: string | null;
+    customer_name?: string | null;
+    city?: string | null;
+  } | null;
+}
+
+export interface IReceiptsListResponse {
+  rows: IReceiptRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface IPendingReceiptRow {
+  nf_id: string;
+  invoice_number: string;
+  status: 'PENDING';
+  source_status?: string;
+  invoice_date?: string | null;
+  load_number?: string | null;
+  customer_name?: string | null;
+  city?: string | null;
+  trip_id?: number | null;
+  rota_id?: number | null;
+  trip_date?: string | null;
+  motorista_id?: number | null;
+  motorista_name?: string | null;
+  can_upload?: boolean;
+}
+
+export interface IPendingReceiptsListResponse {
+  rows: IPendingReceiptRow[];
+  total: number;
+  limit: number;
+}
+
+export interface IReceiptSignedUrlResponse {
+  id: number;
+  signed_url: string;
+  expires_in_seconds: number;
+}
+
 export interface IDanfeTrip {
   customerName: string;
   nf: string;

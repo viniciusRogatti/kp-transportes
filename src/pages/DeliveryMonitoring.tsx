@@ -9,6 +9,7 @@ import {
   Polyline,
   Popup,
   TileLayer,
+  Tooltip,
   useMap,
   useMapEvents,
 } from 'react-leaflet';
@@ -106,6 +107,13 @@ type MarkerCluster = {
   longitude: number;
   count: number;
   dominantStage: DeliveryStage;
+  stageCounts: Record<DeliveryStage, number>;
+  previewRows: Array<{
+    invoice_number: string;
+    customer_name: string;
+    stage: DeliveryStage;
+    driver_name: string | null;
+  }>;
 };
 
 type MarkerPoint = {
@@ -114,6 +122,7 @@ type MarkerPoint = {
 };
 
 type MarkerRenderable = MarkerCluster | MarkerPoint;
+type MapViewMode = 'cluster' | 'points';
 
 const STAGE_LABELS: Record<DeliveryStage, string> = {
   unassigned: 'Sem motorista',
@@ -175,8 +184,16 @@ const resolveStageFromCounts = (rows: DeliveryRow[]): DeliveryStage => {
   ), 'unassigned' as DeliveryStage);
 };
 
-const buildClusteredMarkers = (rows: DeliveryRow[], zoom: number): MarkerRenderable[] => {
-  if (zoom >= 13 || rows.length <= 120) {
+const stagePriority = (stage: DeliveryStage) => {
+  if (stage === 'on_site') return 0;
+  if (stage === 'on_the_way') return 1;
+  if (stage === 'assigned') return 2;
+  if (stage === 'unassigned') return 3;
+  return 4;
+};
+
+const buildClusteredMarkers = (rows: DeliveryRow[], zoom: number, viewMode: MapViewMode): MarkerRenderable[] => {
+  if (viewMode === 'points' || zoom >= 13 || rows.length <= 120) {
     return rows.map((row) => ({ kind: 'point', row }));
   }
 
@@ -220,6 +237,26 @@ const buildClusteredMarkers = (rows: DeliveryRow[], zoom: number): MarkerRendera
       longitude: bucket.lngSum / bucket.rows.length,
       count: bucket.rows.length,
       dominantStage: resolveStageFromCounts(bucket.rows),
+      stageCounts: bucket.rows.reduce<Record<DeliveryStage, number>>((accumulator, row) => {
+        accumulator[row.stage] += 1;
+        return accumulator;
+      }, {
+        unassigned: 0,
+        assigned: 0,
+        on_the_way: 0,
+        on_site: 0,
+        completed: 0,
+      }),
+      previewRows: bucket.rows
+        .slice()
+        .sort((left, right) => stagePriority(left.stage) - stagePriority(right.stage))
+        .slice(0, 8)
+        .map((row) => ({
+          invoice_number: row.invoice_number,
+          customer_name: row.customer_name,
+          stage: row.stage,
+          driver_name: row.driver_name,
+        })),
     } as MarkerCluster;
   });
 };
@@ -237,6 +274,7 @@ function DeliveryMonitoring() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [showRoutes, setShowRoutes] = useState<boolean>(true);
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('cluster');
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -338,9 +376,20 @@ function DeliveryMonitoring() {
   );
 
   const renderables = useMemo(
-    () => buildClusteredMarkers(mapDeliveries, zoom),
-    [mapDeliveries, zoom],
+    () => buildClusteredMarkers(mapDeliveries, zoom, mapViewMode),
+    [mapDeliveries, zoom, mapViewMode],
   );
+
+  const listRows = useMemo(() => {
+    return filteredDeliveries
+      .slice()
+      .sort((left, right) => {
+        const stageDiff = stagePriority(left.stage) - stagePriority(right.stage);
+        if (stageDiff !== 0) return stageDiff;
+        return String(left.invoice_number).localeCompare(String(right.invoice_number));
+      })
+      .slice(0, 120);
+  }, [filteredDeliveries]);
 
   const boundsPoints = useMemo<Array<[number, number]>>(
     () => mapDeliveries.map((row) => [Number(row.geolocation.latitude), Number(row.geolocation.longitude)]),
@@ -409,6 +458,36 @@ function DeliveryMonitoring() {
               className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
             >
               {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
+            </button>
+            <div className="inline-flex h-10 overflow-hidden rounded-md border border-border bg-surface">
+              <button
+                type="button"
+                onClick={() => setMapViewMode('cluster')}
+                className={`px-3 text-sm font-semibold ${mapViewMode === 'cluster' ? 'bg-sky-500/20 text-sky-700' : 'text-text'}`}
+              >
+                Agrupado
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapViewMode('points')}
+                className={`border-l border-border px-3 text-sm font-semibold ${mapViewMode === 'points' ? 'bg-sky-500/20 text-sky-700' : 'text-text'}`}
+              >
+                Pontos
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('assigned')}
+              className="h-10 rounded-md border border-amber-500/45 bg-amber-500/10 px-4 text-sm font-semibold text-amber-700"
+            >
+              Ver atribuídas
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+            >
+              Ver todas
             </button>
           </div>
 
@@ -556,7 +635,26 @@ function DeliveryMonitoring() {
                       }}
                     >
                       <Popup>
-                        <div className="text-sm font-semibold">{`${item.count} entregas neste agrupamento`}</div>
+                        <div className="space-y-2">
+                          <div className="text-sm font-semibold">{`${item.count} entregas neste agrupamento`}</div>
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {STAGE_ORDER.map((stage) => (
+                              <span key={stage} className="rounded border border-border bg-surface px-1.5 py-1">
+                                {`${STAGE_LABELS[stage]}: ${item.stageCounts[stage] || 0}`}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="text-xs text-muted">Principais entregas:</div>
+                          <ul className="max-h-36 space-y-1 overflow-auto pr-1 text-xs">
+                            {item.previewRows.map((row) => (
+                              <li key={`cluster-${item.id}-${row.invoice_number}`} className="rounded border border-border bg-surface px-2 py-1">
+                                <p className="font-semibold">{`NF ${row.invoice_number}`}</p>
+                                <p className="text-slate-600">{row.customer_name || 'Cliente sem nome'}</p>
+                                <p>{`${STAGE_LABELS[row.stage]}${row.driver_name ? ` • ${row.driver_name}` : ''}`}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </Popup>
                     </CircleMarker>
                   );
@@ -580,6 +678,12 @@ function DeliveryMonitoring() {
                       opacity: isDimmed ? 0.3 : 1,
                     }}
                   >
+                    <Tooltip direction="top" offset={[0, -7]} opacity={0.95}>
+                      <div className="text-xs">
+                        <div className="font-semibold">{`NF ${row.invoice_number}`}</div>
+                        <div>{row.customer_name || 'Cliente sem nome'}</div>
+                      </div>
+                    </Tooltip>
                     <Popup>
                       <div className="space-y-1">
                         <p className="text-sm font-semibold">{`NF ${row.invoice_number}`}</p>
@@ -599,6 +703,54 @@ function DeliveryMonitoring() {
           {loading ? (
             <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
+        </section>
+
+        <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-text">Lista de entregas</h3>
+            <span className="text-xs text-muted">
+              {`Mostrando ${Math.min(listRows.length, 120)} de ${filteredDeliveries.length} entregas filtradas`}
+            </span>
+          </div>
+          <div className="max-h-[320px] overflow-auto rounded-md border border-border">
+            <table className="min-w-full text-left text-xs">
+              <thead className="sticky top-0 z-[1] bg-surface">
+                <tr className="border-b border-border">
+                  <th className="px-2 py-2">NF</th>
+                  <th className="px-2 py-2">Cliente</th>
+                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Motorista</th>
+                  <th className="px-2 py-2">Cidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {listRows.map((row) => (
+                  <tr key={`list-${row.invoice_number}`} className="border-b border-border/60 hover:bg-surface-2">
+                    <td className="px-2 py-2 font-semibold">{row.invoice_number}</td>
+                    <td className="px-2 py-2">{row.customer_name || '-'}</td>
+                    <td className="px-2 py-2">
+                      <span
+                        className="inline-flex rounded-full border px-2 py-0.5"
+                        style={{
+                          borderColor: '#cbd5e1',
+                          backgroundColor: `${STAGE_STYLE[row.stage].fill}22`,
+                        }}
+                      >
+                        {STAGE_LABELS[row.stage]}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">{row.driver_name || '-'}</td>
+                    <td className="px-2 py-2">{`${row.city || '-'}${row.state ? `/${row.state}` : ''}`}</td>
+                  </tr>
+                ))}
+                {!listRows.length ? (
+                  <tr>
+                    <td className="px-2 py-3 text-muted" colSpan={5}>Nenhuma entrega para os filtros selecionados.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </section>
       </Container>
     </div>

@@ -78,6 +78,8 @@ type MonitoringSummary = {
 
 type MonitoringResponse = {
   date: string;
+  invoice_reference_date?: string;
+  used_fallback_date?: boolean;
   generated_at: string;
   summary: MonitoringSummary;
   deliveries: DeliveryRow[];
@@ -222,10 +224,13 @@ const buildClusteredMarkers = (rows: DeliveryRow[], zoom: number): MarkerRendera
   });
 };
 
-const hasCoordinates = (row: DeliveryRow) => (
-  Number.isFinite(Number(row.geolocation.latitude))
-  && Number.isFinite(Number(row.geolocation.longitude))
-);
+const hasCoordinates = (row: DeliveryRow) => {
+  const latitude = row.geolocation.latitude;
+  const longitude = row.geolocation.longitude;
+  if (latitude === null || longitude === null) return false;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  return !(latitude === 0 && longitude === 0);
+};
 
 function DeliveryMonitoring() {
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -420,6 +425,12 @@ function DeliveryMonitoring() {
           <div className="mt-3 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800">
             Geocoding automático ativo: entregas sem coordenadas entram em fila no backend e o mapa atualiza sozinho.
           </div>
+
+          {overview?.used_fallback_date ? (
+            <div className="mt-2 rounded-md border border-amber-500/45 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
+              Exibindo notas da data {overview.invoice_reference_date} para acompanhar a operação de {overview.date}.
+            </div>
+          ) : null}
 
           {diagnostics ? (
             <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">

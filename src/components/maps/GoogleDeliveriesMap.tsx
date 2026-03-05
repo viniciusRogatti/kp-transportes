@@ -115,7 +115,8 @@ function GoogleDeliveriesMap({
   }, [deliveries, openedInfoDeliveryId]);
 
   useEffect(() => {
-    setOpenedInfoDeliveryId(selectedDeliveryId);
+    if (selectedDeliveryId) return;
+    setOpenedInfoDeliveryId(null);
   }, [selectedDeliveryId]);
 
   useEffect(() => {
@@ -125,12 +126,13 @@ function GoogleDeliveriesMap({
   }, [deliveries, openedInfoDeliveryId]);
 
   const mapOptions = useMemo<google.maps.MapOptions>(() => ({
-    mapTypeControl: false,
+    mapTypeControl: true,
     streetViewControl: false,
     fullscreenControl: true,
     zoomControl: true,
     gestureHandling: 'greedy',
-    clickableIcons: true,
+    clickableIcons: false,
+    mapTypeId: 'roadmap',
     minZoom: MAP_MIN_ZOOM,
     maxZoom: MAP_MAX_ZOOM,
   }), []);
@@ -287,10 +289,15 @@ function GoogleDeliveriesMap({
             zoomControlOptions: {
               position: window.google.maps.ControlPosition.TOP_RIGHT,
             },
+            mapTypeControlOptions: {
+              position: window.google.maps.ControlPosition.TOP_RIGHT,
+              mapTypeIds: ['roadmap', 'satellite'],
+            },
           });
           setMap(instance);
         }}
         onUnmount={() => setMap(null)}
+        onClick={() => setOpenedInfoDeliveryId(null)}
         onIdle={emitBoundsChange}
       >
         {routes.map((route) => (
@@ -330,7 +337,8 @@ function GoogleDeliveriesMap({
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   onMarkerClick(delivery.id);
                   setOpenedInfoDeliveryId(delivery.id);
                 }}

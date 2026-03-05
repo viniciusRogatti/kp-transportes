@@ -2,14 +2,23 @@ import { useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../data';
 import { Overlay, PopupContainer, PopupContent, InputBox, ButtonBox, PopupButton } from '../style/Popup';
+import { ICar, IDriver } from '../types/types';
 
 interface IPopup {
   title: string;
   closePopup: () => void;
   onAdd: (data: any) => void;
+  existingDrivers: IDriver[];
+  existingCars: ICar[];
 };
 
-function Popup({ title, closePopup, onAdd }: IPopup) {
+const normalizeText = (value: string) => String(value || '').replace(/\s+/g, ' ').trim();
+
+const normalizeDriverName = (name: string) => normalizeText(name).toLocaleLowerCase();
+
+const normalizeLicensePlate = (plate: string) => String(plate || '').toLocaleUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function Popup({ title, closePopup, onAdd, existingDrivers, existingCars }: IPopup) {
   const [value, setValue] = useState<string>('');
   const [plate, setPlate] = useState<string>('');
 
@@ -26,21 +35,44 @@ function Popup({ title, closePopup, onAdd }: IPopup) {
   }
 
   const handleSubmit = async () => {
-    if (value === '') {
+    const normalizedValue = normalizeText(value);
+    const normalizedPlate = normalizeLicensePlate(plate);
+
+    if (!normalizedValue) {
       return alert('Digite o nome do motorista ou o modelo do Veículo');
     }
-    if (title === 'Adicionar Veículo' && plate === '') {
+    if (title === 'Adicionar Veículo' && !normalizedPlate) {
       return alert('Digite a placa do Veículo');
+    }
+
+    if (title === 'Adicionar Motorista') {
+      const hasDuplicateDriver = existingDrivers.some(
+        (driver) => normalizeDriverName(driver.name) === normalizeDriverName(normalizedValue),
+      );
+
+      if (hasDuplicateDriver) {
+        return alert('Ja existe um motorista com esse nome.');
+      }
+    }
+
+    if (title === 'Adicionar Veículo') {
+      const hasDuplicateCar = existingCars.some(
+        (car) => normalizeLicensePlate(car.license_plate) === normalizedPlate,
+      );
+
+      if (hasDuplicateCar) {
+        return alert('Ja existe um veiculo com essa placa.');
+      }
     }
 
     try {
       let data = {};
       if (title === 'Adicionar Veículo') {
         data = {
-          model: value,
-          license_plate: plate,
+          model: normalizedValue,
+          license_plate: normalizedPlate,
         }
-      } else data = { name: value };
+      } else data = { name: normalizedValue };
 
       const route = title === 'Adicionar Motorista' ? 'drivers' : 'cars';
       const response = await axios.post(`${API_URL}/${route}/create`, data);
@@ -52,8 +84,10 @@ function Popup({ title, closePopup, onAdd }: IPopup) {
       onAdd(response.data); // Callback to return the created data
       closePopup();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Erro ao ${title}`, error);
+      const apiMessage = error?.response?.data?.message;
+      alert(apiMessage || `Erro ao ${title.toLocaleLowerCase()}.`);
     }
   }
 

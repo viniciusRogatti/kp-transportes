@@ -1360,7 +1360,15 @@ function RoutePlanning() {
         )}
         </div>
 
-        {showPopup && <Popup title={titlePopup} closePopup={() => setShowPopup(false)} onAdd={handleAddNewDriverOrCar} />}
+        {showPopup && (
+          <Popup
+            title={titlePopup}
+            closePopup={() => setShowPopup(false)}
+            onAdd={handleAddNewDriverOrCar}
+            existingDrivers={drivers}
+            existingCars={cars}
+          />
+        )}
 
         {isBatchModalOpen ? (
           <div className="fixed inset-0 z-[1470] flex items-center justify-center bg-black/70 p-3">

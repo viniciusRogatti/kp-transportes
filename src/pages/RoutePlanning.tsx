@@ -33,6 +33,7 @@ import { ICar, IDanfe, IDriver, ITrip, ITripNote } from '../types/types';
 
 type PlanningTab = 'routing' | 'trips';
 type SwapMode = 'driver' | 'vehicle' | 'both';
+type RouteLookupDanfe = IDanfe & { status?: string | null };
 
 interface ConflictState {
   type: 'driver' | 'vehicle';
@@ -62,6 +63,9 @@ function RoutePlanning() {
   const [driverInput, setDriverInput] = useState<string>('');
   const [carInput, setCarInput] = useState<string>('');
   const [noteLookup, setNoteLookup] = useState<string>('');
+  const [batchNoteLookup, setBatchNoteLookup] = useState<string>('');
+  const [isBatchAdding, setIsBatchAdding] = useState<boolean>(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [addedNotes, setAddedNotes] = useState<ITripNote[]>([]);
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [displayedTrips, setDisplayedTrips] = useState<ITrip[]>([]);
@@ -98,6 +102,7 @@ function RoutePlanning() {
 
   const navigate = useNavigate();
   const noteLookupRef = useRef<HTMLInputElement>(null);
+  const carInputRef = useRef<HTMLInputElement>(null);
   const previousDriverRef = useRef<string>('null');
   const previousCarRef = useRef<string>('null');
   const notesContainerRef = useRef<HTMLDivElement>(null);
@@ -558,21 +563,35 @@ function RoutePlanning() {
     if (nearBottom) setShowJumpToLatest(false);
   };
 
-  const fetchDanfeByLookup = async (lookup: string) => {
+  const fetchDanfeByLookup = async (lookup: string): Promise<RouteLookupDanfe | null> => {
     const normalizedLookup = String(lookup || '').trim();
     if (!normalizedLookup) return null;
 
     try {
-      const byNf = await axios.get(`${API_URL}/danfes/nf/${normalizedLookup}`);
+      const byNf = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/nf/${normalizedLookup}`);
       if (byNf?.data) return byNf.data;
     } catch {
       // Ignora e tenta buscar por barcode
     }
 
     const sanitizedBarcode = normalizedLookup.replace(/\s+/g, '');
-    const byBarcode = await axios.get(`${API_URL}/danfes/barcode/${sanitizedBarcode}`);
+    const byBarcode = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/barcode/${sanitizedBarcode}`);
     return byBarcode?.data || null;
   };
+
+  const canAssignDanfe = (status: unknown) => {
+    const normalized = String(status || '').trim().toLowerCase();
+    return normalized === 'pending' || normalized === 'redelivery';
+  };
+
+  const buildTripNoteFromDanfe = (danfeData: RouteLookupDanfe, order: number): ITripNote => ({
+    customer_name: danfeData.Customer?.name_or_legal_entity || '-',
+    invoice_number: danfeData.invoice_number,
+    city: danfeData.Customer?.city || '-',
+    order,
+    gross_weight: danfeData.gross_weight,
+    status: 'pending',
+  });
 
   const handleAddNote = async () => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
@@ -593,7 +612,7 @@ function RoutePlanning() {
         return;
       }
 
-      if (danfeData.status !== 'pending' && danfeData.status !== 'redelivery') {
+      if (!canAssignDanfe(danfeData.status)) {
         alert('Essa nota não pode ser roteirizada, verifique o status dela.');
         return;
       }
@@ -603,14 +622,7 @@ function RoutePlanning() {
         return;
       }
 
-      const newNote: ITripNote = {
-        customer_name: danfeData.Customer.name_or_legal_entity,
-        invoice_number: danfeData.invoice_number,
-        city: danfeData.Customer.city,
-        order: addedNotes.length + 1,
-        gross_weight: danfeData.gross_weight,
-        status: 'pending',
-      };
+      const newNote = buildTripNoteFromDanfe(danfeData, addedNotes.length + 1);
 
       setAddedNotes((prev) => [...prev, newNote]);
       setCountWeight((prev) => prev + Number(danfeData.gross_weight || 0));
@@ -620,6 +632,92 @@ function RoutePlanning() {
     } finally {
       setNoteLookup('');
       noteLookupRef.current?.focus();
+    }
+  };
+
+  const handleAddBatchNotes = async () => {
+    if (selectedDriver === 'null' || selectedCar === 'null') {
+      alert('Selecione um motorista e um veículo antes de adicionar notas em lote.');
+      return;
+    }
+
+    const lookups = batchNoteLookup
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!lookups.length) {
+      alert('Cole ao menos uma NF ou código de barras (uma por linha).');
+      return;
+    }
+
+    setIsBatchAdding(true);
+    try {
+      const existingInvoiceNumbers = new Set(addedNotes.map((note) => String(note.invoice_number)));
+      const seenLookups = new Set<string>();
+      const notesToAdd: ITripNote[] = [];
+      const errors: string[] = [];
+      let orderCursor = addedNotes.length + 1;
+
+      for (const lookup of lookups) {
+        const lookupKey = lookup.toLowerCase();
+        if (seenLookups.has(lookupKey)) {
+          errors.push(`${lookup}: duplicado no lote.`);
+          continue;
+        }
+        seenLookups.add(lookupKey);
+
+        try {
+          const danfeData = await fetchDanfeByLookup(lookup);
+          if (!danfeData) {
+            errors.push(`${lookup}: nota não encontrada.`);
+            continue;
+          }
+
+          const invoiceKey = String(danfeData.invoice_number);
+          if (existingInvoiceNumbers.has(invoiceKey)) {
+            errors.push(`${lookup}: NF ${invoiceKey} já adicionada na viagem.`);
+            continue;
+          }
+
+          if (!canAssignDanfe(danfeData.status)) {
+            errors.push(`${lookup}: NF ${invoiceKey} com status inválido (${danfeData.status || 'desconhecido'}).`);
+            continue;
+          }
+
+          const newNote = buildTripNoteFromDanfe(danfeData, orderCursor);
+          notesToAdd.push(newNote);
+          existingInvoiceNumbers.add(invoiceKey);
+          orderCursor += 1;
+        } catch {
+          errors.push(`${lookup}: erro ao consultar.`);
+        }
+      }
+
+      if (notesToAdd.length) {
+        const totalWeight = notesToAdd.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
+        setAddedNotes((prev) => [...prev, ...notesToAdd]);
+        setCountWeight((prev) => prev + totalWeight);
+        setLastScannedInvoice(String(notesToAdd[notesToAdd.length - 1].invoice_number));
+      }
+
+      setBatchNoteLookup('');
+      noteLookupRef.current?.focus();
+
+      if (errors.length) {
+        const maxLines = 12;
+        const visibleErrors = errors.slice(0, maxLines);
+        const hiddenCount = errors.length - visibleErrors.length;
+        alert(
+          `Processamento concluído.\nAdicionadas: ${notesToAdd.length}\nCom erro: ${errors.length}\n\n${visibleErrors.join('\n')}${hiddenCount > 0 ? `\n... e mais ${hiddenCount} erro(s).` : ''}`,
+        );
+        return;
+      }
+
+      alert(`${notesToAdd.length} nota(s) adicionada(s) com sucesso.`);
+    } finally {
+      setIsBatchAdding(false);
+      setIsBatchModalOpen(false);
     }
   };
 
@@ -724,6 +822,7 @@ function RoutePlanning() {
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
       setSelectedDriver('null');
       setSelectedCar('null');
+      setShowAssignmentFields(true);
       setAddedNotes([]);
       setIsUpdating(false);
       setTripToUpdate(null);
@@ -1034,6 +1133,12 @@ function RoutePlanning() {
                               }
                               if (event.key === 'Tab') {
                                 commitDriverInput((event.target as HTMLInputElement).value, true);
+                                if (!event.shiftKey) {
+                                  event.preventDefault();
+                                  window.requestAnimationFrame(() => {
+                                    carInputRef.current?.focus();
+                                  });
+                                }
                               }
                             }}
                             placeholder="Digite nome do motorista"
@@ -1047,6 +1152,7 @@ function RoutePlanning() {
                         <FieldGroup>
                           <label>Veículo:</label>
                           <input
+                            ref={carInputRef}
                             list="car-suggestions"
                             value={carInput}
                             onChange={(event) => {
@@ -1063,7 +1169,15 @@ function RoutePlanning() {
                                 commitCarInput((event.target as HTMLInputElement).value, true);
                               }
                               if (event.key === 'Tab') {
-                                commitCarInput((event.target as HTMLInputElement).value, true);
+                                const committed = commitCarInput((event.target as HTMLInputElement).value, true);
+                                const hasDriverSelected = selectedDriver !== 'null';
+                                const hasCarSelected = selectedCar !== 'null' || committed;
+                                if (!event.shiftKey && hasDriverSelected && hasCarSelected) {
+                                  event.preventDefault();
+                                  window.requestAnimationFrame(() => {
+                                    noteLookupRef.current?.focus();
+                                  });
+                                }
                               }
                             }}
                             placeholder="Digite placa ou veículo"
@@ -1113,7 +1227,7 @@ function RoutePlanning() {
                 </div>
               ) : null}
 
-              <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[1fr_auto]">
+              <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                 <BoxSelectDanfe>
                   <input
                     type="text"
@@ -1122,16 +1236,24 @@ function RoutePlanning() {
                     placeholder="Digite NF ou código de barras"
                     value={noteLookup}
                     onChange={(event) => setNoteLookup(event.target.value)}
-                    disabled={selectedDriver === 'null' || selectedCar === 'null'}
+                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                   />
                 </BoxSelectDanfe>
                 <ActionButton
                   $tone="secondary"
                   className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
                   onClick={handleAddNote}
-                  disabled={selectedDriver === 'null' || selectedCar === 'null'}
+                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                 >
                   Adicionar Nota
+                </ActionButton>
+                <ActionButton
+                  $tone="secondary"
+                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                  onClick={() => setIsBatchModalOpen(true)}
+                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
+                >
+                  Adicionar lote
                 </ActionButton>
               </div>
 
@@ -1239,6 +1361,59 @@ function RoutePlanning() {
         </div>
 
         {showPopup && <Popup title={titlePopup} closePopup={() => setShowPopup(false)} onAdd={handleAddNewDriverOrCar} />}
+
+        {isBatchModalOpen ? (
+          <div className="fixed inset-0 z-[1470] flex items-center justify-center bg-black/70 p-3">
+            <div className="w-full max-w-[720px] rounded-lg border border-border bg-surface p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-base font-semibold text-text">Adicionar notas em lote</h3>
+                <button
+                  type="button"
+                  className="rounded border border-border bg-surface-2 px-2 py-1 text-sm text-text"
+                  onClick={() => {
+                    if (isBatchAdding) return;
+                    setIsBatchModalOpen(false);
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <textarea
+                className="scrollbar-ui min-h-[220px] w-full resize-y rounded-sm border border-accent/35 bg-card p-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                placeholder="Cole várias NFs/códigos de barras (uma por linha)"
+                value={batchNoteLookup}
+                onChange={(event) => setBatchNoteLookup(event.target.value)}
+                disabled={isBatchAdding}
+              />
+              <p className="mt-2 text-xs text-muted">
+                Digite ou cole uma NF/código por linha. O sistema valida item por item e mostra os erros ao final.
+              </p>
+
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
+                  onClick={() => {
+                    if (isBatchAdding) return;
+                    setIsBatchModalOpen(false);
+                  }}
+                  disabled={isBatchAdding}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 py-2 text-sm font-semibold text-[#04131e] disabled:cursor-not-allowed disabled:opacity-55"
+                  onClick={handleAddBatchNotes}
+                  disabled={isBatchAdding}
+                >
+                  {isBatchAdding ? 'Validando lote...' : 'Enviar lote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {pendingConflict ? (
           <div className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">

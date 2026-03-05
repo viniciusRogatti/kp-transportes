@@ -16,10 +16,12 @@ import { pdf } from "@react-pdf/renderer";
 import { LoaderPrinting } from "../style/Loaders";
 import { format } from "date-fns";
 import { sanitizeDanfeTextFields } from "../utils/textNormalization";
+import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
+  const { invoiceContextByNf, loadInvoiceContext } = useInvoiceSearchContext();
   const [filters, setFilters] = useState({
     nf: '',
     product: '',
@@ -56,7 +58,10 @@ function TodayInvoices() {
         ? response.data.map((danfe) => sanitizeDanfeTextFields(danfe))
         : [];
       setDataDanfes(sanitizedRows);
-      await loadTodayDrivers();
+      await Promise.all([
+        loadTodayDrivers(),
+        loadInvoiceContext(sanitizedRows),
+      ]);
     } catch (error) {
       console.error('Erro ao buscar notas do dia atual:', error);
     }
@@ -245,7 +250,12 @@ function TodayInvoices() {
             ) : (
               <>
                 <NotesFound key={notesSignature}>{`${danfes.length} Notas encontradas`}</NotesFound>
-                <CardDanfes danfes={danfes} animationKey={notesSignature} driverByInvoice={driverByInvoice} />
+                <CardDanfes
+                  danfes={danfes}
+                  animationKey={notesSignature}
+                  driverByInvoice={driverByInvoice}
+                  invoiceContextByNf={invoiceContextByNf}
+                />
               </>
             )}
           </ContainerDanfes>

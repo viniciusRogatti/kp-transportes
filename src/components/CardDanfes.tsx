@@ -93,7 +93,7 @@ function CardDanfes({
                   className={!driverName ? 'absolute inset-0 select-text overflow-hidden border-accent/55 shadow-[0_0_0_1px_rgba(1,87,163,0.25)]' : 'absolute inset-0 select-text overflow-hidden'}
                   style={{ backfaceVisibility: 'hidden' }}
                 >
-                  <TitleCard>
+                  <TitleCard className="shrink-0">
                     <h1>{`NF ${danfe.invoice_number}`}</h1>
                     <p className={`absolute left-1/2 top-1.5 -translate-x-1/2 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                       driverName
@@ -104,62 +104,68 @@ function CardDanfes({
                     </p>
                     <h4>{formatDateBR(danfe.invoice_date)}</h4>
                   </TitleCard>
-                  <h4 className="mt-1 text-sm font-semibold leading-tight">{customerName}</h4>
-                  <p className="text-xs text-muted">{cityName}</p>
-                  {invoiceContext && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {invoiceContext.occurrence_count > 0 && (
-                        <span className="rounded-full border border-amber-400/45 bg-amber-900/25 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
-                          {`Ocorrencias: ${invoiceContext.occurrence_count}`}
-                        </span>
+                  <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
+                    <div className="mt-1 shrink-0">
+                      <h4 className="break-words text-sm font-semibold leading-tight">{customerName}</h4>
+                      <p className="break-words text-xs text-muted">{cityName}</p>
+                      {invoiceContext && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {invoiceContext.occurrence_count > 0 && (
+                            <span className="rounded-full border border-amber-600 bg-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-950">
+                              {`Ocorrencias: ${invoiceContext.occurrence_count}`}
+                            </span>
+                          )}
+                          {invoiceContext.credit_letter_count > 0 && (
+                            <span className="rounded-full border border-sky-700 bg-sky-200 px-2 py-0.5 text-[10px] font-semibold text-sky-950">
+                              {`Carta de credito: ${invoiceContext.credit_letter_pending_count > 0 ? 'pendente' : 'concluida'}`}
+                            </span>
+                          )}
+                          {returnTypeLabels.map((label) => (
+                            <span
+                              key={`${danfe.invoice_number}-return-type-${label}`}
+                              className="rounded-full border border-emerald-700 bg-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-950"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
                       )}
-                      {invoiceContext.credit_letter_count > 0 && (
-                        <span className="rounded-full border border-sky-400/45 bg-sky-900/25 px-2 py-0.5 text-[10px] font-semibold text-sky-200">
-                          {`Carta de credito: ${invoiceContext.credit_letter_pending_count > 0 ? 'pendente' : 'concluida'}`}
-                        </span>
-                      )}
-                      {returnTypeLabels.map((label) => (
-                        <span
-                          key={`${danfe.invoice_number}-return-type-${label}`}
-                          className="rounded-full border border-emerald-400/45 bg-emerald-900/25 px-2 py-0.5 text-[10px] font-semibold text-emerald-200"
-                        >
-                          {label}
-                        </span>
-                      ))}
                     </div>
-                  )}
-                  <ContainerItems>
-                    {danfe.DanfeProducts.length > 4 && (
-                      <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-surface-2/85 px-2 py-1">
-                        <p className="text-[10px] font-medium text-muted">
-                          Lista grande de itens.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => openProductsModal(danfe)}
-                          className="inline-flex h-6 shrink-0 items-center rounded-md border border-accent/45 bg-accent/15 px-2 text-[10px] font-semibold text-text-accent transition hover:bg-accent/25"
-                          aria-label={`Abrir lista completa de produtos da NF ${danfe.invoice_number}`}
-                        >
-                          Ver todos
-                        </button>
-                      </div>
-                    )}
-                    <DescriptionColumns className="shrink-0 pr-1">
-                      <span>Código</span>
-                      <span>Descrição</span>
-                      <span>Qtd</span>
-                    </DescriptionColumns>
-                    <ItemsScrollArea aria-label={`Itens da NF ${danfe.invoice_number}`}>
-                      {danfe.DanfeProducts.map((item) => (
-                        <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
-                            <li>{item.Product.code}</li>
-                            <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
-                            <li>{formatQuantity(item.quantity, item.type)}</li>
-                        </ListItems>
-                      ))}
-                    </ItemsScrollArea>
-                  </ContainerItems>
-                  <TotalQuantity className="mt-auto flex items-center justify-between gap-2">
+
+                    <ContainerItems className="min-h-0 flex-1">
+                      {danfe.DanfeProducts.length > 4 && (
+                        <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-surface-2/85 px-2 py-1">
+                          <p className="text-[10px] font-medium text-muted">
+                            Lista grande de itens.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => openProductsModal(danfe)}
+                            className="inline-flex h-6 shrink-0 items-center rounded-md border border-accent/45 bg-accent/15 px-2 text-[10px] font-semibold text-text-accent transition hover:bg-accent/25"
+                            aria-label={`Abrir lista completa de produtos da NF ${danfe.invoice_number}`}
+                          >
+                            Ver todos
+                          </button>
+                        </div>
+                      )}
+                      <DescriptionColumns className="shrink-0 pr-1">
+                        <span>Código</span>
+                        <span>Descrição</span>
+                        <span>Qtd</span>
+                      </DescriptionColumns>
+                      <ItemsScrollArea aria-label={`Itens da NF ${danfe.invoice_number}`}>
+                        {danfe.DanfeProducts.map((item) => (
+                          <ListItems key={ `${danfe.invoice_number}-${item.Product.code}` }>
+                              <li>{item.Product.code}</li>
+                              <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
+                              <li>{formatQuantity(item.quantity, item.type)}</li>
+                          </ListItems>
+                        ))}
+                      </ItemsScrollArea>
+                    </ContainerItems>
+                  </div>
+
+                  <TotalQuantity className="mt-2 shrink-0 flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
                     <button
                       type="button"
@@ -176,37 +182,39 @@ function CardDanfes({
                   className="absolute inset-0 select-text overflow-hidden"
                   style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
                 >
-                  <TitleCard>
+                  <TitleCard className="shrink-0">
                     <h1>{`NF ${danfe.invoice_number}`}</h1>
                     <h4>Detalhes</h4>
                   </TitleCard>
-                  <div className="mt-2 space-y-2 text-sm">
-                    <p><strong>Cliente:</strong> {customerName}</p>
-                    <p><strong>Endereço:</strong> {customerAddress}</p>
-                    <p><strong>Cidade:</strong> {cityName}</p>
-                    <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
-                    <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
-                    <p><strong>Motorista:</strong> {driverName || 'Sem motorista'}</p>
-                    {invoiceContext ? (
-                      <>
-                        <p>
-                          <strong>Ocorrencias:</strong>
-                          {` ${invoiceContext.occurrence_count} (pendentes: ${invoiceContext.occurrence_pending_count} | resolvidas: ${invoiceContext.occurrence_resolved_count})`}
-                        </p>
-                        <p>
-                          <strong>Carta de credito:</strong>
-                          {` ${invoiceContext.credit_letter_count ? `${invoiceContext.credit_letter_pending_count} pendente(s) / ${invoiceContext.credit_letter_completed_count} concluida(s)` : 'nenhuma'}`}
-                        </p>
-                        <p>
-                          <strong>Devolucoes:</strong>
-                          {` ${returnTypeLabels.length ? returnTypeLabels.join(', ') : 'nenhuma'}`}
-                        </p>
-                      </>
-                    ) : (
-                      <p><strong>Eventos:</strong> sem ocorrencia/devolucao registrada para esta NF.</p>
-                    )}
+                  <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Cliente:</strong> {customerName}</p>
+                      <p><strong>Endereço:</strong> {customerAddress}</p>
+                      <p><strong>Cidade:</strong> {cityName}</p>
+                      <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
+                      <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
+                      <p><strong>Motorista:</strong> {driverName || 'Sem motorista'}</p>
+                      {invoiceContext ? (
+                        <>
+                          <p>
+                            <strong>Ocorrencias:</strong>
+                            {` ${invoiceContext.occurrence_count} (pendentes: ${invoiceContext.occurrence_pending_count} | resolvidas: ${invoiceContext.occurrence_resolved_count})`}
+                          </p>
+                          <p>
+                            <strong>Carta de credito:</strong>
+                            {` ${invoiceContext.credit_letter_count ? `${invoiceContext.credit_letter_pending_count} pendente(s) / ${invoiceContext.credit_letter_completed_count} concluida(s)` : 'nenhuma'}`}
+                          </p>
+                          <p>
+                            <strong>Devolucoes:</strong>
+                            {` ${returnTypeLabels.length ? returnTypeLabels.join(', ') : 'nenhuma'}`}
+                          </p>
+                        </>
+                      ) : (
+                        <p><strong>Eventos:</strong> sem ocorrencia/devolucao registrada para esta NF.</p>
+                      )}
+                    </div>
                   </div>
-                  <TotalQuantity className="mt-auto flex items-center justify-between gap-2">
+                  <TotalQuantity className="mt-2 shrink-0 flex items-center justify-between gap-2">
                     <p>Use o botão Voltar</p>
                     <button
                       type="button"

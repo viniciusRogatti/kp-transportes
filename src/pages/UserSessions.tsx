@@ -105,6 +105,7 @@ const USER_GROUP_LABELS: Record<UserGroup, string> = {
   kp: 'Operação KP',
   control_tower: 'Torre de Controle (MAR E RIO)',
 };
+const SESSIONS_PER_PAGE = 10;
 
 function formatDateTime(value: string | null) {
   if (!value) return '-';
@@ -153,6 +154,7 @@ function UserSessions() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [canLoadData, setCanLoadData] = useState(false);
+  const [currentSessionsPage, setCurrentSessionsPage] = useState(1);
 
   async function loadUsers() {
     try {
@@ -262,6 +264,34 @@ function UserSessions() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canLoadData, selectedUserGroup]);
+
+  useEffect(() => {
+    setCurrentSessionsPage(1);
+  }, [selectedUserGroup, selectedUserId, fromDate, toDate]);
+
+  const totalSessionsPages = useMemo(() => {
+    if (!sessions.length) return 1;
+    return Math.max(1, Math.ceil(sessions.length / SESSIONS_PER_PAGE));
+  }, [sessions.length]);
+
+  useEffect(() => {
+    setCurrentSessionsPage((current) => {
+      if (current <= totalSessionsPages) return current;
+      return totalSessionsPages;
+    });
+  }, [totalSessionsPages]);
+
+  const paginatedSessions = useMemo(() => {
+    const start = (currentSessionsPage - 1) * SESSIONS_PER_PAGE;
+    return sessions.slice(start, start + SESSIONS_PER_PAGE);
+  }, [currentSessionsPage, sessions]);
+
+  const sessionsRangeText = useMemo(() => {
+    if (!sessions.length) return 'Sem sessões para exibir.';
+    const start = (currentSessionsPage - 1) * SESSIONS_PER_PAGE + 1;
+    const end = Math.min(currentSessionsPage * SESSIONS_PER_PAGE, sessions.length);
+    return `Mostrando ${start}-${end} de ${sessions.length} sessões`;
+  }, [currentSessionsPage, sessions]);
 
   const weeklyLoginsOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
@@ -629,7 +659,7 @@ function UserSessions() {
                     <td colSpan={7}>Nenhuma sessão encontrada.</td>
                   </tr>
                 ) : (
-                  sessions.map((session) => (
+                  paginatedSessions.map((session) => (
                     <tr key={`session-row-${session.id}`}>
                       <td>{session.user?.name || session.user?.username || '-'}</td>
                       <td>{PERMISSION_LABELS[session.user?.permission || ''] || session.user?.permission || '-'}</td>
@@ -643,6 +673,28 @@ function UserSessions() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-surface/40 px-3 py-2 text-xs text-muted">
+            <span>{sessionsRangeText}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentSessionsPage((current) => Math.max(1, current - 1))}
+                disabled={loading || currentSessionsPage <= 1}
+                className="h-8 rounded-md border border-white/15 bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Anterior
+              </button>
+              <span>{`Página ${currentSessionsPage} de ${totalSessionsPages}`}</span>
+              <button
+                type="button"
+                onClick={() => setCurrentSessionsPage((current) => Math.min(totalSessionsPages, current + 1))}
+                disabled={loading || currentSessionsPage >= totalSessionsPages}
+                className="h-8 rounded-md border border-white/15 bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Próxima
+              </button>
+            </div>
           </div>
         </div>
       </Container>

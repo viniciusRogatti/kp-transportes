@@ -51,6 +51,7 @@ import {
 } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
+import { showConfirm } from '../utils/dialog';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 const RETURN_BATCH_LOOKBACK_OPTIONS = [
@@ -1679,30 +1680,39 @@ function ReturnsOccurrences() {
     }
   }
 
-  async function handleConfirmBatchSubmission() {
-    if (!selectedBatch) {
+  async function handleConfirmBatchSubmission(batchToConfirm?: IReturnBatch) {
+    const targetBatch = batchToConfirm || selectedBatch;
+    if (!targetBatch) {
       return;
     }
 
-    if (selectedBatchHasUnsavedChanges) {
+    const targetWorkflowStatus = resolveReturnBatchWorkflowStatus(targetBatch);
+    const isTargetSelected = selectedBatch?.batch_code === targetBatch.batch_code;
+
+    if (isTargetSelected && selectedBatchHasUnsavedChanges) {
       alert('Salve as alteracoes do lote antes de confirmar o envio.');
       return;
     }
 
-    if (!canManageBatchTransportadora || selectedBatchWorkflowStatus !== 'pending_transportadora') {
+    if (!canManageBatchTransportadora || targetWorkflowStatus !== 'pending_transportadora') {
       alert('Apenas lotes pendentes da transportadora podem ser confirmados para envio.');
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       'Ao confirmar o envio da devolucao, este lote nao podera mais ser editado. Deseja continuar?',
+      {
+        title: 'Confirmar envio',
+        confirmLabel: 'Confirmar envio',
+        cancelLabel: 'Cancelar',
+      },
     );
     if (!confirmed) {
       return;
     }
 
     try {
-      await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/confirm-submission`);
+      await axios.put(`${API_URL}/returns/batches/${targetBatch.batch_code}/confirm-submission`);
       alert('Envio do lote confirmado. O lote agora aguarda confirmacao da Torre de Controle.');
       await loadReturnBatches();
     } catch (error) {
@@ -1725,8 +1735,13 @@ function ReturnsOccurrences() {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       'Confirma que a Torre de Controle recebeu esta devolucao e deseja finalizar o lote?',
+      {
+        title: 'Confirmar recebimento',
+        confirmLabel: 'Finalizar lote',
+        cancelLabel: 'Cancelar',
+      },
     );
     if (!confirmed) {
       return;
@@ -2053,7 +2068,15 @@ function ReturnsOccurrences() {
   }
 
   async function handleDeleteOccurrence(id: number) {
-    const confirmed = window.confirm('Deseja realmente excluir esta ocorrencia? O historico sera preservado.');
+    const confirmed = await showConfirm(
+      'Deseja realmente excluir esta ocorrencia? O historico sera preservado.',
+      {
+        title: 'Excluir ocorrência',
+        confirmLabel: 'Excluir',
+        cancelLabel: 'Cancelar',
+        tone: 'danger',
+      },
+    );
     if (!confirmed) {
       return;
     }
@@ -2154,7 +2177,7 @@ function ReturnsOccurrences() {
                     {selectedBatchWorkflowStatus === 'pending_transportadora' && canManageBatchTransportadora && (
                       <button
                         type="button"
-                        onClick={handleConfirmBatchSubmission}
+                        onClick={() => handleConfirmBatchSubmission()}
                         className="rounded-md border border-amber-500/70 bg-[linear-gradient(135deg,#ffd166_0%,#f7b733_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#2b1b00] transition hover:brightness-105"
                       >
                         Confirmar envio da devolucao
@@ -2748,6 +2771,15 @@ function ReturnsOccurrences() {
                                 <button className="secondary" onClick={() => handleOpenBatchPdf(batch)} type="button">
                                   Abrir PDF
                                 </button>
+                                {batchWorkflowStatus === 'pending_transportadora' && canManageBatchTransportadora && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmBatchSubmission(batch)}
+                                    className="rounded-md border border-amber-500/70 bg-[linear-gradient(135deg,#ffd166_0%,#f7b733_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#2b1b00] transition hover:brightness-105"
+                                  >
+                                    Confirmar envio
+                                  </button>
+                                )}
                                 {isAdminUser && (
                                   <IconButton
                                     icon={History}
@@ -3003,12 +3035,19 @@ function ReturnsOccurrences() {
                           <InlineText>Produto</InlineText>
                           <select
                             value={occurrenceProductCode}
-                            onChange={(event) => {
+                            onChange={async (event) => {
                               const nextProductCode = event.target.value;
                               const switchingToTotal = nextProductCode === OCCURRENCE_TOTAL_OPTION;
 
                               if (editingOccurrenceId && switchingToTotal && occurrenceItems.length) {
-                                const confirmed = window.confirm('Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.');
+                                const confirmed = await showConfirm(
+                                  'Deseja trocar a ocorrencia para NF total? Os itens selecionados serao removidos.',
+                                  {
+                                    title: 'Trocar escopo da ocorrência',
+                                    confirmLabel: 'Trocar para NF total',
+                                    cancelLabel: 'Cancelar',
+                                  },
+                                );
                                 if (!confirmed) return;
                               }
 

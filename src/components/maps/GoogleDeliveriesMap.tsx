@@ -96,7 +96,7 @@ function GoogleDeliveriesMap({
   onMapBoundsChange,
 }: GoogleDeliveriesMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [hoveredDeliveryId, setHoveredDeliveryId] = useState<string | null>(null);
+  const [openedInfoDeliveryId, setOpenedInfoDeliveryId] = useState<string | null>(null);
   const hasFittedBoundsRef = useRef(false);
   const activeDatasetKeyRef = useRef<string>(datasetKey);
   const fitControlContainerRef = useRef<HTMLDivElement | null>(null);
@@ -109,10 +109,20 @@ function GoogleDeliveriesMap({
     googleMapsApiKey: apiKey,
   });
 
-  const hoveredDelivery = useMemo(() => {
-    if (!hoveredDeliveryId) return null;
-    return deliveries.find((delivery) => delivery.id === hoveredDeliveryId) || null;
-  }, [deliveries, hoveredDeliveryId]);
+  const openedInfoDelivery = useMemo(() => {
+    if (!openedInfoDeliveryId) return null;
+    return deliveries.find((delivery) => delivery.id === openedInfoDeliveryId) || null;
+  }, [deliveries, openedInfoDeliveryId]);
+
+  useEffect(() => {
+    setOpenedInfoDeliveryId(selectedDeliveryId);
+  }, [selectedDeliveryId]);
+
+  useEffect(() => {
+    if (!openedInfoDeliveryId) return;
+    if (deliveries.some((delivery) => delivery.id === openedInfoDeliveryId)) return;
+    setOpenedInfoDeliveryId(null);
+  }, [deliveries, openedInfoDeliveryId]);
 
   const mapOptions = useMemo<google.maps.MapOptions>(() => ({
     mapTypeControl: false,
@@ -320,13 +330,15 @@ function GoogleDeliveriesMap({
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => onMarkerClick(delivery.id)}
-                onMouseEnter={() => setHoveredDeliveryId(delivery.id)}
-                onMouseLeave={() => setHoveredDeliveryId((current) => (current === delivery.id ? null : current))}
+                onClick={() => {
+                  onMarkerClick(delivery.id);
+                  setOpenedInfoDeliveryId(delivery.id);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
                     onMarkerClick(delivery.id);
+                    setOpenedInfoDeliveryId(delivery.id);
                   }
                 }}
                 aria-label={`Selecionar entrega ${delivery.label}`}
@@ -352,10 +364,10 @@ function GoogleDeliveriesMap({
           );
         })}
 
-        {hoveredDelivery ? (
+        {openedInfoDelivery ? (
           <InfoWindowF
-            position={{ lat: hoveredDelivery.lat, lng: hoveredDelivery.lng }}
-            onCloseClick={() => setHoveredDeliveryId(null)}
+            position={{ lat: openedInfoDelivery.lat, lng: openedInfoDelivery.lng }}
+            onCloseClick={() => setOpenedInfoDeliveryId(null)}
             options={{
               pixelOffset: new window.google.maps.Size(
                 0,
@@ -363,12 +375,12 @@ function GoogleDeliveriesMap({
               ),
             }}
           >
-            <div className="space-y-0.5 text-xs">
-              <div className="font-semibold">{hoveredDelivery.label}</div>
-              <div>{hoveredDelivery.customerName}</div>
-              <div className="text-slate-600">{`${hoveredDelivery.city} • ${hoveredDelivery.neighborhood}`}</div>
-              <div>{`Motorista: ${hoveredDelivery.driverName || 'Nao atribuido'}`}</div>
-              <div>{`Status: ${STAGE_LABELS[hoveredDelivery.status]}`}</div>
+            <div className="space-y-0.5 text-xs" style={{ color: '#000000' }}>
+              <div className="font-semibold">{openedInfoDelivery.label}</div>
+              <div>{openedInfoDelivery.customerName}</div>
+              <div>{`${openedInfoDelivery.city} • ${openedInfoDelivery.neighborhood}`}</div>
+              <div>{`Motorista: ${openedInfoDelivery.driverName || 'Nao atribuido'}`}</div>
+              <div>{`Status: ${STAGE_LABELS[openedInfoDelivery.status]}`}</div>
             </div>
           </InfoWindowF>
         ) : null}

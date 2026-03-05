@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "@react-pdf/renderer": "^3.3.8",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-table": "^8.21.3",

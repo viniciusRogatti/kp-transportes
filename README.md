@@ -148,6 +148,27 @@ Variaveis esperadas no backend para validacao:
 - `TURNSTILE_SECRET_KEY`
 - `RECAPTCHA_SECRET_KEY`
 
+## Google Maps (Monitoramento de Entregas)
+A pagina `/delivery-monitoring` usa Google Maps JavaScript API.
+
+1. No Google Cloud Console, habilite:
+- `Maps JavaScript API` (obrigatoria)
+
+2. Crie uma API key e restrinja por:
+- HTTP referrers (dominios do frontend)
+- API restrictions: apenas `Maps JavaScript API`
+
+3. Configure no frontend (`frontend/.env`):
+```bash
+REACT_APP_GOOGLE_MAPS_API_KEY=...
+# opcional para ambientes Vite:
+# VITE_GOOGLE_MAPS_API_KEY=...
+```
+
+Observacoes:
+- Nao commite a key no repositorio.
+- Sem key valida, o mapa exibe mensagem de configuracao em tela.
+
 ## Build e deploy
 ```bash
 npm run build

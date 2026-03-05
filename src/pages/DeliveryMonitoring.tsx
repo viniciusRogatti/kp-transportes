@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
-import { io, Socket } from 'socket.io-client';
-import L from 'leaflet';
 import {
-  CircleMarker,
-  MapContainer,
-  Polyline,
-  Popup,
-  TileLayer,
-  Tooltip,
-  useMap,
-  useMapEvents,
-} from 'react-leaflet';
+  Check,
+  MapPin,
+  Navigation,
+  Package,
+  Truck,
+  type LucideIcon,
+} from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
+import GoogleDeliveriesMap, { GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';
 import Header from '../components/Header';
 import { API_URL, COMPANY_LOCATION } from '../data';
 import { Container } from '../style/invoices';
-import 'leaflet/dist/leaflet.css';
-
-type DeliveryStage = 'unassigned' | 'assigned' | 'on_the_way' | 'on_site' | 'completed';
+import {
+  DeliveryStage,
+  STAGE_LABELS,
+  STAGE_ORDER,
+  STAGE_PRIORITY,
+  STAGE_STYLE,
+} from './deliveryMonitoring/mapStyles';
+import {
+  toGoogleDeliveryMapItems,
+  toGoogleDeliveryRoutes,
+} from './deliveryMonitoring/googleMapAdapter';
 
 type DeliveryRow = {
   invoice_number: string;
@@ -100,186 +106,125 @@ type AddressDiagnosticsResponse = {
   };
 };
 
-type MarkerCluster = {
-  kind: 'cluster';
-  id: string;
-  latitude: number;
-  longitude: number;
-  count: number;
-  dominantStage: DeliveryStage;
-  stageCounts: Record<DeliveryStage, number>;
-  previewRows: Array<{
-    invoice_number: string;
-    customer_name: string;
-    stage: DeliveryStage;
-    driver_name: string | null;
-  }>;
-};
-
-type MarkerPoint = {
-  kind: 'point';
-  row: DeliveryRow;
-};
-
-type MarkerRenderable = MarkerCluster | MarkerPoint;
-type MapViewMode = 'cluster' | 'points';
-
-const STAGE_LABELS: Record<DeliveryStage, string> = {
-  unassigned: 'Sem motorista',
-  assigned: 'Atribuida',
-  on_the_way: 'A caminho',
-  on_site: 'No local',
-  completed: 'Finalizada',
-};
-
-const STAGE_ORDER: DeliveryStage[] = ['unassigned', 'assigned', 'on_the_way', 'on_site', 'completed'];
-
-const STAGE_STYLE: Record<DeliveryStage, { fill: string; weight: number; opacity: number }> = {
-  unassigned: { fill: '#94a3b8', weight: 2, opacity: 0.95 },
-  assigned: { fill: '#ffffff', weight: 3, opacity: 0.95 },
-  on_the_way: { fill: '#fde047', weight: 3, opacity: 0.98 },
-  on_site: { fill: '#22c55e', weight: 4, opacity: 0.98 },
-  completed: { fill: '#9ca3af', weight: 2, opacity: 0.45 },
-};
-
-function ZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
-  useMapEvents({
-    zoomend(event) {
-      onZoomChange(event.target.getZoom());
-    },
-  });
-  return null;
-}
-
-function FitBoundsToDeliveries({ points }: { points: Array<[number, number]> }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!points.length) return;
-    const bounds = L.latLngBounds(points);
-    map.fitBounds(bounds, {
-      padding: [50, 50],
-      maxZoom: 14,
-    });
-  }, [map, points]);
-
-  return null;
-}
-
-const resolveStageFromCounts = (rows: DeliveryRow[]): DeliveryStage => {
-  const counter = {
-    unassigned: 0,
-    assigned: 0,
-    on_the_way: 0,
-    on_site: 0,
-    completed: 0,
-  };
-
-  rows.forEach((row) => {
-    counter[row.stage] += 1;
-  });
-
-  return STAGE_ORDER.reduce((best, stage) => (
-    counter[stage] > counter[best] ? stage : best
-  ), 'unassigned' as DeliveryStage);
+const resolveGoogleMapsApiKey = () => {
+  const env = process.env as Record<string, string | undefined>;
+  return env.REACT_APP_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY || '';
 };
 
 const stagePriority = (stage: DeliveryStage) => {
-  if (stage === 'on_site') return 0;
-  if (stage === 'on_the_way') return 1;
-  if (stage === 'assigned') return 2;
-  if (stage === 'unassigned') return 3;
-  return 4;
+  return STAGE_PRIORITY[stage] ?? 99;
 };
 
-const buildClusteredMarkers = (rows: DeliveryRow[], zoom: number, viewMode: MapViewMode): MarkerRenderable[] => {
-  if (viewMode === 'points' || zoom >= 13 || rows.length <= 120) {
-    return rows.map((row) => ({ kind: 'point', row }));
+const STAGE_ICONS: Record<DeliveryStage, LucideIcon> = {
+  unassigned: Package,
+  assigned: Truck,
+  on_the_way: Navigation,
+  on_site: MapPin,
+  completed: Check,
+};
+
+const areSameGeolocation = (left: DeliveryRow['geolocation'], right: DeliveryRow['geolocation']) => {
+  return left.latitude === right.latitude
+    && left.longitude === right.longitude
+    && left.status === right.status
+    && left.source === right.source
+    && left.precision_level === right.precision_level
+    && left.last_geocoded_at === right.last_geocoded_at;
+};
+
+const areSameDeliveryRow = (left: DeliveryRow, right: DeliveryRow) => {
+  return left.invoice_number === right.invoice_number
+    && left.customer_name === right.customer_name
+    && left.city === right.city
+    && left.state === right.state
+    && left.neighborhood === right.neighborhood
+    && left.address === right.address
+    && left.address_number === right.address_number
+    && left.zip_code === right.zip_code
+    && left.danfe_status === right.danfe_status
+    && left.stage === right.stage
+    && left.stop_status === right.stop_status
+    && left.driver_id === right.driver_id
+    && left.driver_name === right.driver_name
+    && left.driver_color === right.driver_color
+    && left.trip_id === right.trip_id
+    && left.sequence === right.sequence
+    && areSameGeolocation(left.geolocation, right.geolocation);
+};
+
+const areSameHighlightedStops = (
+  left: DriverSummary['highlighted_stops'],
+  right: DriverSummary['highlighted_stops'],
+) => {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftStop = left[index];
+    const rightStop = right[index];
+    if (
+      leftStop.invoice_number !== rightStop.invoice_number
+      || leftStop.sequence !== rightStop.sequence
+      || leftStop.stage !== rightStop.stage
+      || leftStop.latitude !== rightStop.latitude
+      || leftStop.longitude !== rightStop.longitude
+    ) {
+      return false;
+    }
   }
+  return true;
+};
 
-  const cellSize = zoom <= 7 ? 0.35 : zoom <= 9 ? 0.18 : zoom <= 11 ? 0.08 : 0.035;
-  const buckets = new Map<string, { latSum: number; lngSum: number; rows: DeliveryRow[] }>();
+const areSameDriverSummary = (left: DriverSummary, right: DriverSummary) => {
+  return left.trip_id === right.trip_id
+    && left.driver_id === right.driver_id
+    && left.driver_name === right.driver_name
+    && left.run_number === right.run_number
+    && left.total_deliveries === right.total_deliveries
+    && left.completed_deliveries === right.completed_deliveries
+    && left.progress_pct === right.progress_pct
+    && left.stage === right.stage
+    && left.color === right.color
+    && areSameHighlightedStops(left.highlighted_stops, right.highlighted_stops);
+};
 
-  rows.forEach((row) => {
-    const latitude = Number(row.geolocation.latitude);
-    const longitude = Number(row.geolocation.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-
-    const latBucket = Math.floor(latitude / cellSize);
-    const lngBucket = Math.floor(longitude / cellSize);
-    const key = `${latBucket}:${lngBucket}`;
-    const current = buckets.get(key);
-    if (!current) {
-      buckets.set(key, {
-        latSum: latitude,
-        lngSum: longitude,
-        rows: [row],
-      });
-      return;
-    }
-    current.latSum += latitude;
-    current.lngSum += longitude;
-    current.rows.push(row);
-  });
-
-  return Array.from(buckets.entries()).map(([key, bucket]) => {
-    if (bucket.rows.length === 1) {
-      return {
-        kind: 'point',
-        row: bucket.rows[0],
-      } as MarkerPoint;
-    }
-
-    return {
-      kind: 'cluster',
-      id: key,
-      latitude: bucket.latSum / bucket.rows.length,
-      longitude: bucket.lngSum / bucket.rows.length,
-      count: bucket.rows.length,
-      dominantStage: resolveStageFromCounts(bucket.rows),
-      stageCounts: bucket.rows.reduce<Record<DeliveryStage, number>>((accumulator, row) => {
-        accumulator[row.stage] += 1;
-        return accumulator;
-      }, {
-        unassigned: 0,
-        assigned: 0,
-        on_the_way: 0,
-        on_site: 0,
-        completed: 0,
-      }),
-      previewRows: bucket.rows
-        .slice()
-        .sort((left, right) => stagePriority(left.stage) - stagePriority(right.stage))
-        .slice(0, 8)
-        .map((row) => ({
-          invoice_number: row.invoice_number,
-          customer_name: row.customer_name,
-          stage: row.stage,
-          driver_name: row.driver_name,
-        })),
-    } as MarkerCluster;
+const stabilizeRowsById = (nextRows: DeliveryRow[], prevRows: DeliveryRow[]) => {
+  if (!prevRows.length) return nextRows;
+  const prevById = new Map(prevRows.map((row) => [row.invoice_number, row]));
+  return nextRows.map((nextRow) => {
+    const prevRow = prevById.get(nextRow.invoice_number);
+    if (!prevRow) return nextRow;
+    return areSameDeliveryRow(prevRow, nextRow) ? prevRow : nextRow;
   });
 };
 
-const hasCoordinates = (row: DeliveryRow) => {
-  const latitude = row.geolocation.latitude;
-  const longitude = row.geolocation.longitude;
-  if (latitude === null || longitude === null) return false;
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
-  return !(latitude === 0 && longitude === 0);
+const stabilizeDriversById = (nextDrivers: DriverSummary[], prevDrivers: DriverSummary[]) => {
+  if (!prevDrivers.length) return nextDrivers;
+  const prevById = new Map(prevDrivers.map((driver) => [`${driver.trip_id}:${driver.driver_id || 0}`, driver]));
+  return nextDrivers.map((nextDriver) => {
+    const key = `${nextDriver.trip_id}:${nextDriver.driver_id || 0}`;
+    const prevDriver = prevById.get(key);
+    if (!prevDriver) return nextDriver;
+    return areSameDriverSummary(prevDriver, nextDriver) ? prevDriver : nextDriver;
+  });
 };
 
 function DeliveryMonitoring() {
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
+  const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(null);
   const [showRoutes, setShowRoutes] = useState<boolean>(true);
-  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('cluster');
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [zoom, setZoom] = useState<number>(10);
+  const [mapViewport, setMapViewport] = useState<GoogleMapBoundsPayload | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const googleMapsApiKey = useMemo(() => resolveGoogleMapsApiKey(), []);
+  const mapInitialCenter = useMemo(
+    () => ({ lat: COMPANY_LOCATION.lat, lng: COMPANY_LOCATION.lng }),
+    [],
+  );
+  const mapDatasetKey = overview?.date || date;
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -293,7 +238,15 @@ function DeliveryMonitoring() {
         }),
       ]);
 
-      setOverview(overviewData);
+      setOverview((current) => {
+        const previousDeliveries = current?.deliveries || [];
+        const previousDrivers = current?.drivers || [];
+        return {
+          ...overviewData,
+          deliveries: stabilizeRowsById(overviewData.deliveries || [], previousDeliveries),
+          drivers: stabilizeDriversById(overviewData.drivers || [], previousDrivers),
+        };
+      });
       setDiagnostics(diagnosticsData);
     } catch (error) {
       console.error('Falha ao carregar monitoramento de entregas.', error);
@@ -363,6 +316,17 @@ function DeliveryMonitoring() {
   const drivers = useMemo(() => overview?.drivers || [], [overview]);
   const summary = overview?.summary;
 
+  const selectedDelivery = useMemo(() => {
+    if (!selectedDeliveryInvoice) return null;
+    return deliveries.find((row) => row.invoice_number === selectedDeliveryInvoice) || null;
+  }, [deliveries, selectedDeliveryInvoice]);
+
+  useEffect(() => {
+    if (!selectedDeliveryInvoice) return;
+    if (selectedDelivery) return;
+    setSelectedDeliveryInvoice(null);
+  }, [selectedDeliveryInvoice, selectedDelivery]);
+
   const filteredDeliveries = useMemo(() => {
     return deliveries.filter((row) => {
       if (statusFilter !== 'all' && row.stage !== statusFilter) return false;
@@ -371,13 +335,13 @@ function DeliveryMonitoring() {
   }, [deliveries, statusFilter]);
 
   const mapDeliveries = useMemo(
-    () => filteredDeliveries.filter((row) => hasCoordinates(row)),
+    () => toGoogleDeliveryMapItems(filteredDeliveries),
     [filteredDeliveries],
   );
 
-  const renderables = useMemo(
-    () => buildClusteredMarkers(mapDeliveries, zoom, mapViewMode),
-    [mapDeliveries, zoom, mapViewMode],
+  const selectedDriverRoutes = useMemo(
+    () => toGoogleDeliveryRoutes(drivers, selectedDriverId, showRoutes),
+    [drivers, selectedDriverId, showRoutes],
   );
 
   const listRows = useMemo(() => {
@@ -390,25 +354,6 @@ function DeliveryMonitoring() {
       })
       .slice(0, 120);
   }, [filteredDeliveries]);
-
-  const boundsPoints = useMemo<Array<[number, number]>>(
-    () => mapDeliveries.map((row) => [Number(row.geolocation.latitude), Number(row.geolocation.longitude)]),
-    [mapDeliveries],
-  );
-
-  const selectedDriverRoutes = useMemo(() => {
-    if (!selectedDriverId || !showRoutes) return [];
-    return drivers
-      .filter((driver) => Number(driver.driver_id) === Number(selectedDriverId))
-      .map((driver) => ({
-        ...driver,
-        points: driver.highlighted_stops
-          .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
-          .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
-          .map((stop) => [stop.latitude, stop.longitude] as [number, number]),
-      }))
-      .filter((driver) => driver.points.length >= 2);
-  }, [drivers, selectedDriverId, showRoutes]);
 
   return (
     <div className="min-h-screen">
@@ -459,22 +404,6 @@ function DeliveryMonitoring() {
             >
               {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
             </button>
-            <div className="inline-flex h-10 overflow-hidden rounded-md border border-border bg-surface">
-              <button
-                type="button"
-                onClick={() => setMapViewMode('cluster')}
-                className={`px-3 text-sm font-semibold ${mapViewMode === 'cluster' ? 'bg-sky-500/20 text-sky-700' : 'text-text'}`}
-              >
-                Agrupado
-              </button>
-              <button
-                type="button"
-                onClick={() => setMapViewMode('points')}
-                className={`border-l border-border px-3 text-sm font-semibold ${mapViewMode === 'points' ? 'bg-sky-500/20 text-sky-700' : 'text-text'}`}
-              >
-                Pontos
-              </button>
-            </div>
             <button
               type="button"
               onClick={() => setStatusFilter('assigned')}
@@ -500,16 +429,6 @@ function DeliveryMonitoring() {
             <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {summary?.completed || 0}</span>
             <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {summary?.geolocated || 0}</span>
           </div>
-
-          <div className="mt-3 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800">
-            Geocoding automático ativo: entregas sem coordenadas entram em fila no backend e o mapa atualiza sozinho.
-          </div>
-
-          {overview?.used_fallback_date ? (
-            <div className="mt-2 rounded-md border border-amber-500/45 bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
-              Exibindo notas da data {overview.invoice_reference_date} para acompanhar a operação de {overview.date}.
-            </div>
-          ) : null}
 
           {diagnostics ? (
             <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
@@ -553,7 +472,10 @@ function DeliveryMonitoring() {
                     <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted">{`Rota #${driver.trip_id}`}</span>
                   </div>
                   <p className="mt-1 text-xs text-muted">{`${driver.completed_deliveries}/${driver.total_deliveries} finalizadas`}</p>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className="mt-2 h-2 w-full overflow-hidden rounded-full border bg-slate-100"
+                    style={{ borderColor: driver.color || '#94a3b8' }}
+                  >
                     <div
                       className="h-full rounded-full"
                       style={{
@@ -577,127 +499,113 @@ function DeliveryMonitoring() {
         </section>
 
         <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-            {STAGE_ORDER.map((stage) => (
-              <span key={stage} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full border"
-                  style={{
-                    backgroundColor: STAGE_STYLE[stage].fill,
-                    borderColor: '#0f172a',
-                    opacity: STAGE_STYLE[stage].opacity,
-                  }}
-                />
-                {STAGE_LABELS[stage]}
-              </span>
-            ))}
+          <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
+            <span>Visualizacao operacional no Google Maps (POIs e nomes de lugares).</span>
+            <span>{`Pontos no mapa: ${mapDeliveries.length}`}</span>
           </div>
 
-          <div className="h-[calc(100vh-360px)] min-h-[380px] overflow-hidden rounded-md border border-border">
-            <MapContainer
-              center={[COMPANY_LOCATION.lat, COMPANY_LOCATION.lng]}
-              zoom={10}
-              style={{ height: '100%', width: '100%' }}
-              scrollWheelZoom
-            >
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <ZoomTracker onZoomChange={setZoom} />
-              <FitBoundsToDeliveries points={boundsPoints} />
+          <div className="relative h-[calc(100vh-360px)] min-h-[380px] overflow-hidden rounded-md border border-border">
+            <GoogleDeliveriesMap
+              apiKey={googleMapsApiKey}
+              center={mapInitialCenter}
+              initialZoom={10}
+              datasetKey={mapDatasetKey}
+              deliveries={mapDeliveries}
+              routes={selectedDriverRoutes}
+              selectedDriverId={selectedDriverId}
+              selectedDeliveryId={selectedDeliveryInvoice}
+              onMarkerClick={setSelectedDeliveryInvoice}
+              onMapBoundsChange={setMapViewport}
+            />
 
-              {selectedDriverRoutes.map((route) => (
-                <Polyline
-                  key={`route-${route.trip_id}`}
-                  positions={route.points}
-                  pathOptions={{
-                    color: route.color,
-                    weight: 4,
-                    opacity: 0.85,
-                  }}
+            {selectedDelivery ? (
+              <>
+                <button
+                  type="button"
+                  className="absolute inset-0 z-[30] bg-slate-900/15 md:hidden"
+                  onClick={() => setSelectedDeliveryInvoice(null)}
+                  aria-label="Fechar painel da entrega"
                 />
-              ))}
-
-              {renderables.map((item) => {
-                if (item.kind === 'cluster') {
-                  const stageStyle = STAGE_STYLE[item.dominantStage];
-                  return (
-                    <CircleMarker
-                      key={item.id}
-                      center={[item.latitude, item.longitude]}
-                      radius={Math.min(24, 9 + item.count * 0.6)}
-                      pathOptions={{
-                        color: '#0f172a',
-                        weight: 2,
-                        fillColor: stageStyle.fill,
-                        fillOpacity: 0.78,
-                      }}
+                <aside className="absolute bottom-3 right-3 top-3 z-[40] w-[min(360px,calc(100%-1.5rem))] overflow-auto rounded-md border border-border bg-card p-3 shadow-2xl max-md:top-auto max-md:h-[58%]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted">Detalhes da entrega</p>
+                      <h4 className="text-base font-semibold text-text">{`NF ${selectedDelivery.invoice_number}`}</h4>
+                    </div>
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-text"
+                      onClick={() => setSelectedDeliveryInvoice(null)}
+                      aria-label="Fechar painel da entrega"
                     >
-                      <Popup>
-                        <div className="space-y-2">
-                          <div className="text-sm font-semibold">{`${item.count} entregas neste agrupamento`}</div>
-                          <div className="grid grid-cols-2 gap-1 text-xs">
-                            {STAGE_ORDER.map((stage) => (
-                              <span key={stage} className="rounded border border-border bg-surface px-1.5 py-1">
-                                {`${STAGE_LABELS[stage]}: ${item.stageCounts[stage] || 0}`}
-                              </span>
-                            ))}
-                          </div>
-                          <div className="text-xs text-muted">Principais entregas:</div>
-                          <ul className="max-h-36 space-y-1 overflow-auto pr-1 text-xs">
-                            {item.previewRows.map((row) => (
-                              <li key={`cluster-${item.id}-${row.invoice_number}`} className="rounded border border-border bg-surface px-2 py-1">
-                                <p className="font-semibold">{`NF ${row.invoice_number}`}</p>
-                                <p className="text-slate-600">{row.customer_name || 'Cliente sem nome'}</p>
-                                <p>{`${STAGE_LABELS[row.stage]}${row.driver_name ? ` • ${row.driver_name}` : ''}`}</p>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </Popup>
-                    </CircleMarker>
-                  );
-                }
+                      x
+                    </button>
+                  </div>
 
-                const row = item.row;
-                const stageStyle = STAGE_STYLE[row.stage];
-                const isDimmed = selectedDriverId !== null && Number(row.driver_id) !== Number(selectedDriverId);
-                const markerOpacity = isDimmed ? 0.18 : stageStyle.opacity;
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="rounded-md border border-border bg-surface px-2 py-2">
+                      <p className="font-semibold text-text">{selectedDelivery.customer_name || 'Cliente sem nome'}</p>
+                      <p className="mt-1 text-muted">{`${selectedDelivery.address || '-'}, ${selectedDelivery.address_number || 's/n'}`}</p>
+                      <p className="text-muted">{`${selectedDelivery.neighborhood || '-'} • ${selectedDelivery.city || '-'}${selectedDelivery.state ? `/${selectedDelivery.state}` : ''}`}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-md border border-border bg-surface px-2 py-2">
+                        <p className="text-muted">Status</p>
+                        <p className="font-semibold text-text">{STAGE_LABELS[selectedDelivery.stage]}</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-surface px-2 py-2">
+                        <p className="text-muted">Motorista</p>
+                        <p className="font-semibold text-text">{selectedDelivery.driver_name || 'Nao atribuido'}</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-surface px-2 py-2">
+                        <p className="text-muted">Rota</p>
+                        <p className="font-semibold text-text">{selectedDelivery.trip_id || '-'}</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-surface px-2 py-2">
+                        <p className="text-muted">Sequencia</p>
+                        <p className="font-semibold text-text">{selectedDelivery.sequence || '-'}</p>
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-border bg-surface px-2 py-2">
+                      <p className="text-muted">Geocoding</p>
+                      <p className="font-semibold text-text">
+                        {`${selectedDelivery.geolocation.status}${selectedDelivery.geolocation.source ? ` • ${selectedDelivery.geolocation.source}` : ''}`}
+                      </p>
+                    </div>
+                  </div>
+                </aside>
+              </>
+            ) : null}
+          </div>
 
-                return (
-                  <CircleMarker
-                    key={row.invoice_number}
-                    center={[Number(row.geolocation.latitude), Number(row.geolocation.longitude)]}
-                    radius={row.stage === 'on_site' ? 9 : row.stage === 'completed' ? 6 : 7}
-                    pathOptions={{
-                      color: row.driver_id ? row.driver_color : '#334155',
-                      weight: stageStyle.weight,
-                      fillColor: stageStyle.fill,
-                      fillOpacity: markerOpacity,
-                      opacity: isDimmed ? 0.3 : 1,
+          <div className="mt-2 flex flex-wrap gap-2">
+            {STAGE_ORDER.map((stage) => {
+              const Icon = STAGE_ICONS[stage];
+              return (
+                <span
+                  key={`legend-map-${stage}`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+                >
+                  <span
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white"
+                    style={{
+                      border: `1.5px solid ${STAGE_STYLE[stage].border}`,
                     }}
                   >
-                    <Tooltip direction="top" offset={[0, -7]} opacity={0.95}>
-                      <div className="text-xs">
-                        <div className="font-semibold">{`NF ${row.invoice_number}`}</div>
-                        <div>{row.customer_name || 'Cliente sem nome'}</div>
-                      </div>
-                    </Tooltip>
-                    <Popup>
-                      <div className="space-y-1">
-                        <p className="text-sm font-semibold">{`NF ${row.invoice_number}`}</p>
-                        <p className="text-xs text-slate-600">{row.customer_name || 'Cliente sem nome'}</p>
-                        <p className="text-xs">{`${row.address || '-'}, ${row.address_number || 's/n'} - ${row.city || '-'}/${row.state || '-'}`}</p>
-                        <p className="text-xs">{`Status: ${STAGE_LABELS[row.stage]}`}</p>
-                        <p className="text-xs">{`Motorista: ${row.driver_name || 'Nao atribuido'}`}</p>
-                        <p className="text-xs">{`Geocoding: ${row.geolocation.status}`}</p>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                );
-              })}
-            </MapContainer>
+                    <Icon size={12} strokeWidth={2.4} color={STAGE_STYLE[stage].border} />
+                  </span>
+                  {STAGE_LABELS[stage]}
+                </span>
+              );
+            })}
+          </div>
+
+          <p className="mt-1 text-xs text-muted">
+            Entrega com motorista usa a cor do motorista na borda do marcador.
+          </p>
+
+          <div className="mt-2 text-xs text-muted">
+            Zoom atual: {mapViewport?.zoom || '--'}
           </div>
 
           {loading ? (

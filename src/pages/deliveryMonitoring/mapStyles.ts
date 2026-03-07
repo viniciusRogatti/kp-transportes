@@ -25,7 +25,7 @@ export const STAGE_STYLE: Record<DeliveryStage, {
 }> = {
   unassigned: {
     fill: '#e2e8f0',
-    border: '#64748b',
+    border: '#eed4a4',
     opacity: 0.95,
   },
   assigned: {

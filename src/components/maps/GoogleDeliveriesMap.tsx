@@ -8,6 +8,7 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import {
+  Building2,
   Check,
   MapPin,
   Navigation,
@@ -22,6 +23,7 @@ import {
 } from '../../pages/deliveryMonitoring/mapStyles';
 import {
   GoogleDeliveryMapItem,
+  GoogleDriverLocation,
   GoogleDeliveryRoute,
 } from '../../pages/deliveryMonitoring/googleMapAdapter';
 
@@ -35,12 +37,22 @@ export type GoogleMapBoundsPayload = {
   } | null;
 };
 
+export type GoogleCompanyMarker = {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  address?: string;
+};
+
 type GoogleDeliveriesMapProps = {
   apiKey: string;
   center: { lat: number; lng: number };
   initialZoom?: number;
   datasetKey?: string;
   deliveries: GoogleDeliveryMapItem[];
+  driverLocations?: GoogleDriverLocation[];
+  companyMarker?: GoogleCompanyMarker | null;
   routes?: GoogleDeliveryRoute[];
   selectedDriverId: number | null;
   selectedDeliveryId: string | null;
@@ -51,10 +63,23 @@ type GoogleDeliveriesMapProps = {
 const mapContainerStyle = { width: '100%', height: '100%' };
 const MAP_MIN_ZOOM = 4;
 const MAP_MAX_ZOOM = 20;
+const MAP_MARKER_ICON_SCALE = 0.58;
+const MAP_MARKER_ICON_MIN_SIZE = 12;
+const MAP_MARKER_ICON_STROKE_WIDTH = 0.8;
+const MAP_MARKER_ICON_PADDING = 6;
+const MAP_MARKER_ICON_STROKE_COLOR = '#000000';
+const DRIVER_MARKER_ICON_SCALE = 1.12;
+const DRIVER_MARKER_ICON_MIN_SIZE = 28;
+const DRIVER_MARKER_ICON_STROKE_WIDTH = 1.4;
+const DRIVER_MARKER_ICON_PADDING = 2;
+const COMPANY_MARKER_ICON_SCALE = 0.8;
+const COMPANY_MARKER_ICON_MIN_SIZE = 22;
+const COMPANY_MARKER_ICON_STROKE_WIDTH = 1.2;
+const COMPANY_MARKER_FILL_COLOR = '#707070';
 
 const STAGE_ICONS: Record<DeliveryStage, LucideIcon> = {
   unassigned: Package,
-  assigned: Truck,
+  assigned: Package,
   on_the_way: Navigation,
   on_site: MapPin,
   completed: Check,
@@ -68,11 +93,13 @@ const resolveMarkerSize = (zoom: number) => {
   return 32;
 };
 
-const resolveMarkerBorderColor = (delivery: GoogleDeliveryMapItem) => {
-  if (delivery.driverId) {
-    return delivery.driverColor || STAGE_STYLE[delivery.status].border;
-  }
-  return STAGE_STYLE[delivery.status].border;
+const resolveMarkerIconPaint = (delivery: GoogleDeliveryMapItem) => {
+  return {
+    stroke: MAP_MARKER_ICON_STROKE_COLOR,
+    fill: delivery.status === 'assigned' && delivery.driverId
+      ? delivery.driverColor || STAGE_STYLE[delivery.status].border
+      : STAGE_STYLE[delivery.status].border,
+  };
 };
 
 const resolveMarkerOpacity = (delivery: GoogleDeliveryMapItem, isDimmed: boolean) => {
@@ -89,6 +116,8 @@ function GoogleDeliveriesMap({
   initialZoom = 10,
   datasetKey = 'default',
   deliveries,
+  driverLocations = [],
+  companyMarker = null,
   routes = [],
   selectedDriverId,
   selectedDeliveryId,
@@ -163,9 +192,9 @@ function GoogleDeliveriesMap({
     hasFittedBoundsRef.current = false;
   }, [datasetKey]);
 
-  const fitBoundsToDeliveries = useCallback(() => {
+  const fitBoundsToMapItems = useCallback(() => {
     if (!map) return;
-    if (!deliveries.length) {
+    if (!deliveries.length && !driverLocations.length) {
       map.setCenter(center);
       map.setZoom(initialZoom);
       return;
@@ -175,26 +204,29 @@ function GoogleDeliveriesMap({
     deliveries.forEach((delivery) => {
       bounds.extend({ lat: delivery.lat, lng: delivery.lng });
     });
+    driverLocations.forEach((driverLocation) => {
+      bounds.extend({ lat: driverLocation.lat, lng: driverLocation.lng });
+    });
     map.fitBounds(bounds, 52);
 
     const currentZoom = map.getZoom();
     if (currentZoom && currentZoom > 15) {
       map.setZoom(15);
     }
-  }, [center, deliveries, initialZoom, map]);
+  }, [center, deliveries, driverLocations, initialZoom, map]);
 
   useEffect(() => {
     if (!map) return;
     if (hasFittedBoundsRef.current) return;
-    if (!deliveries.length) return;
-    fitBoundsToDeliveries();
+    if (!deliveries.length && !driverLocations.length) return;
+    fitBoundsToMapItems();
     hasFittedBoundsRef.current = true;
-  }, [deliveries, fitBoundsToDeliveries, map]);
+  }, [deliveries, driverLocations, fitBoundsToMapItems, map]);
 
   const handleManualFitBounds = useCallback(() => {
-    fitBoundsToDeliveries();
+    fitBoundsToMapItems();
     hasFittedBoundsRef.current = true;
-  }, [fitBoundsToDeliveries]);
+  }, [fitBoundsToMapItems]);
 
   useEffect(() => {
     fitBoundsActionRef.current = handleManualFitBounds;
@@ -209,7 +241,7 @@ function GoogleDeliveriesMap({
 
     const controlButton = document.createElement('button');
     controlButton.type = 'button';
-    controlButton.textContent = 'Enquadrar entregas';
+    controlButton.textContent = 'Enquadrar mapa';
     controlButton.style.backgroundColor = '#fff';
     controlButton.style.border = '1px solid rgba(15, 23, 42, 0.25)';
     controlButton.style.borderRadius = '4px';
@@ -316,10 +348,9 @@ function GoogleDeliveriesMap({
         {deliveries.map((delivery) => {
           const zoom = map?.getZoom() || initialZoom;
           const markerSize = resolveMarkerSize(zoom);
-          const iconSize = Math.max(12, Math.round(markerSize * 0.46));
+          const iconSize = Math.max(MAP_MARKER_ICON_MIN_SIZE, Math.round(markerSize * MAP_MARKER_ICON_SCALE));
           const Icon = STAGE_ICONS[delivery.status];
-          const borderColor = resolveMarkerBorderColor(delivery);
-          const iconColor = STAGE_STYLE[delivery.status].border;
+          const iconPaint = resolveMarkerIconPaint(delivery);
           const isDimmed = selectedDriverId !== null && Number(delivery.driverId) !== Number(selectedDriverId);
           const isSelected = selectedDeliveryId === delivery.id;
           const markerOpacity = resolveMarkerOpacity(delivery, isDimmed);
@@ -350,23 +381,136 @@ function GoogleDeliveriesMap({
                   }
                 }}
                 aria-label={`Selecionar entrega ${delivery.label}`}
-                className="flex items-center justify-center rounded-full bg-white"
+                className="flex items-center justify-center"
                 style={{
-                  width: markerSize,
-                  height: markerSize,
-                  border: `${isSelected ? 3 : 2}px solid ${borderColor}`,
-                  boxShadow: isSelected
-                    ? '0 0 0 2px rgba(15,23,42,0.2), 0 6px 16px rgba(15,23,42,0.28)'
-                    : '0 3px 10px rgba(15,23,42,0.2)',
+                  width: iconSize + MAP_MARKER_ICON_PADDING,
+                  height: iconSize + MAP_MARKER_ICON_PADDING,
+                  filter: isSelected
+                    ? 'drop-shadow(0 0 6px rgba(15,23,42,0.28)) drop-shadow(0 6px 14px rgba(15,23,42,0.18))'
+                    : 'drop-shadow(0 3px 8px rgba(15,23,42,0.18))',
                   opacity: markerOpacity,
-                  transform: isSelected ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease',
+                  transform: isSelected ? 'scale(1.12)' : 'scale(1)',
+                  transition: 'transform 120ms ease, filter 120ms ease, opacity 120ms ease',
                   cursor: 'pointer',
                   pointerEvents: 'auto',
                   zIndex: isSelected ? 950 : isDimmed ? 120 : 500,
                 }}
               >
-                <Icon size={iconSize} strokeWidth={2.4} color={iconColor} />
+                <Icon
+                  size={iconSize}
+                  strokeWidth={MAP_MARKER_ICON_STROKE_WIDTH}
+                  color={iconPaint.stroke}
+                  fill={iconPaint.fill}
+                />
+              </div>
+            </OverlayViewF>
+          );
+        })}
+
+        {companyMarker ? (() => {
+          const zoom = map?.getZoom() || initialZoom;
+          const companyMarkerSize = resolveMarkerSize(zoom);
+          const companyIconSize = Math.max(
+            COMPANY_MARKER_ICON_MIN_SIZE,
+            Math.round(companyMarkerSize * COMPANY_MARKER_ICON_SCALE),
+          );
+
+          return (
+            <OverlayViewF
+              key={companyMarker.id}
+              position={{ lat: companyMarker.lat, lng: companyMarker.lng }}
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+              getPixelPositionOffset={(width, height) => ({
+                x: Math.round(width / -2),
+                y: Math.round(height / -2),
+              })}
+            >
+              <div className="pointer-events-none flex flex-col items-center gap-1">
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    width: companyIconSize + 10,
+                    height: companyIconSize + 10,
+                    filter: 'drop-shadow(0 3px 8px rgba(15,23,42,0.18))',
+                  }}
+                  aria-label={companyMarker.address ? `${companyMarker.label} - ${companyMarker.address}` : companyMarker.label}
+                >
+                  <Building2
+                    size={companyIconSize}
+                    strokeWidth={COMPANY_MARKER_ICON_STROKE_WIDTH}
+                    color="#000000"
+                    fill={COMPANY_MARKER_FILL_COLOR}
+                  />
+                </div>
+                <div className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm">
+                  {companyMarker.label}
+                </div>
+              </div>
+            </OverlayViewF>
+          );
+        })() : null}
+
+        {driverLocations.map((driverLocation) => {
+          const zoom = map?.getZoom() || initialZoom;
+          const driverMarkerSize = resolveMarkerSize(zoom);
+          const driverIconSize = Math.max(
+            DRIVER_MARKER_ICON_MIN_SIZE,
+            Math.round(driverMarkerSize * DRIVER_MARKER_ICON_SCALE),
+          );
+          const isSelected = selectedDriverId !== null && Number(driverLocation.driverId) === Number(selectedDriverId);
+          const attentionBorder = driverLocation.attentionLevel === 'CRITICAL'
+            ? '#e11d48'
+            : driverLocation.attentionLevel === 'WARNING'
+              ? '#d97706'
+              : '#0f172a';
+          const opacity = selectedDriverId !== null && Number(driverLocation.driverId) !== Number(selectedDriverId)
+            ? 0.38
+            : 1;
+
+          return (
+            <OverlayViewF
+              key={driverLocation.id}
+              position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+              getPixelPositionOffset={(width, height) => ({
+                x: Math.round(width / -2),
+                y: Math.round(height / -2),
+              })}
+            >
+              <div
+                className="pointer-events-none flex flex-col items-center gap-1"
+                style={{
+                  opacity,
+                  transform: isSelected ? 'scale(1.06)' : 'scale(1)',
+                  transition: 'transform 120ms ease, opacity 120ms ease',
+                  zIndex: isSelected ? 980 : 760,
+                }}
+              >
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    width: driverIconSize + DRIVER_MARKER_ICON_PADDING,
+                    height: driverIconSize + DRIVER_MARKER_ICON_PADDING,
+                    filter: isSelected
+                      ? `drop-shadow(0 0 6px ${attentionBorder}) drop-shadow(0 6px 14px rgba(15,23,42,0.22))`
+                      : `drop-shadow(0 3px 8px rgba(15,23,42,0.18)) drop-shadow(0 0 3px ${attentionBorder})`,
+                  }}
+                >
+                  <Truck
+                    size={driverIconSize}
+                    strokeWidth={DRIVER_MARKER_ICON_STROKE_WIDTH}
+                    color="#000000"
+                    fill={driverLocation.color}
+                  />
+                </div>
+                <div
+                  className="rounded-full border bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm"
+                  style={{
+                    borderColor: attentionBorder,
+                  }}
+                >
+                  {driverLocation.driverName}
+                </div>
               </div>
             </OverlayViewF>
           );
@@ -379,7 +523,7 @@ function GoogleDeliveriesMap({
             options={{
               pixelOffset: new window.google.maps.Size(
                 0,
-                -Math.round(resolveMarkerSize(map?.getZoom() || initialZoom) * 0.62),
+                -Math.round(resolveMarkerSize(map?.getZoom() || initialZoom) * 0.45),
               ),
             }}
           >

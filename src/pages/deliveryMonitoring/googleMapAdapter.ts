@@ -20,7 +20,16 @@ export type MonitoringDeliveryForMap = {
 export type MonitoringDriverForMap = {
   trip_id: number;
   driver_id: number | null;
+  driver_name?: string;
   color: string;
+  stage?: DeliveryStage | 'idle';
+  current_status?: string;
+  attention_level?: 'INFO' | 'WARNING' | 'CRITICAL' | null;
+  live_location?: {
+    latitude: number | null;
+    longitude: number | null;
+    updated_at?: string | null;
+  } | null;
   highlighted_stops: Array<{
     latitude: number;
     longitude: number;
@@ -47,6 +56,18 @@ export type GoogleDeliveryRoute = {
   id: string;
   color: string;
   points: Array<{ lat: number; lng: number }>;
+};
+
+export type GoogleDriverLocation = {
+  id: string;
+  lat: number;
+  lng: number;
+  driverId: number | null;
+  driverName: string;
+  color: string;
+  status: string;
+  attentionLevel: 'INFO' | 'WARNING' | 'CRITICAL' | null;
+  updatedAt: string | null;
 };
 
 const normalizeNumber = (value: unknown) => {
@@ -100,4 +121,33 @@ export const toGoogleDeliveryRoutes = (
         .map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
     }))
     .filter((route) => route.points.length >= 2);
+};
+
+export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): GoogleDriverLocation[] => {
+  return drivers
+    .filter((driver) => hasDeliveryCoordinates({
+      invoice_number: `driver-${driver.trip_id}`,
+      customer_name: '',
+      city: '',
+      neighborhood: '',
+      stage: 'assigned',
+      driver_id: driver.driver_id,
+      driver_name: driver.driver_name || null,
+      driver_color: driver.color,
+      geolocation: {
+        latitude: driver.live_location?.latitude ?? null,
+        longitude: driver.live_location?.longitude ?? null,
+      },
+    }))
+    .map((driver) => ({
+      id: `driver-${driver.trip_id}-${driver.driver_id || 0}`,
+      lat: Number(driver.live_location?.latitude),
+      lng: Number(driver.live_location?.longitude),
+      driverId: driver.driver_id,
+      driverName: String(driver.driver_name || 'Motorista'),
+      color: driver.color || '#0f172a',
+      status: String(driver.current_status || driver.stage || 'idle'),
+      attentionLevel: driver.attention_level || null,
+      updatedAt: driver.live_location?.updated_at || null,
+    }));
 };

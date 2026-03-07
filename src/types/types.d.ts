@@ -371,7 +371,11 @@ export interface IAlertRow {
   company_id: number;
   user_id?: number | null;
   receipt_id?: number | null;
+  driver_id?: number | null;
+  trip_id?: number | null;
+  trip_note_id?: number | null;
   nf_number?: string | null;
+  dedupe_key?: string | null;
   code: string;
   title: string;
   message: string;

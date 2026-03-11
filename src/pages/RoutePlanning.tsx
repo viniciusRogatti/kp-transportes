@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
@@ -26,6 +26,7 @@ import Popup from '../components/Popup';
 import ProductListPDF from '../components/ProductListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
+import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
@@ -42,17 +43,92 @@ interface ConflictState {
   nextCar: string;
 }
 
+interface RoutingCityOption {
+  city: string;
+  danfes: RouteLookupDanfe[];
+  noteCount: number;
+  totalWeight: number;
+}
+
 function toApiDate(date: Date) {
   return format(date, 'dd-MM-yyyy');
 }
 
 function toISODate(date: string) {
-  const [day, month, year] = String(date).split('-');
+  const normalized = String(date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+
+  const [day, month, year] = normalized.split('-');
   return `${year}-${month}-${day}`;
+}
+
+function parseSupportedDateInput(date: string) {
+  const normalized = String(date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const [year, month, day] = normalized.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  if (/^\d{2}-\d{2}-\d{4}$/.test(normalized)) {
+    const [day, month, year] = normalized.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  return null;
+}
+
+function resolveRoutingInvoiceDateCandidates(date: string) {
+  const parsedDate = parseSupportedDateInput(date);
+  if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+    const fallback = toISODate(date);
+    return fallback ? [fallback] : [];
+  }
+
+  const routeDate = format(parsedDate, 'yyyy-MM-dd');
+  const operationalInvoiceDate = format(subDays(parsedDate, 1), 'yyyy-MM-dd');
+  return Array.from(new Set([operationalInvoiceDate, routeDate]));
 }
 
 function isTripActive(trip: ITrip) {
   return (trip.TripNotes || []).some((note) => !['returned', 'cancelled', 'delivered'].includes(String(note.status || '').toLowerCase()));
+}
+
+function canAssignDanfe(status: unknown) {
+  const normalized = String(status || '').trim().toLowerCase();
+  return normalized === 'pending' || normalized === 'redelivery';
+}
+
+function isDanfeEligibleForRouting(status: unknown) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (!normalized) return true;
+  return !['cancelled', 'delivered', 'returned'].includes(normalized);
+}
+
+function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe {
+  return sanitizeDanfeTextFields(danfeData as IDanfe) as RouteLookupDanfe;
+}
+
+function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITripNote {
+  return {
+    customer_name: normalizeTextValue(danfeData.Customer?.name_or_legal_entity) || '-',
+    invoice_number: String(danfeData.invoice_number),
+    city: normalizeCityLabel(danfeData.Customer?.city) || 'Cidade não informada',
+    order,
+    gross_weight: String(danfeData.gross_weight || 0),
+    status: 'pending',
+  };
+}
+
+function sortTripNotesByOrder(notes: ITripNote[]) {
+  return notes.slice().sort((a, b) => a.order - b.order);
+}
+
+function reindexTripNotes(notes: ITripNote[]) {
+  return sortTripNotesByOrder(notes).map((note, index) => ({ ...note, order: index + 1 }));
+}
+
+function calculateTripNotesWeight(notes: ITripNote[]) {
+  return notes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
 }
 
 function RoutePlanning() {
@@ -74,7 +150,6 @@ function RoutePlanning() {
   const [titlePopup, setTitlePopup] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isTripsLoading, setIsTripsLoading] = useState<boolean>(false);
-  const [countWeight, setCountWeight] = useState<number>(0);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [tripToUpdate, setTripToUpdate] = useState<ITrip | null>(null);
   const [isSecondRunMode, setIsSecondRunMode] = useState<boolean>(false);
@@ -84,6 +159,9 @@ function RoutePlanning() {
   const [editNotes, setEditNotes] = useState<ITripNote[]>([]);
   const [editSearch, setEditSearch] = useState<string>('');
   const [availableDanfes, setAvailableDanfes] = useState<IDanfe[]>([]);
+  const [routingPoolDanfes, setRoutingPoolDanfes] = useState<RouteLookupDanfe[]>([]);
+  const [selectedRoutingCity, setSelectedRoutingCity] = useState<string>('');
+  const [isRoutingPoolLoading, setIsRoutingPoolLoading] = useState<boolean>(false);
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -115,7 +193,8 @@ function RoutePlanning() {
     return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
   }, []);
 
-  const sortedNotes = useMemo(() => addedNotes.slice().sort((a, b) => a.order - b.order), [addedNotes]);
+  const sortedNotes = useMemo(() => sortTripNotesByOrder(addedNotes), [addedNotes]);
+  const countWeight = useMemo(() => calculateTripNotesWeight(sortedNotes), [sortedNotes]);
 
   const sortedDisplayedTrips = useMemo(
     () => displayedTrips.slice().sort((a, b) => Number(a.run_number || 1) - Number(b.run_number || 1)),
@@ -185,6 +264,42 @@ function RoutePlanning() {
       })
       .slice(0, 40);
   }, [availableDanfes, editNotes, editSearch]);
+
+  const availableRoutingCityOptions = useMemo(() => {
+    const invoicesAlreadyAdded = new Set(addedNotes.map((note) => String(note.invoice_number)));
+    const seenInvoices = new Set<string>();
+    const groupedByCity = new Map<string, RoutingCityOption>();
+
+    routingPoolDanfes.forEach((danfe) => {
+      const invoiceNumber = String(danfe.invoice_number || '').trim();
+      if (!invoiceNumber || invoicesAlreadyAdded.has(invoiceNumber) || seenInvoices.has(invoiceNumber)) return;
+
+      seenInvoices.add(invoiceNumber);
+
+      const city = normalizeCityLabel(danfe.Customer?.city) || 'Cidade não informada';
+      const existing = groupedByCity.get(city);
+      if (existing) {
+        existing.noteCount += 1;
+        existing.totalWeight += Number(danfe.gross_weight || 0);
+        existing.danfes.push(danfe);
+        return;
+      }
+
+      groupedByCity.set(city, {
+        city,
+        danfes: [danfe],
+        noteCount: 1,
+        totalWeight: Number(danfe.gross_weight || 0),
+      });
+    });
+
+    return Array.from(groupedByCity.values()).sort((a, b) => a.city.localeCompare(b.city, 'pt-BR', { sensitivity: 'base' }));
+  }, [addedNotes, routingPoolDanfes]);
+
+  const availableRoutingCityNoteCount = useMemo(
+    () => availableRoutingCityOptions.reduce((sum, option) => sum + option.noteCount, 0),
+    [availableRoutingCityOptions],
+  );
 
   const selectedDriverName = useMemo(() => {
     if (selectedDriver === 'null') return '';
@@ -263,6 +378,59 @@ function RoutePlanning() {
     }
   }, [todayApiDate]);
 
+  const fetchDanfesForTripDate = useCallback(async (tripDate: string) => {
+    const candidateDates = resolveRoutingInvoiceDateCandidates(tripDate);
+    if (!candidateDates.length) return [];
+
+    const responses = await Promise.all(
+      candidateDates.map((candidateDate) => (
+        axios.get(`${API_URL}/danfes/date/?startDate=${candidateDate}&endDate=${candidateDate}`)
+      )),
+    );
+
+    const danfesByInvoice = new Map<string, RouteLookupDanfe>();
+
+    responses.forEach((response) => {
+      if (!Array.isArray(response.data)) return;
+      response.data.forEach((danfe: RouteLookupDanfe) => {
+        const sanitized = sanitizeRouteLookupDanfe(danfe);
+        const invoiceNumber = String(sanitized.invoice_number || '').trim();
+        if (!invoiceNumber || danfesByInvoice.has(invoiceNumber)) return;
+        danfesByInvoice.set(invoiceNumber, sanitized);
+      });
+    });
+
+    return Array.from(danfesByInvoice.values());
+  }, []);
+
+  const refreshRoutingPool = useCallback(async (tripDate?: string) => {
+    setIsRoutingPoolLoading(true);
+    try {
+      const targetDate = tripDate || todayApiDate;
+      const [danfes, trips] = await Promise.all([
+        fetchDanfesForTripDate(targetDate),
+        fetchTripsByDate(targetDate),
+      ]);
+
+      const assignedInvoiceNumbers = new Set(
+        trips.flatMap((trip) => (trip.TripNotes || []).map((note) => String(note.invoice_number || '').trim())).filter(Boolean),
+      );
+
+      setRoutingPoolDanfes(
+        danfes.filter((danfe) => {
+          const invoiceNumber = String(danfe.invoice_number || '').trim();
+          if (!invoiceNumber) return false;
+          if (assignedInvoiceNumbers.has(invoiceNumber)) return false;
+          return isDanfeEligibleForRouting(danfe.status);
+        }),
+      );
+    } catch {
+      setRoutingPoolDanfes([]);
+    } finally {
+      setIsRoutingPoolLoading(false);
+    }
+  }, [fetchDanfesForTripDate, todayApiDate]);
+
   const jumpToLatest = () => {
     if (!notesContainerRef.current) return;
     notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
@@ -284,7 +452,6 @@ function RoutePlanning() {
       setTripToUpdate(null);
       setIsUpdating(false);
       setAddedNotes([]);
-      setCountWeight(0);
       previousDriverRef.current = 'null';
       previousCarRef.current = 'null';
       setShowAssignmentFields(true);
@@ -292,12 +459,10 @@ function RoutePlanning() {
     }
 
     const tripNotes = (trip.TripNotes || []).filter((note) => !['returned', 'cancelled', 'delivered'].includes(String(note.status || '').toLowerCase()));
-    const totalWeight = tripNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
 
     setTripToUpdate(trip);
     setIsUpdating(true);
     setAddedNotes(tripNotes);
-    setCountWeight(totalWeight);
     setIsSecondRunMode(false);
     setSelectedDriver(String(trip.driver_id));
     setSelectedCar(String(trip.car_id));
@@ -305,6 +470,16 @@ function RoutePlanning() {
     previousCarRef.current = String(trip.car_id);
     setShowAssignmentFields(false);
   }, []);
+
+  useEffect(() => {
+    void refreshRoutingPool(tripToUpdate?.date || todayApiDate);
+  }, [refreshRoutingPool, todayApiDate, tripToUpdate?.date]);
+
+  useEffect(() => {
+    if (selectedRoutingCity && !availableRoutingCityOptions.some((option) => option.city === selectedRoutingCity)) {
+      setSelectedRoutingCity('');
+    }
+  }, [availableRoutingCityOptions, selectedRoutingCity]);
 
   useEffect(() => {
     const tabFromQuery = searchParams.get('tab');
@@ -569,29 +744,15 @@ function RoutePlanning() {
 
     try {
       const byNf = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/nf/${normalizedLookup}`);
-      if (byNf?.data) return byNf.data;
+      if (byNf?.data) return sanitizeRouteLookupDanfe(byNf.data);
     } catch {
       // Ignora e tenta buscar por barcode
     }
 
     const sanitizedBarcode = normalizedLookup.replace(/\s+/g, '');
     const byBarcode = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/barcode/${sanitizedBarcode}`);
-    return byBarcode?.data || null;
+    return byBarcode?.data ? sanitizeRouteLookupDanfe(byBarcode.data) : null;
   };
-
-  const canAssignDanfe = (status: unknown) => {
-    const normalized = String(status || '').trim().toLowerCase();
-    return normalized === 'pending' || normalized === 'redelivery';
-  };
-
-  const buildTripNoteFromDanfe = (danfeData: RouteLookupDanfe, order: number): ITripNote => ({
-    customer_name: danfeData.Customer?.name_or_legal_entity || '-',
-    invoice_number: danfeData.invoice_number,
-    city: danfeData.Customer?.city || '-',
-    order,
-    gross_weight: danfeData.gross_weight,
-    status: 'pending',
-  });
 
   const handleAddNote = async () => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
@@ -625,7 +786,6 @@ function RoutePlanning() {
       const newNote = buildTripNoteFromDanfe(danfeData, addedNotes.length + 1);
 
       setAddedNotes((prev) => [...prev, newNote]);
-      setCountWeight((prev) => prev + Number(danfeData.gross_weight || 0));
       setLastScannedInvoice(String(newNote.invoice_number));
     } catch {
       alert('Não foi possível buscar essa nota.');
@@ -695,9 +855,7 @@ function RoutePlanning() {
       }
 
       if (notesToAdd.length) {
-        const totalWeight = notesToAdd.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
         setAddedNotes((prev) => [...prev, ...notesToAdd]);
-        setCountWeight((prev) => prev + totalWeight);
         setLastScannedInvoice(String(notesToAdd[notesToAdd.length - 1].invoice_number));
       }
 
@@ -721,6 +879,33 @@ function RoutePlanning() {
     }
   };
 
+  const handleAddCityNotes = () => {
+    if (selectedDriver === 'null' || selectedCar === 'null') {
+      alert('Selecione um motorista e um veículo antes de adicionar notas por cidade.');
+      return;
+    }
+
+    if (!selectedRoutingCity) {
+      alert('Selecione uma cidade para adicionar as notas.');
+      return;
+    }
+
+    const cityOption = availableRoutingCityOptions.find((option) => option.city === selectedRoutingCity);
+    if (!cityOption?.danfes.length) {
+      alert('Nenhuma nota pendente encontrada para essa cidade.');
+      setSelectedRoutingCity('');
+      return;
+    }
+
+    const notesToAdd = cityOption.danfes.map((danfe, index) => buildTripNoteFromDanfe(danfe, addedNotes.length + index + 1));
+
+    setAddedNotes((prev) => [...prev, ...notesToAdd]);
+    setLastScannedInvoice(String(notesToAdd[notesToAdd.length - 1].invoice_number));
+    setSelectedRoutingCity('');
+    setNoteLookup('');
+    noteLookupRef.current?.focus();
+  };
+
   const removeNoteFromList = async (nf: string, noteId: any) => {
     if (tripToUpdate?.id && noteId) {
       setIsLoading(true);
@@ -729,14 +914,15 @@ function RoutePlanning() {
         await axios.put(`${API_URL}/danfes/update-status`, {
           danfes: [{ invoice_number: nf, status: 'pending' }],
         });
-        setAddedNotes((prev) => prev.filter((note) => String(note.invoice_number) !== String(nf)));
+        setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
+        await refreshRoutingPool(tripToUpdate.date);
       } finally {
         setIsLoading(false);
       }
       return;
     }
 
-    setAddedNotes((prev) => prev.filter((note) => String(note.invoice_number) !== String(nf)));
+    setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
   };
 
   const moveNoteUp = (order: number) => {
@@ -827,8 +1013,10 @@ function RoutePlanning() {
       setIsUpdating(false);
       setTripToUpdate(null);
       setIsSecondRunMode(false);
-      setCountWeight(0);
-      await refreshTrips(todayApiDate);
+      await Promise.all([
+        refreshTrips(todayApiDate),
+        refreshRoutingPool(todayApiDate),
+      ]);
     } catch (error: any) {
       alert(error?.response?.data?.error || 'Erro ao enviar a viagem.');
     } finally {
@@ -853,11 +1041,8 @@ function RoutePlanning() {
 
   const fetchAvailableForTrip = async (tripDate: string) => {
     try {
-      const isoDate = toISODate(tripDate);
-      const { data } = await axios.get(`${API_URL}/danfes/date/?startDate=${isoDate}&endDate=${isoDate}`);
-      const filtered = Array.isArray(data)
-        ? data.filter((danfe: any) => ['pending', 'redelivery', 'assigned'].includes(String(danfe.status || '').toLowerCase()))
-        : [];
+      const danfes = await fetchDanfesForTripDate(tripDate);
+      const filtered = danfes.filter((danfe) => ['pending', 'redelivery', 'assigned'].includes(String(danfe.status || '').toLowerCase()));
       setAvailableDanfes(filtered);
     } catch {
       setAvailableDanfes([]);
@@ -878,7 +1063,6 @@ function RoutePlanning() {
     setTripToUpdate(null);
     setEditTrip(null);
     setAddedNotes([]);
-    setCountWeight(0);
     setSelectedDriver('null');
     setSelectedCar('null');
     setIsSecondRunMode(false);
@@ -969,7 +1153,10 @@ function RoutePlanning() {
       setEditTrip(null);
       setEditNotes([]);
       const selectedDate = tripDateFilter ? toApiDate(tripDateFilter) : todayApiDate;
-      await refreshTrips(selectedDate);
+      await Promise.all([
+        refreshTrips(selectedDate),
+        refreshRoutingPool(editTrip.date),
+      ]);
       const refreshedToday = await fetchTripsByDate(todayApiDate);
       setTodayTrips(refreshedToday);
     } catch (error: any) {
@@ -1252,8 +1439,45 @@ function RoutePlanning() {
                   className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
                   onClick={() => setIsBatchModalOpen(true)}
                   disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
-                >
+                  >
                   Adicionar lote
+                </ActionButton>
+              </div>
+
+              <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="flex flex-col gap-1">
+                  <select
+                    value={selectedRoutingCity}
+                    onChange={(event) => setSelectedRoutingCity(event.target.value)}
+                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !availableRoutingCityOptions.length}
+                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">
+                      {isRoutingPoolLoading
+                        ? 'Carregando cidades...'
+                        : availableRoutingCityOptions.length
+                          ? 'Selecione uma cidade para adicionar todas as notas'
+                          : 'Nenhuma cidade pendente disponível'}
+                    </option>
+                    {availableRoutingCityOptions.map((option) => (
+                      <option key={option.city} value={option.city}>
+                        {`${option.city} • ${option.noteCount} nota(s) • ${option.totalWeight.toFixed(2)} Kg`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted">
+                    {isRoutingPoolLoading
+                      ? 'Atualizando cidades com notas ainda sem motorista...'
+                      : `${availableRoutingCityOptions.length} cidade(s) com ${availableRoutingCityNoteCount} nota(s) do dia ainda sem motorista para esta data.`}
+                  </p>
+                </div>
+                <ActionButton
+                  $tone="secondary"
+                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                  onClick={handleAddCityNotes}
+                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !selectedRoutingCity}
+                >
+                  Adicionar cidade
                 </ActionButton>
               </div>
 

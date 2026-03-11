@@ -1,21 +1,8 @@
 import { IImportResult } from '../../types/upload';
+import { getImportErrorPresentation } from '../../utils/importErrorPresentation';
 
 interface ImportErrorsPanelProps {
   results: IImportResult[];
-}
-
-const ERROR_CODE_LABELS: Record<string, string> = {
-  INVALID_FILE_TYPE: 'Arquivo inválido',
-  XML_PARSE_ERROR: 'XML inválido',
-  MISSING_REQUIRED_FIELD: 'Campo obrigatório ausente',
-  DUPLICATE_INVOICE: 'Nota fiscal duplicada',
-  DB_CONSTRAINT_ERROR: 'Conflito de dados',
-  UNKNOWN_ERROR: 'Erro inesperado',
-};
-
-function getErrorCodeLabel(code?: string) {
-  if (!code) return ERROR_CODE_LABELS.UNKNOWN_ERROR;
-  return ERROR_CODE_LABELS[code] || 'Erro de importação';
 }
 
 function normalizeTechnicalDetails(details?: string) {
@@ -57,49 +44,57 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-rose-500/35 bg-rose-500/12 p-4 text-sm text-[color:var(--color-danger)]">
-        Falhou em {errors.length} arquivo(s) — {successCount} foi/foram importado(s) normalmente.
+        {errors.length} arquivo(s) tiveram problema. {successCount} foi/foram importado(s) normalmente.
+        Verifique abaixo o motivo em linguagem simples e, se quiser, use "Reenviar apenas com erro".
       </div>
 
       <div className="space-y-2">
-        {errors.map((item) => (
-          <div key={`${item.fileKey || item.fileName}-error`} className="rounded-xl border border-border bg-surface/80 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-text">{item.fileName}</p>
-                <p className="mt-1 text-xs text-[color:var(--color-danger)]">
-                  {getErrorCodeLabel(item.error?.code)} • {item.error?.message || 'Erro inesperado ao processar arquivo.'}
-                </p>
-                {item.error?.hint ? (
-                  <p className="mt-1 text-xs text-[color:var(--color-text-accent)]">Dica: {item.error.hint}</p>
-                ) : null}
+        {errors.map((item) => {
+          const presentation = getImportErrorPresentation(item.error);
+
+          return (
+            <div key={`${item.fileKey || item.fileName}-error`} className="rounded-xl border border-border bg-surface/80 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-text">{item.fileName}</p>
+                  <p className="mt-1 text-xs font-semibold text-[color:var(--color-danger)]">
+                    {presentation.title}
+                  </p>
+                  <p className="mt-1 text-xs text-text">
+                    {presentation.description}
+                  </p>
+                  <p className="mt-1 text-xs text-[color:var(--color-text-accent)]">
+                    Próximo passo: {presentation.hint}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(buildClipboardPayload(item))}
+                  className="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-text hover:border-accent/60"
+                >
+                  Copiar detalhes para suporte
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(buildClipboardPayload(item))}
-                className="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-text hover:border-accent/60"
-              >
-                Copiar detalhes
-              </button>
+              {item.error?.details || item.error?.stack ? (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-muted">Detalhes técnicos (opcional)</summary>
+                  {item.error?.details ? (
+                    <p className="mt-2 text-xs text-muted">
+                      {normalizeTechnicalDetails(item.error.details)}
+                    </p>
+                  ) : null}
+                  {item.error?.stack ? (
+                    <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-border bg-surface-2/90 p-2 text-[11px] text-text">
+                      {item.error.stack}
+                    </pre>
+                  ) : null}
+                </details>
+              ) : null}
             </div>
-
-            {item.error?.details || item.error?.stack ? (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-semibold text-muted">Detalhes técnicos</summary>
-                {item.error?.details ? (
-                  <p className="mt-2 text-xs text-muted">
-                    {normalizeTechnicalDetails(item.error.details)}
-                  </p>
-                ) : null}
-                {item.error?.stack ? (
-                  <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-border bg-surface-2/90 p-2 text-[11px] text-text">
-                    {item.error.stack}
-                  </pre>
-                ) : null}
-              </details>
-            ) : null}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

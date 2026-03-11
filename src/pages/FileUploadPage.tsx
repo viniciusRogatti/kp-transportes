@@ -11,6 +11,14 @@ import ImportSummary from '../components/upload/ImportSummary';
 import ImportErrorsPanel from '../components/upload/ImportErrorsPanel';
 import NewProductsPanel from '../components/upload/NewProductsPanel';
 import { IImportResult, IImportSummary, IUploadImportReportResponse } from '../types/upload';
+import { showAlert } from '../utils/dialog';
+import {
+  buildDuplicateInvoiceAlertMessage,
+  buildImportFailureAlertMessage,
+  getDuplicateInvoiceResults,
+  getImportErrorQueueMessage,
+  hasDuplicateInvoiceWarning,
+} from '../utils/importErrorPresentation';
 
 const ACCEPTED_MIME_TYPES = new Set(['text/xml', 'application/xml']);
 const BATCH_SIZE = 40;
@@ -307,7 +315,7 @@ function FileUploadPage() {
       return {
         ...item,
         status: 'error',
-        errorMessage: match.error?.message || 'Erro ao processar arquivo.',
+        errorMessage: getImportErrorQueueMessage(match.error),
         warningCount: 0,
       };
     }));
@@ -360,6 +368,7 @@ function FileUploadPage() {
     if (!target.length) return;
 
     const queueSelectedCount = queue.length;
+    const targetIds = new Set(target.map((item) => item.id));
     const startedAt = Date.now();
     let processed = 0;
     let workingReport = preserveExistingReport && report
@@ -396,6 +405,30 @@ function FileUploadPage() {
 
         processed += batch.length;
         updateProgressCounters(processed, target.length, startedAt);
+      }
+
+      const targetResults = workingReport.results.filter((item) => (
+        item.fileKey
+          ? targetIds.has(item.fileKey)
+          : target.some((queueItem) => queueItem.file.name === item.fileName)
+      ));
+      const duplicateInvoiceResults = getDuplicateInvoiceResults(targetResults);
+      const failedTargetResults = targetResults.filter((item) => item.status === 'error');
+
+      if (duplicateInvoiceResults.length) {
+        setActiveTab('success');
+        await showAlert(buildDuplicateInvoiceAlertMessage(duplicateInvoiceResults), {
+          title: 'Notas já cadastradas',
+          okLabel: 'Ver avisos',
+        });
+      }
+
+      if (failedTargetResults.length) {
+        setActiveTab('errors');
+        await showAlert(buildImportFailureAlertMessage(failedTargetResults), {
+          title: 'Erros na importação',
+          okLabel: 'Ver erros',
+        });
       }
     } finally {
       setIsUploading(false);
@@ -615,6 +648,11 @@ function FileUploadPage() {
                         <p className="mt-1 text-xs text-muted">
                           NF: {item.meta?.invoiceNumber || '-'} • Origem: {item.meta?.origin || '-'}
                         </p>
+                        {hasDuplicateInvoiceWarning(item) ? (
+                          <div className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/12 px-3 py-2 text-xs text-[color:var(--color-warning)]">
+                            Essa nota já estava cadastrada no banco. O XML foi reconhecido, mas não foi importado novamente.
+                          </div>
+                        ) : null}
                         {item.warnings?.length ? (
                           <div className="mt-2 space-y-1">
                             {item.warnings.map((warning) => (

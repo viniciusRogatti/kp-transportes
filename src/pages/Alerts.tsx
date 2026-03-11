@@ -1,4 +1,9 @@
-import { useEffect, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -11,6 +16,11 @@ import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { getReceiptSignedUrl, listPostedReceipts } from '../services/receiptsService';
 import { listAlerts, resolveAlert } from '../services/alertsService';
+import {
+  getReadAlertIds,
+  markAlertsAsRead,
+  subscribeToAlertReadChanges,
+} from '../utils/alertReadState';
 import {
   IAlertRow,
   IReceiptRow,
@@ -43,6 +53,8 @@ function AlertsPage() {
   const [manualRows, setManualRows] = useState<IReceiptRow[]>([]);
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState('');
+  const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
+  const alertRowRefs = useRef<Record<number, HTMLLIElement | null>>({});
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -107,6 +119,60 @@ function AlertsPage() {
     refreshAlerts();
     refreshManualReview();
   }, []);
+
+  useEffect(() => {
+    return subscribeToAlertReadChanges(() => {
+      setReadAlertIds(new Set(getReadAlertIds()));
+    });
+  }, []);
+
+  const unreadAlertCount = useMemo(
+    () => alerts.reduce((count, alertRow) => {
+      if (alertRow.status === 'RESOLVED') return count;
+      return readAlertIds.has(alertRow.id) ? count : count + 1;
+    }, 0),
+    [alerts, readAlertIds],
+  );
+
+  useEffect(() => {
+    if (activeTab !== 'alerts' || !alerts.length) return undefined;
+
+    const pendingReadIds = alerts
+      .map((alertRow) => Number(alertRow.id))
+      .filter((alertId) => alertId > 0 && !readAlertIds.has(alertId));
+
+    if (!pendingReadIds.length) return undefined;
+
+    if (typeof window === 'undefined' || typeof window.IntersectionObserver === 'undefined') {
+      markAlertsAsRead(pendingReadIds);
+      return undefined;
+    }
+
+    const observer = new window.IntersectionObserver(
+      (entries) => {
+        const idsToMark = entries
+          .filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.4)
+          .map((entry) => Number((entry.target as HTMLElement).dataset.alertId))
+          .filter((alertId) => alertId > 0 && !readAlertIds.has(alertId));
+
+        if (idsToMark.length) {
+          markAlertsAsRead(idsToMark);
+        }
+      },
+      {
+        threshold: [0.4],
+      },
+    );
+
+    pendingReadIds.forEach((alertId) => {
+      const element = alertRowRefs.current[alertId];
+      if (element) observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeTab, alerts, readAlertIds]);
 
   async function handleResolveAlert(alertId: number) {
     try {
@@ -174,6 +240,12 @@ function AlertsPage() {
                 REVISÃO MANUAL ({manualCount})
               </button>
             </div>
+
+            <p className="mt-2 text-xs text-muted">
+              {unreadAlertCount > 0
+                ? `${unreadAlertCount} alertas ainda não foram visualizados nesta conta.`
+                : 'Todos os alertas desta lista já foram visualizados.'}
+            </p>
           </section>
 
           {activeTab === 'alerts' ? (
@@ -196,9 +268,17 @@ function AlertsPage() {
                       : alertRow.severity === 'INFO'
                         ? 'border-sky-500/70 bg-sky-900/20'
                         : 'border-amber-500/70 bg-amber-900/20';
+                    const visualized = readAlertIds.has(alertRow.id);
 
                     return (
-                      <li key={`alert-${alertRow.id}`} className={`rounded-md border p-3 ${severityClass}`}>
+                      <li
+                        key={`alert-${alertRow.id}`}
+                        ref={(element) => {
+                          alertRowRefs.current[alertRow.id] = element;
+                        }}
+                        data-alert-id={alertRow.id}
+                        className={`rounded-md border p-3 transition ${severityClass} ${visualized ? 'opacity-80' : 'shadow-sm shadow-sky-950/5'}`}
+                      >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="space-y-1 text-sm">
                             <p className="font-semibold text-text">
@@ -211,13 +291,22 @@ function AlertsPage() {
                             </p>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleResolveAlert(alertRow.id)}
-                            className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-text"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Resolver
-                          </button>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visualized
+                              ? 'border-border bg-card text-muted'
+                              : 'border-sky-500/60 bg-sky-500/10 text-sky-700'
+                              }`}
+                            >
+                              {visualized ? 'Visualizado' : 'Novo'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleResolveAlert(alertRow.id)}
+                              className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-text"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Resolver
+                            </button>
+                          </div>
                         </div>
                       </li>
                     );

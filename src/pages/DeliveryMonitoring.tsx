@@ -4,14 +4,12 @@ import { format } from 'date-fns';
 import {
   AlertTriangle,
   Check,
-  LocateFixed,
   MapPin,
-  Navigation,
-  Package,
-  type LucideIcon,
 } from 'lucide-react';
+import { useNavigate } from 'react-router';
 import { io, Socket } from 'socket.io-client';
 import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';
+import { MapMarkerPin } from '../components/maps/MapMarkerPin';
 import Header from '../components/Header';
 import { API_URL, COMPANY_LOCATION } from '../data';
 import { Container } from '../style/invoices';
@@ -27,6 +25,14 @@ import {
   toGoogleDriverLocations,
   toGoogleDeliveryRoutes,
 } from './deliveryMonitoring/googleMapAdapter';
+import {
+  DELIVERY_STAGE_ICONS,
+  getLegendMarkerVisual,
+} from './deliveryMonitoring/googleMarkerVisuals';
+import {
+  getReadAlertIds,
+  subscribeToAlertReadChanges,
+} from '../utils/alertReadState';
 
 type DeliveryRow = {
   invoice_number: string;
@@ -152,6 +158,8 @@ type AddressDiagnosticsResponse = {
   };
 };
 
+type DriverStopVisual = 'pending' | 'on_the_way' | 'on_site' | 'completed' | 'returned';
+
 const resolveGoogleMapsApiKey = () => {
   const env = process.env as Record<string, string | undefined>;
   return env.REACT_APP_GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -163,42 +171,71 @@ const stagePriority = (stage: DeliveryStage) => {
   return STAGE_PRIORITY[stage] ?? 99;
 };
 
+const RETURNED_STOP_STATUSES = new Set(['returned', 'redelivery', 'cancelled']);
+const COMPLETED_STOP_STATUSES = new Set(['delivered', 'completed']);
+
+const normalizeOperationalStatus = (value?: string | null) => String(value || '').trim().toLowerCase();
+
+const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
+  const stopStatus = normalizeOperationalStatus(row.stop_status);
+  const danfeStatus = normalizeOperationalStatus(row.danfe_status);
+
+  if (RETURNED_STOP_STATUSES.has(stopStatus) || RETURNED_STOP_STATUSES.has(danfeStatus)) {
+    return 'returned';
+  }
+
+  if (
+    COMPLETED_STOP_STATUSES.has(stopStatus)
+    || COMPLETED_STOP_STATUSES.has(danfeStatus)
+    || row.stage === 'completed'
+  ) {
+    return 'completed';
+  }
+
+  if (stopStatus === 'arrived' || row.stage === 'on_site') {
+    return 'on_site';
+  }
+
+  if (stopStatus === 'on_the_way' || row.stage === 'on_the_way') {
+    return 'on_the_way';
+  }
+
+  return 'pending';
+};
+
+const getDriverStopLabel = (visual: DriverStopVisual) => {
+  if (visual === 'completed') return 'entrega concluida';
+  if (visual === 'on_the_way') return 'motorista a caminho';
+  if (visual === 'on_site') return 'motorista no local';
+  if (visual === 'returned') return 'entrega devolvida';
+  return 'entrega pendente';
+};
+
+const getDriverStopClassName = (visual: DriverStopVisual) => {
+  if (visual === 'completed') {
+    return 'border-emerald-500/60 bg-emerald-500/15 text-emerald-700';
+  }
+
+  if (visual === 'on_the_way') {
+    return 'border-amber-500/60 bg-amber-500/15 text-amber-700';
+  }
+
+  if (visual === 'on_site') {
+    return 'border-sky-500/60 bg-sky-500/15 text-sky-700';
+  }
+
+  if (visual === 'returned') {
+    return 'border-rose-500/65 bg-rose-500/15 text-rose-700';
+  }
+
+  return 'border-border bg-white text-text';
+};
+
 const alertSeverityPriority = (severity?: string | null) => {
   if (severity === 'CRITICAL') return 0;
   if (severity === 'WARNING') return 1;
   if (severity === 'INFO') return 2;
   return 3;
-};
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
-};
-
-const formatRelativeMinutes = (value?: string | null) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  const diffMs = Date.now() - parsed.getTime();
-  const minutes = Math.max(0, Math.round(diffMs / 60000));
-  if (minutes < 1) return 'agora';
-  if (minutes === 1) return '1 min';
-  return `${minutes} min`;
-};
-
-const STAGE_ICONS: Record<DeliveryStage, LucideIcon> = {
-  unassigned: Package,
-  assigned: Package,
-  on_the_way: Navigation,
-  on_site: MapPin,
-  completed: Check,
 };
 
 const areSameGeolocation = (left: DeliveryRow['geolocation'], right: DeliveryRow['geolocation']) => {
@@ -330,6 +367,7 @@ const stabilizeDriversById = (nextDrivers: DriverSummary[], prevDrivers: DriverS
 };
 
 function DeliveryMonitoring() {
+  const navigate = useNavigate();
   const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
@@ -339,6 +377,7 @@ function DeliveryMonitoring() {
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [mapViewport, setMapViewport] = useState<GoogleMapBoundsPayload | null>(null);
+  const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const googleMapsApiKey = useMemo(() => resolveGoogleMapsApiKey(), []);
@@ -447,6 +486,12 @@ function DeliveryMonitoring() {
     };
   }, []);
 
+  useEffect(() => {
+    return subscribeToAlertReadChanges(() => {
+      setReadAlertIds(new Set(getReadAlertIds()));
+    });
+  }, []);
+
   const deliveries = useMemo(() => overview?.deliveries || [], [overview]);
   const drivers = useMemo(() => {
     return (overview?.drivers || [])
@@ -466,6 +511,14 @@ function DeliveryMonitoring() {
   const alerts = useMemo(() => overview?.alerts || [], [overview]);
   const summary = overview?.summary;
   const alertSummary = overview?.alert_summary;
+  const unreadAlertsCount = useMemo(
+    () => alerts.reduce((count, alert) => {
+      if (alert.status === 'RESOLVED') return count;
+      return readAlertIds.has(alert.id) ? count : count + 1;
+    }, 0),
+    [alerts, readAlertIds],
+  );
+  const totalOpenAlerts = alertSummary?.total ?? alerts.length;
 
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
@@ -510,16 +563,65 @@ function DeliveryMonitoring() {
       .slice(0, 120);
   }, [filteredDeliveries]);
 
+  const driverStopsByTrip = useMemo(() => {
+    const nextMap = new Map<number, Map<number, DriverStopVisual>>();
+
+    deliveries.forEach((row) => {
+      const tripId = Number(row.trip_id || 0);
+      const sequence = Number(row.sequence || 0);
+      if (tripId <= 0 || sequence <= 0) return;
+
+      if (!nextMap.has(tripId)) {
+        nextMap.set(tripId, new Map<number, DriverStopVisual>());
+      }
+
+      nextMap.get(tripId)?.set(sequence, resolveDriverStopVisual(row));
+    });
+
+    return nextMap;
+  }, [deliveries]);
+
   return (
     <div className="min-h-screen">
       <Header />
       <Container>
         <section className="w-full rounded-lg border border-border bg-card p-4 shadow-elevated">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-text">Monitoramento de Entregas</h2>
-            <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
-              Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
-            </span>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-text">Monitoramento de Entregas</h2>
+              <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
+                Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate('/alerts')}
+              className={`inline-flex items-center gap-3 rounded-full border px-3 py-2 text-left transition ${unreadAlertsCount > 0
+                ? 'border-rose-500/70 bg-rose-500/10 text-rose-700'
+                : 'border-border bg-surface text-text'
+                }`}
+            >
+              <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-current/20 bg-white/80">
+                <AlertTriangle className="h-5 w-5" />
+                {unreadAlertsCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}
+                  </span>
+                ) : null}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">
+                  Alertas
+                </span>
+                <span className="block text-xs text-muted">
+                  {unreadAlertsCount > 0
+                    ? `${unreadAlertsCount} não lidos`
+                    : 'Sem alertas pendentes'}
+                  {totalOpenAlerts > 0 ? ` • ${totalOpenAlerts} abertos` : ''}
+                </span>
+              </span>
+            </button>
           </div>
 
           <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -583,9 +685,6 @@ function DeliveryMonitoring() {
             <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {summary?.on_site || 0}</span>
             <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {summary?.completed || 0}</span>
             <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {summary?.geolocated || 0}</span>
-            <span className="rounded-full border border-rose-500/45 bg-rose-500/10 px-3 py-1 text-rose-700">Alertas: {alertSummary?.total || 0}</span>
-            <span className="rounded-full border border-rose-500/45 bg-rose-500/10 px-3 py-1 text-rose-700">Criticos: {alertSummary?.critical || 0}</span>
-            <span className="rounded-full border border-amber-500/45 bg-amber-500/10 px-3 py-1 text-amber-700">Avisos: {alertSummary?.warning || 0}</span>
           </div>
 
           {diagnostics ? (
@@ -609,11 +708,23 @@ function DeliveryMonitoring() {
               Limpar destaque
             </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <p className="mb-3 text-xs text-muted">
+            Cada bolha representa a sequência da rota. Verde concluído, amarelo a caminho, azul no local, vermelho devolvido e branco pendente.
+          </p>
+          <div className="space-y-2">
             {drivers.map((driver) => {
               const numericDriverId = Number(driver.driver_id || 0);
               const canHighlight = numericDriverId > 0;
               const isActive = Number(selectedDriverId) === numericDriverId;
+              const routeStops = driverStopsByTrip.get(driver.trip_id) || new Map<number, DriverStopVisual>();
+              const visualStops = Array.from({ length: Number(driver.total_deliveries || 0) }, (_, index) => {
+                const sequence = index + 1;
+                return {
+                  sequence,
+                  visual: routeStops.get(sequence) || 'pending',
+                };
+              });
+
               return (
                 <button
                   key={`${driver.trip_id}-${driver.driver_id}`}
@@ -623,7 +734,7 @@ function DeliveryMonitoring() {
                     setSelectedDriverId(isActive ? null : numericDriverId);
                   }}
                   disabled={!canHighlight}
-                  className={`min-w-[320px] rounded-md border px-3 py-2 text-left transition ${isActive
+                  className={`w-full rounded-2xl border px-3 py-2 text-left transition ${isActive
                     ? 'border-sky-500 bg-sky-500/10'
                     : driver.attention_level === 'CRITICAL'
                       ? 'border-rose-500/70 bg-rose-900/10'
@@ -632,81 +743,28 @@ function DeliveryMonitoring() {
                         : driver.stale_location
                           ? 'border-slate-400 bg-slate-100/70'
                           : 'border-border bg-surface'
-                    }`}
+                    } ${canHighlight ? '' : 'cursor-default opacity-85'}`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <strong className="text-sm text-text">{driver.driver_name}</strong>
-                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted">{`Rota #${driver.trip_id}`}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted">{`${driver.completed_deliveries}/${driver.total_deliveries} finalizadas`}</p>
-                  <div
-                    className="mt-2 h-2 w-full overflow-hidden rounded-full border bg-slate-100"
-                    style={{ borderColor: driver.color || '#94a3b8' }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${driver.progress_pct}%`,
-                        backgroundColor: driver.color,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted">
-                    Status da rota: {driver.stage === 'completed' ? 'Finalizada' : driver.stage === 'on_the_way' ? 'Em andamento' : driver.stage === 'on_site' ? 'No local' : 'Atribuida'}
-                  </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="rounded-md border border-border bg-card px-2 py-1.5">
-                      <p className="text-muted">Status atual</p>
-                      <p className="font-semibold text-text">
-                        {driver.current_status === 'arrived'
-                          ? 'No local'
-                          : driver.current_status === 'on_the_way'
-                            ? 'A caminho'
-                            : driver.current_status === 'completed'
-                              ? 'Finalizada'
-                              : driver.current_status === 'idle'
-                                ? 'Aguardando proxima acao'
-                                : driver.current_status || 'Atribuida'}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-card px-2 py-1.5">
-                      <p className="text-muted">NF ativa</p>
-                      <p className="font-semibold text-text">{driver.current_invoice_number || driver.last_delivery_invoice_number || '-'}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-card px-2 py-1.5">
-                      <p className="text-muted">Ultima localizacao</p>
-                      <p className={`font-semibold ${driver.stale_location ? 'text-rose-700' : 'text-text'}`}>
-                        {driver.last_location_at ? `${formatRelativeMinutes(driver.last_location_at)} atras` : 'Sem ponto'}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-card px-2 py-1.5">
-                      <p className="text-muted">Alertas abertos</p>
-                      <p className={`font-semibold ${driver.open_alerts_count ? 'text-rose-700' : 'text-text'}`}>
-                        {driver.open_alerts_count || 0}
-                      </p>
-                    </div>
-                  </div>
-                  {driver.live_location?.latitude != null && driver.live_location?.longitude != null ? (
-                    <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted">
-                      <LocateFixed className="h-3.5 w-3.5" />
-                      {`${Number(driver.live_location.latitude).toFixed(5)}, ${Number(driver.live_location.longitude).toFixed(5)}`}
-                    </p>
-                  ) : null}
-                  {driver.alerts?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {driver.alerts.slice(0, 2).map((alert) => (
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                    <strong className="min-w-[180px] text-sm text-text">{driver.driver_name}</strong>
+                    <div className="flex flex-1 flex-wrap gap-1.5">
+                      {visualStops.map((stop) => (
                         <span
-                          key={`driver-alert-${driver.trip_id}-${alert.id}`}
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${alert.severity === 'CRITICAL'
-                            ? 'border-rose-500/60 bg-rose-500/10 text-rose-700'
-                            : 'border-amber-500/60 bg-amber-500/10 text-amber-700'
-                            }`}
+                          key={`${driver.trip_id}-${stop.sequence}`}
+                          title={`Parada ${stop.sequence}: ${getDriverStopLabel(stop.visual)}`}
+                          className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-semibold ${getDriverStopClassName(stop.visual)}`}
                         >
-                          {alert.title}
+                          {stop.visual === 'completed' ? (
+                            <Check className="h-4 w-4" />
+                          ) : stop.visual === 'on_site' ? (
+                            <MapPin className="h-4 w-4" />
+                          ) : (
+                            stop.sequence
+                          )}
                         </span>
                       ))}
                     </div>
-                  ) : null}
+                  </div>
                 </button>
               );
             })}
@@ -716,58 +774,6 @@ function DeliveryMonitoring() {
               </div>
             ) : null}
           </div>
-        </section>
-
-        <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-text">Alertas Operacionais</h3>
-            <span className="text-xs text-muted">{`${alerts.length} alertas abertos no acompanhamento atual`}</span>
-          </div>
-
-          {!alerts.length ? (
-            <div className="rounded-md border border-border bg-surface px-3 py-3 text-sm text-muted">
-              Nenhum alerta operacional aberto para as rotas filtradas.
-            </div>
-          ) : (
-            <div className="grid gap-2 lg:grid-cols-2">
-              {alerts.map((alert) => (
-                <button
-                  key={`monitoring-alert-${alert.id}`}
-                  type="button"
-                  onClick={() => {
-                    if (alert.driver_id) setSelectedDriverId(alert.driver_id);
-                    if (alert.nf_number) setSelectedDeliveryInvoice(alert.nf_number);
-                  }}
-                  className={`rounded-md border p-3 text-left ${alert.severity === 'CRITICAL'
-                    ? 'border-rose-500/70 bg-rose-900/10'
-                    : 'border-amber-500/60 bg-amber-500/10'
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="inline-flex items-center gap-2 text-sm font-semibold text-text">
-                        <AlertTriangle className="h-4 w-4" />
-                        {alert.title}
-                      </p>
-                      <p className="mt-1 text-xs text-muted">{alert.message}</p>
-                    </div>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${alert.severity === 'CRITICAL'
-                      ? 'border-rose-500/60 bg-rose-500/10 text-rose-700'
-                      : 'border-amber-500/60 bg-amber-500/10 text-amber-700'
-                      }`}>
-                      {alert.severity}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
-                    <span>{`Criado: ${formatDateTime(alert.created_at)}`}</span>
-                    <span>{`Driver: ${alert.driver_id || '-'}`}</span>
-                    <span>{`Rota: ${alert.trip_id || '-'}`}</span>
-                    <span>{`NF: ${alert.nf_number || '-'}`}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </section>
 
         <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
@@ -854,18 +860,20 @@ function DeliveryMonitoring() {
 
           <div className="mt-2 flex flex-wrap gap-2">
             {STAGE_ORDER.map((stage) => {
-              const Icon = STAGE_ICONS[stage];
+              const Icon = DELIVERY_STAGE_ICONS[stage];
+              const markerTone = getLegendMarkerVisual(stage);
               return (
                 <span
                   key={`legend-map-${stage}`}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
                 >
                   <span className="inline-flex items-center justify-center">
-                    <Icon
+                    <MapMarkerPin
+                      icon={Icon}
+                      tone={markerTone}
                       size={20}
-                      strokeWidth={1.2}
-                      color="#000000"
-                      fill={STAGE_STYLE[stage].border}
+                      iconSize={11}
+                      iconStrokeWidth={1.4}
                     />
                   </span>
                   {STAGE_LABELS[stage]}
@@ -875,7 +883,7 @@ function DeliveryMonitoring() {
           </div>
 
           <p className="mt-1 text-xs text-muted">
-            Todos os ícones usam preenchimento colorido e contorno preto fino; nas entregas atribuídas o preenchimento segue a cor do motorista.
+            O pin recebe a cor do status. Em entregas atribuídas e em rota, a borda ou o fundo usam a cor do motorista quando isso ajuda a leitura operacional.
           </p>
 
           <div className="mt-2 text-xs text-muted">

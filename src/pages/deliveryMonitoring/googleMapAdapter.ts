@@ -6,6 +6,8 @@ export type MonitoringDeliveryForMap = {
   city: string;
   neighborhood: string;
   stage: DeliveryStage;
+  danfe_status?: string | null;
+  stop_status?: string | null;
   driver_id: number | null;
   driver_name: string | null;
   driver_color: string;
@@ -42,6 +44,8 @@ export type GoogleDeliveryMapItem = {
   lat: number;
   lng: number;
   status: DeliveryStage;
+  stopStatus: string | null;
+  danfeStatus: string | null;
   driverId: number | null;
   driverColor: string | null;
   label: string;
@@ -77,6 +81,47 @@ const normalizeNumber = (value: unknown) => {
   return parsed;
 };
 
+const isValidCoordinatePair = (latitude: unknown, longitude: unknown) => {
+  const normalizedLatitude = normalizeNumber(latitude);
+  const normalizedLongitude = normalizeNumber(longitude);
+  if (normalizedLatitude === null || normalizedLongitude === null) return false;
+  return !(normalizedLatitude === 0 && normalizedLongitude === 0);
+};
+
+const areRoutePointsNear = (
+  left: { lat: number; lng: number } | null,
+  right: { lat: number; lng: number } | null,
+) => {
+  if (!left || !right) return false;
+  return Math.abs(left.lat - right.lat) < 0.00005 && Math.abs(left.lng - right.lng) < 0.00005;
+};
+
+const buildDriverRoutePoints = (driver: MonitoringDriverForMap) => {
+  const stopPoints = driver.highlighted_stops
+    .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
+    .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+    .map((stop) => ({ lat: stop.latitude, lng: stop.longitude }));
+
+  const hasLiveLocation = isValidCoordinatePair(
+    driver.live_location?.latitude ?? null,
+    driver.live_location?.longitude ?? null,
+  );
+
+  if (!hasLiveLocation) return stopPoints;
+
+  const livePoint = {
+    lat: Number(driver.live_location?.latitude),
+    lng: Number(driver.live_location?.longitude),
+  };
+
+  if (areRoutePointsNear(livePoint, stopPoints[0] || null)) {
+    return stopPoints;
+  }
+
+  // When the operator selects a driver, the route should start from the latest known driver position.
+  return [livePoint, ...stopPoints];
+};
+
 export const hasDeliveryCoordinates = (row: MonitoringDeliveryForMap) => {
   const latitude = normalizeNumber(row.geolocation.latitude);
   const longitude = normalizeNumber(row.geolocation.longitude);
@@ -92,6 +137,8 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
       lat: Number(row.geolocation.latitude),
       lng: Number(row.geolocation.longitude),
       status: row.stage,
+      stopStatus: row.stop_status || null,
+      danfeStatus: row.danfe_status || null,
       driverId: row.driver_id,
       driverColor: row.driver_id ? row.driver_color : null,
       label: `NF ${row.invoice_number}`,
@@ -115,10 +162,7 @@ export const toGoogleDeliveryRoutes = (
     .map((driver) => ({
       id: `route-${driver.trip_id}`,
       color: driver.color,
-      points: driver.highlighted_stops
-        .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
-        .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
-        .map((stop) => ({ lat: stop.latitude, lng: stop.longitude })),
+      points: buildDriverRoutePoints(driver),
     }))
     .filter((route) => route.points.length >= 2);
 };

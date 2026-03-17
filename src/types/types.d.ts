@@ -363,6 +363,52 @@ export interface IPendingReceiptsListResponse {
   limit: number;
 }
 
+export interface IReceiptWhatsappActivityRow {
+  id: string;
+  event_id: number | null;
+  alert_id: number | null;
+  kind: 'success' | 'review' | 'error';
+  processing_status: 'SUCCESS' | 'REVIEW' | 'ERROR';
+  classification?: string | null;
+  invoice_number?: string | null;
+  backend_action?: string | null;
+  backend_mode?: string | null;
+  title: string;
+  message: string;
+  occurred_at: string | number | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  message_id?: string | null;
+  sender_name?: string | null;
+  sender_phone?: string | null;
+  driver?: {
+    id: number;
+    name: string;
+  } | null;
+  danfe?: {
+    invoice_number: string;
+    status?: string | null;
+    invoice_date?: string | null;
+    customer_name?: string | null;
+    city?: string | null;
+  } | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface IReceiptWhatsappActivitySummary {
+  total: number;
+  success: number;
+  review: number;
+  error: number;
+}
+
+export interface IReceiptWhatsappActivityListResponse {
+  rows: IReceiptWhatsappActivityRow[];
+  total: number;
+  limit: number;
+  summary: IReceiptWhatsappActivitySummary;
+}
+
 export interface IReceiptSignedUrlResponse {
   id: number;
   signed_url: string;

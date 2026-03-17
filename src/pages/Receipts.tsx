@@ -20,15 +20,18 @@ import {
   listDriversForReceiptFilters,
   listPendingReceipts,
   listPostedReceipts,
+  listWhatsappReceiptActivity,
   uploadReceipt,
 } from '../services/receiptsService';
 import {
   IDriver,
   IPendingReceiptRow,
   IReceiptRow,
+  IReceiptWhatsappActivityRow,
+  IReceiptWhatsappActivitySummary,
 } from '../types/types';
 
-type ReceiptsTab = 'posted' | 'pending';
+type ReceiptsTab = 'whatsapp' | 'posted' | 'pending';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -41,7 +44,7 @@ type UploadPreviewReport = {
 const MIN_WIDTH = 1000;
 const MIN_AREA = 1000000;
 
-const formatDateTime = (value: string | null | undefined) => {
+const formatDateTime = (value: string | number | null | undefined) => {
   if (!value) return '-';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '-';
@@ -67,13 +70,53 @@ const formatDateOnly = (value: string | null | undefined) => {
 
 const formatSizeKb = (sizeBytes: number) => `${(Number(sizeBytes || 0) / 1024).toFixed(0)} KB`;
 
-const toDateInputDefault = (daysAgo = 7) => {
-  const now = new Date();
-  const date = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
-  return date.toISOString().slice(0, 10);
+const toLocalDateInput = (date: Date) => {
+  const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60 * 1000));
+  return localDate.toISOString().slice(0, 10);
 };
 
-const todayDateInput = () => new Date().toISOString().slice(0, 10);
+const todayDateInput = () => toLocalDateInput(new Date());
+
+const EMPTY_WHATSAPP_SUMMARY: IReceiptWhatsappActivitySummary = {
+  total: 0,
+  success: 0,
+  review: 0,
+  error: 0,
+};
+
+const getWhatsappKindLabel = (kind: IReceiptWhatsappActivityRow['kind']) => {
+  if (kind === 'success') return 'Sucesso';
+  if (kind === 'review') return 'Revisar';
+  return 'Erro';
+};
+
+const getWhatsappKindClasses = (kind: IReceiptWhatsappActivityRow['kind']) => {
+  if (kind === 'success') {
+    return 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100';
+  }
+
+  if (kind === 'review') {
+    return 'border-amber-500/70 bg-amber-900/25 text-amber-100';
+  }
+
+  return 'border-rose-500/70 bg-rose-900/25 text-rose-100';
+};
+
+const getWhatsappSummaryClasses = (kind: 'success' | 'review' | 'error') => {
+  if (kind === 'success') return 'border-emerald-500/40 bg-emerald-950/20';
+  if (kind === 'review') return 'border-amber-500/40 bg-amber-900/20';
+  return 'border-rose-500/40 bg-rose-900/20';
+};
+
+const buildWhatsappSenderLabel = (row: IReceiptWhatsappActivityRow) => {
+  const name = String(row.sender_name || '').trim();
+  const phone = String(row.sender_phone || '').trim();
+
+  if (name && phone) return `${name} · ${phone}`;
+  if (name) return name;
+  if (phone) return phone;
+  return '-';
+};
 
 const readImageDimensions = (file: Blob) => new Promise<{ width: number; height: number }>((resolve, reject) => {
   const objectUrl = URL.createObjectURL(file);
@@ -144,16 +187,19 @@ async function prepareFileForUpload(file: File): Promise<{ file: File; report: U
 function Receipts() {
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<ReceiptsTab>('posted');
+  const [activeTab, setActiveTab] = useState<ReceiptsTab>('whatsapp');
   const [drivers, setDrivers] = useState<IDriver[]>([]);
 
   const [nfFilter, setNfFilter] = useState('');
   const [motoristaFilter, setMotoristaFilter] = useState('');
-  const [startDate, setStartDate] = useState<string>(toDateInputDefault(15));
+  const [startDate, setStartDate] = useState<string>(todayDateInput());
   const [endDate, setEndDate] = useState<string>(todayDateInput());
 
+  const [whatsappRows, setWhatsappRows] = useState<IReceiptWhatsappActivityRow[]>([]);
+  const [whatsappSummary, setWhatsappSummary] = useState<IReceiptWhatsappActivitySummary>(EMPTY_WHATSAPP_SUMMARY);
   const [postedRows, setPostedRows] = useState<IReceiptRow[]>([]);
   const [pendingRows, setPendingRows] = useState<IPendingReceiptRow[]>([]);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [postedLoading, setPostedLoading] = useState(false);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pageError, setPageError] = useState('');
@@ -233,6 +279,29 @@ function Receipts() {
     }
   }
 
+  async function refreshWhatsapp() {
+    setWhatsappLoading(true);
+    setPageError('');
+    try {
+      const response = await listWhatsappReceiptActivity({
+        nf: nfFilter.trim() || undefined,
+        motoristaId: selectedMotoristaFilterId,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        limit: 120,
+      });
+      setWhatsappRows(Array.isArray(response?.rows) ? response.rows : []);
+      setWhatsappSummary(response?.summary || EMPTY_WHATSAPP_SUMMARY);
+    } catch (error) {
+      console.error(error);
+      setPageError('Não foi possível carregar a atividade do WhatsApp.');
+      setWhatsappRows([]);
+      setWhatsappSummary(EMPTY_WHATSAPP_SUMMARY);
+    } finally {
+      setWhatsappLoading(false);
+    }
+  }
+
   async function refreshPending() {
     setPendingLoading(true);
     setPageError('');
@@ -255,6 +324,11 @@ function Receipts() {
   }
 
   useEffect(() => {
+    if (activeTab === 'whatsapp') {
+      refreshWhatsapp();
+      return;
+    }
+
     if (activeTab === 'posted') {
       refreshPosted();
       return;
@@ -265,6 +339,11 @@ function Receipts() {
   }, [activeTab]);
 
   async function handleSearch() {
+    if (activeTab === 'whatsapp') {
+      await refreshWhatsapp();
+      return;
+    }
+
     if (activeTab === 'posted') {
       await refreshPosted();
       return;
@@ -454,6 +533,7 @@ function Receipts() {
 
   const pendingCount = pendingRows.length;
   const postedCount = postedRows.length;
+  const whatsappCount = whatsappSummary.total || whatsappRows.length;
 
   return (
     <div>
@@ -464,7 +544,7 @@ function Receipts() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-lg font-semibold text-text">Canhotos</h2>
-                <p className="text-sm text-muted">Upload com validação de legibilidade e armazenamento privado.</p>
+                <p className="text-sm text-muted">Acompanhe hoje o grupo do WhatsApp, as NFs sem canhoto e os arquivos já postados.</p>
               </div>
               <button
                 type="button"
@@ -532,6 +612,13 @@ function Receipts() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => setActiveTab('whatsapp')}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'whatsapp' ? 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100' : 'border-border bg-card text-text'}`}
+              >
+                WHATSAPP ({whatsappCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => setActiveTab('posted')}
                 className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'posted' ? 'border-sky-500/70 bg-sky-900/35 text-sky-100' : 'border-border bg-card text-text'}`}
               >
@@ -553,7 +640,61 @@ function Receipts() {
             ) : null}
           </section>
 
-          {activeTab === 'posted' ? (
+          {activeTab === 'whatsapp' ? (
+            <section className="space-y-3 rounded-md border border-border bg-surface/70 p-3">
+              <div className="grid gap-2 md:grid-cols-3">
+                <div className={`rounded-md border px-3 py-2 ${getWhatsappSummaryClasses('success')}`}>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">Sucesso</p>
+                  <p className="mt-1 text-2xl font-semibold text-text">{whatsappSummary.success}</p>
+                </div>
+                <div className={`rounded-md border px-3 py-2 ${getWhatsappSummaryClasses('review')}`}>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">Revisão</p>
+                  <p className="mt-1 text-2xl font-semibold text-text">{whatsappSummary.review}</p>
+                </div>
+                <div className={`rounded-md border px-3 py-2 ${getWhatsappSummaryClasses('error')}`}>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted">Erro</p>
+                  <p className="mt-1 text-2xl font-semibold text-text">{whatsappSummary.error}</p>
+                </div>
+              </div>
+
+              {whatsappLoading ? (
+                <p className="text-sm text-muted">Carregando atividade do WhatsApp...</p>
+              ) : !whatsappRows.length ? (
+                <p className="text-sm text-muted">Nenhuma atividade do bot encontrada para os filtros atuais.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {whatsappRows.map((row) => (
+                    <li key={row.id} className="rounded-md border border-border bg-card p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-text">NF {row.invoice_number || row.danfe?.invoice_number || '-'}</p>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getWhatsappKindClasses(row.kind)}`}>
+                              {getWhatsappKindLabel(row.kind)}
+                            </span>
+                          </div>
+                          <p className="text-muted">{row.danfe?.customer_name || 'Cliente não informado'} · {row.danfe?.city || '-'}</p>
+                          <p className="text-muted">Remetente: {buildWhatsappSenderLabel(row)}</p>
+                          <p className="text-muted">Motorista: {row.driver?.name || '-'}</p>
+                          <p className="text-muted">Grupo: {row.group_name || row.group_id || '-'}</p>
+                          <p className="text-muted">Evento: {formatDateTime(row.occurred_at)} · Backend: {row.backend_action || '-'}</p>
+                          <p className="text-muted">Status atual da NF: {row.danfe?.status || '-'}</p>
+                        </div>
+                        <div className={`rounded-md border px-2 py-1 text-xs font-semibold ${getWhatsappKindClasses(row.kind)}`}>
+                          {row.backend_mode || 'whatsapp'}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 rounded-md border border-border bg-surface/60 px-3 py-2">
+                        <p className="text-sm font-semibold text-text">{row.title || 'Atividade do bot'}</p>
+                        <p className="mt-1 text-xs text-muted">{row.message || 'Sem detalhes adicionais.'}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : activeTab === 'posted' ? (
             <section className="rounded-md border border-border bg-surface/70 p-3">
               {postedLoading ? (
                 <p className="text-sm text-muted">Carregando canhotos postados...</p>

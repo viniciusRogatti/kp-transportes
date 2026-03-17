@@ -382,6 +382,8 @@ function ReturnsOccurrences() {
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
+  const [selectedBatchDriverId, setSelectedBatchDriverId] = useState('');
+  const [selectedBatchCarId, setSelectedBatchCarId] = useState('');
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
@@ -459,11 +461,16 @@ function ReturnsOccurrences() {
   useEffect(() => {
     if (!selectedBatch) {
       setBatchDraftNotes([]);
+      setSelectedBatchDriverId('');
+      setSelectedBatchCarId('');
       return;
     }
 
     setBatchDraftNotes(selectedBatch.notes);
-  }, [selectedBatch]);
+    setSelectedBatchDriverId(String(selectedBatch.driver_id || ''));
+    const currentCar = cars.find((car) => String(car.license_plate).toUpperCase() === String(selectedBatch.vehicle_plate || '').toUpperCase());
+    setSelectedBatchCarId(currentCar ? String(currentCar.id) : '');
+  }, [selectedBatch, cars]);
 
   const selectedBatchHasUnsavedChanges = useMemo(() => {
     if (!selectedBatch) {
@@ -477,8 +484,33 @@ function ReturnsOccurrences() {
       return true;
     }
 
-    return originalInvoices.some((invoiceNumber, index) => invoiceNumber !== draftInvoices[index]);
-  }, [selectedBatch, batchDraftNotes]);
+    const hasInvoiceChanges = originalInvoices.some((invoiceNumber, index) => invoiceNumber !== draftInvoices[index]);
+    if (hasInvoiceChanges) {
+      return true;
+    }
+
+    if (String(selectedBatch.driver_id || '') !== String(selectedBatchDriverId || '')) {
+      return true;
+    }
+
+    const selectedBatchCar = cars.find((car) => String(car.id) === String(selectedBatchCarId));
+    const nextVehiclePlate = String(selectedBatchCar?.license_plate || selectedBatch.vehicle_plate || '').toUpperCase();
+    return String(selectedBatch.vehicle_plate || '').toUpperCase() !== nextVehiclePlate;
+  }, [selectedBatch, batchDraftNotes, selectedBatchDriverId, selectedBatchCarId, cars]);
+
+  const selectedBatchDriverName = useMemo(() => {
+    if (!selectedBatch) return 'Motorista';
+    return drivers.find((driver) => String(driver.id) === String(selectedBatchDriverId || selectedBatch.driver_id))?.name
+      || selectedBatch.Driver?.name
+      || String(selectedBatchDriverId || selectedBatch.driver_id || 'Motorista');
+  }, [drivers, selectedBatch, selectedBatchDriverId]);
+
+  const selectedBatchVehiclePlate = useMemo(() => {
+    if (!selectedBatch) return '';
+    return cars.find((car) => String(car.id) === String(selectedBatchCarId))?.license_plate
+      || selectedBatch.vehicle_plate
+      || '';
+  }, [cars, selectedBatch, selectedBatchCarId]);
 
   const selectedBatchAggregatedPreview = useMemo(() => {
     if (!selectedBatch) {
@@ -1654,16 +1686,25 @@ function ReturnsOccurrences() {
     const originalNotes = selectedBatch.notes;
     const draftInvoices = new Set(batchDraftNotes.map((note) => note.invoice_number));
     const originalInvoices = new Set(originalNotes.map((note) => note.invoice_number));
+    const driverChanged = String(selectedBatch.driver_id || '') !== String(selectedBatchDriverId || '');
+    const vehicleChanged = String(selectedBatch.vehicle_plate || '').toUpperCase() !== String(selectedBatchVehiclePlate || '').toUpperCase();
 
     const notesToAdd = batchDraftNotes.filter((note) => !originalInvoices.has(note.invoice_number));
     const notesToRemove = originalNotes.filter((note) => !draftInvoices.has(note.invoice_number));
 
-    if (!notesToAdd.length && !notesToRemove.length) {
+    if (!notesToAdd.length && !notesToRemove.length && !driverChanged && !vehicleChanged) {
       alert('Nenhuma alteracao para salvar no lote.');
       return;
     }
 
     try {
+      if (driverChanged || vehicleChanged) {
+        await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/transport`, {
+          driver_id: Number(selectedBatchDriverId),
+          vehicle_plate: selectedBatchVehiclePlate,
+        });
+      }
+
       await Promise.all(notesToRemove.map((note) => axios.delete(`${API_URL}/returns/notes/${note.id}`)));
       await Promise.all(notesToAdd.map((note) => (
         axios.post(
@@ -2212,7 +2253,7 @@ function ReturnsOccurrences() {
                     {selectedBatch ? (
                       <>
                         <InlineText>
-                          Motorista: {selectedBatch.Driver?.name || selectedBatch.driver_id} | Placa: {selectedBatch.vehicle_plate} | Data: {formatDateBR(selectedBatch.return_date)}
+                          Motorista: {selectedBatchDriverName} | Placa: {selectedBatchVehiclePlate} | Data: {formatDateBR(selectedBatch.return_date)}
                         </InlineText>
                         <InlineText>
                           Status do lote: {RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']}
@@ -2231,6 +2272,28 @@ function ReturnsOccurrences() {
                         )}
                         {isSelectedBatchEditableByTransportadora && (
                           <>
+                            <Grid className="mt-2 grid-cols-1 gap-3 md:grid-cols-2 md:max-w-[680px]">
+                              <div>
+                                <InlineText>Motorista do lote</InlineText>
+                                <select value={selectedBatchDriverId} onChange={(event) => setSelectedBatchDriverId(event.target.value)}>
+                                  <option value="">Selecione</option>
+                                  {drivers.map((driver) => (
+                                    <option key={driver.id} value={driver.id}>{driver.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <InlineText>Veiculo / Placa do lote</InlineText>
+                                <select value={selectedBatchCarId} onChange={(event) => setSelectedBatchCarId(event.target.value)}>
+                                  <option value="">Selecione</option>
+                                  {cars.map((car) => (
+                                    <option key={car.id} value={car.id}>
+                                      {car.model} - {car.license_plate}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </Grid>
                             <InfoText>
                               Lote em rascunho: NFs adicionadas aqui ainda nao bloqueiam coleta/ocorrencia ate a confirmacao do envio.
                             </InfoText>

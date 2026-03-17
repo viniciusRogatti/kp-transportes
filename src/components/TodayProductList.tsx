@@ -1,6 +1,7 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
 import { IGroupedProduct } from "../types/types";
+import { formatGroupedProductQuantity } from '../utils/todayInvoiceProducts';
 
 interface TodayProductListProps {
   products: IGroupedProduct[];
@@ -37,7 +38,7 @@ const TodayProductList: React.FC<TodayProductListProps> = ({ products }) => (
             <View style={styles.tableRow} key={index}>
               <View style={styles.tableColCode}><Text style={styles.tableCell}>{product.Product.code}</Text></View>
               <View style={styles.tableColDescription}><Text style={styles.tableCell}>{truncateText(product.Product.description, 50)}</Text></View>
-              <View style={styles.tableColQuantity}><Text style={styles.tableCell}>{product.quantity}</Text></View>
+              <View style={styles.tableColQuantity}><Text style={styles.tableCell}>{formatGroupedProductQuantity(product.quantity)}</Text></View>
             </View>
           ))}
         </View>

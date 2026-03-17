@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { IDanfe, IInvoiceSearchContext } from '../types/types'
 import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ItemsScrollArea, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
 import { formatDateBR } from '../utils/dateDisplay';
@@ -6,7 +6,6 @@ import { normalizeCityLabel, normalizeTextValue } from '../utils/textNormalizati
 
 interface CardDanfesProps {
   danfes: IDanfe[];
-  animationKey?: string;
   driverByInvoice?: Record<string, string>;
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
 }
@@ -20,7 +19,6 @@ const RETURN_TYPE_LABELS: Record<string, string> = {
 
 function CardDanfes({
   danfes,
-  animationKey,
   driverByInvoice = {},
   invoiceContextByNf = {},
 } : CardDanfesProps) {
@@ -70,7 +68,7 @@ function CardDanfes({
 
   return (
     <>
-      <ContainerCards key={animationKey}>
+      <ContainerCards>
         { danfes.map((danfe) => {
           const key = String(danfe.barcode || danfe.invoice_number);
           const isFlipped = Boolean(flippedCards[key]);
@@ -284,4 +282,4 @@ function CardDanfes({
   )
 }
 
-export default CardDanfes;
+export default memo(CardDanfes);

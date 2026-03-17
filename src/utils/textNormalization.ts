@@ -66,6 +66,7 @@ function toNullableText(value: unknown) {
 export function sanitizeDanfeTextFields(danfe: IDanfe): IDanfe {
   return {
     ...danfe,
+    representative_name: toNullableText(danfe.representative_name),
     Customer: {
       ...danfe.Customer,
       name_or_legal_entity: normalizeTextValue(danfe.Customer?.name_or_legal_entity),
@@ -77,6 +78,7 @@ export function sanitizeDanfeTextFields(danfe: IDanfe): IDanfe {
       state: toNullableText(danfe.Customer?.state),
       zip_code: toNullableText(danfe.Customer?.zip_code),
       cnpj_or_cpf: normalizeTextValue(danfe.Customer?.cnpj_or_cpf),
+      representative_name: toNullableText(danfe.Customer?.representative_name),
     },
     DanfeProducts: Array.isArray(danfe.DanfeProducts)
       ? danfe.DanfeProducts.map((product) => ({

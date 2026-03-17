@@ -135,6 +135,7 @@ const formatCollectionQuantityWithType = (quantity?: number | null, productType?
   const normalizedQty = Number.isInteger(parsed) ? String(parsed) : parsed.toFixed(3).replace(/\.?0+$/, '');
   return `${normalizedQty}${normalizedType || ''}`;
 };
+const currencyFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatUrgencyLabel = (level?: string | null) => {
   const normalized = String(level || '').trim().toLowerCase();
   if (normalized === 'critica') return 'Crítica';
@@ -256,6 +257,8 @@ const sanitizeOccurrenceRecord = (occurrence: IOccurrence): IOccurrence => ({
   ...occurrence,
   customer_name: normalizeTextValue(occurrence.customer_name) || null,
   city: normalizeCityLabel(occurrence.city) || null,
+  load_number: normalizeTextValue(occurrence.load_number) || null,
+  representative_name: normalizeTextValue(occurrence.representative_name) || null,
   product_description: normalizeTextValue(occurrence.product_description) || null,
   resolution_note: normalizeTextValue(occurrence.resolution_note) || null,
   items: Array.isArray(occurrence.items)
@@ -287,6 +290,7 @@ const sanitizeCollectionRequestRecord = (request: ICollectionRequest): ICollecti
 });
 const sanitizeDanfeForDisplay = (danfe: IDanfe): IDanfe => ({
   ...danfe,
+  representative_name: normalizeTextValue(danfe.representative_name) || null,
   Customer: {
     ...danfe.Customer,
     name_or_legal_entity: normalizeTextValue(danfe.Customer?.name_or_legal_entity),
@@ -623,7 +627,10 @@ function Home() {
 
       const missingContextOccurrences = safeData.filter((occurrence: IOccurrence) => {
         const invoice = String(occurrence.invoice_number || '').trim();
-        const needsContext = !occurrence.customer_name || !occurrence.city || (!occurrence.product_description && !!occurrence.product_id);
+        const needsContext = !occurrence.customer_name
+          || !occurrence.city
+          || (!occurrence.product_description && !!occurrence.product_id)
+          || (isSimpleOccurrenceReason(occurrence.reason) && (!occurrence.load_number || !occurrence.representative_name));
         return needsContext && /^\d+$/.test(invoice);
       });
 
@@ -652,6 +659,9 @@ function Home() {
               id: occurrence.id,
               customer_name: normalizeTextValue(danfe?.Customer?.name_or_legal_entity || occurrence.customer_name) || null,
               city: normalizeCityLabel(danfe?.Customer?.city || occurrence.city) || null,
+              load_number: normalizeTextValue(danfe?.load_number || occurrence.load_number) || null,
+              representative_name: normalizeTextValue(danfe?.representative_name || danfe?.Customer?.representative_name || occurrence.representative_name) || null,
+              invoice_total_value: toNullableNumber(danfe?.total_value ?? occurrence.invoice_total_value),
               product_description: normalizeTextValue(fallbackProductDescription) || null,
               product_type: fallbackProductType,
             };
@@ -674,6 +684,9 @@ function Home() {
           ...sanitizeOccurrenceRecord(occurrence),
           customer_name: fallback.customer_name ?? occurrence.customer_name ?? null,
           city: fallback.city ?? occurrence.city ?? null,
+          load_number: fallback.load_number ?? occurrence.load_number ?? null,
+          representative_name: fallback.representative_name ?? occurrence.representative_name ?? null,
+          invoice_total_value: fallback.invoice_total_value ?? occurrence.invoice_total_value ?? null,
           product_description: fallback.product_description ?? occurrence.product_description ?? null,
           product_type: fallback.product_type ?? occurrence.product_type ?? null,
         };
@@ -772,6 +785,20 @@ function Home() {
       }];
     }
     return [];
+  }
+
+  function getOccurrenceMissingValue(occurrence: IOccurrence) {
+    const itemsTotal = Array.isArray(occurrence.items)
+      ? occurrence.items.reduce((sum, item) => sum + Number(item.total_price || 0), 0)
+      : 0;
+
+    if (itemsTotal > 0) return itemsTotal;
+
+    const occurrenceTotal = Number(occurrence.total_price || 0);
+    if (occurrenceTotal > 0) return occurrenceTotal;
+
+    const invoiceTotal = Number(occurrence.invoice_total_value || 0);
+    return Number.isFinite(invoiceTotal) ? invoiceTotal : 0;
   }
 
   function renderOccurrenceActions(occurrence: IOccurrence) {
@@ -1693,6 +1720,7 @@ function Home() {
                                 <span className="w-fit rounded-full border border-accent/35 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text-accent">
                                   Prioridade de carregamento
                                 </span>
+                                <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
                                 <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">
@@ -1733,6 +1761,10 @@ function Home() {
                                 <span className="w-fit rounded-full border border-border bg-surface-2/85 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text">
                                   Formulario de faltante
                                 </span>
+                                <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
+                                <span><strong>Representante:</strong> {occurrence.representative_name || '-'}</span>
+                                <span><strong>Carga:</strong> {occurrence.load_number || '-'}</span>
+                                <span><strong>Valor faltante:</strong> {currencyFmt.format(getOccurrenceMissingValue(occurrence))}</span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
                                 <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">

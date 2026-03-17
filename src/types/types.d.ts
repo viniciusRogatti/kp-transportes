@@ -109,6 +109,9 @@ export interface IOccurrence {
   invoice_number: string;
   customer_name?: string | null;
   city?: string | null;
+  load_number?: string | null;
+  representative_name?: string | null;
+  invoice_total_value?: number | string | null;
   reason?: 'faltou_no_carregamento' | 'faltou_na_carga' | 'produto_avariado' | 'produto_invertido' | 'produto_sem_etiqueta_ou_data' | 'legacy_outros' | null;
   scope?: 'invoice_total' | 'items';
   items?: Array<{
@@ -433,6 +436,7 @@ export interface IDanfe {
   invoice_number: string;
   barcode: string;
   load_number?: string | null;
+  representative_name?: string | null;
   invoice_date: string;
   departure_time: string;
   total_quantity: number;
@@ -451,6 +455,7 @@ export interface IDanfe {
     state?: string | null;
     zip_code?: string | null;
     cnpj_or_cpf: string;
+    representative_name?: string | null;
   };
   DanfeProducts: IDanfeProduct[];
 }
@@ -498,5 +503,6 @@ export interface ICustomer {
   state: string | null;
   zip_code: string | null;
   neighborhood: string | null;
+  representative_name?: string | null;
   cnpj_or_cpf: string;
 }

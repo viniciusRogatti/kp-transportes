@@ -44,6 +44,11 @@ function getOptionalAddressNumber(customer: CustomerWithOptionalNumber) {
   return found ? String(found).trim() : "";
 }
 
+function formatRepresentativeName(value?: string | null) {
+  const normalized = normalizeSpaces(String(value || ""));
+  return normalized || "-";
+}
+
 function formatAddress(customer: CustomerWithOptionalNumber) {
   const neighborhood = normalizeSpaces(String(customer.neighborhood || ""));
 
@@ -136,10 +141,11 @@ function Customers() {
               />
             </FilterBar>
             <div className="w-full max-w-[1200px] overflow-x-auto">
-              <table className="min-w-[760px] max-[768px]:min-w-[560px] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:leading-tight">
+              <table className="min-w-[920px] max-[768px]:min-w-[720px] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:leading-tight">
                 <thead>
                   <tr>
                     <th>Nome</th>
+                    <th>Representante</th>
                     <th>Endereço</th>
                     <th>Cidade</th>
                     <th className="max-[768px]:hidden">Estado</th>
@@ -151,6 +157,7 @@ function Customers() {
                   {filteredCustomers.map((customer) => (
                     <tr key={customer.cnpj_or_cpf}>
                       <td>{toTitleCase(customer.name_or_legal_entity || "-")}</td>
+                      <td>{formatRepresentativeName(customer.representative_name)}</td>
                       <td className="max-[768px]:text-[0.72rem] max-[768px]:leading-snug">{formatAddress(customer)}</td>
                       <td>{customer.city ? toTitleCase(customer.city) : "-"}</td>
                       <td className="max-[768px]:hidden">{customer.state || "-"}</td>

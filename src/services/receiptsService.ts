@@ -1,6 +1,7 @@
 import axios from 'axios';
 import {
   IDriver,
+  IReceiptRow,
   IPendingReceiptsListResponse,
   IReceiptUploadResponse,
   IReceiptsListResponse,
@@ -86,6 +87,17 @@ export async function getReceiptSignedUrl(
   const { data } = await axios.get<IReceiptSignedUrlResponse>(
     `${API_URL}/api/receipts/${receiptId}/url${suffix ? `?${suffix}` : ''}`,
   );
+
+  return data;
+}
+
+export async function updateReceiptManualReview(
+  receiptId: number,
+  needsManualReview: boolean,
+): Promise<IReceiptRow> {
+  const { data } = await axios.patch<IReceiptRow>(`${API_URL}/api/receipts/${receiptId}/manual-review`, {
+    needsManualReview,
+  });
 
   return data;
 }

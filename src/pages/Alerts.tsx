@@ -6,6 +6,7 @@ import {
 } from 'react';
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ExternalLink,
   RefreshCcw,
@@ -14,7 +15,11 @@ import { useNavigate } from 'react-router';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
-import { getReceiptSignedUrl, listPostedReceipts } from '../services/receiptsService';
+import {
+  getReceiptSignedUrl,
+  listPostedReceipts,
+  updateReceiptManualReview,
+} from '../services/receiptsService';
 import { listAlerts, resolveAlert } from '../services/alertsService';
 import {
   getReadAlertIds,
@@ -53,6 +58,7 @@ function AlertsPage() {
   const [manualRows, setManualRows] = useState<IReceiptRow[]>([]);
   const [manualLoading, setManualLoading] = useState(false);
   const [manualError, setManualError] = useState('');
+  const [manualUpdatingId, setManualUpdatingId] = useState<number | null>(null);
   const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
   const alertRowRefs = useRef<Record<number, HTMLLIElement | null>>({});
 
@@ -196,6 +202,19 @@ function AlertsPage() {
     } catch (error) {
       console.error(error);
       alert('Não foi possível abrir o canhoto agora.');
+    }
+  }
+
+  async function handleApproveManualReview(receipt: IReceiptRow) {
+    try {
+      setManualUpdatingId(receipt.id);
+      await updateReceiptManualReview(receipt.id, false);
+      await Promise.all([refreshManualReview(), refreshAlerts()]);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível aprovar a revisão manual agora.');
+    } finally {
+      setManualUpdatingId(null);
     }
   }
 
@@ -352,6 +371,16 @@ function AlertsPage() {
                         className="mt-2 inline-flex h-9 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-text"
                       >
                         <ExternalLink className="h-3.5 w-3.5" /> Abrir canhoto
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApproveManualReview(receipt)}
+                        disabled={manualUpdatingId === receipt.id}
+                        className="mt-2 ml-2 inline-flex h-9 items-center gap-1 rounded-md border border-emerald-500/60 bg-emerald-900/20 px-2 text-xs font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {manualUpdatingId === receipt.id ? 'Aprovando...' : 'Aprovar revisão'}
                       </button>
                     </li>
                   ))}

@@ -3,8 +3,6 @@ import axios from 'axios';
 import imageCompression from 'browser-image-compression';
 import {
   AlertTriangle,
-  Download,
-  ExternalLink,
   ImagePlus,
   RefreshCcw,
   Search,
@@ -16,22 +14,19 @@ import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import {
-  getReceiptSignedUrl,
   listDriversForReceiptFilters,
   listPendingReceipts,
-  listPostedReceipts,
   listWhatsappReceiptActivity,
   uploadReceipt,
 } from '../services/receiptsService';
 import {
   IDriver,
   IPendingReceiptRow,
-  IReceiptRow,
   IReceiptWhatsappActivityRow,
   IReceiptWhatsappActivitySummary,
 } from '../types/types';
 
-type ReceiptsTab = 'whatsapp' | 'posted' | 'pending';
+type ReceiptsTab = 'success' | 'review' | 'error' | 'pending';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -67,8 +62,6 @@ const formatDateOnly = (value: string | null | undefined) => {
     year: 'numeric',
   }).format(parsed);
 };
-
-const formatSizeKb = (sizeBytes: number) => `${(Number(sizeBytes || 0) / 1024).toFixed(0)} KB`;
 
 const toLocalDateInput = (date: Date) => {
   const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60 * 1000));
@@ -106,6 +99,12 @@ const getWhatsappSummaryClasses = (kind: 'success' | 'review' | 'error') => {
   if (kind === 'success') return 'border-emerald-500/40 bg-emerald-950/20';
   if (kind === 'review') return 'border-amber-500/40 bg-amber-900/20';
   return 'border-rose-500/40 bg-rose-900/20';
+};
+
+const getActivityEmptyMessage = (tab: Exclude<ReceiptsTab, 'pending'>) => {
+  if (tab === 'success') return 'Nenhum canhoto validado com sucesso para os filtros atuais.';
+  if (tab === 'review') return 'Nenhum canhoto em revisão para os filtros atuais.';
+  return 'Nenhum erro de canhoto encontrado para os filtros atuais.';
 };
 
 const buildWhatsappSenderLabel = (row: IReceiptWhatsappActivityRow) => {
@@ -187,7 +186,7 @@ async function prepareFileForUpload(file: File): Promise<{ file: File; report: U
 function Receipts() {
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<ReceiptsTab>('whatsapp');
+  const [activeTab, setActiveTab] = useState<ReceiptsTab>('review');
   const [drivers, setDrivers] = useState<IDriver[]>([]);
 
   const [nfFilter, setNfFilter] = useState('');
@@ -197,10 +196,8 @@ function Receipts() {
 
   const [whatsappRows, setWhatsappRows] = useState<IReceiptWhatsappActivityRow[]>([]);
   const [whatsappSummary, setWhatsappSummary] = useState<IReceiptWhatsappActivitySummary>(EMPTY_WHATSAPP_SUMMARY);
-  const [postedRows, setPostedRows] = useState<IReceiptRow[]>([]);
   const [pendingRows, setPendingRows] = useState<IPendingReceiptRow[]>([]);
   const [whatsappLoading, setWhatsappLoading] = useState(false);
-  const [postedLoading, setPostedLoading] = useState(false);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pageError, setPageError] = useState('');
 
@@ -257,41 +254,30 @@ function Receipts() {
     }
   }, [selectedPreviewUrl]);
 
-  async function refreshPosted() {
-    setPostedLoading(true);
-    setPageError('');
-    try {
-      const response = await listPostedReceipts({
-        nf: nfFilter.trim() || undefined,
-        motoristaId: selectedMotoristaFilterId,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        includeUrls: true,
-        limit: 80,
-      });
-      setPostedRows(Array.isArray(response?.rows) ? response.rows : []);
-    } catch (error) {
-      console.error(error);
-      setPageError('Não foi possível carregar os canhotos postados.');
-      setPostedRows([]);
-    } finally {
-      setPostedLoading(false);
-    }
-  }
-
-  async function refreshWhatsapp() {
+  async function refreshWhatsapp(status: Exclude<ReceiptsTab, 'pending'> = 'review') {
     setWhatsappLoading(true);
     setPageError('');
     try {
-      const response = await listWhatsappReceiptActivity({
+      const baseFilters = {
         nf: nfFilter.trim() || undefined,
         motoristaId: selectedMotoristaFilterId,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        limit: 120,
-      });
-      setWhatsappRows(Array.isArray(response?.rows) ? response.rows : []);
-      setWhatsappSummary(response?.summary || EMPTY_WHATSAPP_SUMMARY);
+      };
+      const [summaryResponse, rowsResponse] = await Promise.all([
+        listWhatsappReceiptActivity({
+          ...baseFilters,
+          limit: 250,
+        }),
+        listWhatsappReceiptActivity({
+          ...baseFilters,
+          status,
+          limit: 160,
+        }),
+      ]);
+
+      setWhatsappRows(Array.isArray(rowsResponse?.rows) ? rowsResponse.rows : []);
+      setWhatsappSummary(summaryResponse?.summary || EMPTY_WHATSAPP_SUMMARY);
     } catch (error) {
       console.error(error);
       setPageError('Não foi possível carregar a atividade do WhatsApp.');
@@ -324,13 +310,8 @@ function Receipts() {
   }
 
   useEffect(() => {
-    if (activeTab === 'whatsapp') {
-      refreshWhatsapp();
-      return;
-    }
-
-    if (activeTab === 'posted') {
-      refreshPosted();
+    if (activeTab !== 'pending') {
+      refreshWhatsapp(activeTab);
       return;
     }
 
@@ -339,13 +320,8 @@ function Receipts() {
   }, [activeTab]);
 
   async function handleSearch() {
-    if (activeTab === 'whatsapp') {
-      await refreshWhatsapp();
-      return;
-    }
-
-    if (activeTab === 'posted') {
-      await refreshPosted();
+    if (activeTab !== 'pending') {
+      await refreshWhatsapp(activeTab);
       return;
     }
 
@@ -434,8 +410,7 @@ function Receipts() {
       await uploadReceipt(formData);
 
       closeUploadModal();
-      await Promise.all([refreshPosted(), refreshPending()]);
-      setActiveTab('posted');
+      await refreshPending();
     } catch (error) {
       console.error(error);
 
@@ -500,40 +475,10 @@ function Receipts() {
     }
   }
 
-  async function handleOpenReceipt(receipt: IReceiptRow) {
-    try {
-      if (receipt.preview_url) {
-        window.open(receipt.preview_url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-
-      const data = await getReceiptSignedUrl(receipt.id, { expiresIn: 900 });
-      window.open(data.signed_url, '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error(error);
-      alert('Não foi possível abrir o canhoto agora.');
-    }
-  }
-
-  async function handleDownloadReceipt(receipt: IReceiptRow) {
-    try {
-      const filename = `canhoto-${receipt.nf_id || receipt.id}.jpg`;
-      const data = await getReceiptSignedUrl(receipt.id, {
-        download: true,
-        filename,
-        expiresIn: 900,
-      });
-
-      window.open(data.signed_url, '_blank', 'noopener,noreferrer');
-    } catch (error) {
-      console.error(error);
-      alert('Não foi possível baixar o canhoto agora.');
-    }
-  }
-
   const pendingCount = pendingRows.length;
-  const postedCount = postedRows.length;
-  const whatsappCount = whatsappSummary.total || whatsappRows.length;
+  const successCount = whatsappSummary.success || 0;
+  const reviewCount = whatsappSummary.review || 0;
+  const errorCount = whatsappSummary.error || 0;
 
   return (
     <div>
@@ -544,7 +489,7 @@ function Receipts() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-lg font-semibold text-text">Canhotos</h2>
-                <p className="text-sm text-muted">Acompanhe hoje o grupo do WhatsApp, as NFs sem canhoto e os arquivos já postados.</p>
+                <p className="text-sm text-muted">Acompanhe os canhotos detectados no WhatsApp por status e mantenha em pendente apenas as NFs ainda sem foto no grupo.</p>
               </div>
               <button
                 type="button"
@@ -612,22 +557,29 @@ function Receipts() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setActiveTab('whatsapp')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'whatsapp' ? 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100' : 'border-border bg-card text-text'}`}
+                onClick={() => setActiveTab('success')}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'success' ? 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100' : 'border-border bg-card text-text'}`}
               >
-                WHATSAPP ({whatsappCount})
+                SUCESSO ({successCount})
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('posted')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'posted' ? 'border-sky-500/70 bg-sky-900/35 text-sky-100' : 'border-border bg-card text-text'}`}
+                onClick={() => setActiveTab('review')}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'review' ? 'border-amber-500/70 bg-amber-900/25 text-amber-100' : 'border-border bg-card text-text'}`}
               >
-                POSTADOS ({postedCount})
+                REVISÃO ({reviewCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('error')}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'error' ? 'border-rose-500/70 bg-rose-900/25 text-rose-100' : 'border-border bg-card text-text'}`}
+              >
+                ERRO ({errorCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('pending')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'pending' ? 'border-amber-500/70 bg-amber-900/25 text-amber-100' : 'border-border bg-card text-text'}`}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'pending' ? 'border-sky-500/70 bg-sky-900/35 text-sky-100' : 'border-border bg-card text-text'}`}
               >
                 PENDENTES ({pendingCount})
               </button>
@@ -640,7 +592,7 @@ function Receipts() {
             ) : null}
           </section>
 
-          {activeTab === 'whatsapp' ? (
+          {activeTab !== 'pending' ? (
             <section className="space-y-3 rounded-md border border-border bg-surface/70 p-3">
               <div className="grid gap-2 md:grid-cols-3">
                 <div className={`rounded-md border px-3 py-2 ${getWhatsappSummaryClasses('success')}`}>
@@ -660,7 +612,7 @@ function Receipts() {
               {whatsappLoading ? (
                 <p className="text-sm text-muted">Carregando atividade do WhatsApp...</p>
               ) : !whatsappRows.length ? (
-                <p className="text-sm text-muted">Nenhuma atividade do bot encontrada para os filtros atuais.</p>
+                <p className="text-sm text-muted">{getActivityEmptyMessage(activeTab)}</p>
               ) : (
                 <ul className="space-y-2">
                   {whatsappRows.map((row) => (
@@ -688,56 +640,6 @@ function Receipts() {
                       <div className="mt-2 rounded-md border border-border bg-surface/60 px-3 py-2">
                         <p className="text-sm font-semibold text-text">{row.title || 'Atividade do bot'}</p>
                         <p className="mt-1 text-xs text-muted">{row.message || 'Sem detalhes adicionais.'}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ) : activeTab === 'posted' ? (
-            <section className="rounded-md border border-border bg-surface/70 p-3">
-              {postedLoading ? (
-                <p className="text-sm text-muted">Carregando canhotos postados...</p>
-              ) : !postedRows.length ? (
-                <p className="text-sm text-muted">Nenhum canhoto encontrado com os filtros atuais.</p>
-              ) : (
-                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {postedRows.map((receipt) => (
-                    <li key={`receipt-${receipt.id}`} className="rounded-md border border-border bg-card p-2">
-                      <div className="aspect-[4/3] w-full overflow-hidden rounded-md border border-border bg-surface-2/60">
-                        {receipt.preview_url ? (
-                          <img src={receipt.preview_url} alt={`Canhoto NF ${receipt.nf_id || '-'}`} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-muted">Sem preview</div>
-                        )}
-                      </div>
-
-                      <div className="mt-2 space-y-1 text-xs">
-                        <p className="font-semibold text-text">NF: {receipt.nf_id || '-'}</p>
-                        <p className="text-muted">Motorista: {receipt.driver?.name || '-'}</p>
-                        <p className="text-muted">Dimensão: {receipt.width}x{receipt.height}</p>
-                        <p className="text-muted">Tamanho: {formatSizeKb(receipt.size_bytes)}</p>
-                        <p className="text-muted">Enviado em: {formatDateTime(receipt.created_at)}</p>
-                        {receipt.needs_manual_review ? (
-                          <p className="font-semibold text-amber-200">Revisão manual pendente</p>
-                        ) : null}
-                      </div>
-
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenReceipt(receipt)}
-                          className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-surface px-2 text-xs text-text"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" /> Abrir
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDownloadReceipt(receipt)}
-                          className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-surface px-2 text-xs text-text"
-                        >
-                          <Download className="h-3.5 w-3.5" /> Baixar
-                        </button>
                       </div>
                     </li>
                   ))}

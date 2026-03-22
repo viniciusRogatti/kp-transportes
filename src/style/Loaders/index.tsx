@@ -13,7 +13,7 @@ export function TruckLoader({ className, ...props }: DivProps) {
 }
 
 export function Loading({ className, ...props }: SpanProps) {
-  return <span className={cn('mt-12 inline-block animate-pulse text-4xl tracking-[6px] text-text', className)} {...props}>Loading</span>;
+  return <span className={cn('mt-12 inline-block animate-pulse text-4xl tracking-[6px] text-text', className)} {...props}>Carregando</span>;
 }
 
 export function LoaderPrinting({ className, ...props }: SpanProps) {

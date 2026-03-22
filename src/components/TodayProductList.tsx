@@ -27,12 +27,12 @@ const TodayProductList: React.FC<TodayProductListProps> = ({ products }) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.section}>
-        <Text style={styles.header}>Products Report</Text>
+        <Text style={styles.header}>Relatório de produtos</Text>
         <View style={styles.table}>
           <View style={styles.tableRow}>
-            <View style={styles.tableColCode}><Text style={styles.tableCell}>Code</Text></View>
-            <View style={styles.tableColDescription}><Text style={styles.tableCell}>Description</Text></View>
-            <View style={styles.tableColQuantity}><Text style={styles.tableCell}>Quantity</Text></View>
+            <View style={styles.tableColCode}><Text style={styles.tableCell}>Código</Text></View>
+            <View style={styles.tableColDescription}><Text style={styles.tableCell}>Descrição</Text></View>
+            <View style={styles.tableColQuantity}><Text style={styles.tableCell}>Quantidade</Text></View>
           </View>
           {products.map((product, index) => (
             <View style={styles.tableRow} key={index}>

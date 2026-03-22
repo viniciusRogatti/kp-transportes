@@ -15,17 +15,17 @@ type UserRow = {
 };
 
 const PERMISSION_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'user', label: 'User' },
+  { value: 'admin', label: 'Administrador' },
+  { value: 'user', label: 'Usuário' },
   { value: 'expedicao', label: 'Expedição' },
   { value: 'conferente', label: 'Conferente' },
   { value: 'control_tower', label: 'Torre de Controle' },
 ];
 
 const PERMISSION_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  master: 'Master',
-  user: 'User',
+  admin: 'Administrador',
+  master: 'Administrador geral',
+  user: 'Usuário',
   expedicao: 'Expedição',
   conferente: 'Conferente',
   control_tower: 'Torre de Controle',
@@ -107,7 +107,7 @@ function UserManagement() {
     const name = form.name.trim();
 
     if (!username || !name || !form.password.trim() || !form.passwordConfirmation.trim() || !form.actorPassword.trim()) {
-      setErrorMessage('Preencha login, nome, senha, confirmação e sua senha.');
+      setErrorMessage('Preencha usuário, nome, senha, confirmação e sua senha.');
       return;
     }
 
@@ -157,7 +157,7 @@ function UserManagement() {
           <div className="rounded-md border border-white/15 bg-surface/70 p-4">
             <h2 className="text-[1.05rem] font-semibold text-text">Cadastro de usuários</h2>
             <p className="mt-1 text-sm text-muted">
-              Disponível apenas para perfis Admin e Master.
+              Disponível apenas para perfis administrativos.
             </p>
 
             <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -165,7 +165,7 @@ function UserManagement() {
                 type="text"
                 value={form.username}
                 onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
-                placeholder="Login"
+                placeholder="Usuário de acesso"
                 autoComplete="new-username"
                 className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
@@ -231,7 +231,7 @@ function UserManagement() {
               type="text"
               value={filterText}
               onChange={(event) => setFilterText(event.target.value)}
-              placeholder="Filtrar por nome, login ou permissão"
+              placeholder="Filtrar por nome, usuário ou permissão"
               className="max-w-full"
             />
           </FilterBar>
@@ -241,7 +241,7 @@ function UserManagement() {
               <thead>
                 <tr>
                   <th>Nome</th>
-                  <th>Login</th>
+                  <th>Usuário</th>
                   <th>Permissão</th>
                   <th>Criado em</th>
                 </tr>

@@ -40,35 +40,35 @@ const FreightSummary: React.FC = () => {
 
   return (
     <div>
-      <h1>Freight Summary</h1>
+      <h1>Resumo de fretes</h1>
       <div>
-        <label>Driver ID:</label>
+        <label>ID do motorista:</label>
         <SearchInput
           type="text"
           value={driverId}
           onChange={(e) => setDriverId(e.target.value)}
           onSearch={searchTrips}
-          searchLabel="Search trips"
-          placeholder="Driver ID"
+          searchLabel="Buscar viagens"
+          placeholder="ID do motorista"
         />
       </div>
       <div>
-        <label>Start Date:</label>
+        <label>Data inicial:</label>
         <DatePicker selected={startDate} onChange={(date: Date) => setStartDate(date)} />
       </div>
       <div>
-        <label>End Date:</label>
+        <label>Data final:</label>
         <DatePicker selected={endDate} onChange={(date: Date) => setEndDate(date)} />
       </div>
       {trips.length > 0 && (
         <div>
-          <h2>Trips Found</h2>
+          <h2>Viagens encontradas</h2>
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Cities</th>
-                <th>Freight Value</th>
+                <th>Data</th>
+                <th>Cidades</th>
+                <th>Valor do frete</th>
               </tr>
             </thead>
             <tbody>
@@ -88,14 +88,14 @@ const FreightSummary: React.FC = () => {
             </tbody>
           </table>
           <div>
-            <label>Total Toll Value:</label>
+            <label>Valor total de pedágio:</label>
             <input type="number" value={tollValue} onChange={(e) => setTollValue(parseFloat(e.target.value))} />
           </div>
           <PDFDownloadLink
             document={<TripsPDF trips={trips} freightValues={freightValues} tollValue={tollValue} />}
-            fileName="trips.pdf"
+            fileName="relatorio-fretes.pdf"
           >
-            {({ loading }) => (loading ? 'Generating PDF...' : 'Download PDF')}
+            {({ loading }) => (loading ? 'Gerando PDF...' : 'Baixar PDF')}
           </PDFDownloadLink>
         </div>
       )}

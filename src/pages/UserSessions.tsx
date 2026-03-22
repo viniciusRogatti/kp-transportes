@@ -91,9 +91,9 @@ type SessionsAnalytics = {
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  master: 'Master',
-  user: 'User',
+  admin: 'Administrador',
+  master: 'Administrador geral',
+  user: 'Usuário',
   expedicao: 'Expedição',
   conferente: 'Conferente',
   control_tower: 'Torre de Controle',
@@ -350,7 +350,7 @@ function UserSessions() {
     legend: {
       top: 0,
       textStyle: { color: '#93a1b2' },
-      data: ['Logins', 'Interações'],
+      data: ['Acessos', 'Interações'],
     },
     grid: { left: 38, right: 12, top: 30, bottom: 24 },
     xAxis: {
@@ -367,7 +367,7 @@ function UserSessions() {
     },
     series: [
       {
-        name: 'Logins',
+        name: 'Acessos',
         type: 'line',
         smooth: true,
         data: analytics.activityByDay.map((item) => item.logins),
@@ -424,7 +424,7 @@ function UserSessions() {
           <div className="rounded-md border border-white/15 bg-surface/70 p-4">
             <h2 className="text-[1.05rem] font-semibold text-text">Horário de sessões dos usuários</h2>
             <p className="mt-1 text-sm text-muted">
-              Visualização exclusiva para usuário Master.
+              Visualização exclusiva para o perfil Administrador geral.
             </p>
             <p className="mt-1 text-xs text-muted">
               Visão ativa: {USER_GROUP_LABELS[selectedUserGroup]}. {audienceDescription}
@@ -488,7 +488,7 @@ function UserSessions() {
 
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-md border border-white/10 bg-surface/70 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted">Logins no período</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted">Acessos no período</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.logins}</p>
             </div>
             <div className="rounded-md border border-white/10 bg-surface/70 p-3">
@@ -504,7 +504,7 @@ function UserSessions() {
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="rounded-md border border-white/10 bg-surface/70 p-3">
-              <h3 className="text-sm font-semibold text-text">Picos semanais de login</h3>
+              <h3 className="text-sm font-semibold text-text">Picos semanais de acesso</h3>
               <ReactECharts option={weeklyLoginsOption} style={{ height: 260 }} notMerge lazyUpdate />
             </div>
             <div className="rounded-md border border-white/10 bg-surface/70 p-3">
@@ -514,7 +514,7 @@ function UserSessions() {
           </div>
 
           <div className="rounded-md border border-white/10 bg-surface/70 p-3">
-            <h3 className="text-sm font-semibold text-text">Logins x Interações por dia</h3>
+            <h3 className="text-sm font-semibold text-text">Acessos x interações por dia</h3>
             <ReactECharts option={dailyActivityOption} style={{ height: 300 }} notMerge lazyUpdate />
           </div>
 
@@ -642,8 +642,8 @@ function UserSessions() {
                 <tr>
                   <th>Usuário</th>
                   <th>Permissão</th>
-                  <th>Login</th>
-                  <th>Logout</th>
+                  <th>Entrada</th>
+                  <th>Saída</th>
                   <th>Duração</th>
                   <th>Status</th>
                   <th>IP</th>

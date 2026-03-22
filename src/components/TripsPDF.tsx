@@ -50,19 +50,19 @@ const TripsPDF: React.FC<TripsPDFProps> = ({ trips, freightValues, tollValue }) 
   <Document>
     <Page style={styles.page}>
       <View style={styles.section}>
-        <Text>Trip Report</Text>
+        <Text>Relatório de fretes</Text>
       </View>
       <View style={styles.section}>
         <View style={styles.table}>
           <View style={styles.tableRow}>
             <View style={styles.tableColHeader}>
-              <Text style={styles.tableCellHeader}>Date</Text>
+              <Text style={styles.tableCellHeader}>Data</Text>
             </View>
             <View style={styles.tableColHeader}>
-              <Text style={styles.tableCellHeader}>Cities</Text>
+              <Text style={styles.tableCellHeader}>Cidades</Text>
             </View>
             <View style={styles.tableColHeader}>
-              <Text style={styles.tableCellHeader}>Freight Value</Text>
+              <Text style={styles.tableCellHeader}>Valor do frete</Text>
             </View>
           </View>
           {trips.map(trip => (
@@ -81,7 +81,7 @@ const TripsPDF: React.FC<TripsPDFProps> = ({ trips, freightValues, tollValue }) 
         </View>
       </View>
       <View style={styles.section}>
-        <Text>Total Toll Value: {tollValue}</Text>
+        <Text>Valor total de pedágio: {tollValue}</Text>
       </View>
     </Page>
   </Document>

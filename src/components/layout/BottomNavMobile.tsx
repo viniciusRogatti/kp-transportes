@@ -30,8 +30,8 @@ const defaultBottomNavItems: BottomNavItem[] = [
   {
     key: 'home',
     to: '/home',
-    label: 'Home',
-    ariaLabel: 'Ir para Home',
+    label: 'Início',
+    ariaLabel: 'Ir para Início',
     icon: <Home className="h-[1.45rem] w-[1.45rem]" />,
     isHome: true,
   },

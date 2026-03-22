@@ -1605,7 +1605,7 @@ function ControlTowerCollections() {
       <div className="mx-auto max-w-[1550px] space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Control Tower | KP Transportes + Mar e Rio</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Torre de Controle | KP Transportes + Mar e Rio</h1>
             <p className="text-sm text-muted">Visão ampla de volume, tendência, gargalo e ação imediata.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

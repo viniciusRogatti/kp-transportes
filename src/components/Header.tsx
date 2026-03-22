@@ -50,9 +50,9 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  master: 'Master',
-  user: 'User',
+  admin: 'Administrador',
+  master: 'Administrador geral',
+  user: 'Usuário',
   expedicao: 'Expedição',
   conferente: 'Conferente',
   control_tower: 'Torre de Controle',
@@ -70,7 +70,7 @@ const formatNotificationTime = (value: string) => {
 };
 
 const navItems: NavItem[] = [
-  { to: '/home', label: 'Home', shortLabel: 'Home', icon: <Home className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/home', label: 'Início', shortLabel: 'Início', icon: <Home className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/products', label: 'Itens Cadastrados', shortLabel: 'Itens', icon: <ClipboardList className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
@@ -124,10 +124,10 @@ function Header() {
   const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const currentTitle = routeTitles[location.pathname] || 'KP Transportes';
-  const currentSection = location.pathname.startsWith('/control-tower') ? 'Control Tower' : 'Operação';
+  const currentSection = location.pathname.startsWith('/control-tower') ? 'Torre de Controle' : 'Operação';
   const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
-  const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permission || 'Usuário').trim();
   const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';
+  const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permissionLabel || 'Usuário').trim();
   const latestNotifications = notifications.slice(0, 10);
   const unreadNotificationClass = isLightTheme
     ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
@@ -282,7 +282,7 @@ function Header() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0">
-              <p className="truncate text-[11px] uppercase tracking-wide text-muted">{currentSection} / {permission}</p>
+              <p className="truncate text-[11px] uppercase tracking-wide text-muted">{currentSection} / {permissionLabel}</p>
               <h1 className="truncate text-[1.05rem] font-semibold text-text">{currentTitle}</h1>
             </div>
           </div>
@@ -342,7 +342,7 @@ function Header() {
                   : 'border-amber-500/60 bg-amber-500/10 text-amber-500',
               )}>
                 <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
-                {connected ? 'Realtime ON' : 'Fallback polling'}
+                {connected ? 'Tempo real ativo' : 'Atualização periódica'}
               </span>
             </div>
 

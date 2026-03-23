@@ -104,6 +104,44 @@ function isDanfeEligibleForRouting(status: unknown) {
   return !['cancelled', 'delivered', 'returned'].includes(normalized);
 }
 
+function normalizeTripNoteStatus(status: unknown) {
+  return String(status || '').trim().toLowerCase();
+}
+
+function isMutableTripNoteStatus(status: unknown) {
+  const normalized = normalizeTripNoteStatus(status);
+  return !normalized || normalized === 'pending' || normalized === 'assigned';
+}
+
+function resolveTripNotePayloadStatus(status: unknown) {
+  const normalized = normalizeTripNoteStatus(status);
+  if (!normalized || normalized === 'pending') return 'assigned';
+  return normalized;
+}
+
+function getTripNoteStatusLabel(status: unknown) {
+  const normalized = normalizeTripNoteStatus(status);
+  if (!normalized || normalized === 'pending' || normalized === 'assigned') return 'Atribuida';
+  if (normalized === 'on_the_way') return 'A caminho';
+  if (normalized === 'arrived') return 'No local';
+  if (normalized === 'delivered' || normalized === 'completed') return 'Entregue';
+  if (normalized === 'returned') return 'Recusada';
+  if (normalized === 'cancelled') return 'Cancelada';
+  if (normalized === 'redelivery') return 'Redespacho';
+  return normalized;
+}
+
+function buildTripNotePayload(note: ITripNote, order: number) {
+  return {
+    invoice_number: note.invoice_number,
+    city: note.city,
+    customer_name: note.customer_name,
+    status: resolveTripNotePayloadStatus(note.status),
+    order,
+    gross_weight: note.gross_weight,
+  };
+}
+
 function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe {
   return sanitizeDanfeTextFields(danfeData as IDanfe) as RouteLookupDanfe;
 }
@@ -125,6 +163,16 @@ function sortTripNotesByOrder(notes: ITripNote[]) {
 
 function reindexTripNotes(notes: ITripNote[]) {
   return sortTripNotesByOrder(notes).map((note, index) => ({ ...note, order: index + 1 }));
+}
+
+function canReorderTripNote(notes: ITripNote[], note: ITripNote, direction: 'up' | 'down') {
+  if (!isMutableTripNoteStatus(note.status)) return false;
+
+  const adjacentOrder = direction === 'up' ? note.order - 1 : note.order + 1;
+  const adjacentNote = notes.find((item) => item.order === adjacentOrder);
+  if (!adjacentNote) return false;
+
+  return isMutableTripNoteStatus(adjacentNote.status);
 }
 
 function calculateTripNotesWeight(notes: ITripNote[]) {
@@ -195,6 +243,14 @@ function RoutePlanning() {
 
   const sortedNotes = useMemo(() => sortTripNotesByOrder(addedNotes), [addedNotes]);
   const countWeight = useMemo(() => calculateTripNotesWeight(sortedNotes), [sortedNotes]);
+  const hasLockedNotesInRoutingEdit = useMemo(
+    () => isUpdating && sortedNotes.some((note) => !isMutableTripNoteStatus(note.status)),
+    [isUpdating, sortedNotes],
+  );
+  const editHasLockedNotes = useMemo(
+    () => editNotes.some((note) => !isMutableTripNoteStatus(note.status)),
+    [editNotes],
+  );
 
   const sortedDisplayedTrips = useMemo(
     () => displayedTrips.slice().sort((a, b) => Number(a.run_number || 1) - Number(b.run_number || 1)),
@@ -458,7 +514,7 @@ function RoutePlanning() {
       return;
     }
 
-    const tripNotes = (trip.TripNotes || []).filter((note) => !['returned', 'cancelled', 'delivered'].includes(String(note.status || '').toLowerCase()));
+    const tripNotes = sortTripNotesByOrder(trip.TripNotes || []);
 
     setTripToUpdate(trip);
     setIsUpdating(true);
@@ -906,7 +962,15 @@ function RoutePlanning() {
     noteLookupRef.current?.focus();
   };
 
-  const removeNoteFromList = async (nf: string, noteId: any) => {
+  const removeNoteFromList = async (note: ITripNote) => {
+    if (!isMutableTripNoteStatus(note.status)) {
+      alert('Notas em andamento ou finalizadas nao podem ser removidas nesta tela.');
+      return;
+    }
+
+    const nf = String(note.invoice_number);
+    const noteId = note.id;
+
     if (tripToUpdate?.id && noteId) {
       setIsLoading(true);
       try {
@@ -930,6 +994,10 @@ function RoutePlanning() {
     const prevIndex = updated.findIndex((note) => note.order === order - 1);
     const currIndex = updated.findIndex((note) => note.order === order);
     if (prevIndex !== -1 && currIndex !== -1) {
+      if (!isMutableTripNoteStatus(updated[currIndex].status) || !isMutableTripNoteStatus(updated[prevIndex].status)) {
+        alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
+        return;
+      }
       [updated[prevIndex].order, updated[currIndex].order] = [updated[currIndex].order, updated[prevIndex].order];
       setAddedNotes(updated);
     }
@@ -940,6 +1008,10 @@ function RoutePlanning() {
     const nextIndex = updated.findIndex((note) => note.order === order + 1);
     const currIndex = updated.findIndex((note) => note.order === order);
     if (nextIndex !== -1 && currIndex !== -1) {
+      if (!isMutableTripNoteStatus(updated[currIndex].status) || !isMutableTripNoteStatus(updated[nextIndex].status)) {
+        alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
+        return;
+      }
       [updated[nextIndex].order, updated[currIndex].order] = [updated[currIndex].order, updated[nextIndex].order];
       setAddedNotes(updated);
     }
@@ -955,6 +1027,11 @@ function RoutePlanning() {
 
     if (selectedDriver === 'null' || selectedCar === 'null' || !sortedNotes.length) {
       alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
+      return;
+    }
+
+    if (hasLockedNotesInRoutingEdit) {
+      alert('Esta rota possui notas em andamento ou finalizadas. Para evitar perda de historico, a atualizacao por recriacao esta bloqueada.');
       return;
     }
 
@@ -991,14 +1068,7 @@ function RoutePlanning() {
         is_second_run: isSecondRunMode,
         replace_trip_id: isUpdating && tripToUpdate ? tripToUpdate.id : null,
         run_number: tripToUpdate?.run_number,
-        tripNotes: sortedNotes.map(({ invoice_number, city, customer_name, order, gross_weight }) => ({
-          invoice_number,
-          city,
-          customer_name,
-          status: 'assigned',
-          order,
-          gross_weight,
-        })),
+        tripNotes: sortedNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
       if (isUpdating && tripToUpdate) {
@@ -1086,6 +1156,12 @@ function RoutePlanning() {
   };
 
   const removeEditNote = (invoice: string) => {
+    const targetNote = editNotes.find((note) => String(note.invoice_number) === String(invoice));
+    if (targetNote && !isMutableTripNoteStatus(targetNote.status)) {
+      alert('Notas em andamento ou finalizadas nao podem ser removidas da rota.');
+      return;
+    }
+
     setEditNotes((prev) => prev
       .filter((note) => String(note.invoice_number) !== String(invoice))
       .map((note, index) => ({ ...note, order: index + 1 })));
@@ -1095,6 +1171,11 @@ function RoutePlanning() {
     if (!editTrip) return;
     if (!editNotes.length) {
       alert('A rota precisa ter ao menos uma nota.');
+      return;
+    }
+
+    if (editHasLockedNotes) {
+      alert('Esta rota possui notas em andamento ou finalizadas. Para evitar perda de historico, a edicao por recriacao esta bloqueada.');
       return;
     }
 
@@ -1137,14 +1218,7 @@ function RoutePlanning() {
         run_number: isSecondRunMode ? Number(editTrip.run_number || 1) + 1 : editTrip.run_number || 1,
         is_second_run: isSecondRunMode || Number(editTrip.run_number || 1) > 1,
         replace_trip_id: editTrip.id,
-        tripNotes: editNotes.map((note, index) => ({
-          invoice_number: note.invoice_number,
-          city: note.city,
-          customer_name: note.customer_name,
-          status: 'assigned',
-          order: index + 1,
-          gross_weight: note.gross_weight,
-        })),
+        tripNotes: editNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
       await axios.delete(`${API_URL}/trips/delete/${editTrip.id}`, authConfig);
@@ -1414,6 +1488,12 @@ function RoutePlanning() {
                 </div>
               ) : null}
 
+              {hasLockedNotesInRoutingEdit ? (
+                <div className="mb-2 w-full rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                  Esta rota possui notas em andamento ou finalizadas. Elas aparecem para consulta, mas a atualizacao por recriacao fica bloqueada para preservar o historico operacional.
+                </div>
+              ) : null}
+
               <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                 <BoxSelectDanfe>
                   <input
@@ -1485,22 +1565,22 @@ function RoutePlanning() {
                 <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui h-full overflow-y-auto p-2">
                   <ul className="space-y-2">
                     {sortedNotes.map((note) => (
-                      <li key={`${note.invoice_number}-${note.order}`} className={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : 'border-border bg-surface-2/70'}`}>
+                      <li key={`${note.invoice_number}-${note.order}`} className={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : !isMutableTripNoteStatus(note.status) ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
                         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold text-text">
                           {note.order}
                         </span>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-text">NF {note.invoice_number} | {note.customer_name}</p>
-                          <p className="truncate text-xs text-muted">{note.city} | {note.gross_weight} Kg</p>
+                          <p className="truncate text-xs text-muted">{note.city} | {note.gross_weight} Kg | {getTripNoteStatusLabel(note.status)}</p>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button type="button" onClick={() => moveNoteUp(note.order)} disabled={note.order === 1} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
+                          <button type="button" onClick={() => moveNoteUp(note.order)} disabled={!canReorderTripNote(sortedNotes, note, 'up')} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
                             <FaArrowUpLong />
                           </button>
-                          <button type="button" onClick={() => moveNoteDown(note.order)} disabled={note.order === addedNotes.length} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
+                          <button type="button" onClick={() => moveNoteDown(note.order)} disabled={!canReorderTripNote(sortedNotes, note, 'down')} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
                             <FaArrowDownLong />
                           </button>
-                          <button type="button" onClick={() => removeNoteFromList(note.invoice_number, note.id)} className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-1 text-xs text-rose-200">
+                          <button type="button" onClick={() => removeNoteFromList(note)} disabled={!isMutableTripNoteStatus(note.status)} className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-1 text-xs text-rose-200 disabled:opacity-45">
                             Remover
                           </button>
                         </div>
@@ -1522,7 +1602,7 @@ function RoutePlanning() {
               <div className="mt-2 flex shrink-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs">
                 <span className="text-muted"><strong className="text-text">{sortedNotes.length}</strong> notas adicionadas</span>
                 <span className="text-muted">Peso total: <strong className="text-text">{countWeight.toFixed(2)}</strong></span>
-                <span className="inline-flex items-center gap-1 text-muted"><Truck className="h-3.5 w-3.5" /> status operacional</span>
+                <span className="inline-flex items-center gap-1 text-muted"><Truck className="h-3.5 w-3.5" /> {sortedNotes.filter((note) => !isMutableTripNoteStatus(note.status)).length} bloqueada(s)</span>
               </div>
             </div>
           </section>
@@ -1747,14 +1827,20 @@ function RoutePlanning() {
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
               </div>
 
+              {editHasLockedNotes ? (
+                <div className="mb-3 rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                  Esta rota possui notas em andamento ou finalizadas. O salvamento fica bloqueado nesta tela para preservar o historico operacional.
+                </div>
+              ) : null}
+
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas atribuídas</p>
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {editNotes.slice().sort((a, b) => a.order - b.order).map((note, index) => (
-                      <li key={`${note.invoice_number}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm">
-                        <span className="min-w-0 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name}</span>
-                        <button type="button" className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-0.5 text-xs text-rose-200" onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
+                      <li key={`${note.invoice_number}-${index}`} className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2/70' : 'border-amber-700/55 bg-amber-950/15'}`}>
+                        <span className="min-w-0 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
+                        <button type="button" className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-0.5 text-xs text-rose-200 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
                       </li>
                     ))}
                   </ul>
@@ -1776,7 +1862,7 @@ function RoutePlanning() {
 
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">Cancelar</button>
-                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
+                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit || editHasLockedNotes} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
                   {isSavingEdit ? 'Salvando...' : 'Salvar alterações'}
                 </button>
               </div>

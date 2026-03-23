@@ -92,6 +92,12 @@ type DriverSummary = {
   attention_level?: 'INFO' | 'WARNING' | 'CRITICAL' | null;
   open_alerts_count?: number;
   alerts?: MonitoringAlert[];
+  stops?: Array<{
+    note_id: number;
+    invoice_number: string;
+    sequence: number | null;
+    status: string;
+  }>;
   highlighted_stops: Array<{
     invoice_number: string;
     sequence: number | null;
@@ -169,6 +175,9 @@ const resolveGoogleMapsApiKey = () => {
 };
 
 const COMPANY_MARKER_ADDRESS = 'Av. Ricardo Bassoli Cezare, 3666 - Jardim Itatinga';
+const MOBILE_MONITORING_BREAKPOINT = 768;
+
+const getTodayMonitoringDate = () => format(new Date(), 'yyyy-MM-dd');
 
 const stagePriority = (stage: DeliveryStage) => {
   return STAGE_PRIORITY[stage] ?? 99;
@@ -200,6 +209,28 @@ const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
   }
 
   if (stopStatus === 'on_the_way' || row.stage === 'on_the_way') {
+    return 'on_the_way';
+  }
+
+  return 'pending';
+};
+
+const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVisual => {
+  const normalized = normalizeOperationalStatus(status);
+
+  if (RETURNED_STOP_STATUSES.has(normalized)) {
+    return 'returned';
+  }
+
+  if (COMPLETED_STOP_STATUSES.has(normalized)) {
+    return 'completed';
+  }
+
+  if (normalized === 'arrived') {
+    return 'on_site';
+  }
+
+  if (normalized === 'on_the_way') {
     return 'on_the_way';
   }
 
@@ -420,7 +451,7 @@ const stabilizeDriversById = (nextDrivers: DriverSummary[], prevDrivers: DriverS
 
 function DeliveryMonitoring() {
   const navigate = useNavigate();
-  const [date, setDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState<string>(getTodayMonitoringDate());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(null);
@@ -431,7 +462,13 @@ function DeliveryMonitoring() {
   const [loading, setLoading] = useState<boolean>(false);
   const [mapViewport, setMapViewport] = useState<GoogleMapBoundsPayload | null>(null);
   const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
+  const [isMobileView, setIsMobileView] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < MOBILE_MONITORING_BREAKPOINT;
+  });
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const todayDate = getTodayMonitoringDate();
+  const effectiveDate = isMobileView ? todayDate : date;
 
   const googleMapsApiKey = useMemo(() => resolveGoogleMapsApiKey(), []);
   const mapInitialCenter = useMemo(
@@ -448,19 +485,56 @@ function DeliveryMonitoring() {
     }),
     [],
   );
-  const mapDatasetKey = overview?.date || date;
+  const mapDatasetKey = overview?.date || effectiveDate;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_MONITORING_BREAKPOINT - 1}px)`);
+    const updateViewport = (matches: boolean) => {
+      setIsMobileView(matches);
+    };
+
+    updateViewport(mediaQuery.matches);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      updateViewport(event.matches);
+    };
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => {
+        mediaQuery.removeEventListener('change', handleChange);
+      };
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => {
+      mediaQuery.removeListener(handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileView) return;
+
+    setDate((currentDate) => (currentDate === todayDate ? currentDate : todayDate));
+    setSelectedDeliveryInvoice(null);
+  }, [isMobileView, todayDate]);
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: overviewData }, { data: diagnosticsData }] = await Promise.all([
-        axios.get<MonitoringResponse>(`${API_URL}/api/delivery-monitoring`, {
-          params: { date },
-        }),
-        axios.get<AddressDiagnosticsResponse>(`${API_URL}/api/delivery-monitoring/address-diagnostics`, {
-          params: { date },
-        }),
-      ]);
+      const overviewRequest = axios.get<MonitoringResponse>(`${API_URL}/api/delivery-monitoring`, {
+        params: { date: effectiveDate },
+      });
+      const diagnosticsRequest = isMobileView
+        ? Promise.resolve(null)
+        : axios.get<AddressDiagnosticsResponse>(`${API_URL}/api/delivery-monitoring/address-diagnostics`, {
+          params: { date: effectiveDate },
+        });
+
+      const [overviewResponse, diagnosticsResponse] = await Promise.all([overviewRequest, diagnosticsRequest]);
+      const overviewData = overviewResponse.data;
 
       setOverview((current) => {
         const previousDeliveries = current?.deliveries || [];
@@ -471,13 +545,13 @@ function DeliveryMonitoring() {
           drivers: stabilizeDriversById(overviewData.drivers || [], previousDrivers),
         };
       });
-      setDiagnostics(diagnosticsData);
+      setDiagnostics(diagnosticsResponse?.data || null);
     } catch (error) {
       console.error('Falha ao carregar monitoramento de entregas.', error);
     } finally {
       setLoading(false);
     }
-  }, [date]);
+  }, [effectiveDate, isMobileView]);
 
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -572,6 +646,15 @@ function DeliveryMonitoring() {
     [alerts, readAlertIds],
   );
   const totalOpenAlerts = alertSummary?.total ?? alerts.length;
+  const mobileSummaryCards = useMemo(
+    () => [
+      { label: 'Motoristas', value: drivers.length },
+      { label: 'Entregas', value: summary?.total || 0 },
+      { label: 'Em rota', value: (summary?.on_the_way || 0) + (summary?.on_site || 0) },
+      { label: 'Concluídas', value: summary?.completed || 0 },
+    ],
+    [drivers.length, summary],
+  );
 
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
@@ -606,15 +689,20 @@ function DeliveryMonitoring() {
   );
 
   const listRows = useMemo(() => {
-    return filteredDeliveries
+    const driverScopedRows = selectedDriverId
+      ? filteredDeliveries.filter((row) => Number(row.driver_id || 0) === Number(selectedDriverId))
+      : filteredDeliveries;
+
+    const sortedRows = driverScopedRows
       .slice()
       .sort((left, right) => {
         const stageDiff = stagePriority(left.stage) - stagePriority(right.stage);
         if (stageDiff !== 0) return stageDiff;
         return String(left.invoice_number).localeCompare(String(right.invoice_number));
-      })
-      .slice(0, 120);
-  }, [filteredDeliveries]);
+      });
+
+    return selectedDriverId ? sortedRows : sortedRows.slice(0, 120);
+  }, [filteredDeliveries, selectedDriverId]);
 
   const driverStopsByTrip = useMemo(() => {
     const nextMap = new Map<number, Map<number, DriverStopVisual>>();
@@ -671,21 +759,47 @@ function DeliveryMonitoring() {
       <Header />
       <Container>
         <section className="w-full rounded-lg border border-border bg-card p-4 shadow-elevated">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-text">Monitoramento de Entregas</h2>
-              <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
-                Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
-              </span>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold text-text">Monitoramento de Entregas</h2>
+                {!isMobileView ? (
+                  <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
+                    Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
+                  </span>
+                ) : null}
+              </div>
+
+              {isMobileView ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span className="rounded-full border border-border bg-surface-2 px-2 py-1">
+                    Hoje
+                  </span>
+                  <span className="rounded-full border border-border bg-surface-2 px-2 py-1">
+                    Atualizado {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
+                  </span>
+                </div>
+              ) : null}
+
+              {isMobileView ? (
+                <p className="mt-2 text-xs text-muted">
+                  Exibindo apenas as rotas do dia atual com foco no progresso de cada motorista.
+                </p>
+              ) : null}
             </div>
 
             <button
               type="button"
               onClick={() => navigate('/alerts')}
-              className={`inline-flex items-center gap-3 rounded-full border px-3 py-2 text-left transition ${unreadAlertsCount > 0
+              className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-2 text-left transition md:gap-3 md:px-3 ${unreadAlertsCount > 0
                 ? 'border-rose-500/70 bg-rose-500/10 text-rose-700'
                 : 'border-border bg-surface text-text'
                 }`}
+              aria-label={unreadAlertsCount > 0
+                ? `Abrir alertas. ${unreadAlertsCount} não lidos`
+                : 'Abrir alertas'
+              }
+              title="Abrir alertas"
             >
               <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-current/20 bg-white/80">
                 <AlertTriangle className="h-5 w-5" />
@@ -695,7 +809,7 @@ function DeliveryMonitoring() {
                   </span>
                 ) : null}
               </span>
-              <span>
+              <span className="hidden md:block">
                 <span className="block text-sm font-semibold">
                   Alertas
                 </span>
@@ -709,22 +823,24 @@ function DeliveryMonitoring() {
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-muted">
-              Data
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted">
+          <div className="mt-4 flex flex-col gap-2 md:mt-3 md:flex-row md:flex-wrap md:items-end">
+            {!isMobileView ? (
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Data
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
+                />
+              </label>
+            ) : null}
+            <label className={`flex flex-col gap-1 text-xs text-muted ${isMobileView ? 'w-full' : ''}`}>
               Status
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
+                className={`h-10 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
               >
                 <option value="all">Todos</option>
                 {STAGE_ORDER.map((stage) => (
@@ -732,56 +848,81 @@ function DeliveryMonitoring() {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              onClick={fetchOverview}
-              className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
-            >
-              Atualizar
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowRoutes((current) => !current)}
-              className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
-            >
-              {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('assigned')}
-              className="h-10 rounded-md border border-amber-500/45 bg-amber-500/10 px-4 text-sm font-semibold text-amber-700"
-            >
-              Ver atribuídas
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
-            >
-              Ver todas
-            </button>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Total: {summary?.total || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Sem motorista: {summary?.unassigned || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {summary?.assigned || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {summary?.on_the_way || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {summary?.on_site || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {summary?.completed || 0}</span>
-            <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {summary?.geolocated || 0}</span>
-          </div>
-
-          {diagnostics ? (
-            <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
-              Enderecos com problemas: {diagnostics.summary.problematic}/{diagnostics.summary.total}
-              {' | '}Duplicidade prefixo: {diagnostics.summary.duplicated_prefix}
-              {' | '}Sem cidade/UF: {diagnostics.summary.missing_city_or_state}
-              {' | '}Sem rua: {diagnostics.summary.missing_street}
+            <div className={`flex gap-2 ${isMobileView ? 'w-full' : 'flex-wrap'}`}>
+              <button
+                type="button"
+                onClick={fetchOverview}
+                className={`h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text ${isMobileView ? 'flex-1' : ''}`}
+              >
+                Atualizar
+              </button>
+              {!isMobileView ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowRoutes((current) => !current)}
+                    className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+                  >
+                    {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('assigned')}
+                    className="h-10 rounded-md border border-amber-500/45 bg-amber-500/10 px-4 text-sm font-semibold text-amber-700"
+                  >
+                    Ver atribuídas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('all')}
+                    className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+                  >
+                    Ver todas
+                  </button>
+                </>
+              ) : null}
             </div>
+          </div>
+
+          {isMobileView ? (
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+              {mobileSummaryCards.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-lg border border-border bg-surface px-3 py-2"
+                >
+                  <p className="text-[11px] uppercase tracking-wide text-muted">{item.label}</p>
+                  <p className="mt-1 text-base font-semibold text-text">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Total: {summary?.total || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Sem motorista: {summary?.unassigned || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {summary?.assigned || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {summary?.on_the_way || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {summary?.on_site || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {summary?.completed || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {summary?.geolocated || 0}</span>
+              </div>
+
+              {diagnostics ? (
+                <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+                  Enderecos com problemas: {diagnostics.summary.problematic}/{diagnostics.summary.total}
+                  {' | '}Duplicidade prefixo: {diagnostics.summary.duplicated_prefix}
+                  {' | '}Sem cidade/UF: {diagnostics.summary.missing_city_or_state}
+                  {' | '}Sem rua: {diagnostics.summary.missing_street}
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {loading && isMobileView ? (
+            <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
         </section>
-
         <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
@@ -798,7 +939,9 @@ function DeliveryMonitoring() {
             </button>
           </div>
           <p className="mb-3 text-xs text-muted">
-            Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.
+            {isMobileView
+              ? 'Toque nas paradas para ver NF e cliente da rota selecionada.'
+              : 'Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.'}
           </p>
           <div className="space-y-1">
             {drivers.map((driver) => {
@@ -807,29 +950,40 @@ function DeliveryMonitoring() {
               const isActive = Number(selectedDriverId) === numericDriverId;
               const routeStops = driverStopsByTrip.get(driver.trip_id) || new Map<number, DriverStopVisual>();
               const tripDeliveries = deliveriesByTripAndSequence.get(driver.trip_id) || new Map<number, DeliveryRow>();
+              const driverStops = Array.isArray(driver.stops)
+                ? driver.stops.slice().sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+                : [];
+              const driverStopsBySequence = new Map(
+                driverStops.map((stop) => [Number(stop.sequence || 0), stop]),
+              );
               const selectedStopSequence = selectedDriverStop?.tripId === driver.trip_id
                 ? selectedDriverStop.sequence
                 : null;
+              const selectedStopMeta = selectedStopSequence
+                ? driverStopsBySequence.get(selectedStopSequence) || null
+                : null;
               const selectedStopVisual = selectedStopSequence
-                ? routeStops.get(selectedStopSequence) || 'pending'
+                ? routeStops.get(selectedStopSequence) || resolveDriverStopVisualFromStatus(selectedStopMeta?.status)
                 : null;
               const selectedStopDelivery = selectedStopSequence
                 ? tripDeliveries.get(selectedStopSequence) || null
                 : null;
               const visualStops = Array.from({ length: Number(driver.total_deliveries || 0) }, (_, index) => {
                 const sequence = index + 1;
+                const stopMeta = driverStopsBySequence.get(sequence) || null;
                 return {
                   sequence,
-                  visual: routeStops.get(sequence) || 'pending',
+                  visual: routeStops.get(sequence) || resolveDriverStopVisualFromStatus(stopMeta?.status),
+                  invoiceNumber: stopMeta?.invoice_number || null,
                 };
               });
 
               return (
                 <div
                   key={`${driver.trip_id}-${driver.driver_id}`}
-                  className={`w-full rounded-xl border px-2 py-1.5 transition ${getDriverRowClassName(driver, isActive)} ${canHighlight ? '' : 'opacity-85'}`}
+                  className={`w-full rounded-xl border px-3 py-2 transition md:px-2 md:py-1.5 ${getDriverRowClassName(driver, isActive)} ${canHighlight ? '' : 'opacity-85'}`}
                 >
-                  <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center">
+                  <div className="flex flex-col gap-2 md:gap-1.5 lg:flex-row lg:items-center">
                     <button
                       type="button"
                       onClick={() => {
@@ -837,7 +991,7 @@ function DeliveryMonitoring() {
                         setSelectedDriverId(isActive ? null : numericDriverId);
                       }}
                       disabled={!canHighlight}
-                      className={`flex min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-0.5 text-left transition lg:min-w-[250px] lg:max-w-[320px] ${canHighlight
+                      className={`flex min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-1 text-left transition md:py-0.5 lg:min-w-[250px] lg:max-w-[320px] ${canHighlight
                         ? 'hover:bg-surface-2/70'
                         : 'cursor-default'
                         }`}
@@ -851,6 +1005,9 @@ function DeliveryMonitoring() {
                       <span className="ml-auto inline-flex shrink-0 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow-sm">
                         {`${driver.completed_deliveries}/${driver.total_deliveries}`}
                       </span>
+                      <span className="inline-flex shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 md:hidden">
+                        {`${Math.round(driver.progress_pct || 0)}%`}
+                      </span>
                       {driver.run_number > 1 ? (
                         <span className="inline-flex shrink-0 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">
                           {`${driver.run_number}a saída`}
@@ -858,12 +1015,13 @@ function DeliveryMonitoring() {
                       ) : null}
                     </button>
 
-                    <div className="min-w-0 flex-1 overflow-x-auto">
+                    <div className="min-w-0 flex-1 overflow-x-auto pb-1 md:pb-0">
                       <div className="inline-flex min-w-max overflow-hidden rounded-sm border border-border bg-surface">
                         {visualStops.map((stop, index) => {
                           const stopDelivery = tripDeliveries.get(stop.sequence) || null;
-                          const stopTitle = stopDelivery?.invoice_number
-                            ? `Parada ${stop.sequence}: NF ${stopDelivery.invoice_number} • ${getDriverStopLabel(stop.visual)}`
+                          const stopInvoiceNumber = stopDelivery?.invoice_number || stop.invoiceNumber;
+                          const stopTitle = stopInvoiceNumber
+                            ? `Parada ${stop.sequence}: NF ${stopInvoiceNumber} • ${getDriverStopLabel(stop.visual)}`
                             : `Parada ${stop.sequence}: ${getDriverStopLabel(stop.visual)}`;
 
                           return (
@@ -885,13 +1043,13 @@ function DeliveryMonitoring() {
                               if (canHighlight) {
                                 setSelectedDriverId(numericDriverId);
                               }
-                              if (stopDelivery?.invoice_number) {
-                                setSelectedDeliveryInvoice(stopDelivery.invoice_number);
+                              if (stopDelivery?.invoice_number || stop.invoiceNumber) {
+                                setSelectedDeliveryInvoice(stopDelivery?.invoice_number || stop.invoiceNumber || null);
                               }
                             }}
                             title={stopTitle}
                             aria-label={stopTitle}
-                            className={`relative inline-flex h-5 w-[22px] shrink-0 items-center justify-center px-0 text-[10px] font-semibold leading-none tabular-nums transition first:border-l-0 ${index > 0 ? 'border-l border-slate-500/30' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
+                            className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center px-0 text-[11px] font-semibold leading-none tabular-nums transition first:border-l-0 md:h-5 md:w-[22px] md:text-[10px] ${index > 0 ? 'border-l border-slate-500/30' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
                             aria-pressed={selectedStopSequence === stop.sequence}
                           >
                             {stop.visual === 'completed' ? (
@@ -907,7 +1065,7 @@ function DeliveryMonitoring() {
                   </div>
 
                   {selectedStopSequence ? (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-border/80 bg-surface/90 px-2 py-1.5 text-xs">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-border/80 bg-surface/90 px-2.5 py-2 text-xs md:px-2 md:py-1.5">
                       <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 font-semibold text-text">
                         {`Parada ${selectedStopSequence}`}
                       </span>
@@ -915,7 +1073,7 @@ function DeliveryMonitoring() {
                         {selectedStopVisual ? getDriverStopLabel(selectedStopVisual) : 'status indisponível'}
                       </span>
                       <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 text-text">
-                        {selectedStopDelivery?.invoice_number ? `NF ${selectedStopDelivery.invoice_number}` : 'NF não identificada'}
+                        {(selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number) ? `NF ${selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number}` : 'NF não identificada'}
                       </span>
                       <span className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-text">
                         {selectedStopDelivery?.customer_name || 'Cliente não identificado'}
@@ -927,13 +1085,13 @@ function DeliveryMonitoring() {
             })}
             {!drivers.length ? (
               <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-                Nenhuma rota para a data selecionada.
+                {isMobileView ? 'Nenhuma rota disponível para hoje.' : 'Nenhuma rota para a data selecionada.'}
               </div>
             ) : null}
           </div>
         </section>
 
-        <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
+        <section className="mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
           <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
             <span>Visualizacao operacional no Google Maps (POIs e nomes de lugares).</span>
             <span>{`Pontos no mapa: ${mapDeliveries.length} entregas • ${mapDriverLocations.length} motoristas • 1 empresa`}</span>
@@ -1052,11 +1210,13 @@ function DeliveryMonitoring() {
           ) : null}
         </section>
 
-        <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
+        <section className="mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Lista de entregas</h3>
             <span className="text-xs text-muted">
-              {`Mostrando ${Math.min(listRows.length, 120)} de ${filteredDeliveries.length} entregas filtradas`}
+              {selectedDriverId
+                ? `Mostrando ${listRows.length} entrega(s) do motorista selecionado`
+                : `Mostrando ${Math.min(listRows.length, 120)} de ${filteredDeliveries.length} entregas filtradas`}
             </span>
           </div>
           <div className="max-h-[320px] overflow-auto rounded-md border border-border">

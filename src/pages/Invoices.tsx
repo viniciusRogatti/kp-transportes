@@ -67,7 +67,7 @@ function Invoices() {
         setStartDate(null);
         setEndDate(null);
         setDataDanfes(sanitizedRows);
-        await loadInvoiceContext(sanitizedRows);
+        await loadInvoiceContext(sanitizedRows, { includeTripDriver: true });
       } catch (error) {
         console.error('Não foi possível encontrar notas com essas datas', error);
       }
@@ -83,21 +83,25 @@ function Invoices() {
     const normalizedNf = searchNf.trim();
     if (!normalizedNf) return;
 
-    const isDuplicate = dataDanfes.some((danfe) => danfe?.invoice_number === normalizedNf);
-    if (!isDuplicate) {
-      try {
-        const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
-        
-        if (data) {
-          const sanitizedDanfe = sanitizeDanfeTextFields(data);
-          await loadInvoiceContext([sanitizedDanfe]);
-          setDataDanfes((previous) => [...previous, sanitizedDanfe]);
-        }
-        
-      } catch (error) {
-        console.error('Algo deu errado ao tentar buscar essa nf', error);
+    try {
+      const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
+
+      if (data) {
+        const sanitizedDanfe = sanitizeDanfeTextFields(data);
+        await loadInvoiceContext([sanitizedDanfe], {
+          force: true,
+          includeTripDriver: true,
+        });
+        setDataDanfes((previous) => {
+          const invoiceNumber = String(sanitizedDanfe.invoice_number);
+          const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
+          return [sanitizedDanfe, ...nextRows];
+        });
       }
+    } catch (error) {
+      console.error('Algo deu errado ao tentar buscar essa nf', error);
     }
+
     setSearchNf('');
   };
 
@@ -113,7 +117,7 @@ function Invoices() {
         if (!data) return;
         const sanitizedDanfe = sanitizeDanfeTextFields(data);
         setDataDanfes([sanitizedDanfe]);
-        await loadInvoiceContext([sanitizedDanfe]);
+        await loadInvoiceContext([sanitizedDanfe], { force: true, includeTripDriver: true });
       } catch (error) {
         console.error('Algo deu errado ao tentar buscar essa nf', error);
       }

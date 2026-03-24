@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { getSemanticToneClassName } from '../../utils/statusStyles';
 
 export type UploadQueueStatus = 'ready' | 'uploading' | 'success' | 'error';
 
@@ -31,9 +32,9 @@ const statusLabel: Record<UploadQueueStatus, string> = {
 
 const statusClassName: Record<UploadQueueStatus, string> = {
   ready: 'border-border bg-surface text-text',
-  uploading: 'border-sky-500/45 bg-sky-500/15 text-[color:var(--color-text-accent)]',
-  success: 'border-emerald-500/45 bg-emerald-500/15 text-[color:var(--color-success)]',
-  error: 'border-rose-500/45 bg-rose-500/15 text-[color:var(--color-danger)]',
+  uploading: getSemanticToneClassName('info'),
+  success: getSemanticToneClassName('success'),
+  error: getSemanticToneClassName('danger'),
 };
 
 const formatBytes = (value: number) => {

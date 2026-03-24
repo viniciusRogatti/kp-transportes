@@ -1,14 +1,16 @@
 import { HTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
+import { getSemanticToneClassName, SemanticTone } from '../../utils/statusStyles';
 
-type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+type BadgeTone = SemanticTone;
 
 const toneMap: Record<BadgeTone, string> = {
-  neutral: 'border-border bg-surface-2/80 text-text',
-  info: 'border-info/50 bg-info/15 text-info',
-  success: 'border-success/50 bg-success/15 text-success',
-  warning: 'border-warning/50 bg-warning/15 text-warning',
-  danger: 'border-danger/50 bg-danger/15 text-danger',
+  neutral: getSemanticToneClassName('neutral'),
+  info: getSemanticToneClassName('info'),
+  success: getSemanticToneClassName('success'),
+  warning: getSemanticToneClassName('warning'),
+  danger: getSemanticToneClassName('danger'),
+  redelivery: getSemanticToneClassName('redelivery'),
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -18,7 +20,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 function Badge({ className, tone = 'neutral', ...props }: BadgeProps) {
   return (
     <span
-      className={cn('inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium', toneMap[tone], className)}
+      className={cn('inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-semibold', toneMap[tone], className)}
       {...props}
     />
   );

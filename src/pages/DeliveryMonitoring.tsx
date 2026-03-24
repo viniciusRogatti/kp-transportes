@@ -32,6 +32,13 @@ import {
   getReadAlertIds,
   subscribeToAlertReadChanges,
 } from '../utils/alertReadState';
+import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
+import {
+  canManuallyUpdateStopStatus,
+  getManualStopStatusLabel,
+  MANUAL_STOP_STATUS_ACTIONS,
+  ManualStopStatus,
+} from './deliveryMonitoring/stopStatusActions';
 
 type DeliveryRow = {
   invoice_number: string;
@@ -163,10 +170,23 @@ type AddressDiagnosticsResponse = {
   };
 };
 
-type DriverStopVisual = 'pending' | 'on_the_way' | 'on_site' | 'completed' | 'returned';
+type DriverStopVisual = 'pending' | 'on_the_way' | 'on_site' | 'completed' | 'retained' | 'returned';
 type SelectedDriverStop = {
   tripId: number;
   sequence: number;
+};
+
+type StopStatusUpdateState = {
+  tripId: number;
+  sequence: number;
+  nextStatus: ManualStopStatus;
+};
+
+type StopStatusFeedback = {
+  tripId: number;
+  sequence: number;
+  tone: SemanticTone;
+  message: string;
 };
 
 const resolveGoogleMapsApiKey = () => {
@@ -184,9 +204,9 @@ const stagePriority = (stage: DeliveryStage) => {
 };
 
 const RETURNED_STOP_STATUSES = new Set(['returned', 'redelivery', 'cancelled']);
+const RETAINED_STOP_STATUSES = new Set(['retained']);
 const COMPLETED_STOP_STATUSES = new Set(['delivered', 'completed']);
 
-const normalizeOperationalStatus = (value?: string | null) => String(value || '').trim().toLowerCase();
 
 const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
   const stopStatus = normalizeOperationalStatus(row.stop_status);
@@ -194,6 +214,10 @@ const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
 
   if (RETURNED_STOP_STATUSES.has(stopStatus) || RETURNED_STOP_STATUSES.has(danfeStatus)) {
     return 'returned';
+  }
+
+  if (RETAINED_STOP_STATUSES.has(stopStatus) || RETAINED_STOP_STATUSES.has(danfeStatus)) {
+    return 'retained';
   }
 
   if (
@@ -222,6 +246,10 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
     return 'returned';
   }
 
+  if (RETAINED_STOP_STATUSES.has(normalized)) {
+    return 'retained';
+  }
+
   if (COMPLETED_STOP_STATUSES.has(normalized)) {
     return 'completed';
   }
@@ -239,56 +267,31 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
 
 const getDriverStopLabel = (visual: DriverStopVisual) => {
   if (visual === 'completed') return 'entrega concluida';
+  if (visual === 'retained') return 'canhoto retido';
   if (visual === 'on_the_way') return 'motorista a caminho';
   if (visual === 'on_site') return 'motorista no local';
   if (visual === 'returned') return 'entrega devolvida';
   return 'entrega pendente';
 };
 
+const getDriverStopTone = (visual: DriverStopVisual): SemanticTone => {
+  if (visual === 'completed') return 'success';
+  if (visual === 'retained') return 'warning';
+  if (visual === 'on_the_way' || visual === 'on_site') return 'info';
+  if (visual === 'returned') return 'danger';
+  return 'warning';
+};
+
 const getDriverStopBadgeClassName = (visual: DriverStopVisual, isSelected = false) => {
   const selectedState = isSelected ? 'ring-2 ring-slate-900/10 ring-offset-1' : '';
-
-  if (visual === 'completed') {
-    return `border-emerald-800 bg-emerald-700 text-white shadow-sm ${selectedState}`;
-  }
-
-  if (visual === 'on_the_way') {
-    return `border-amber-400 bg-amber-200 text-amber-900 ${selectedState}`;
-  }
-
-  if (visual === 'on_site') {
-    return `border-sky-500 bg-sky-200 text-sky-900 ${selectedState}`;
-  }
-
-  if (visual === 'returned') {
-    return `border-rose-500 bg-rose-100 text-rose-800 ${selectedState}`;
-  }
-
-  return `border-slate-400 bg-white text-slate-900 ${selectedState}`;
+  return `${getSemanticToneClassName(getDriverStopTone(visual))} ${selectedState}`.trim();
 };
 
 const getDriverStopSegmentClassName = (visual: DriverStopVisual, isSelected = false) => {
   const selectedState = isSelected
     ? 'z-[1] shadow-[inset_0_0_0_2px_rgba(15,23,42,0.32)]'
     : '';
-
-  if (visual === 'completed') {
-    return `bg-emerald-700 text-white ${selectedState}`;
-  }
-
-  if (visual === 'on_the_way') {
-    return `bg-amber-200 text-amber-950 ${selectedState}`;
-  }
-
-  if (visual === 'on_site') {
-    return `bg-sky-200 text-sky-950 ${selectedState}`;
-  }
-
-  if (visual === 'returned') {
-    return `bg-rose-100 text-rose-900 ${selectedState}`;
-  }
-
-  return `bg-white text-slate-900 ${selectedState}`;
+  return `${getSemanticToneClassName(getDriverStopTone(visual))} ${selectedState}`.trim();
 };
 
 const getDriverRowClassName = (
@@ -296,19 +299,19 @@ const getDriverRowClassName = (
   isActive: boolean,
 ) => {
   if (isActive) {
-    return 'border-sky-500 bg-sky-500/10';
+    return getSemanticToneClassName('info', 'panel');
   }
 
   if (driver.attention_level === 'CRITICAL') {
-    return 'border-rose-500/70 bg-rose-900/10';
+    return getSemanticToneClassName('danger', 'panel');
   }
 
   if (driver.attention_level === 'WARNING') {
-    return 'border-amber-500/60 bg-amber-500/10';
+    return getSemanticToneClassName('warning', 'panel');
   }
 
   if (driver.stale_location) {
-    return 'border-slate-400 bg-slate-100/70';
+    return getSemanticToneClassName('neutral', 'panel');
   }
 
   return 'border-border bg-surface';
@@ -449,6 +452,17 @@ const stabilizeDriversById = (nextDrivers: DriverSummary[], prevDrivers: DriverS
   });
 };
 
+const getStopStatusUpdateErrorMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return 'Nao foi possivel atualizar o status desta parada.';
+  }
+
+  const responseData = error.response?.data as { message?: string; error?: string } | undefined;
+  return responseData?.message
+    || responseData?.error
+    || 'Nao foi possivel atualizar o status desta parada.';
+};
+
 function DeliveryMonitoring() {
   const navigate = useNavigate();
   const [date, setDate] = useState<string>(getTodayMonitoringDate());
@@ -460,6 +474,8 @@ function DeliveryMonitoring() {
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [stopStatusUpdate, setStopStatusUpdate] = useState<StopStatusUpdateState | null>(null);
+  const [stopStatusFeedback, setStopStatusFeedback] = useState<StopStatusFeedback | null>(null);
   const [mapViewport, setMapViewport] = useState<GoogleMapBoundsPayload | null>(null);
   const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
   const [isMobileView, setIsMobileView] = useState<boolean>(() => {
@@ -754,6 +770,123 @@ function DeliveryMonitoring() {
     setSelectedDriverStop(null);
   }, [deliveriesByTripAndSequence, drivers, selectedDriverStop]);
 
+  useEffect(() => {
+    if (!selectedDriverStop) {
+      setStopStatusUpdate(null);
+      setStopStatusFeedback(null);
+      return;
+    }
+
+    setStopStatusUpdate((current) => (current
+      && current.tripId === selectedDriverStop.tripId
+      && current.sequence === selectedDriverStop.sequence
+      ? current
+      : null));
+    setStopStatusFeedback((current) => (current
+      && current.tripId === selectedDriverStop.tripId
+      && current.sequence === selectedDriverStop.sequence
+      ? current
+      : null));
+  }, [selectedDriverStop]);
+
+  const handleStopStatusUpdate = useCallback(async ({
+    tripId,
+    sequence,
+    stopId,
+    currentStatus,
+    nextStatus,
+    driverId,
+    driverName,
+    invoiceNumber,
+  }: {
+    tripId: number;
+    sequence: number;
+    stopId: number | null;
+    currentStatus: string;
+    nextStatus: ManualStopStatus;
+    driverId: number | null;
+    driverName: string | null;
+    invoiceNumber: string | null;
+  }) => {
+    if (!stopId) {
+      setStopStatusFeedback({
+        tripId,
+        sequence,
+        tone: 'danger',
+        message: 'Esta parada nao possui identificador operacional para atualizacao.',
+      });
+      return;
+    }
+
+    if (!driverId) {
+      setStopStatusFeedback({
+        tripId,
+        sequence,
+        tone: 'warning',
+        message: 'A rota precisa de um motorista vinculado para permitir a atualizacao operacional.',
+      });
+      return;
+    }
+
+    if (!canManuallyUpdateStopStatus(currentStatus, nextStatus)) {
+      setStopStatusFeedback({
+        tripId,
+        sequence,
+        tone: 'warning',
+        message: 'Esta parada ja esta finalizada ou nao aceita essa mudanca manual.',
+      });
+      return;
+    }
+
+    const invoiceLabel = invoiceNumber ? `NF ${invoiceNumber}` : 'esta parada';
+    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+      ? true
+      : window.confirm(`Confirmar ${getManualStopStatusLabel(nextStatus)} para ${invoiceLabel}?`);
+
+    if (!confirmed) return;
+
+    setStopStatusUpdate({ tripId, sequence, nextStatus });
+    setStopStatusFeedback(null);
+
+    try {
+      await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
+        status: nextStatus,
+        driver_id: driverId,
+        driver_name: driverName,
+        source: 'delivery_monitoring_manual_update',
+        metadata: {
+          origin: 'delivery_monitoring',
+          trip_id: tripId,
+          invoice_number: invoiceNumber,
+          sequence,
+        },
+      });
+
+      await fetchOverview();
+      setStopStatusFeedback({
+        tripId,
+        sequence,
+        tone: 'success',
+        message: `${invoiceLabel} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
+      });
+    } catch (error) {
+      setStopStatusFeedback({
+        tripId,
+        sequence,
+        tone: 'danger',
+        message: getStopStatusUpdateErrorMessage(error),
+      });
+    } finally {
+      setStopStatusUpdate((current) => (
+        current
+        && current.tripId === tripId
+        && current.sequence === sequence
+          ? null
+          : current
+      ));
+    }
+  }, [fetchOverview]);
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -792,7 +925,7 @@ function DeliveryMonitoring() {
               type="button"
               onClick={() => navigate('/alerts')}
               className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-2 text-left transition md:gap-3 md:px-3 ${unreadAlertsCount > 0
-                ? 'border-rose-500/70 bg-rose-500/10 text-rose-700'
+                ? 'semantic-solid-danger'
                 : 'border-border bg-surface text-text'
                 }`}
               aria-label={unreadAlertsCount > 0
@@ -801,7 +934,7 @@ function DeliveryMonitoring() {
               }
               title="Abrir alertas"
             >
-              <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-current/20 bg-white/80">
+              <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-current/40 bg-card">
                 <AlertTriangle className="h-5 w-5" />
                 {unreadAlertsCount > 0 ? (
                   <span className="absolute -right-1 -top-1 inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -813,7 +946,7 @@ function DeliveryMonitoring() {
                 <span className="block text-sm font-semibold">
                   Alertas
                 </span>
-                <span className="block text-xs text-muted">
+                <span className={`block text-xs ${unreadAlertsCount > 0 ? 'opacity-85' : 'text-muted'}`}>
                   {unreadAlertsCount > 0
                     ? `${unreadAlertsCount} não lidos`
                     : 'Sem alertas pendentes'}
@@ -868,7 +1001,7 @@ function DeliveryMonitoring() {
                   <button
                     type="button"
                     onClick={() => setStatusFilter('assigned')}
-                    className="h-10 rounded-md border border-amber-500/45 bg-amber-500/10 px-4 text-sm font-semibold text-amber-700"
+                    className="h-10 rounded-md border semantic-solid-info px-4 text-sm font-semibold transition hover:brightness-95"
                   >
                     Ver atribuídas
                   </button>
@@ -968,6 +1101,22 @@ function DeliveryMonitoring() {
               const selectedStopDelivery = selectedStopSequence
                 ? tripDeliveries.get(selectedStopSequence) || null
                 : null;
+              const selectedStopStatus = normalizeOperationalStatus(
+                selectedStopMeta?.status || selectedStopDelivery?.stop_status || selectedStopDelivery?.danfe_status,
+              ) || 'pending';
+              const selectedStopInvoiceNumber = selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number || null;
+              const selectedStopCustomerName = selectedStopDelivery?.customer_name || null;
+              const selectedStopAllowsManualUpdate = MANUAL_STOP_STATUS_ACTIONS.some((action) => (
+                canManuallyUpdateStopStatus(selectedStopStatus, action.status)
+              ));
+              const selectedStopUpdating = Boolean(
+                selectedStopSequence
+                && stopStatusUpdate?.tripId === driver.trip_id
+                && stopStatusUpdate.sequence === selectedStopSequence,
+              );
+              const selectedStopFeedbackMessage = selectedStopSequence && stopStatusFeedback?.tripId === driver.trip_id && stopStatusFeedback.sequence === selectedStopSequence
+                ? stopStatusFeedback
+                : null;
               const visualStops = Array.from({ length: Number(driver.total_deliveries || 0) }, (_, index) => {
                 const sequence = index + 1;
                 const stopMeta = driverStopsBySequence.get(sequence) || null;
@@ -1005,7 +1154,7 @@ function DeliveryMonitoring() {
                       <span className="ml-auto inline-flex shrink-0 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-900 shadow-sm">
                         {`${driver.completed_deliveries}/${driver.total_deliveries}`}
                       </span>
-                      <span className="inline-flex shrink-0 rounded-md border border-sky-400/30 bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700 md:hidden">
+                      <span className="inline-flex shrink-0 rounded-md border semantic-solid-info px-1.5 py-0.5 text-[11px] font-semibold md:hidden">
                         {`${Math.round(driver.progress_pct || 0)}%`}
                       </span>
                       {driver.run_number > 1 ? (
@@ -1054,6 +1203,8 @@ function DeliveryMonitoring() {
                           >
                             {stop.visual === 'completed' ? (
                               <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                            ) : stop.visual === 'retained' ? (
+                              <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.5} />
                             ) : (
                               stop.sequence
                             )}
@@ -1065,19 +1216,70 @@ function DeliveryMonitoring() {
                   </div>
 
                   {selectedStopSequence ? (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-border/80 bg-surface/90 px-2.5 py-2 text-xs md:px-2 md:py-1.5">
-                      <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 font-semibold text-text">
-                        {`Parada ${selectedStopSequence}`}
-                      </span>
-                      <span className={`inline-flex rounded-md border px-2 py-1 font-semibold ${selectedStopVisual ? getDriverStopBadgeClassName(selectedStopVisual) : 'border-border bg-surface text-text'}`}>
-                        {selectedStopVisual ? getDriverStopLabel(selectedStopVisual) : 'status indisponível'}
-                      </span>
-                      <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 text-text">
-                        {(selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number) ? `NF ${selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number}` : 'NF não identificada'}
-                      </span>
-                      <span className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-text">
-                        {selectedStopDelivery?.customer_name || 'Cliente não identificado'}
-                      </span>
+                    <div className="mt-1.5 rounded-md border border-border/80 bg-surface/90 px-2.5 py-2 text-xs md:px-2 md:py-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 font-semibold text-text">
+                          {`Parada ${selectedStopSequence}`}
+                        </span>
+                        <span className={`inline-flex rounded-md border px-2 py-1 font-semibold ${selectedStopVisual ? getDriverStopBadgeClassName(selectedStopVisual) : 'border-border bg-surface text-text'}`}>
+                          {selectedStopVisual ? getDriverStopLabel(selectedStopVisual) : 'status indisponivel'}
+                        </span>
+                        <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 text-text">
+                          {selectedStopInvoiceNumber ? `NF ${selectedStopInvoiceNumber}` : 'NF nao identificada'}
+                        </span>
+                        <span className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-text">
+                          {selectedStopCustomerName || 'Cliente nao identificado'}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                          Acoes da parada
+                        </span>
+                        {MANUAL_STOP_STATUS_ACTIONS.map((action) => {
+                          const actionAllowed = canManuallyUpdateStopStatus(selectedStopStatus, action.status);
+                          const actionLoading = selectedStopUpdating && stopStatusUpdate?.nextStatus === action.status;
+                          const actionDisabled = !selectedStopMeta?.note_id || !numericDriverId || !actionAllowed || selectedStopUpdating;
+
+                          return (
+                            <button
+                              key={`${driver.trip_id}-${selectedStopSequence}-${action.status}`}
+                              type="button"
+                              onClick={() => handleStopStatusUpdate({
+                                tripId: driver.trip_id,
+                                sequence: selectedStopSequence,
+                                stopId: selectedStopMeta?.note_id || null,
+                                currentStatus: selectedStopStatus,
+                                nextStatus: action.status,
+                                driverId: numericDriverId || null,
+                                driverName: driver.driver_name || null,
+                                invoiceNumber: selectedStopInvoiceNumber,
+                              })}
+                              disabled={actionDisabled}
+                              className={`inline-flex rounded-md border px-2 py-1 font-semibold transition ${getSemanticToneClassName(action.tone)} ${actionDisabled ? 'cursor-not-allowed opacity-60' : 'hover:brightness-95'}`}
+                              aria-label={`${action.label} da NF ${selectedStopInvoiceNumber || selectedStopSequence}`}
+                            >
+                              {actionLoading ? 'Salvando...' : action.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <p className="mt-2 text-[11px] text-muted">
+                        {!selectedStopMeta?.note_id
+                          ? 'Esta parada nao possui identificador operacional para atualizacao.'
+                          : !numericDriverId
+                            ? 'Esta rota precisa de um motorista vinculado para permitir a atualizacao operacional.'
+                            : selectedStopAllowsManualUpdate
+                              ? 'Selecione uma das acoes para registrar devolucao, reentrega, canhoto retido ou cancelamento direto do monitoramento.'
+                              : 'Esta parada ja esta finalizada e nao aceita nova mudanca por esse atalho.'}
+                      </p>
+
+                      {selectedStopFeedbackMessage ? (
+                        <div className={`mt-2 rounded-md border px-2 py-1.5 ${getSemanticToneClassName(selectedStopFeedbackMessage.tone, 'panel')}`}>
+                          {selectedStopFeedbackMessage.message}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

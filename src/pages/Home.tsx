@@ -30,6 +30,7 @@ import {
 import { ICollectionRequest, IDanfe, IOccurrence } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
+import { getSemanticToneClassName } from '../utils/statusStyles';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -152,9 +153,7 @@ const getCollectionUrgencyBadgeLabel = (level?: string | null) => (
   resolveCollectionUrgencyTier(level) === 'prioritaria' ? 'Prioritaria' : 'Media'
 );
 const getCollectionUrgencyBadgeClass = (level?: string | null) => (
-  resolveCollectionUrgencyTier(level) === 'prioritaria'
-    ? 'rounded-full border border-rose-300/45 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-danger)]'
-    : 'rounded-full border border-emerald-300/45 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-success)]'
+  `rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getSemanticToneClassName(resolveCollectionUrgencyTier(level) === 'prioritaria' ? 'danger' : 'success')}`
 );
 const COLLECTION_STATUS_LABELS: Record<string, string> = {
   solicitada: 'Coleta solicitada',
@@ -1432,7 +1431,7 @@ function Home() {
                         {unscheduledCollectionRequests.map((request) => (
                             <li
                               key={`home-pickup-unscheduled-${request.id}`}
-                              className="!border-amber-500/55 !bg-amber-500/15"
+                              className="!border-[color:var(--semantic-warning-border)] !bg-[color:var(--semantic-warning-bg)] !text-[color:var(--semantic-warning-text)]"
                             >
                             <OccurrenceItemContent>
                               <span className="flex flex-wrap items-center gap-2">
@@ -1515,12 +1514,12 @@ function Home() {
                         {cancellationRequestedCollectionRequests.map((request) => (
                             <li
                               key={`home-pickup-cancellation-request-${request.id}`}
-                              className="!border-rose-500/55 !bg-rose-500/18"
+                              className="!border-[color:var(--semantic-danger-border)] !bg-[color:var(--semantic-danger-bg)] !text-[color:var(--semantic-danger-text)]"
                             >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
                                 <strong className="text-[color:var(--color-danger)]">CANCELAMENTO SOLICITADO</strong>
-                                <span className="rounded-full border border-rose-300/45 bg-rose-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-danger)]">
+                                <span className="rounded-full border semantic-solid-danger px-2 py-0.5 text-[11px] font-semibold">
                                   {`Em: ${formatDateBR(request.updated_at)}`}
                                 </span>
                               </span>
@@ -1550,14 +1549,14 @@ function Home() {
                                           icon={CheckCircle2}
                                           label="Aprovar cancelamento"
                                           onClick={() => handleApproveCollectionCancellation(request)}
-                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-rose-400/55 !bg-rose-400/15 !text-[color:var(--color-danger)] hover:!bg-rose-400/25"
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-[color:var(--semantic-danger-border)] !bg-[color:var(--semantic-danger-bg)] !text-[color:var(--semantic-danger-text)] hover:brightness-95"
                                           disabled={collectionStatusUpdatingId === request.id}
                                         />
                                         <IconButton
                                           icon={CalendarDays}
                                           label="Manter coleta agendada"
                                           onClick={() => handleRejectCollectionCancellation(request)}
-                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-amber-400/55 !bg-amber-400/15 !text-[color:var(--color-warning)] hover:!bg-amber-400/25"
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-[color:var(--semantic-warning-border)] !bg-[color:var(--semantic-warning-bg)] !text-[color:var(--semantic-warning-text)] hover:brightness-95"
                                           disabled={collectionStatusUpdatingId === request.id}
                                         />
                                       </>
@@ -1585,12 +1584,12 @@ function Home() {
                         {scheduledCollectionRequests.map((request) => (
                             <li
                               key={`home-pickup-scheduled-${request.id}`}
-                              className="!border-sky-500/45 !bg-sky-500/15"
+                              className="!border-[color:var(--semantic-info-border)] !bg-[color:var(--semantic-info-bg)] !text-[color:var(--semantic-info-text)]"
                             >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
                                 <strong className="text-[color:var(--color-text-accent)]">COLETA AGENDADA</strong>
-                                <span className="rounded-full border border-sky-300/45 bg-sky-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-text-accent)]">
+                                <span className="rounded-full border semantic-solid-info px-2 py-0.5 text-[11px] font-semibold">
                                   {`Data: ${formatDateBR(request.scheduled_for)}`}
                                 </span>
                                 <span className={getCollectionUrgencyBadgeClass(request.urgency_level)}>
@@ -1633,7 +1632,7 @@ function Home() {
                                         icon={CheckCircle2}
                                         label="Confirmar coleta"
                                         onClick={() => handleMarkCollectionAsCollected(request)}
-                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-emerald-400/45 !bg-emerald-400/15 !text-[color:var(--color-success)] hover:!bg-emerald-400/25"
+                                        className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-[color:var(--semantic-success-border)] !bg-[color:var(--semantic-success-bg)] !text-[color:var(--semantic-success-text)] hover:brightness-95"
                                         disabled={collectionStatusUpdatingId === request.id}
                                       />
                                     )}
@@ -1660,12 +1659,12 @@ function Home() {
                         {collectedCollectionRequests.map((request) => (
                             <li
                               key={`home-pickup-collected-${request.id}`}
-                              className="!border-emerald-500/45 !bg-emerald-500/15"
+                              className="!border-[color:var(--semantic-success-border)] !bg-[color:var(--semantic-success-bg)] !text-[color:var(--semantic-success-text)]"
                             >
                             <OccurrenceItemContent className="gap-1.5">
                               <span className="flex flex-wrap items-center gap-2">
                                 <strong className="text-[color:var(--color-success)]">COLETA COLETADA</strong>
-                                <span className="rounded-full border border-emerald-300/45 bg-emerald-300/15 px-2 py-0.5 text-[11px] font-semibold text-[color:var(--color-success)]">
+                                <span className="rounded-full border semantic-solid-success px-2 py-0.5 text-[11px] font-semibold">
                                   {`Confirmada em: ${formatDateBR(request.collected_at || request.updated_at)}`}
                                 </span>
                               </span>

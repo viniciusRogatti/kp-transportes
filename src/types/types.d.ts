@@ -284,6 +284,17 @@ export interface IInvoiceSearchContext {
   credit_letter_completed_count: number;
   return_count: number;
   return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
+  driver_name?: string | null;
+  trip_id?: number | null;
+  trip_date?: string | null;
+  trip_run_number?: number | null;
+  latest_occurrence?: {
+    id: number;
+    description: string;
+    status: 'pending' | 'resolved';
+    created_at: string;
+    resolved_at?: string | null;
+  } | null;
 }
 
 export interface IReceiptRow {
@@ -361,6 +372,48 @@ export interface IPendingReceiptsListResponse {
   rows: IPendingReceiptRow[];
   total: number;
   limit: number;
+}
+
+export type ReceiptBacklogQueueType = 'pending' | 'retained' | 'returned' | 'cancelled' | 'unassigned';
+
+export interface IReceiptBacklogRow {
+  queue_type: ReceiptBacklogQueueType;
+  nf_id: string;
+  invoice_number: string;
+  status: 'POSTED' | 'PENDING';
+  source_status?: string | null;
+  latest_stop_status?: string | null;
+  invoice_date?: string | null;
+  load_number?: string | null;
+  customer_name?: string | null;
+  city?: string | null;
+  trip_id?: number | null;
+  rota_id?: number | null;
+  trip_date?: string | null;
+  motorista_id?: number | null;
+  motorista_name?: string | null;
+  has_receipt?: boolean;
+  receipt_id?: number | null;
+  receipt_created_at?: string | null;
+  age_days?: number;
+  can_upload?: boolean;
+}
+
+export interface IReceiptBacklogSummary {
+  pending: number;
+  retained: number;
+  returned: number;
+  cancelled: number;
+  unassigned: number;
+  total: number;
+}
+
+export interface IReceiptBacklogResponse {
+  rows: IReceiptBacklogRow[];
+  total: number;
+  limit: number;
+  cutoff_date: string;
+  summary: IReceiptBacklogSummary;
 }
 
 export interface IReceiptWhatsappActivityRow {
@@ -480,6 +533,7 @@ export interface IProduct {
 export interface IDanfe {
   customer_id: string;
   invoice_number: string;
+  status?: string | null;
   barcode: string;
   load_number?: string | null;
   representative_name?: string | null;

@@ -493,9 +493,9 @@ function FileUploadPage() {
           />
 
           {!!selectionIssues.length && (
-            <div className="space-y-1 rounded-xl border border-amber-500/35 bg-amber-500/12 p-3">
+            <div className="space-y-1 rounded-xl border semantic-panel-warning p-3">
               {selectionIssues.map((message) => (
-                <p key={message} className="text-xs text-[color:var(--color-warning)]">{message}</p>
+                <p key={message} className="text-xs">{message}</p>
               ))}
             </div>
           )}
@@ -522,7 +522,7 @@ function FileUploadPage() {
                 type="button"
                 onClick={handleRetryFailed}
                 disabled={!failedItems.length || isUploading}
-                className="inline-flex h-10 items-center rounded-md border border-rose-400/40 bg-rose-500/15 px-4 text-sm font-semibold text-[color:var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border semantic-solid-danger px-4 text-sm font-semibold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Reenviar apenas com erro
               </button>
@@ -530,7 +530,7 @@ function FileUploadPage() {
                 type="button"
                 onClick={downloadReport}
                 disabled={!report}
-                className="inline-flex h-10 items-center rounded-md border border-sky-400/35 bg-sky-500/15 px-4 text-sm font-semibold text-[color:var(--color-text-accent)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border semantic-solid-info px-4 text-sm font-semibold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Baixar relatório (JSON)
               </button>
@@ -641,7 +641,7 @@ function FileUploadPage() {
                       <div key={`${item.fileKey || item.fileName}-success`} className="rounded-xl border border-border bg-card p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-text">{item.fileName}</p>
-                          <span className="inline-flex h-7 items-center rounded-full border border-emerald-500/45 bg-emerald-500/15 px-2 text-[0.68rem] font-semibold uppercase tracking-wide text-[color:var(--color-success)]">
+                          <span className="inline-flex h-7 items-center rounded-full border semantic-solid-success px-2 text-[0.68rem] font-semibold uppercase tracking-wide">
                             Sucesso
                           </span>
                         </div>
@@ -649,7 +649,7 @@ function FileUploadPage() {
                           NF: {item.meta?.invoiceNumber || '-'} • Origem: {item.meta?.origin || '-'}
                         </p>
                         {hasDuplicateInvoiceWarning(item) ? (
-                          <div className="mt-2 rounded-lg border border-amber-500/35 bg-amber-500/12 px-3 py-2 text-xs text-[color:var(--color-warning)]">
+                          <div className="mt-2 rounded-lg border semantic-panel-warning px-3 py-2 text-xs">
                             Essa nota já estava cadastrada no banco. O XML foi reconhecido, mas não foi importado novamente.
                           </div>
                         ) : null}

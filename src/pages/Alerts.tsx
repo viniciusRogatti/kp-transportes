@@ -22,6 +22,7 @@ import {
 import {
   IAlertRow,
 } from '../types/types';
+import { getAlertSeverityTone, getSemanticToneClassName } from '../utils/statusStyles';
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return '-';
@@ -174,7 +175,7 @@ function AlertsPage() {
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-md border border-rose-500/70 bg-rose-900/25 px-3 py-1.5 text-sm font-semibold text-rose-100">
+              <span className="rounded-md border semantic-solid-danger px-3 py-1.5 text-sm font-semibold">
                 ALERTAS ABERTOS ({alertCount})
               </span>
             </div>
@@ -188,7 +189,7 @@ function AlertsPage() {
 
           <section className="rounded-md border border-border bg-surface/70 p-3">
             {alertsError ? (
-              <div className="rounded-md border border-rose-500/60 bg-rose-900/20 px-3 py-2 text-sm text-rose-100">
+              <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
                 {alertsError}
               </div>
             ) : null}
@@ -200,11 +201,7 @@ function AlertsPage() {
             ) : (
               <ul className="space-y-2">
                 {alerts.map((alertRow) => {
-                  const severityClass = alertRow.severity === 'CRITICAL'
-                    ? 'border-rose-500/70 bg-rose-900/25'
-                    : alertRow.severity === 'INFO'
-                      ? 'border-sky-500/70 bg-sky-900/20'
-                      : 'border-amber-500/70 bg-amber-900/20';
+                  const severityClass = getSemanticToneClassName(getAlertSeverityTone(alertRow.severity), 'panel');
                   const visualized = readAlertIds.has(alertRow.id);
 
                   return (
@@ -230,8 +227,8 @@ function AlertsPage() {
 
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${visualized
-                            ? 'border-border bg-card text-muted'
-                            : 'border-sky-500/60 bg-sky-500/10 text-sky-700'
+                            ? 'semantic-solid-neutral'
+                            : getSemanticToneClassName('info')
                             }`}
                           >
                             {visualized ? 'Visualizado' : 'Novo'}
@@ -251,7 +248,7 @@ function AlertsPage() {
               </ul>
             )}
 
-            <div className="mt-3 rounded-md border border-sky-500/40 bg-sky-900/15 px-3 py-2 text-xs text-sky-100">
+            <div className="mt-3 rounded-md border semantic-panel-info px-3 py-2 text-xs">
               <div className="inline-flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
                 <span>

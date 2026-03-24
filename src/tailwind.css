@@ -20,6 +20,36 @@
   --color-danger: #ef4444;
   --color-info: #38bdf8;
 
+  --semantic-neutral-bg: #243449;
+  --semantic-neutral-border: #60738f;
+  --semantic-neutral-text: #f3f6fb;
+  --semantic-info-bg: #0f3b57;
+  --semantic-info-border: #38bdf8;
+  --semantic-info-text: #e0f2fe;
+  --semantic-success-bg: #165c33;
+  --semantic-success-border: #22c55e;
+  --semantic-success-text: #dcfce7;
+  --semantic-warning-bg: #7c450c;
+  --semantic-warning-border: #f59e0b;
+  --semantic-warning-text: #fef3c7;
+  --semantic-danger-bg: #7f1d1d;
+  --semantic-danger-border: #ef4444;
+  --semantic-danger-text: #fee2e2;
+  --semantic-redelivery-bg: #5b2492;
+  --semantic-redelivery-border: #c084fc;
+  --semantic-redelivery-text: #f3e8ff;
+
+  --status-border-pending: var(--semantic-warning-border);
+  --status-border-assigned: var(--semantic-info-border);
+  --status-border-on-the-way: var(--semantic-info-border);
+  --status-border-arrived: var(--semantic-info-border);
+  --status-border-delivered: var(--semantic-success-border);
+  --status-border-completed: var(--semantic-success-border);
+  --status-border-retained: #f97316;
+  --status-border-returned: var(--semantic-danger-border);
+  --status-border-redelivery: var(--semantic-redelivery-border);
+  --status-border-cancelled: var(--semantic-neutral-border);
+
   --chart-title: #e2e8f0;
   --chart-subtitle: #94a3b8;
   --chart-axis-label: #94a3b8;
@@ -73,6 +103,26 @@
   --color-danger: #dc2626;
   --color-info: #0284c7;
 
+  --semantic-neutral-bg: #e2e8f0;
+  --semantic-neutral-border: #64748b;
+  --semantic-neutral-text: #1e293b;
+  --semantic-info-bg: #e0f2fe;
+  --semantic-info-border: #0369a1;
+  --semantic-info-text: #0c4a6e;
+  --semantic-success-bg: #dcfce7;
+  --semantic-success-border: #15803d;
+  --semantic-success-text: #14532d;
+  --semantic-warning-bg: #fef3c7;
+  --semantic-warning-border: #b45309;
+  --semantic-warning-text: #78350f;
+  --semantic-danger-bg: #fee2e2;
+  --semantic-danger-border: #b91c1c;
+  --semantic-danger-text: #7f1d1d;
+  --semantic-redelivery-bg: #f3e8ff;
+  --semantic-redelivery-border: #9333ea;
+  --semantic-redelivery-text: #581c87;
+  --status-border-retained: #c2410c;
+
   --shadow-1: 0 6px 16px rgba(15, 23, 42, 0.08);
   --shadow-2: 0 14px 30px rgba(15, 23, 42, 0.11);
   --shadow-3: 0 20px 44px rgba(15, 23, 42, 0.16);
@@ -88,6 +138,115 @@
   --chart-tooltip-text: #0f172a;
   --chart-pie-border: #f8fafc;
   --chart-pie-label-line: #64748b;
+}
+
+
+@layer components {
+  .semantic-solid-neutral,
+  .semantic-panel-neutral {
+    border-color: var(--semantic-neutral-border);
+    background-color: var(--semantic-neutral-bg);
+    color: var(--semantic-neutral-text);
+  }
+
+  .semantic-solid-info,
+  .semantic-panel-info {
+    border-color: var(--semantic-info-border);
+    background-color: var(--semantic-info-bg);
+    color: var(--semantic-info-text);
+  }
+
+  .semantic-solid-success,
+  .semantic-panel-success {
+    border-color: var(--semantic-success-border);
+    background-color: var(--semantic-success-bg);
+    color: var(--semantic-success-text);
+  }
+
+  .semantic-solid-warning,
+  .semantic-panel-warning {
+    border-color: var(--semantic-warning-border);
+    background-color: var(--semantic-warning-bg);
+    color: var(--semantic-warning-text);
+  }
+
+  .semantic-solid-danger,
+  .semantic-panel-danger {
+    border-color: var(--semantic-danger-border);
+    background-color: var(--semantic-danger-bg);
+    color: var(--semantic-danger-text);
+  }
+
+  .semantic-solid-redelivery,
+  .semantic-panel-redelivery {
+    border-color: var(--semantic-redelivery-border);
+    background-color: var(--semantic-redelivery-bg);
+    color: var(--semantic-redelivery-text);
+  }
+
+  .semantic-border-neutral {
+    border-color: var(--semantic-neutral-border);
+  }
+
+  .semantic-border-info {
+    border-color: var(--semantic-info-border);
+  }
+
+  .semantic-border-success {
+    border-color: var(--semantic-success-border);
+  }
+
+  .semantic-border-warning {
+    border-color: var(--semantic-warning-border);
+  }
+
+  .semantic-border-danger {
+    border-color: var(--semantic-danger-border);
+  }
+
+  .semantic-border-redelivery {
+    border-color: var(--semantic-redelivery-border);
+  }
+
+  .status-border-pending {
+    border-color: var(--status-border-pending);
+  }
+
+  .status-border-assigned {
+    border-color: var(--status-border-assigned);
+  }
+
+  .status-border-on-the-way {
+    border-color: var(--status-border-on-the-way);
+  }
+
+  .status-border-arrived {
+    border-color: var(--status-border-arrived);
+  }
+
+  .status-border-delivered {
+    border-color: var(--status-border-delivered);
+  }
+
+  .status-border-completed {
+    border-color: var(--status-border-completed);
+  }
+
+  .status-border-retained {
+    border-color: var(--status-border-retained);
+  }
+
+  .status-border-returned {
+    border-color: var(--status-border-returned);
+  }
+
+  .status-border-redelivery {
+    border-color: var(--status-border-redelivery);
+  }
+
+  .status-border-cancelled {
+    border-color: var(--status-border-cancelled);
+  }
 }
 
 @media (max-width: 768px) {

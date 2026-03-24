@@ -7,6 +7,7 @@ import {
   IReceiptsListResponse,
   IReceiptSignedUrlResponse,
   IReceiptWhatsappActivityListResponse,
+  IReceiptBacklogResponse,
 } from '../types/types';
 import { API_URL } from '../data';
 
@@ -22,6 +23,7 @@ type ReceiptListFilters = {
   needsManualReview?: boolean;
   status?: string;
   group?: string;
+  queueType?: string;
 };
 
 const toQueryParams = (filters: ReceiptListFilters = {}) => {
@@ -38,6 +40,7 @@ const toQueryParams = (filters: ReceiptListFilters = {}) => {
   if (typeof filters.needsManualReview === 'boolean') params.set('needsManualReview', filters.needsManualReview ? '1' : '0');
   if (filters.status) params.set('status', filters.status);
   if (filters.group) params.set('group', filters.group);
+  if (filters.queueType) params.set('queueType', filters.queueType);
 
   return params;
 };
@@ -51,6 +54,13 @@ export async function listPostedReceipts(filters: ReceiptListFilters = {}): Prom
 export async function listPendingReceipts(filters: ReceiptListFilters = {}): Promise<IPendingReceiptsListResponse> {
   const params = toQueryParams(filters);
   const { data } = await axios.get<IPendingReceiptsListResponse>(`${API_URL}/api/receipts/pending?${params.toString()}`);
+  return data;
+}
+
+export async function listReceiptBacklog(filters: ReceiptListFilters = {}): Promise<IReceiptBacklogResponse> {
+  const params = toQueryParams(filters);
+  const suffix = params.toString();
+  const { data } = await axios.get<IReceiptBacklogResponse>(`${API_URL}/api/receipts/backlog${suffix ? `?${suffix}` : ''}`);
   return data;
 }
 

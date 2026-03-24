@@ -25,6 +25,7 @@ import {
   IReceiptWhatsappActivityRow,
   IReceiptWhatsappActivitySummary,
 } from '../types/types';
+import { getSemanticToneClassName, SemanticTone } from '../utils/statusStyles';
 
 type ReceiptsTab = 'success' | 'review' | 'error' | 'pending';
 
@@ -83,23 +84,24 @@ const getWhatsappKindLabel = (kind: IReceiptWhatsappActivityRow['kind']) => {
   return 'Erro';
 };
 
-const getWhatsappKindClasses = (kind: IReceiptWhatsappActivityRow['kind']) => {
-  if (kind === 'success') {
-    return 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100';
-  }
-
-  if (kind === 'review') {
-    return 'border-amber-500/70 bg-amber-900/25 text-amber-100';
-  }
-
-  return 'border-rose-500/70 bg-rose-900/25 text-rose-100';
+const getWhatsappTone = (kind: IReceiptWhatsappActivityRow['kind'] | ReceiptsTab): SemanticTone => {
+  if (kind === 'success') return 'success';
+  if (kind === 'review') return 'warning';
+  if (kind === 'pending') return 'info';
+  return 'danger';
 };
 
-const getWhatsappSummaryClasses = (kind: 'success' | 'review' | 'error') => {
-  if (kind === 'success') return 'border-emerald-500/40 bg-emerald-950/20';
-  if (kind === 'review') return 'border-amber-500/40 bg-amber-900/20';
-  return 'border-rose-500/40 bg-rose-900/20';
-};
+const getWhatsappKindClasses = (kind: IReceiptWhatsappActivityRow['kind']) => (
+  getSemanticToneClassName(getWhatsappTone(kind))
+);
+
+const getWhatsappSummaryClasses = (kind: 'success' | 'review' | 'error') => (
+  getSemanticToneClassName(getWhatsappTone(kind), 'panel')
+);
+
+const getReceiptsTabClasses = (tab: ReceiptsTab, active: boolean) => (
+  active ? getSemanticToneClassName(getWhatsappTone(tab)) : 'border-border bg-card text-text'
+);
 
 const getActivityEmptyMessage = (tab: Exclude<ReceiptsTab, 'pending'>) => {
   if (tab === 'success') return 'Nenhum canhoto validado com sucesso para os filtros atuais.';
@@ -558,35 +560,35 @@ function Receipts() {
               <button
                 type="button"
                 onClick={() => setActiveTab('success')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'success' ? 'border-emerald-500/70 bg-emerald-950/30 text-emerald-100' : 'border-border bg-card text-text'}`}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${getReceiptsTabClasses('success', activeTab === 'success')}`}
               >
                 SUCESSO ({successCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('review')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'review' ? 'border-amber-500/70 bg-amber-900/25 text-amber-100' : 'border-border bg-card text-text'}`}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${getReceiptsTabClasses('review', activeTab === 'review')}`}
               >
                 REVISÃO ({reviewCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('error')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'error' ? 'border-rose-500/70 bg-rose-900/25 text-rose-100' : 'border-border bg-card text-text'}`}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${getReceiptsTabClasses('error', activeTab === 'error')}`}
               >
                 ERRO ({errorCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('pending')}
-                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${activeTab === 'pending' ? 'border-sky-500/70 bg-sky-900/35 text-sky-100' : 'border-border bg-card text-text'}`}
+                className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${getReceiptsTabClasses('pending', activeTab === 'pending')}`}
               >
                 PENDENTES ({pendingCount})
               </button>
             </div>
 
             {pageError ? (
-              <div className="mt-3 rounded-md border border-rose-500/60 bg-rose-900/20 px-3 py-2 text-sm text-rose-100">
+              <div className="mt-3 rounded-md border semantic-panel-danger px-3 py-2 text-sm">
                 {pageError}
               </div>
             ) : null}
@@ -666,7 +668,7 @@ function Receipts() {
                         <button
                           type="button"
                           onClick={() => openUploadModal(row)}
-                          className="inline-flex h-10 items-center gap-2 rounded-md border border-sky-500/70 bg-sky-900/30 px-3 text-sm font-semibold text-sky-100"
+                          className="inline-flex h-10 items-center gap-2 rounded-md border semantic-solid-info px-3 text-sm font-semibold transition hover:brightness-95"
                         >
                           <UploadCloud className="h-4 w-4" /> Enviar canhoto
                         </button>
@@ -768,7 +770,7 @@ function Receipts() {
                 ) : null}
 
                 {uploadError ? (
-                  <div className="rounded-md border border-rose-500/60 bg-rose-900/20 px-3 py-2 text-sm text-rose-100">
+                  <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
                     <div className="inline-flex items-start gap-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4" />
                       <span>{uploadError}</span>
@@ -780,7 +782,7 @@ function Receipts() {
                   <button
                     type="submit"
                     disabled={uploading}
-                    className="inline-flex h-10 items-center gap-2 rounded-md border border-sky-500/70 bg-sky-900/30 px-3 text-sm font-semibold text-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-2 rounded-md border semantic-solid-info px-3 text-sm font-semibold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <ImagePlus className="h-4 w-4" />
                     {uploading ? 'Enviando...' : 'Enviar canhoto'}

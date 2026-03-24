@@ -14,6 +14,7 @@ import UserSessions from './pages/UserSessions';
 import Receipts from './pages/Receipts';
 import AlertsPage from './pages/Alerts';
 import DeliveryMonitoring from './pages/DeliveryMonitoring';
+import OperationalPendencies from './pages/OperationalPendencies';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
@@ -61,6 +62,7 @@ function App() {
           <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><TodayInvoices /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Invoices /></ProtectedRoute>} />
           <Route path="/receipts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Receipts /></ProtectedRoute>} />
+          <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><OperationalPendencies /></ProtectedRoute>} />
           <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><AlertsPage /></ProtectedRoute>} />
           <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><DeliveryMonitoring /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Products /></ProtectedRoute>} />

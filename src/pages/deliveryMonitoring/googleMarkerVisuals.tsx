@@ -21,11 +21,13 @@ const DRIVER_DIMMED_OPACITY = 0.95;
 const DELIVERY_DIMMED_OPACITY = 1;
 
 const RETURN_STATUSES = new Set(['returned', 'redelivery', 'cancelled']);
+const RETAINED_STATUSES = new Set(['retained']);
 
 const MARKER_COLOR = {
   yellow: '#facc15',
   blue: '#3b82f6',
   green: '#22c55e',
+  orange: '#f97316',
   red: '#ef4444',
   gray: '#94a3b8',
   company: '#ffffff',
@@ -55,6 +57,12 @@ const isReturnFlow = (delivery: DeliveryMarkerVisualInput) => {
   return RETURN_STATUSES.has(stopStatus) || RETURN_STATUSES.has(danfeStatus);
 };
 
+const isRetainedFlow = (delivery: DeliveryMarkerVisualInput) => {
+  const stopStatus = normalizeStatus(delivery.stopStatus);
+  const danfeStatus = normalizeStatus(delivery.danfeStatus);
+  return RETAINED_STATUSES.has(stopStatus) || RETAINED_STATUSES.has(danfeStatus);
+};
+
 // Priority matters because the same delivery can be assigned and also be in a stronger operational state.
 export const getDeliveryMarkerStyleByStatus = (
   delivery: DeliveryMarkerVisualInput,
@@ -67,6 +75,17 @@ export const getDeliveryMarkerStyleByStatus = (
       iconFill: DEFAULT_ICON_FILL,
       opacity: DELIVERY_DIMMED_OPACITY,
       shadowColor: 'rgba(239, 68, 68, 0.42)',
+    };
+  }
+
+  if (isRetainedFlow(delivery)) {
+    return {
+      backgroundColor: MARKER_COLOR.orange,
+      borderColor: DEFAULT_BORDER,
+      iconColor: DEFAULT_ICON_COLOR,
+      iconFill: DEFAULT_ICON_FILL,
+      opacity: DELIVERY_DIMMED_OPACITY,
+      shadowColor: 'rgba(249, 115, 22, 0.38)',
     };
   }
 

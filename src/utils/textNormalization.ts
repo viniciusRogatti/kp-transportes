@@ -67,6 +67,23 @@ export function sanitizeDanfeTextFields(danfe: IDanfe): IDanfe {
   return {
     ...danfe,
     representative_name: toNullableText(danfe.representative_name),
+    replacement_invoice_number: toNullableText(danfe.replacement_invoice_number),
+    replacement_reason: toNullableText(danfe.replacement_reason),
+    replacement_invoice: danfe.replacement_invoice
+      ? {
+        invoice_number: toNullableText(danfe.replacement_invoice.invoice_number),
+        status: toNullableText(danfe.replacement_invoice.status),
+        invoice_date: toNullableText(danfe.replacement_invoice.invoice_date),
+      }
+      : null,
+    replaced_invoice_number: toNullableText(danfe.replaced_invoice_number),
+    replaced_invoice: danfe.replaced_invoice
+      ? {
+        invoice_number: toNullableText(danfe.replaced_invoice.invoice_number),
+        status: toNullableText(danfe.replaced_invoice.status),
+        invoice_date: toNullableText(danfe.replaced_invoice.invoice_date),
+      }
+      : null,
     Customer: {
       ...danfe.Customer,
       name_or_legal_entity: normalizeTextValue(danfe.Customer?.name_or_legal_entity),

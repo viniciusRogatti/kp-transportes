@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import Badge from './ui/Badge';
 import { cn } from '../lib/cn';
 import { IDanfe, IInvoiceSearchContext } from '../types/types';
@@ -15,13 +16,15 @@ import {
   getSemanticToneClassName,
   matchesDanfeLegendFilter,
 } from '../utils/statusStyles';
-import { normalizeCityLabel, normalizeTextValue } from '../utils/textNormalization';
+import { API_URL } from '../data';
+import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 
 interface CardDanfesProps {
   danfes: IDanfe[];
   driverByInvoice?: Record<string, string>;
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   showLegend?: boolean;
+  onDanfeUpdated?: (danfe: IDanfe) => void;
 }
 
 const RETURN_TYPE_LABELS: Record<string, string> = {
@@ -46,9 +49,15 @@ function CardDanfes({
   driverByInvoice = {},
   invoiceContextByNf = {},
   showLegend = true,
+  onDanfeUpdated,
 }: CardDanfesProps) {
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
   const [productsModalDanfe, setProductsModalDanfe] = useState<IDanfe | null>(null);
+  const [replacementModalDanfe, setReplacementModalDanfe] = useState<IDanfe | null>(null);
+  const [replacementInvoiceInput, setReplacementInvoiceInput] = useState('');
+  const [replacementReasonInput, setReplacementReasonInput] = useState('Refaturada');
+  const [replacementError, setReplacementError] = useState('');
+  const [isLinkingReplacement, setIsLinkingReplacement] = useState(false);
   const [activeStatusFilter, setActiveStatusFilter] = useState<DanfeLegendKey | null>(null);
 
   const filteredDanfes = useMemo(() => {
@@ -84,12 +93,79 @@ function CardDanfes({
     setProductsModalDanfe(null);
   }
 
+  function openReplacementModal(danfe: IDanfe) {
+    setReplacementModalDanfe(danfe);
+    setReplacementInvoiceInput(danfe.replacement_invoice_number || '');
+    setReplacementReasonInput(danfe.replacement_reason || 'Refaturada');
+    setReplacementError('');
+  }
+
+  function closeReplacementModal(force = false) {
+    if (isLinkingReplacement && !force) return;
+    setReplacementModalDanfe(null);
+    setReplacementInvoiceInput('');
+    setReplacementReasonInput('Refaturada');
+    setReplacementError('');
+  }
+
+  async function handleLinkReplacementInvoice() {
+    if (!replacementModalDanfe) return;
+
+    const replacementInvoiceNumber = String(replacementInvoiceInput || '').trim();
+    if (!replacementInvoiceNumber) {
+      setReplacementError('Informe a NF substituta para vincular o refaturamento.');
+      return;
+    }
+
+    try {
+      setIsLinkingReplacement(true);
+      setReplacementError('');
+
+      const { data } = await axios.patch<IDanfe>(
+        `${API_URL}/danfes/nf/${encodeURIComponent(replacementModalDanfe.invoice_number)}/replacement`,
+        {
+          replacementInvoiceNumber,
+          replacementReason: String(replacementReasonInput || '').trim() || 'Refaturada',
+        },
+      );
+
+      const updatedDanfe = sanitizeDanfeTextFields(data);
+      onDanfeUpdated?.(updatedDanfe);
+
+      if (replacementInvoiceNumber) {
+        try {
+          const replacementResponse = await axios.get<IDanfe>(`${API_URL}/danfes/nf/${encodeURIComponent(replacementInvoiceNumber)}`);
+          if (replacementResponse.data) {
+            onDanfeUpdated?.(sanitizeDanfeTextFields(replacementResponse.data));
+          }
+        } catch {
+          // noop: a NF substituta sera atualizada ao ser pesquisada novamente.
+        }
+      }
+
+      closeReplacementModal(true);
+    } catch (error: any) {
+      setReplacementError(
+        error?.response?.data?.error
+          || 'Nao foi possivel vincular a NF substituta agora.',
+      );
+    } finally {
+      setIsLinkingReplacement(false);
+    }
+  }
+
   useEffect(() => {
-    if (!productsModalDanfe) return undefined;
+    if (!productsModalDanfe && !replacementModalDanfe) return undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setProductsModalDanfe(null);
+        if (productsModalDanfe) {
+          setProductsModalDanfe(null);
+          return;
+        }
+        if (replacementModalDanfe && !isLinkingReplacement) {
+          closeReplacementModal();
+        }
       }
     };
 
@@ -97,7 +173,7 @@ function CardDanfes({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [productsModalDanfe]);
+  }, [isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
 
   return (
     <>
@@ -162,6 +238,8 @@ function CardDanfes({
             const returnTypeLabels = invoiceContext?.return_types?.length
               ? invoiceContext.return_types.map((type) => RETURN_TYPE_LABELS[type] || type)
               : [];
+            const replacementInvoiceNumber = normalizeTextValue(danfe.replacement_invoice_number) || null;
+            const replacedInvoiceNumber = normalizeTextValue(danfe.replaced_invoice_number) || null;
             const danfeStatusLabel = getOperationalStatusLabel(danfe.status);
             const danfeStatusTone = getOperationalStatusTone(danfe.status);
             const latestOccurrence = invoiceContext?.latest_occurrence || null;
@@ -221,6 +299,16 @@ function CardDanfes({
                               {label}
                             </Badge>
                           ))}
+                          {replacementInvoiceNumber ? (
+                            <Badge tone="neutral" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
+                              {`Refaturada: NF ${replacementInvoiceNumber}`}
+                            </Badge>
+                          ) : null}
+                          {replacedInvoiceNumber ? (
+                            <Badge tone="info" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
+                              {`Substitui NF ${replacedInvoiceNumber}`}
+                            </Badge>
+                          ) : null}
                         </div>
                         {latestOccurrence ? (
                           <div
@@ -304,6 +392,24 @@ function CardDanfes({
                         <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                         <p><strong>Motorista:</strong> {resolvedDriverName || 'Sem motorista'}</p>
+                        {replacementInvoiceNumber ? (
+                          <>
+                            <p><strong>Motivo/observacao:</strong> {normalizeTextValue(danfe.replacement_reason) || 'Refaturada'}</p>
+                            <p><strong>NF substituta:</strong> {replacementInvoiceNumber}</p>
+                          </>
+                        ) : null}
+                        {replacedInvoiceNumber ? (
+                          <p><strong>Substitui a NF cancelada:</strong> {replacedInvoiceNumber}</p>
+                        ) : null}
+                        {normalizeTextValue(danfe.status) === 'cancelled' && !replacementInvoiceNumber ? (
+                          <button
+                            type="button"
+                            onClick={() => openReplacementModal(danfe)}
+                            className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                          >
+                            Vincular NF substituta
+                          </button>
+                        ) : null}
                         {latestOccurrence ? (
                           <>
                             <p><strong>Ultima ocorrencia:</strong> {latestOccurrenceDescription}</p>
@@ -398,6 +504,78 @@ function CardDanfes({
             <p className="mt-2 text-xs font-medium text-muted">
               {`Total de itens: ${productsModalDanfe.DanfeProducts.length}`}
             </p>
+          </div>
+        </div>
+      ) : null}
+
+      {replacementModalDanfe ? (
+        <div className="fixed inset-0 z-[1415] flex items-center justify-center p-3">
+          <button
+            type="button"
+            aria-label="Fechar vinculo de refaturamento"
+            className="absolute inset-0 bg-slate-950/80"
+            onClick={() => closeReplacementModal()}
+          />
+          <div className="relative z-[1420] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-base font-semibold">{`NF ${replacementModalDanfe.invoice_number}`}</h3>
+                <p className="text-xs text-muted">Vincule a NF nova para manter o refaturamento visivel na busca da expedicao.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeReplacementModal()}
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
+                disabled={isLinkingReplacement}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <label className="mt-3 text-xs text-muted">
+              NF substituta
+              <input
+                value={replacementInvoiceInput}
+                onChange={(event) => setReplacementInvoiceInput(event.target.value)}
+                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2/85 px-3 text-sm text-text"
+                placeholder="Ex.: 1722999"
+              />
+            </label>
+
+            <label className="mt-3 text-xs text-muted">
+              Motivo/observacao
+              <input
+                value={replacementReasonInput}
+                onChange={(event) => setReplacementReasonInput(event.target.value)}
+                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2/85 px-3 text-sm text-text"
+                placeholder="Refaturada"
+              />
+            </label>
+
+            {replacementError ? (
+              <div className="mt-3 rounded-md border semantic-panel-danger px-3 py-2 text-sm">
+                {replacementError}
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeReplacementModal()}
+                className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text"
+                disabled={isLinkingReplacement}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleLinkReplacementInvoice}
+                className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                disabled={isLinkingReplacement}
+              >
+                {isLinkingReplacement ? 'Vinculando...' : 'Salvar vinculo'}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

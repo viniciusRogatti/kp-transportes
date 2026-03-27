@@ -144,6 +144,14 @@ function Invoices() {
     () => filterInvoiceListDanfes(dataDanfes, deferredFilters),
     [dataDanfes, deferredFilters],
   );
+
+  function handleDanfeUpdated(updatedDanfe: IDanfe) {
+    setDataDanfes((previous) => {
+      const invoiceNumber = String(updatedDanfe.invoice_number);
+      const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
+      return [sanitizeDanfeTextFields(updatedDanfe), ...nextRows];
+    });
+  }
   
   return (
     <div>
@@ -215,7 +223,11 @@ function Invoices() {
           <input type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Filtrar por cidade" />
         </FilterBar>
         <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
-        <CardDanfes danfes={danfes} invoiceContextByNf={invoiceContextByNf} />
+        <CardDanfes
+          danfes={danfes}
+          invoiceContextByNf={invoiceContextByNf}
+          onDanfeUpdated={handleDanfeUpdated}
+        />
         <ScrollToTopButton />
       </Container>
     </div>

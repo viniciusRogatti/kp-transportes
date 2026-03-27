@@ -3,6 +3,14 @@ import { act } from 'react-dom/test-utils';
 import CardDanfes from '../CardDanfes';
 import { IDanfe, IInvoiceSearchContext } from '../../types/types';
 
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    patch: jest.fn(),
+  },
+}));
+
 const buildDanfe = (invoiceNumber: string, status: string): IDanfe => ({
   customer_id: '1',
   invoice_number: invoiceNumber,
@@ -102,5 +110,46 @@ describe('CardDanfes', () => {
     expect(screen.getByTestId('danfe-card-654321')).toBeInTheDocument();
     expect(screen.getByTestId('danfe-card-999888')).toBeInTheDocument();
     expect(screen.queryByText('Filtro ativo: Entregue. Exibindo 1 de 3 NF(s).')).not.toBeInTheDocument();
+  });
+
+  it('mostra o vinculo de refaturamento na NF cancelada e a referencia reversa na NF nova', async () => {
+    render(
+      <CardDanfes
+        danfes={[
+          buildDanfe('777111', 'cancelled'),
+          buildDanfe('777222', 'pending'),
+        ].map((danfe) => {
+          if (danfe.invoice_number === '777111') {
+            return {
+              ...danfe,
+              replacement_invoice_number: '777222',
+              replacement_reason: 'Refaturada',
+            };
+          }
+
+          return {
+            ...danfe,
+            replaced_invoice_number: '777111',
+          };
+        })}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 777111' }));
+    });
+
+    expect(screen.getByText('NF substituta:')).toBeInTheDocument();
+    expect(screen.getByText('777222')).toBeInTheDocument();
+    expect(screen.getByText('Motivo/observacao:')).toBeInTheDocument();
+    expect(screen.getByText('Refaturada')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Voltar para frente do card da NF 777111' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 777222' }));
+    });
+
+    expect(screen.getByText('Substitui a NF cancelada:')).toBeInTheDocument();
+    expect(screen.getAllByText('777111').length).toBeGreaterThan(0);
   });
 });

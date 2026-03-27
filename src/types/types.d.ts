@@ -33,7 +33,10 @@ export interface ITripNote {
   order: number;
   city: string;
   customer_name?: string;
+  customer_id?: string | null;
   gross_weight: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 
@@ -354,6 +357,7 @@ export interface IReceiptUploadResponse {
 export interface IPendingReceiptRow {
   nf_id: string;
   invoice_number: string;
+  customer_id?: string | null;
   status: 'PENDING';
   source_status?: string;
   invoice_date?: string | null;
@@ -376,10 +380,22 @@ export interface IPendingReceiptsListResponse {
 
 export type ReceiptBacklogQueueType = 'pending' | 'retained' | 'returned' | 'cancelled' | 'unassigned';
 
+export interface IReceiptBacklogRouteHistoryRow {
+  trip_id?: number | null;
+  trip_note_id?: number | null;
+  trip_date?: string | null;
+  motorista_id?: number | null;
+  motorista_name?: string | null;
+  note_status?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface IReceiptBacklogRow {
   queue_type: ReceiptBacklogQueueType;
   nf_id: string;
   invoice_number: string;
+  customer_id?: string | null;
   status: 'POSTED' | 'PENDING';
   source_status?: string | null;
   latest_stop_status?: string | null;
@@ -395,6 +411,7 @@ export interface IReceiptBacklogRow {
   has_receipt?: boolean;
   receipt_id?: number | null;
   receipt_created_at?: string | null;
+  route_history?: IReceiptBacklogRouteHistoryRow[];
   age_days?: number;
   can_upload?: boolean;
 }
@@ -444,6 +461,11 @@ export interface IReceiptWhatsappActivityRow {
     invoice_date?: string | null;
     customer_name?: string | null;
     city?: string | null;
+  } | null;
+  receipt?: {
+    id: number;
+    nf_id: string | null;
+    needs_manual_review: boolean;
   } | null;
   metadata?: Record<string, unknown> | null;
 }
@@ -534,6 +556,19 @@ export interface IDanfe {
   customer_id: string;
   invoice_number: string;
   status?: string | null;
+  replacement_invoice_number?: string | null;
+  replacement_reason?: string | null;
+  replacement_invoice?: {
+    invoice_number: string | null;
+    status?: string | null;
+    invoice_date?: string | null;
+  } | null;
+  replaced_invoice_number?: string | null;
+  replaced_invoice?: {
+    invoice_number: string | null;
+    status?: string | null;
+    invoice_date?: string | null;
+  } | null;
   barcode: string;
   load_number?: string | null;
   representative_name?: string | null;

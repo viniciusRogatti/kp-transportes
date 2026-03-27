@@ -17,6 +17,7 @@ import {
   listDriversForReceiptFilters,
   listPendingReceipts,
   listWhatsappReceiptActivity,
+  updateReceiptManualReview,
   uploadReceipt,
 } from '../services/receiptsService';
 import {
@@ -202,6 +203,7 @@ function Receipts() {
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pageError, setPageError] = useState('');
+  const [manualReviewReceiptId, setManualReviewReceiptId] = useState<number | null>(null);
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<IPendingReceiptRow | null>(null);
@@ -328,6 +330,25 @@ function Receipts() {
     }
 
     await refreshPending();
+  }
+
+  async function handleDismissManualReview(row: IReceiptWhatsappActivityRow) {
+    const receiptId = Number(row.receipt?.id || 0);
+    if (!receiptId) return;
+
+    const confirmed = window.confirm(`Marcar o canhoto da NF ${row.receipt?.nf_id || row.invoice_number || '-'} como validado e remover da revisão manual?`);
+    if (!confirmed) return;
+
+    try {
+      setManualReviewReceiptId(receiptId);
+      await updateReceiptManualReview(receiptId, false);
+      await refreshWhatsapp(activeTab === 'pending' ? 'review' : activeTab);
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível remover esse canhoto da revisão manual.');
+    } finally {
+      setManualReviewReceiptId(null);
+    }
   }
 
   function openUploadModal(pendingRow: IPendingReceiptRow) {
@@ -633,9 +654,26 @@ function Receipts() {
                           <p className="text-muted">Grupo: {row.group_name || row.group_id || '-'}</p>
                           <p className="text-muted">Evento: {formatDateTime(row.occurred_at)} · Backend: {row.backend_action || '-'}</p>
                           <p className="text-muted">Status atual da NF: {row.danfe?.status || '-'}</p>
+                          {row.receipt?.id ? (
+                            <p className="text-muted">
+                              Canhoto vinculado: #{row.receipt.id} {row.receipt.needs_manual_review ? '· revisão manual ativa' : '· revisão manual baixa'}
+                            </p>
+                          ) : null}
                         </div>
-                        <div className={`rounded-md border px-2 py-1 text-xs font-semibold ${getWhatsappKindClasses(row.kind)}`}>
-                          {row.backend_mode || 'whatsapp'}
+                        <div className="flex flex-col items-end gap-2">
+                          <div className={`rounded-md border px-2 py-1 text-xs font-semibold ${getWhatsappKindClasses(row.kind)}`}>
+                            {row.backend_mode || 'whatsapp'}
+                          </div>
+                          {row.kind === 'review' && row.receipt?.id && row.receipt.needs_manual_review ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDismissManualReview(row)}
+                              disabled={manualReviewReceiptId === row.receipt.id}
+                              className="rounded-md border semantic-solid-success px-2.5 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {manualReviewReceiptId === row.receipt.id ? 'Validando...' : 'Marcar como validado'}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
 

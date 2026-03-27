@@ -20,6 +20,7 @@ import {
 import {
   IDriver,
   IReceiptBacklogRow,
+  IReceiptBacklogRouteHistoryRow,
   IReceiptBacklogSummary,
   ReceiptBacklogQueueType,
 } from '../types/types';
@@ -52,7 +53,7 @@ const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
   pending: {
     label: 'Pendentes',
     summaryLabel: 'Pendentes',
-    emptyMessage: 'Nenhuma NF pendente sem fechamento de canhoto para os filtros atuais.',
+    emptyMessage: 'Nenhuma entrega vinculada a motorista e sem canhoto postado para os filtros atuais.',
     tone: 'warning',
   },
   retained: {
@@ -196,6 +197,32 @@ const getAgeBadgeTone = (row: IReceiptBacklogRow): SemanticTone => {
   if (row.queue_type === 'returned' || row.queue_type === 'cancelled') return 'neutral';
   if (row.queue_type === 'retained') return 'warning';
   return 'danger';
+};
+
+const shouldExpandRouteHistory = (row: IReceiptBacklogRow) => {
+  const historyLength = Array.isArray(row.route_history) ? row.route_history.length : 0;
+  if (historyLength <= 1) return false;
+  return row.queue_type === 'returned' || row.source_status === 'redelivery';
+};
+
+const getRouteHistoryEntryKey = (
+  row: IReceiptBacklogRow,
+  historyRow: IReceiptBacklogRouteHistoryRow,
+  index: number,
+) => (
+  `${row.invoice_number}-${historyRow.trip_id || 'sem-trip'}-${historyRow.trip_note_id || historyRow.created_at || index}`
+);
+
+const isCurrentRouteHistoryEntry = (row: IReceiptBacklogRow, historyRow: IReceiptBacklogRouteHistoryRow) => {
+  if (row.trip_id && historyRow.trip_id) {
+    return Number(row.trip_id) === Number(historyRow.trip_id);
+  }
+
+  if (row.trip_date && historyRow.trip_date && row.motorista_id && historyRow.motorista_id) {
+    return row.trip_date === historyRow.trip_date && Number(row.motorista_id) === Number(historyRow.motorista_id);
+  }
+
+  return false;
 };
 
 function OperationalPendencies() {
@@ -600,7 +627,7 @@ function OperationalPendencies() {
                   <h3 className="text-sm font-semibold text-text">{activeTabConfig.label}</h3>
                   <p className="text-xs text-muted">
                     {activeTab === 'pending'
-                      ? 'Fila das NFs abertas sem canhoto postado e sem fechamento final.'
+                      ? 'Entregas vinculadas a motorista e ainda sem canhoto/foto postado.'
                       : activeTab === 'retained'
                         ? 'NFs marcadas como canhoto retido para acompanhar a coleta do comprovante na proxima entrega.'
                         : activeTab === 'unassigned'
@@ -650,6 +677,54 @@ function OperationalPendencies() {
                             <p className="text-muted">Data NF: {formatDateOnly(row.invoice_date)} · Data rota: {formatDateOnly(row.trip_date || null)}</p>
                             <p className="text-muted">Carga: {row.load_number || '-'} · Trip: {row.trip_id || '-'} · Rota: {row.rota_id || '-'}</p>
                             <p className="text-muted">Ultimo canhoto: {formatDateTime(row.receipt_created_at || null)}</p>
+
+                            {Array.isArray(row.route_history) && row.route_history.length ? (
+                              <details
+                                className="mt-2 rounded-md border border-border bg-card/70 p-2"
+                                open={shouldExpandRouteHistory(row)}
+                              >
+                                <summary className="cursor-pointer list-none text-[11px] font-semibold text-text">
+                                  Historico de saidas ({row.route_history.length})
+                                </summary>
+                                <div className="mt-2 space-y-2">
+                                  {row.route_history.map((historyRow, index) => {
+                                    const isCurrent = isCurrentRouteHistoryEntry(row, historyRow);
+                                    const historyStatus = historyRow.note_status || '';
+
+                                    return (
+                                      <div
+                                        key={getRouteHistoryEntryKey(row, historyRow, index)}
+                                        className="rounded-sm border border-border bg-surface px-2 py-2"
+                                      >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="text-[11px] font-semibold text-text">
+                                            {formatDateOnly(historyRow.trip_date || null)}
+                                          </p>
+                                          <Badge tone={getOperationalStatusTone(historyStatus)} className="h-auto px-2 py-0.5 text-[10px]">
+                                            {getOperationalStatusLabel(historyStatus)}
+                                          </Badge>
+                                          {isCurrent ? (
+                                            <Badge tone="info" className="h-auto px-2 py-0.5 text-[10px]">
+                                              Saida atual
+                                            </Badge>
+                                          ) : (
+                                            <Badge tone="neutral" className="h-auto px-2 py-0.5 text-[10px]">
+                                              Historico
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <p className="mt-1 text-muted">
+                                          Motorista: {historyRow.motorista_name || '-'} · Trip: {historyRow.trip_id || '-'}
+                                        </p>
+                                        <p className="text-muted">
+                                          Registro: {formatDateTime(historyRow.updated_at || historyRow.created_at || null)}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </details>
+                            ) : null}
                           </div>
 
                           <div className="flex min-w-[180px] flex-col items-stretch gap-2">

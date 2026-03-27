@@ -30,11 +30,25 @@ import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from 
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
-import { ICar, IDanfe, IDriver, ITrip, ITripNote } from '../types/types';
+import { listReceiptBacklog } from '../services/receiptsService';
+import { ICar, IDanfe, IDriver, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
+import {
+  canDanfeAppearInRoutingPool,
+  evaluateRoutePlanningDecision,
+  findActiveAssignmentForInvoice,
+  getRetainedContextsForNote,
+  groupRetainedRowsByCustomerId,
+  isRouteFinalStatus,
+  isRoutePlanningTripActive,
+  normalizeRoutePlanningStatus,
+  RoutePlanningDecision,
+  RouteReturnInfo,
+} from '../utils/routePlanningRules';
 
 type PlanningTab = 'routing' | 'trips';
 type SwapMode = 'driver' | 'vehicle' | 'both';
 type RouteLookupDanfe = IDanfe & { status?: string | null };
+type RoutingTripNote = ITripNote & { customer_id?: string | null };
 
 interface ConflictState {
   type: 'driver' | 'vehicle';
@@ -42,6 +56,12 @@ interface ConflictState {
   nextDriver: string;
   nextCar: string;
 }
+
+type RoutingModalState = {
+  danfe: RouteLookupDanfe;
+  lookupValue: string;
+  decision: Exclude<RoutePlanningDecision, { outcome: 'allow' }>;
+};
 
 interface RoutingCityOption {
   city: string;
@@ -90,18 +110,7 @@ function resolveRoutingInvoiceDateCandidates(date: string) {
 }
 
 function isTripActive(trip: ITrip) {
-  return (trip.TripNotes || []).some((note) => !['returned', 'cancelled', 'delivered'].includes(String(note.status || '').toLowerCase()));
-}
-
-function canAssignDanfe(status: unknown) {
-  const normalized = String(status || '').trim().toLowerCase();
-  return normalized === 'pending' || normalized === 'redelivery';
-}
-
-function isDanfeEligibleForRouting(status: unknown) {
-  const normalized = String(status || '').trim().toLowerCase();
-  if (!normalized) return true;
-  return !['cancelled', 'delivered', 'returned'].includes(normalized);
+  return isRoutePlanningTripActive(trip);
 }
 
 function normalizeTripNoteStatus(status: unknown) {
@@ -127,7 +136,8 @@ function getTripNoteStatusLabel(status: unknown) {
   if (normalized === 'delivered' || normalized === 'completed') return 'Entregue';
   if (normalized === 'returned') return 'Recusada';
   if (normalized === 'cancelled') return 'Cancelada';
-  if (normalized === 'redelivery') return 'Redespacho';
+  if (normalized === 'redelivery') return 'Reentrega';
+  if (normalized === 'retained') return 'Canhoto retido';
   return normalized;
 }
 
@@ -149,6 +159,7 @@ function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe
 function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITripNote {
   return {
     customer_name: normalizeTextValue(danfeData.Customer?.name_or_legal_entity) || '-',
+    customer_id: danfeData.customer_id || null,
     invoice_number: String(danfeData.invoice_number),
     city: normalizeCityLabel(danfeData.Customer?.city) || 'Cidade não informada',
     order,
@@ -165,14 +176,45 @@ function reindexTripNotes(notes: ITripNote[]) {
   return sortTripNotesByOrder(notes).map((note, index) => ({ ...note, order: index + 1 }));
 }
 
+function canReuseVehicleOnSecondRun(trips: ITrip[], driverId: string | number, carId: string | number) {
+  const normalizedDriverId = String(driverId || '').trim();
+  const normalizedCarId = String(carId || '').trim();
+  const hasDriver = normalizedDriverId !== '' && normalizedDriverId !== 'null';
+  const hasCar = normalizedCarId !== '' && normalizedCarId !== 'null';
+  if (hasDriver === false || hasCar === false) return false;
+
+  const carTrips = trips.filter((trip) => String(trip.car_id) === normalizedCarId);
+  return carTrips.length > 0 && carTrips.every((trip) => String(trip.driver_id) === normalizedDriverId);
+}
+
+function getTripNoteKey(note: ITripNote) {
+  return String(note.invoice_number);
+}
+
+function reorderTripNotes(notes: ITripNote[], movingNote: ITripNote, nextOrder: number): ITripNote[] | null {
+  const ordered = sortTripNotesByOrder(notes);
+  const currentIndex = ordered.findIndex((note) => getTripNoteKey(note) === getTripNoteKey(movingNote));
+  if (currentIndex < 0) return null;
+  if (isMutableTripNoteStatus(ordered[currentIndex].status) === false) return null;
+
+  const clampedOrder = Math.min(Math.max(Math.trunc(nextOrder), 1), ordered.length);
+  const targetIndex = clampedOrder - 1;
+  if (targetIndex === currentIndex) {
+    return ordered.map((note, index) => ({ ...note, order: index + 1 }));
+  }
+
+  const affectedNotes = ordered.slice(Math.min(currentIndex, targetIndex), Math.max(currentIndex, targetIndex) + 1);
+  if (affectedNotes.some((note) => isMutableTripNoteStatus(note.status) === false)) return null;
+
+  const [removedNote] = ordered.splice(currentIndex, 1);
+  ordered.splice(targetIndex, 0, removedNote);
+  return ordered.map((note, index) => ({ ...note, order: index + 1 }));
+}
+
 function canReorderTripNote(notes: ITripNote[], note: ITripNote, direction: 'up' | 'down') {
-  if (!isMutableTripNoteStatus(note.status)) return false;
-
-  const adjacentOrder = direction === 'up' ? note.order - 1 : note.order + 1;
-  const adjacentNote = notes.find((item) => item.order === adjacentOrder);
-  if (!adjacentNote) return false;
-
-  return isMutableTripNoteStatus(adjacentNote.status);
+  const targetOrder = direction === 'up' ? note.order - 1 : note.order + 1;
+  if (targetOrder < 1 || targetOrder > notes.length) return false;
+  return reorderTripNotes(notes, note, targetOrder) !== null;
 }
 
 function calculateTripNotesWeight(notes: ITripNote[]) {
@@ -190,7 +232,7 @@ function RoutePlanning() {
   const [batchNoteLookup, setBatchNoteLookup] = useState<string>('');
   const [isBatchAdding, setIsBatchAdding] = useState<boolean>(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
-  const [addedNotes, setAddedNotes] = useState<ITripNote[]>([]);
+  const [addedNotes, setAddedNotes] = useState<RoutingTripNote[]>([]);
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [displayedTrips, setDisplayedTrips] = useState<ITrip[]>([]);
   const [tripDateFilter, setTripDateFilter] = useState<Date | null>(new Date());
@@ -204,10 +246,11 @@ function RoutePlanning() {
   const [assignmentWarning, setAssignmentWarning] = useState<string>('');
   const [detailsTrip, setDetailsTrip] = useState<ITrip | null>(null);
   const [editTrip, setEditTrip] = useState<ITrip | null>(null);
-  const [editNotes, setEditNotes] = useState<ITripNote[]>([]);
+  const [editNotes, setEditNotes] = useState<RoutingTripNote[]>([]);
   const [editSearch, setEditSearch] = useState<string>('');
   const [availableDanfes, setAvailableDanfes] = useState<IDanfe[]>([]);
   const [routingPoolDanfes, setRoutingPoolDanfes] = useState<RouteLookupDanfe[]>([]);
+  const [retainedContextRows, setRetainedContextRows] = useState<IReceiptBacklogRow[]>([]);
   const [selectedRoutingCity, setSelectedRoutingCity] = useState<string>('');
   const [isRoutingPoolLoading, setIsRoutingPoolLoading] = useState<boolean>(false);
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
@@ -221,10 +264,13 @@ function RoutePlanning() {
   const [swapReason, setSwapReason] = useState<string>('');
   const [isSwapping, setIsSwapping] = useState<boolean>(false);
   const [showAssignmentFields, setShowAssignmentFields] = useState<boolean>(true);
+  const [routingModalState, setRoutingModalState] = useState<RoutingModalState | null>(null);
+  const [isResolvingNoteConflict, setIsResolvingNoteConflict] = useState<boolean>(false);
   const [lastScannedInvoice, setLastScannedInvoice] = useState<string>('');
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState<boolean>(false);
   const [isNotesNearBottom, setIsNotesNearBottom] = useState<boolean>(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
+  const [manualOrderInputs, setManualOrderInputs] = useState<Record<string, string>>({});
 
   const navigate = useNavigate();
   const noteLookupRef = useRef<HTMLInputElement>(null);
@@ -258,29 +304,51 @@ function RoutePlanning() {
   );
 
   const activeTodayTrips = useMemo(() => todayTrips.filter((trip) => isTripActive(trip)), [todayTrips]);
+  const retainedByCustomerId = useMemo(
+    () => groupRetainedRowsByCustomerId(retainedContextRows),
+    [retainedContextRows],
+  );
 
   const availableSwapTrips = useMemo(() => {
-    if (!tripToUpdate) return [] as ITrip[];
+    if (tripToUpdate === null) return [] as ITrip[];
+    return activeTodayTrips.filter((trip) => Number(trip.id) !== Number(tripToUpdate.id));
+  }, [activeTodayTrips, tripToUpdate]);
+
+  const routingActiveTripsExcludingCurrent = useMemo(() => {
+    if (tripToUpdate === null) return activeTodayTrips;
     return activeTodayTrips.filter((trip) => Number(trip.id) !== Number(tripToUpdate.id));
   }, [activeTodayTrips, tripToUpdate]);
 
   const driverOccupancyMap = useMemo(() => {
     const map = new Map<string, ITrip>();
-    activeTodayTrips.forEach((trip) => {
-      if (tripToUpdate && Number(trip.id) === Number(tripToUpdate.id)) return;
+    routingActiveTripsExcludingCurrent.forEach((trip) => {
       map.set(String(trip.driver_id), trip);
     });
     return map;
-  }, [activeTodayTrips, tripToUpdate]);
+  }, [routingActiveTripsExcludingCurrent]);
 
   const carOccupancyMap = useMemo(() => {
     const map = new Map<string, ITrip>();
-    activeTodayTrips.forEach((trip) => {
-      if (tripToUpdate && Number(trip.id) === Number(tripToUpdate.id)) return;
+    routingActiveTripsExcludingCurrent.forEach((trip) => {
       map.set(String(trip.car_id), trip);
     });
     return map;
-  }, [activeTodayTrips, tripToUpdate]);
+  }, [routingActiveTripsExcludingCurrent]);
+
+  const selectedDriverConflictTrips = useMemo(() => {
+    if (selectedDriver === 'null') return [] as ITrip[];
+    return routingActiveTripsExcludingCurrent.filter((trip) => String(trip.driver_id) === String(selectedDriver));
+  }, [routingActiveTripsExcludingCurrent, selectedDriver]);
+
+  const selectedCarConflictTrips = useMemo(() => {
+    if (selectedCar === 'null') return [] as ITrip[];
+    return routingActiveTripsExcludingCurrent.filter((trip) => String(trip.car_id) === String(selectedCar));
+  }, [routingActiveTripsExcludingCurrent, selectedCar]);
+
+  const canReuseSelectedCarOnSecondRun = useMemo(
+    () => canReuseVehicleOnSecondRun(routingActiveTripsExcludingCurrent, selectedDriver, selectedCar),
+    [routingActiveTripsExcludingCurrent, selectedDriver, selectedCar],
+  );
 
   const driverOptions = useMemo(() => {
     return drivers.map((driver) => {
@@ -393,6 +461,14 @@ function RoutePlanning() {
   }, [selectedDriver, selectedCar]);
 
   useEffect(() => {
+    const nextInputs: Record<string, string> = {};
+    sortedNotes.forEach((note) => {
+      nextInputs[getTripNoteKey(note)] = String(note.order);
+    });
+    setManualOrderInputs(nextInputs);
+  }, [sortedNotes]);
+
+  useEffect(() => {
     const current = sortedNotes.length;
     const previous = previousNotesCountRef.current;
     if (current > previous && notesContainerRef.current) {
@@ -421,6 +497,108 @@ function RoutePlanning() {
     const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
     return response.data as ITrip[];
   };
+
+  const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string) => {
+    const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`);
+    return Array.isArray(response.data) ? response.data : [];
+  }, []);
+
+  const searchReturnBatchesByInvoiceNumber = useCallback(async (invoiceNumber: string) => {
+    const response = await axios.get<IReturnBatch[]>(`${API_URL}/returns/batches/search`, {
+      params: {
+        invoice_number: invoiceNumber,
+        workflow_status: 'all',
+      },
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  }, []);
+
+  const buildRoutingPoolRows = useCallback((danfes: RouteLookupDanfe[], trips: ITrip[], options?: { ignoreTripId?: number | null }) => {
+    const ignoredTripId = Number(options?.ignoreTripId || 0) || null;
+    const assignedInvoiceNumbers = new Set(
+      trips
+        .filter((trip) => !ignoredTripId || Number(trip.id) !== ignoredTripId)
+        .flatMap((trip) => (
+          trip.TripNotes || []
+        ))
+        .filter((note) => !isRouteFinalStatus(note.status))
+        .map((note) => String(note.invoice_number || '').trim())
+        .filter(Boolean),
+    );
+
+    return danfes.filter((danfe) => {
+      const invoiceNumber = String(danfe.invoice_number || '').trim();
+      if (!invoiceNumber) return false;
+      if (assignedInvoiceNumbers.has(invoiceNumber)) return false;
+      return canDanfeAppearInRoutingPool(danfe.status);
+    });
+  }, []);
+
+  const formatAssignmentDateTime = useCallback((value?: string | null) => {
+    if (!value) return '-';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDateBR(value);
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(parsed);
+  }, []);
+
+  const extractActiveReturnInfo = useCallback((batches: IReturnBatch[], invoiceNumber: string): RouteReturnInfo => {
+    const normalizedInvoiceNumber = String(invoiceNumber || '').trim();
+    const matchedBatch = batches.find((batch) => (
+      (batch.notes || []).some((note) => String(note.invoice_number || '').trim() === normalizedInvoiceNumber)
+    ));
+
+    if (!matchedBatch) return null;
+
+    const matchedNote = (matchedBatch.notes || []).find((note) => String(note.invoice_number || '').trim() === normalizedInvoiceNumber) || null;
+
+    return {
+      batchCode: matchedBatch.batch_code || null,
+      returnType: matchedNote?.return_type || null,
+      returnDate: matchedBatch.return_date || null,
+      workflowStatus: matchedBatch.workflow_status || null,
+    };
+  }, []);
+
+  const resolveRoutingDecision = useCallback(async (danfeData: RouteLookupDanfe) => {
+    const invoiceNumber = String(danfeData.invoice_number || '').trim();
+    const normalizedStatus = normalizeRoutePlanningStatus(danfeData.status);
+
+    const [tripRows, returnBatches] = await Promise.all([
+      normalizedStatus === 'assigned' ? searchTripsByInvoiceNumber(invoiceNumber) : Promise.resolve([] as ITrip[]),
+      normalizedStatus === 'returned' ? searchReturnBatchesByInvoiceNumber(invoiceNumber) : Promise.resolve([] as IReturnBatch[]),
+    ]);
+
+    const assignment = normalizedStatus === 'assigned'
+      ? findActiveAssignmentForInvoice(tripRows, invoiceNumber)
+      : null;
+    const activeReturn = normalizedStatus === 'returned'
+      ? extractActiveReturnInfo(returnBatches, invoiceNumber)
+      : null;
+
+    return evaluateRoutePlanningDecision({
+      danfe: danfeData,
+      assignment,
+      activeReturn,
+    });
+  }, [extractActiveReturnInfo, searchReturnBatchesByInvoiceNumber, searchTripsByInvoiceNumber]);
+
+  const appendDanfeToRoute = useCallback((danfeData: RouteLookupDanfe) => {
+    const sanitizedDanfe = sanitizeRouteLookupDanfe(danfeData);
+    if (addedNotes.some((note) => String(note.invoice_number) === String(sanitizedDanfe.invoice_number))) {
+      return;
+    }
+
+    const newNote = buildTripNoteFromDanfe(sanitizedDanfe, addedNotes.length + 1) as RoutingTripNote;
+    setAddedNotes((prev) => [...prev, newNote]);
+    setLastScannedInvoice(String(newNote.invoice_number));
+  }, [addedNotes]);
 
   const refreshTrips = useCallback(async (date?: string) => {
     const targetDate = date || todayApiDate;
@@ -468,24 +646,13 @@ function RoutePlanning() {
         fetchTripsByDate(targetDate),
       ]);
 
-      const assignedInvoiceNumbers = new Set(
-        trips.flatMap((trip) => (trip.TripNotes || []).map((note) => String(note.invoice_number || '').trim())).filter(Boolean),
-      );
-
-      setRoutingPoolDanfes(
-        danfes.filter((danfe) => {
-          const invoiceNumber = String(danfe.invoice_number || '').trim();
-          if (!invoiceNumber) return false;
-          if (assignedInvoiceNumbers.has(invoiceNumber)) return false;
-          return isDanfeEligibleForRouting(danfe.status);
-        }),
-      );
+      setRoutingPoolDanfes(buildRoutingPoolRows(danfes, trips));
     } catch {
       setRoutingPoolDanfes([]);
     } finally {
       setIsRoutingPoolLoading(false);
     }
-  }, [fetchDanfesForTripDate, todayApiDate]);
+  }, [buildRoutingPoolRows, fetchDanfesForTripDate, todayApiDate]);
 
   const jumpToLatest = () => {
     if (!notesContainerRef.current) return;
@@ -592,31 +759,54 @@ function RoutePlanning() {
   }, []);
 
   useEffect(() => {
+    const loadRetainedContexts = async () => {
+      try {
+        const response = await listReceiptBacklog({
+          queueType: 'retained',
+          limit: 300,
+        });
+        setRetainedContextRows(Array.isArray(response?.rows) ? response.rows : []);
+      } catch {
+        setRetainedContextRows([]);
+      }
+    };
+
+    void loadRetainedContexts();
+  }, []);
+
+  useEffect(() => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
       setAssignmentWarning('');
       return;
     }
 
-    if (isSecondRunMode) {
-      setAssignmentWarning('');
-      return;
-    }
-
-    const hasDriverConflict = driverOccupancyMap.has(String(selectedDriver));
-    const hasCarConflict = carOccupancyMap.has(String(selectedCar));
+    const hasDriverConflict = selectedDriverConflictTrips.length > 0;
+    const hasCarConflict = selectedCarConflictTrips.length > 0
+      && (isSecondRunMode === false || canReuseSelectedCarOnSecondRun === false);
 
     if (hasCarConflict) {
-      setAssignmentWarning('Placa ocupada em rota ativa no dia. Resolva com Swap, 2ª saída ou escolha outro veículo.');
+      setAssignmentWarning(
+        isSecondRunMode
+          ? 'Placa ocupada em rota ativa de outro motorista no dia. A 2ª saída libera a mesma placa apenas para o mesmo motorista.'
+          : 'Placa ocupada em rota ativa no dia. Ative a 2ª saída para reutilizar a mesma placa no mesmo motorista ou escolha outro veículo.',
+      );
       return;
     }
 
-    if (hasDriverConflict) {
+    if (hasDriverConflict && isSecondRunMode === false) {
       setAssignmentWarning('Motorista ocupado em rota ativa no dia. Resolva com Swap, 2ª saída ou escolha outro motorista.');
       return;
     }
 
     setAssignmentWarning('');
-  }, [selectedDriver, selectedCar, isSecondRunMode, driverOccupancyMap, carOccupancyMap]);
+  }, [
+    selectedDriver,
+    selectedCar,
+    isSecondRunMode,
+    selectedDriverConflictTrips,
+    selectedCarConflictTrips,
+    canReuseSelectedCarOnSecondRun,
+  ]);
 
   const applyDriverSelection = (driverId: string) => {
     setSelectedDriver(driverId);
@@ -794,6 +984,80 @@ function RoutePlanning() {
     if (nearBottom) setShowJumpToLatest(false);
   };
 
+  const closeRoutingModal = () => {
+    if (isResolvingNoteConflict) return;
+    setRoutingModalState(null);
+  };
+
+  const handleUseReplacementInvoice = () => {
+    if (!routingModalState || routingModalState.decision.outcome !== 'blocked') return;
+    const replacementInvoiceNumber = routingModalState.decision.replacementInvoiceNumber;
+    if (!replacementInvoiceNumber) return;
+
+    setNoteLookup(replacementInvoiceNumber);
+    setRoutingModalState(null);
+    window.requestAnimationFrame(() => {
+      noteLookupRef.current?.focus();
+      noteLookupRef.current?.select();
+    });
+  };
+
+  const handleResolveAssignmentConflict = async () => {
+    if (!routingModalState || routingModalState.decision.outcome !== 'assignment_conflict') return;
+
+    const assignment = routingModalState.decision.assignment;
+    if (!assignment?.tripId || !assignment?.noteId) {
+      alert(`A NF ${routingModalState.danfe.invoice_number} esta atribuida, mas nao foi possivel localizar a parada atual para remocao assistida.`);
+      return;
+    }
+
+    try {
+      setIsResolvingNoteConflict(true);
+      await axios.put(`${API_URL}/trips/remove-note/${assignment.tripId}`, {
+        noteId: assignment.noteId,
+      }, authConfig);
+      await axios.put(`${API_URL}/danfes/update-status`, {
+        danfes: [{
+          invoice_number: routingModalState.danfe.invoice_number,
+          status: 'pending',
+        }],
+      }, authConfig);
+
+      appendDanfeToRoute({
+        ...routingModalState.danfe,
+        status: 'pending',
+      });
+      setRoutingModalState(null);
+      await Promise.all([
+        refreshTrips(todayApiDate),
+        refreshRoutingPool(tripToUpdate?.date || todayApiDate),
+      ]);
+    } catch (error: any) {
+      alert(error?.response?.data?.error || `Nao foi possivel remover a NF ${routingModalState.danfe.invoice_number} da rota atual.`);
+    } finally {
+      setIsResolvingNoteConflict(false);
+    }
+  };
+
+  const buildAssignmentConflictMessage = useCallback((conflicts: any, secondRunEnabled: boolean) => {
+    if (conflicts?.hasCarConflict) {
+      const activeCarDriverId = Number(conflicts?.carActiveTrip?.driver_id || 0);
+      if (secondRunEnabled) {
+        return 'Placa ocupada em rota ativa de outro motorista no dia. A 2ª saída libera a mesma placa apenas para o mesmo motorista.';
+      }
+      if (activeCarDriverId > 0 && activeCarDriverId === Number(selectedDriver)) {
+        return 'A placa já está em outra rota deste motorista. Ative a 2ª saída para enviar a nova rota.';
+      }
+      return 'Placa ocupada em rota ativa no dia.';
+    }
+
+    if (conflicts?.hasDriverConflict) {
+      return 'Motorista já possui rota ativa no dia. Use Segunda saída ou faça Swap.';
+    }
+
+    return 'Conflito de motorista/placa para salvar a rota.';
+  }, [selectedDriver]);
+
   const fetchDanfeByLookup = async (lookup: string): Promise<RouteLookupDanfe | null> => {
     const normalizedLookup = String(lookup || '').trim();
     if (!normalizedLookup) return null;
@@ -829,20 +1093,22 @@ function RoutePlanning() {
         return;
       }
 
-      if (!canAssignDanfe(danfeData.status)) {
-        alert('Essa nota não pode ser roteirizada, verifique o status dela.');
-        return;
-      }
-
       if (addedNotes.some((note) => String(danfeData.invoice_number) === String(note.invoice_number))) {
         alert('Esta nota já foi adicionada à viagem.');
         return;
       }
 
-      const newNote = buildTripNoteFromDanfe(danfeData, addedNotes.length + 1);
+      const decision = await resolveRoutingDecision(danfeData);
+      if (decision.outcome === 'allow') {
+        appendDanfeToRoute(danfeData);
+        return;
+      }
 
-      setAddedNotes((prev) => [...prev, newNote]);
-      setLastScannedInvoice(String(newNote.invoice_number));
+      setRoutingModalState({
+        danfe: danfeData,
+        lookupValue: lookup,
+        decision,
+      });
     } catch {
       alert('Não foi possível buscar essa nota.');
     } finally {
@@ -896,8 +1162,9 @@ function RoutePlanning() {
             continue;
           }
 
-          if (!canAssignDanfe(danfeData.status)) {
-            errors.push(`${lookup}: NF ${invoiceKey} com status inválido (${danfeData.status || 'desconhecido'}).`);
+          const decision = await resolveRoutingDecision(danfeData);
+          if (decision.outcome !== 'allow') {
+            errors.push(`${lookup}: ${decision.message}`);
             continue;
           }
 
@@ -989,32 +1256,63 @@ function RoutePlanning() {
     setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
   };
 
-  const moveNoteUp = (order: number) => {
-    const updated = [...addedNotes];
-    const prevIndex = updated.findIndex((note) => note.order === order - 1);
-    const currIndex = updated.findIndex((note) => note.order === order);
-    if (prevIndex !== -1 && currIndex !== -1) {
-      if (!isMutableTripNoteStatus(updated[currIndex].status) || !isMutableTripNoteStatus(updated[prevIndex].status)) {
-        alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
-        return;
-      }
-      [updated[prevIndex].order, updated[currIndex].order] = [updated[currIndex].order, updated[prevIndex].order];
-      setAddedNotes(updated);
+  const moveNoteUp = (note: ITripNote) => {
+    const reorderedNotes = reorderTripNotes(addedNotes, note, note.order - 1);
+    if (reorderedNotes === null) {
+      alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
+      return;
     }
+    setAddedNotes(reorderedNotes);
   };
 
-  const moveNoteDown = (order: number) => {
-    const updated = [...addedNotes];
-    const nextIndex = updated.findIndex((note) => note.order === order + 1);
-    const currIndex = updated.findIndex((note) => note.order === order);
-    if (nextIndex !== -1 && currIndex !== -1) {
-      if (!isMutableTripNoteStatus(updated[currIndex].status) || !isMutableTripNoteStatus(updated[nextIndex].status)) {
-        alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
-        return;
-      }
-      [updated[nextIndex].order, updated[currIndex].order] = [updated[currIndex].order, updated[nextIndex].order];
-      setAddedNotes(updated);
+  const moveNoteDown = (note: ITripNote) => {
+    const reorderedNotes = reorderTripNotes(addedNotes, note, note.order + 1);
+    if (reorderedNotes === null) {
+      alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
+      return;
     }
+    setAddedNotes(reorderedNotes);
+  };
+
+  const handleManualOrderInputChange = (note: ITripNote, value: string) => {
+    if (/^\d*$/.test(value) === false) return;
+    setManualOrderInputs((prev) => ({
+      ...prev,
+      [getTripNoteKey(note)]: value,
+    }));
+  };
+
+  const commitManualOrderChange = (note: ITripNote) => {
+    const inputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);
+    if (inputValue.trim() === '') {
+      setManualOrderInputs((prev) => ({
+        ...prev,
+        [getTripNoteKey(note)]: String(note.order),
+      }));
+      return;
+    }
+
+    const parsedOrder = Number(inputValue);
+    if (Number.isFinite(parsedOrder) === false || parsedOrder <= 0) {
+      alert('Digite uma ordem válida maior que zero.');
+      setManualOrderInputs((prev) => ({
+        ...prev,
+        [getTripNoteKey(note)]: String(note.order),
+      }));
+      return;
+    }
+
+    const reorderedNotes = reorderTripNotes(addedNotes, note, parsedOrder);
+    if (reorderedNotes === null) {
+      alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
+      setManualOrderInputs((prev) => ({
+        ...prev,
+        [getTripNoteKey(note)]: String(note.order),
+      }));
+      return;
+    }
+
+    setAddedNotes(reorderedNotes);
   };
 
   const sendTripsToBackend = async () => {
@@ -1025,7 +1323,7 @@ function RoutePlanning() {
       return;
     }
 
-    if (selectedDriver === 'null' || selectedCar === 'null' || !sortedNotes.length) {
+    if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
       alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
       return;
     }
@@ -1045,15 +1343,9 @@ function RoutePlanning() {
         replace_trip_id: isUpdating && tripToUpdate ? tripToUpdate.id : null,
       }, authConfig);
 
-      if (!validation?.data?.ok) {
-        if (validation?.data?.conflicts?.hasCarConflict) {
-          alert('Placa ocupada em rota ativa no dia.');
-          return;
-        }
-        if (validation?.data?.conflicts?.hasDriverConflict) {
-          alert('Motorista já possui rota ativa no dia. Use Segunda saída ou faça Swap.');
-          return;
-        }
+      if (validation?.data?.ok !== true) {
+        alert(buildAssignmentConflictMessage(validation?.data?.conflicts, isSecondRunMode));
+        return;
       }
 
       await axios.put(`${API_URL}/danfes/update-status`, {
@@ -1109,10 +1401,15 @@ function RoutePlanning() {
     await refreshTrips(toApiDate(date));
   };
 
-  const fetchAvailableForTrip = async (tripDate: string) => {
+  const fetchAvailableForTrip = async (tripDate: string, ignoreTripId?: number | null) => {
     try {
-      const danfes = await fetchDanfesForTripDate(tripDate);
-      const filtered = danfes.filter((danfe) => ['pending', 'redelivery', 'assigned'].includes(String(danfe.status || '').toLowerCase()));
+      const [danfes, trips] = await Promise.all([
+        fetchDanfesForTripDate(tripDate),
+        fetchTripsByDate(tripDate),
+      ]);
+      const filtered = buildRoutingPoolRows(danfes, trips, {
+        ignoreTripId: ignoreTripId || null,
+      });
       setAvailableDanfes(filtered);
     } catch {
       setAvailableDanfes([]);
@@ -1125,7 +1422,7 @@ function RoutePlanning() {
     setEditTrip(trip);
     setEditNotes((trip.TripNotes || []).slice().sort((a, b) => a.order - b.order));
     setEditSearch('');
-    await fetchAvailableForTrip(trip.date);
+    await fetchAvailableForTrip(trip.date, trip.id);
   };
 
   const exitEditMode = () => {
@@ -1147,6 +1444,7 @@ function RoutePlanning() {
       {
         invoice_number: danfe.invoice_number,
         customer_name: danfe.Customer.name_or_legal_entity,
+        customer_id: danfe.customer_id || null,
         city: danfe.Customer.city,
         order: prev.length + 1,
         gross_weight: String(danfe.gross_weight || 0),
@@ -1157,7 +1455,7 @@ function RoutePlanning() {
 
   const removeEditNote = (invoice: string) => {
     const targetNote = editNotes.find((note) => String(note.invoice_number) === String(invoice));
-    if (targetNote && !isMutableTripNoteStatus(targetNote.status)) {
+    if (targetNote && isMutableTripNoteStatus(targetNote.status) === false) {
       alert('Notas em andamento ou finalizadas nao podem ser removidas da rota.');
       return;
     }
@@ -1168,8 +1466,8 @@ function RoutePlanning() {
   };
 
   const saveTripEdition = async () => {
-    if (!editTrip) return;
-    if (!editNotes.length) {
+    if (editTrip === null) return;
+    if (editNotes.length === 0) {
       alert('A rota precisa ter ao menos uma nota.');
       return;
     }
@@ -1189,8 +1487,9 @@ function RoutePlanning() {
         is_second_run: Number(editTrip.run_number || 1) > 1 || isSecondRunMode,
       }, authConfig);
 
-      if (!validation.data?.ok && !isSecondRunMode) {
-        alert('Conflito de motorista/placa para salvar edição.');
+      const editSecondRunEnabled = isSecondRunMode || Number(editTrip.run_number || 1) > 1;
+      if (validation.data?.ok !== true) {
+        alert(buildAssignmentConflictMessage(validation.data?.conflicts, editSecondRunEnabled));
         return;
       }
 
@@ -1198,15 +1497,15 @@ function RoutePlanning() {
       const nextInvoices = new Set(editNotes.map((note) => String(note.invoice_number)));
 
       const danfesToPending = Array.from(originalInvoices)
-        .filter((invoice) => !nextInvoices.has(invoice))
+        .filter((invoice) => nextInvoices.has(invoice) === false)
         .map((invoice_number) => ({ invoice_number, status: 'pending' }));
 
       const danfesToAssigned = Array.from(nextInvoices)
-        .filter((invoice) => !originalInvoices.has(invoice))
+        .filter((invoice) => originalInvoices.has(invoice) === false)
         .map((invoice_number) => ({ invoice_number, status: 'assigned' }));
 
-      if (danfesToPending.length) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
-      if (danfesToAssigned.length) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });
+      if (danfesToPending.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
+      if (danfesToAssigned.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });
 
       const totalWeight = editNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
 
@@ -1291,7 +1590,7 @@ function RoutePlanning() {
     <ContainerRoutePlanning>
       <Header />
       <Container className="h-[calc(100dvh-var(--header-height)-var(--space-2))] min-h-0 overflow-hidden pb-2 pt-[calc(var(--header-height)+var(--space-2))]">
-        <div className="flex h-full w-full max-w-[1280px] min-h-0 flex-col">
+        <div className="flex h-full w-full max-w-[1560px] min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
             <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
               <button
@@ -1343,7 +1642,7 @@ function RoutePlanning() {
           </div>
 
         {activeTab === 'routing' ? (
-          <section className="w-full max-w-[1280px] min-h-0 flex-1 rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-2 shadow-[var(--shadow-2)]">
+          <section className="w-full min-h-0 flex-1 rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             <div className="flex h-full min-h-0 flex-col">
               {isUpdating && tripToUpdate ? (
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700/60 bg-sky-950/30 px-2 py-1.5 text-xs text-sky-200">
@@ -1561,31 +1860,106 @@ function RoutePlanning() {
                 </ActionButton>
               </div>
 
-              <div className="relative min-h-0 flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45">
+              <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
                 <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui h-full overflow-y-auto p-2">
                   <ul className="space-y-2">
-                    {sortedNotes.map((note) => (
-                      <li key={`${note.invoice_number}-${note.order}`} className={`grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border px-2 py-2 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : !isMutableTripNoteStatus(note.status) ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold text-text">
-                          {note.order}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-text">NF {note.invoice_number} | {note.customer_name}</p>
-                          <p className="truncate text-xs text-muted">{note.city} | {note.gross_weight} Kg | {getTripNoteStatusLabel(note.status)}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button type="button" onClick={() => moveNoteUp(note.order)} disabled={!canReorderTripNote(sortedNotes, note, 'up')} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
-                            <FaArrowUpLong />
-                          </button>
-                          <button type="button" onClick={() => moveNoteDown(note.order)} disabled={!canReorderTripNote(sortedNotes, note, 'down')} className="rounded border border-border bg-surface px-2 py-1 text-xs text-text disabled:opacity-45">
-                            <FaArrowDownLong />
-                          </button>
-                          <button type="button" onClick={() => removeNoteFromList(note)} disabled={!isMutableTripNoteStatus(note.status)} className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-1 text-xs text-rose-200 disabled:opacity-45">
-                            Remover
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                    {sortedNotes.map((note) => {
+                      const orderInputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);
+                      const noteIsLocked = isMutableTripNoteStatus(note.status) === false;
+                      const retainedContexts = getRetainedContextsForNote(note, retainedByCustomerId)
+                        .filter((row) => String(row.invoice_number) !== String(note.invoice_number));
+
+                      return (
+                        <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-3 py-3 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
+                          <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <div className="shrink-0">
+                                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Ordem</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={sortedNotes.length}
+                                  inputMode="numeric"
+                                  value={orderInputValue}
+                                  onChange={(event) => handleManualOrderInputChange(note, event.target.value)}
+                                  onBlur={() => commitManualOrderChange(note)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      commitManualOrderChange(note);
+                                    }
+                                  }}
+                                  onFocus={(event) => event.currentTarget.select()}
+                                  disabled={noteIsLocked}
+                                  aria-label={`Editar ordem da NF ${note.invoice_number}`}
+                                  className="h-10 w-16 rounded-md border border-accent/35 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
+                                />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-text">NF {note.invoice_number}</p>
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${noteIsLocked ? 'border-amber-700/65 bg-amber-950/30 text-amber-100' : 'border-border bg-surface text-muted'}`}>
+                                    {getTripNoteStatusLabel(note.status)}
+                                  </span>
+                                  {retainedContexts.length ? (
+                                    <span className="inline-flex rounded-full border border-amber-700/65 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-100">
+                                      {`${retainedContexts.length} canhoto(s) retido(s) vinculado(s)`}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 break-words text-sm font-semibold leading-tight text-text md:truncate">{note.customer_name || '-'}</p>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                                  <span>{note.city}</span>
+                                  <span>{note.gross_weight} Kg</span>
+                                </div>
+                                {retainedContexts.length ? (
+                                  <div className="mt-2 rounded-md border border-amber-700/65 bg-amber-950/25 px-2.5 py-2 text-xs text-amber-100">
+                                    <p className="font-semibold uppercase tracking-[0.08em]">Canhoto retido do cliente</p>
+                                    <div className="mt-1 space-y-1">
+                                      {retainedContexts.map((row) => (
+                                        <p key={`retained-context-${note.invoice_number}-${row.invoice_number}`}>
+                                          {`NF ${row.invoice_number} | ultima rota: ${row.trip_id || '-'} | pendencia desde ${row.invoice_date || '-'}`}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-2 md:border-t-0 md:pt-0">
+                              <button
+                                type="button"
+                                onClick={() => moveNoteUp(note)}
+                                disabled={canReorderTripNote(sortedNotes, note, 'up') === false}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
+                                aria-label={`Subir NF ${note.invoice_number}`}
+                              >
+                                <FaArrowUpLong />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveNoteDown(note)}
+                                disabled={canReorderTripNote(sortedNotes, note, 'down') === false}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
+                                aria-label={`Descer NF ${note.invoice_number}`}
+                              >
+                                <FaArrowDownLong />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeNoteFromList(note)}
+                                disabled={noteIsLocked}
+                                className="rounded border border-rose-700/70 bg-rose-950/30 px-3 py-2 text-xs text-rose-200 disabled:opacity-45"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
                 {showJumpToLatest ? (
@@ -1607,7 +1981,7 @@ function RoutePlanning() {
             </div>
           </section>
         ) : (
-          <section className="flex w-full max-w-[1280px] min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+          <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
               <div className="flex items-center gap-2">
@@ -1721,6 +2095,83 @@ function RoutePlanning() {
                   disabled={isBatchAdding}
                 >
                   {isBatchAdding ? 'Validando lote...' : 'Enviar lote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {routingModalState ? (
+          <div className="fixed inset-0 z-[1465] flex items-center justify-center bg-black/70 p-3">
+            <div className="w-full max-w-[620px] rounded-lg border border-border bg-surface p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold text-text">{routingModalState.decision.title}</h3>
+                  <p className="mt-1 text-sm text-muted">{routingModalState.decision.message}</p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded border border-border bg-surface-2 px-2 py-1 text-sm text-text disabled:opacity-50"
+                  onClick={closeRoutingModal}
+                  disabled={isResolvingNoteConflict}
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {routingModalState.decision.outcome === 'assignment_conflict' ? (
+                <div className="mt-3 rounded-md border border-sky-700/65 bg-sky-950/25 px-3 py-2 text-sm text-sky-100">
+                  <p><strong>NF:</strong> {routingModalState.danfe.invoice_number}</p>
+                  <p><strong>Motorista atual:</strong> {routingModalState.decision.assignment.driverName || 'Nao informado'}</p>
+                  <p><strong>Rota atual:</strong> #{routingModalState.decision.assignment.tripId} {routingModalState.decision.assignment.runNumber ? `| saida #${routingModalState.decision.assignment.runNumber}` : ''}</p>
+                  <p><strong>Data da atribuicao:</strong> {formatAssignmentDateTime(routingModalState.decision.assignment.tripCreatedAt || routingModalState.decision.assignment.tripDate || null)}</p>
+                </div>
+              ) : null}
+
+              {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'returned_active' ? (
+                <div className="mt-3 rounded-md border border-rose-700/65 bg-rose-950/25 px-3 py-2 text-sm text-rose-100">
+                  <p><strong>Lote de devolucao:</strong> {routingModalState.decision.returnInfo?.batchCode || '-'}</p>
+                  <p><strong>Tipo:</strong> {routingModalState.decision.returnInfo?.returnType || '-'}</p>
+                  <p><strong>Data da devolucao:</strong> {routingModalState.decision.returnInfo?.returnDate || '-'}</p>
+                </div>
+              ) : null}
+
+              {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'cancelled_replaced' ? (
+                <div className="mt-3 rounded-md border border-border bg-surface-2/80 px-3 py-2 text-sm text-text">
+                  <p><strong>NF substituta:</strong> {routingModalState.decision.replacementInvoiceNumber}</p>
+                  <p className="mt-1 text-xs text-muted">Use a NF nova para continuar a roteirizacao sem sair desta tela.</p>
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'cancelled_replaced' ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e]"
+                    onClick={handleUseReplacementInvoice}
+                  >
+                    Usar NF substituta
+                  </button>
+                ) : null}
+
+                {routingModalState.decision.outcome === 'assignment_conflict' ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                    onClick={handleResolveAssignmentConflict}
+                    disabled={isResolvingNoteConflict}
+                  >
+                    {isResolvingNoteConflict ? 'Removendo atribuicao...' : 'Remover da rota atual e adicionar nesta'}
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
+                  onClick={closeRoutingModal}
+                  disabled={isResolvingNoteConflict}
+                >
+                  Fechar
                 </button>
               </div>
             </div>

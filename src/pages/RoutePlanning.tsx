@@ -221,6 +221,21 @@ function calculateTripNotesWeight(notes: ITripNote[]) {
   return notes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
 }
 
+function buildTripNotesTxt(notes: ITripNote[]) {
+  return sortTripNotesByOrder(Array.isArray(notes) ? notes : [])
+    .map((note) => String(note?.invoice_number || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildTripNotesTxtFileName(options: { tripId?: number | null; tripDate?: string | null; runNumber?: number | null }) {
+  const normalizedDate = String(options.tripDate || '').trim();
+  const safeDate = normalizedDate ? toISODate(normalizedDate).replace(/[^\d-]/g, '') : 'sem-data';
+  const safeRunNumber = Number(options.runNumber || 1) || 1;
+  const safeTripId = Number(options.tripId || 0) > 0 ? `rota-${options.tripId}` : 'rota';
+  return `${safeTripId}-${safeDate}-saida-${safeRunNumber}-nfs.txt`;
+}
+
 function RoutePlanning() {
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [cars, setCars] = useState<ICar[]>([]);
@@ -1256,6 +1271,42 @@ function RoutePlanning() {
     setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
   };
 
+  const downloadTripNotesTxt = useCallback((options: {
+    notes: ITripNote[];
+    tripId?: number | null;
+    tripDate?: string | null;
+    runNumber?: number | null;
+  }) => {
+    const txtContent = buildTripNotesTxt(options.notes);
+    if (!txtContent) {
+      alert('Esta rota nao possui NFs para exportar.');
+      return;
+    }
+
+    const blob = new Blob([`${txtContent}\n`], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = buildTripNotesTxtFileName({
+      tripId: options.tripId,
+      tripDate: options.tripDate,
+      runNumber: options.runNumber,
+    });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  }, []);
+
+  const exportTripNotesTxt = useCallback((trip: ITrip) => {
+    downloadTripNotesTxt({
+      notes: trip.TripNotes || [],
+      tripId: trip.id,
+      tripDate: trip.date,
+      runNumber: trip.run_number || 1,
+    });
+  }, [downloadTripNotesTxt]);
+
   const moveNoteUp = (note: ITripNote) => {
     const reorderedNotes = reorderTripNotes(addedNotes, note, note.order - 1);
     if (reorderedNotes === null) {
@@ -1352,7 +1403,7 @@ function RoutePlanning() {
         danfes: sortedNotes.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
       });
 
-      await axios.post(`${API_URL}/trips/create`, {
+      const createdTripResponse = await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
         date: todayApiDate,
@@ -1363,9 +1414,18 @@ function RoutePlanning() {
         tripNotes: sortedNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
+      const createdTrip = createdTripResponse?.data;
+
       if (isUpdating && tripToUpdate) {
         await axios.delete(`${API_URL}/trips/delete/${tripToUpdate.id}`, authConfig);
       }
+
+      downloadTripNotesTxt({
+        notes: sortedNotes,
+        tripId: createdTrip?.id ?? null,
+        tripDate: createdTrip?.date || todayApiDate,
+        runNumber: createdTrip?.run_number ?? tripToUpdate?.run_number ?? 1,
+      });
 
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
       setSelectedDriver('null');
@@ -1509,7 +1569,7 @@ function RoutePlanning() {
 
       const totalWeight = editNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
 
-      await axios.post(`${API_URL}/trips/create`, {
+      const recreatedTripResponse = await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
         date: editTrip.date,
@@ -1520,7 +1580,16 @@ function RoutePlanning() {
         tripNotes: editNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
+      const recreatedTrip = recreatedTripResponse?.data;
+
       await axios.delete(`${API_URL}/trips/delete/${editTrip.id}`, authConfig);
+
+      downloadTripNotesTxt({
+        notes: editNotes,
+        tripId: recreatedTrip?.id ?? null,
+        tripDate: recreatedTrip?.date || editTrip.date,
+        runNumber: recreatedTrip?.run_number ?? editTrip.run_number ?? 1,
+      });
 
       alert('Rota atualizada com sucesso.');
       setEditTrip(null);
@@ -2025,6 +2094,7 @@ function RoutePlanning() {
                             onClick={() => startEditModeFromTrip(trip)}
                             className="rounded-md"
                           />
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => exportTripNotesTxt(trip)}>Baixar TXT</button>
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
                         </div>
@@ -2255,7 +2325,10 @@ function RoutePlanning() {
             <div className="w-full max-w-[760px] rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold text-text">Detalhes da Rota #{detailsTrip.run_number || 1}</h3>
-                <button type="button" onClick={() => setDetailsTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => exportTripNotesTxt(detailsTrip)} className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text">Baixar TXT</button>
+                  <button type="button" onClick={() => setDetailsTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
+                </div>
               </div>
               <p className="text-sm text-muted">Motorista: {detailsTrip.Driver.name} | Veículo: {detailsTrip.Car.license_plate} | Data: {formatDateBR(detailsTrip.date)}</p>
               <ul className="scrollbar-ui mt-3 max-h-[340px] space-y-1 overflow-y-auto pr-1">

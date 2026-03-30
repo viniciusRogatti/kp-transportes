@@ -720,7 +720,7 @@ function RoutePlanning() {
       next.set('tab', resolved);
       setSearchParams(next, { replace: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -755,7 +755,7 @@ function RoutePlanning() {
 
     fetchToken();
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1599,7 +1599,7 @@ function RoutePlanning() {
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'routing'
                   ? 'border-border border-b-transparent bg-card text-text shadow-soft'
                   : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-                }`}
+                  }`}
               >
                 Roteirização
               </button>
@@ -1609,7 +1609,7 @@ function RoutePlanning() {
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'trips'
                   ? 'border-border border-b-transparent bg-card text-text shadow-soft'
                   : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-                }`}
+                  }`}
               >
                 Trips
               </button>
@@ -1641,401 +1641,400 @@ function RoutePlanning() {
             ) : null}
           </div>
 
-        {activeTab === 'routing' ? (
-          <section className="w-full min-h-0 flex-1 rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
-            <div className="flex h-full min-h-0 flex-col">
-              {isUpdating && tripToUpdate ? (
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700/60 bg-sky-950/30 px-2 py-1.5 text-xs text-sky-200">
-                  <span>
-                    Modo edição: rota #{tripToUpdate.id} | Motorista {tripToUpdate.Driver.name} | Placa {tripToUpdate.Car.license_plate}
-                  </span>
-                  <div className="flex gap-2">
+          {activeTab === 'routing' ? (
+            <section className="flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+              <div className="flex min-h-0 flex-1 flex-col">
+                {isUpdating && tripToUpdate ? (
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700/60 bg-sky-950/30 px-2 py-1.5 text-xs text-sky-200">
+                    <span>
+                      Modo edição: rota #{tripToUpdate.id} | Motorista {tripToUpdate.Driver.name} | Placa {tripToUpdate.Car.license_plate}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded border border-sky-700/65 bg-sky-900/25 px-2 py-1 text-sky-100"
+                        onClick={() => setIsSwapModalOpen(true)}
+                      >
+                        Trocar com rota...
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded border border-border bg-surface px-2 py-1 text-text"
+                        onClick={exitEditMode}
+                      >
+                        Sair do modo edição
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className={`overflow-hidden transition-all duration-300 ${showAssignmentFields ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                  <ContainerForm className="w-full p-0">
+                    <FormColumns className="grid-cols-1 gap-2">
+                      <FormColumn className="gap-1">
+                        <BoxDriverVehicle className="grid w-full grid-cols-1 gap-2 md:grid-cols-2">
+                          <FieldGroup>
+                            <label>Motorista:</label>
+                            <input
+                              list="driver-suggestions"
+                              value={driverInput}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setDriverInput(value);
+                                commitDriverInput(value, false);
+                              }}
+                              onBlur={(event) => {
+                                commitDriverInput(event.target.value, true);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  commitDriverInput((event.target as HTMLInputElement).value, true);
+                                }
+                                if (event.key === 'Tab') {
+                                  commitDriverInput((event.target as HTMLInputElement).value, true);
+                                  if (!event.shiftKey) {
+                                    event.preventDefault();
+                                    window.requestAnimationFrame(() => {
+                                      carInputRef.current?.focus();
+                                    });
+                                  }
+                                }
+                              }}
+                              placeholder="Digite nome do motorista"
+                            />
+                            <datalist id="driver-suggestions">
+                              {driverOptions.map((option) => (
+                                <option key={option.id} value={option.value} label={option.label} />
+                              ))}
+                            </datalist>
+                          </FieldGroup>
+                          <FieldGroup>
+                            <label>Veículo:</label>
+                            <input
+                              ref={carInputRef}
+                              list="car-suggestions"
+                              value={carInput}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setCarInput(value);
+                                commitCarInput(value, false);
+                              }}
+                              onBlur={(event) => {
+                                commitCarInput(event.target.value, true);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  commitCarInput((event.target as HTMLInputElement).value, true);
+                                }
+                                if (event.key === 'Tab') {
+                                  const committed = commitCarInput((event.target as HTMLInputElement).value, true);
+                                  const hasDriverSelected = selectedDriver !== 'null';
+                                  const hasCarSelected = selectedCar !== 'null' || committed;
+                                  if (!event.shiftKey && hasDriverSelected && hasCarSelected) {
+                                    event.preventDefault();
+                                    window.requestAnimationFrame(() => {
+                                      noteLookupRef.current?.focus();
+                                    });
+                                  }
+                                }
+                              }}
+                              placeholder="Digite placa ou veículo"
+                            />
+                            <datalist id="car-suggestions">
+                              {carOptions.map((option) => (
+                                <option key={option.id} value={option.value} label={option.label} />
+                              ))}
+                            </datalist>
+                          </FieldGroup>
+                        </BoxDriverVehicle>
+                      </FormColumn>
+                    </FormColumns>
+                  </ContainerForm>
+                </div>
+
+                {showAssignmentFields && selectedDriver !== 'null' && selectedCar !== 'null' ? (
+                  <div className="mb-2 mt-1 flex justify-end">
                     <button
                       type="button"
-                      className="rounded border border-sky-700/65 bg-sky-900/25 px-2 py-1 text-sky-100"
-                      onClick={() => setIsSwapModalOpen(true)}
+                      onClick={() => setShowAssignmentFields(false)}
+                      className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text"
                     >
-                      Trocar com rota...
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded border border-border bg-surface px-2 py-1 text-text"
-                      onClick={exitEditMode}
-                    >
-                      Sair do modo edição
+                      Ocultar seleção <ChevronUp className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              <div className={`overflow-hidden transition-all duration-300 ${showAssignmentFields ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                <ContainerForm className="w-full p-0">
-                  <FormColumns className="grid-cols-1 gap-2">
-                    <FormColumn className="gap-1">
-                      <BoxDriverVehicle className="grid w-full grid-cols-1 gap-2 md:grid-cols-2">
-                        <FieldGroup>
-                          <label>Motorista:</label>
-                          <input
-                            list="driver-suggestions"
-                            value={driverInput}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setDriverInput(value);
-                              commitDriverInput(value, false);
-                            }}
-                            onBlur={(event) => {
-                              commitDriverInput(event.target.value, true);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                event.preventDefault();
-                                commitDriverInput((event.target as HTMLInputElement).value, true);
-                              }
-                              if (event.key === 'Tab') {
-                                commitDriverInput((event.target as HTMLInputElement).value, true);
-                                if (!event.shiftKey) {
-                                  event.preventDefault();
-                                  window.requestAnimationFrame(() => {
-                                    carInputRef.current?.focus();
-                                  });
-                                }
-                              }
-                            }}
-                            placeholder="Digite nome do motorista"
-                          />
-                          <datalist id="driver-suggestions">
-                            {driverOptions.map((option) => (
-                              <option key={option.id} value={option.value} label={option.label} />
-                            ))}
-                          </datalist>
-                        </FieldGroup>
-                        <FieldGroup>
-                          <label>Veículo:</label>
-                          <input
-                            ref={carInputRef}
-                            list="car-suggestions"
-                            value={carInput}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setCarInput(value);
-                              commitCarInput(value, false);
-                            }}
-                            onBlur={(event) => {
-                              commitCarInput(event.target.value, true);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') {
-                                event.preventDefault();
-                                commitCarInput((event.target as HTMLInputElement).value, true);
-                              }
-                              if (event.key === 'Tab') {
-                                const committed = commitCarInput((event.target as HTMLInputElement).value, true);
-                                const hasDriverSelected = selectedDriver !== 'null';
-                                const hasCarSelected = selectedCar !== 'null' || committed;
-                                if (!event.shiftKey && hasDriverSelected && hasCarSelected) {
-                                  event.preventDefault();
-                                  window.requestAnimationFrame(() => {
-                                    noteLookupRef.current?.focus();
-                                  });
-                                }
-                              }
-                            }}
-                            placeholder="Digite placa ou veículo"
-                          />
-                          <datalist id="car-suggestions">
-                            {carOptions.map((option) => (
-                              <option key={option.id} value={option.value} label={option.label} />
-                            ))}
-                          </datalist>
-                        </FieldGroup>
-                      </BoxDriverVehicle>
-                    </FormColumn>
-                  </FormColumns>
-                </ContainerForm>
-              </div>
+                {!showAssignmentFields && (selectedDriver !== 'null' || selectedCar !== 'null') ? (
+                  <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2/60 px-2 py-1.5 text-xs">
+                    <span className="text-muted">
+                      <strong className="text-text">Motorista:</strong> {selectedDriverName || '-'} | <strong className="text-text">Veículo:</strong> {selectedVehicleLabel || '-'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAssignmentFields(true)}
+                      className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text"
+                    >
+                      Editar <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : null}
 
-              {showAssignmentFields && selectedDriver !== 'null' && selectedCar !== 'null' ? (
-                <div className="mb-2 mt-1 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setShowAssignmentFields(false)}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text"
-                  >
-                    Ocultar seleção <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : null}
+                {assignmentWarning ? (
+                  <div className="mb-2 w-full rounded-md border border-rose-700/65 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+                    {assignmentWarning}
+                  </div>
+                ) : null}
 
-              {!showAssignmentFields && (selectedDriver !== 'null' || selectedCar !== 'null') ? (
-                <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2/60 px-2 py-1.5 text-xs">
-                  <span className="text-muted">
-                    <strong className="text-text">Motorista:</strong> {selectedDriverName || '-'} | <strong className="text-text">Veículo:</strong> {selectedVehicleLabel || '-'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAssignmentFields(true)}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text"
-                  >
-                    Editar <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : null}
+                {hasLockedNotesInRoutingEdit ? (
+                  <div className="mb-2 w-full rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                    Esta rota possui notas em andamento ou finalizadas. Elas aparecem para consulta, mas a atualizacao por recriacao fica bloqueada para preservar o historico operacional.
+                  </div>
+                ) : null}
 
-              {assignmentWarning ? (
-                <div className="mb-2 w-full rounded-md border border-rose-700/65 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
-                  {assignmentWarning}
-                </div>
-              ) : null}
-
-              {hasLockedNotesInRoutingEdit ? (
-                <div className="mb-2 w-full rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
-                  Esta rota possui notas em andamento ou finalizadas. Elas aparecem para consulta, mas a atualizacao por recriacao fica bloqueada para preservar o historico operacional.
-                </div>
-              ) : null}
-
-              <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
-                <BoxSelectDanfe>
-                  <input
-                    type="text"
-                    ref={noteLookupRef}
-                    onKeyDown={handleEnterPress}
-                    placeholder="Digite NF ou código de barras"
-                    value={noteLookup}
-                    onChange={(event) => setNoteLookup(event.target.value)}
+                <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <BoxSelectDanfe>
+                    <input
+                      type="text"
+                      ref={noteLookupRef}
+                      onKeyDown={handleEnterPress}
+                      placeholder="Digite NF ou código de barras"
+                      value={noteLookup}
+                      onChange={(event) => setNoteLookup(event.target.value)}
+                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
+                    />
+                  </BoxSelectDanfe>
+                  <ActionButton
+                    $tone="secondary"
+                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                    onClick={handleAddNote}
                     disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
-                  />
-                </BoxSelectDanfe>
-                <ActionButton
-                  $tone="secondary"
-                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
-                  onClick={handleAddNote}
-                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
-                >
-                  Adicionar Nota
-                </ActionButton>
-                <ActionButton
-                  $tone="secondary"
-                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
-                  onClick={() => setIsBatchModalOpen(true)}
-                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                   >
-                  Adicionar lote
-                </ActionButton>
-              </div>
-
-              <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="flex flex-col gap-1">
-                  <select
-                    value={selectedRoutingCity}
-                    onChange={(event) => setSelectedRoutingCity(event.target.value)}
-                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !availableRoutingCityOptions.length}
-                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    Adicionar Nota
+                  </ActionButton>
+                  <ActionButton
+                    $tone="secondary"
+                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                    onClick={() => setIsBatchModalOpen(true)}
+                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                   >
-                    <option value="">
-                      {isRoutingPoolLoading
-                        ? 'Carregando cidades...'
-                        : availableRoutingCityOptions.length
-                          ? 'Selecione uma cidade para adicionar todas as notas'
-                          : 'Nenhuma cidade pendente disponível'}
-                    </option>
-                    {availableRoutingCityOptions.map((option) => (
-                      <option key={option.city} value={option.city}>
-                        {`${option.city} • ${option.noteCount} nota(s) • ${option.totalWeight.toFixed(2)} Kg`}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted">
-                    {isRoutingPoolLoading
-                      ? 'Atualizando cidades com notas ainda sem motorista...'
-                      : `${availableRoutingCityOptions.length} cidade(s) com ${availableRoutingCityNoteCount} nota(s) do dia ainda sem motorista para esta data.`}
-                  </p>
+                    Adicionar lote
+                  </ActionButton>
                 </div>
-                <ActionButton
-                  $tone="secondary"
-                  className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
-                  onClick={handleAddCityNotes}
-                  disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !selectedRoutingCity}
-                >
-                  Adicionar cidade
-                </ActionButton>
-              </div>
 
-              <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
-                <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui h-full overflow-y-auto p-2">
-                  <ul className="space-y-2">
-                    {sortedNotes.map((note) => {
-                      const orderInputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);
-                      const noteIsLocked = isMutableTripNoteStatus(note.status) === false;
-                      const retainedContexts = getRetainedContextsForNote(note, retainedByCustomerId)
-                        .filter((row) => String(row.invoice_number) !== String(note.invoice_number));
+                <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="flex flex-col gap-1">
+                    <select
+                      value={selectedRoutingCity}
+                      onChange={(event) => setSelectedRoutingCity(event.target.value)}
+                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !availableRoutingCityOptions.length}
+                      className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">
+                        {isRoutingPoolLoading
+                          ? 'Carregando cidades...'
+                          : availableRoutingCityOptions.length
+                            ? 'Selecione uma cidade para adicionar todas as notas'
+                            : 'Nenhuma cidade pendente disponível'}
+                      </option>
+                      {availableRoutingCityOptions.map((option) => (
+                        <option key={option.city} value={option.city}>
+                          {`${option.city} • ${option.noteCount} nota(s) • ${option.totalWeight.toFixed(2)} Kg`}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted">
+                      {isRoutingPoolLoading
+                        ? 'Atualizando cidades com notas ainda sem motorista...'
+                        : `${availableRoutingCityOptions.length} cidade(s) com ${availableRoutingCityNoteCount} nota(s) do dia ainda sem motorista para esta data.`}
+                    </p>
+                  </div>
+                  <ActionButton
+                    $tone="secondary"
+                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                    onClick={handleAddCityNotes}
+                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !selectedRoutingCity}
+                  >
+                    Adicionar cidade
+                  </ActionButton>
+                </div>
 
-                      return (
-                        <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-3 py-3 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
-                          <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <div className="shrink-0">
-                                <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Ordem</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={sortedNotes.length}
-                                  inputMode="numeric"
-                                  value={orderInputValue}
-                                  onChange={(event) => handleManualOrderInputChange(note, event.target.value)}
-                                  onBlur={() => commitManualOrderChange(note)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      commitManualOrderChange(note);
-                                    }
-                                  }}
-                                  onFocus={(event) => event.currentTarget.select()}
-                                  disabled={noteIsLocked}
-                                  aria-label={`Editar ordem da NF ${note.invoice_number}`}
-                                  className="h-10 w-16 rounded-md border border-accent/35 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
-                                />
-                              </div>
+                <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
+                  <div className="flex h-full min-h-0 flex-col">
+                    <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1.5 md:p-2">
+                      <ul className="space-y-1.5">
+                        {sortedNotes.map((note) => {
+                          const orderInputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);
+                          const noteIsLocked = isMutableTripNoteStatus(note.status) === false;
+                          const retainedContexts = getRetainedContextsForNote(note, retainedByCustomerId)
+                            .filter((row) => String(row.invoice_number) !== String(note.invoice_number));
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-semibold text-text">NF {note.invoice_number}</p>
-                                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${noteIsLocked ? 'border-amber-700/65 bg-amber-950/30 text-amber-100' : 'border-border bg-surface text-muted'}`}>
-                                    {getTripNoteStatusLabel(note.status)}
-                                  </span>
-                                  {retainedContexts.length ? (
-                                    <span className="inline-flex rounded-full border border-amber-700/65 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-100">
-                                      {`${retainedContexts.length} canhoto(s) retido(s) vinculado(s)`}
+                          return (
+                            <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-2.5 py-2 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
+                              <div className="flex flex-col gap-2 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-3">
+                                <div className="shrink-0">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={sortedNotes.length}
+                                    inputMode="numeric"
+                                    value={orderInputValue}
+                                    onChange={(event) => handleManualOrderInputChange(note, event.target.value)}
+                                    onBlur={() => commitManualOrderChange(note)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault();
+                                        commitManualOrderChange(note);
+                                      }
+                                    }}
+                                    onFocus={(event) => event.currentTarget.select()}
+                                    disabled={noteIsLocked}
+                                    aria-label={`Editar ordem da NF ${note.invoice_number}`}
+                                    className="h-9 w-14 rounded-md border border-accent/35 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
+                                  />
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <p className="text-sm font-semibold text-text">NF {note.invoice_number}</p>
+                                    <p className="mt-0.5 break-words text-sm leading-tight text-text md:truncate">{note.customer_name || '-'}</p>
+
+                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${noteIsLocked ? 'border-amber-700/65 bg-amber-950/30 text-amber-100' : 'border-border bg-surface text-muted'}`}>
+                                      {getTripNoteStatusLabel(note.status)}
                                     </span>
+                                    {retainedContexts.length ? (
+                                      <span className="inline-flex rounded-full border border-amber-700/65 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-100">
+                                        {`${retainedContexts.length} canhoto(s) retido(s) vinculado(s)`}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-muted">
+                                    <span>{note.city}</span>
+                                    <span>{note.gross_weight} Kg</span>
+                                  </div>
+                                  {retainedContexts.length ? (
+                                    <div className="mt-1.5 rounded-md border border-amber-700/65 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
+                                      <p className="font-semibold uppercase tracking-[0.08em]">Canhoto retido do cliente</p>
+                                      <div className="mt-1 space-y-0.5">
+                                        {retainedContexts.map((row) => (
+                                          <p key={`retained-context-${note.invoice_number}-${row.invoice_number}`}>
+                                            {`NF ${row.invoice_number} | ultima rota: ${row.trip_id || '-'} | pendencia desde ${row.invoice_date || '-'}`}
+                                          </p>
+                                        ))}
+                                      </div>
+                                    </div>
                                   ) : null}
                                 </div>
-                                <p className="mt-1 break-words text-sm font-semibold leading-tight text-text md:truncate">{note.customer_name || '-'}</p>
-                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                                  <span>{note.city}</span>
-                                  <span>{note.gross_weight} Kg</span>
+
+                                <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-2 md:self-center md:border-t-0 md:pt-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveNoteUp(note)}
+                                    disabled={canReorderTripNote(sortedNotes, note, 'up') === false}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
+                                    aria-label={`Subir NF ${note.invoice_number}`}
+                                  >
+                                    <FaArrowUpLong />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveNoteDown(note)}
+                                    disabled={canReorderTripNote(sortedNotes, note, 'down') === false}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
+                                    aria-label={`Descer NF ${note.invoice_number}`}
+                                  >
+                                    <FaArrowDownLong />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeNoteFromList(note)}
+                                    disabled={noteIsLocked}
+                                    className="rounded border border-rose-700/70 bg-rose-950/30 px-2.5 py-1.5 text-[11px] text-rose-200 disabled:opacity-45"
+                                  >
+                                    Remover
+                                  </button>
                                 </div>
-                                {retainedContexts.length ? (
-                                  <div className="mt-2 rounded-md border border-amber-700/65 bg-amber-950/25 px-2.5 py-2 text-xs text-amber-100">
-                                    <p className="font-semibold uppercase tracking-[0.08em]">Canhoto retido do cliente</p>
-                                    <div className="mt-1 space-y-1">
-                                      {retainedContexts.map((row) => (
-                                        <p key={`retained-context-${note.invoice_number}-${row.invoice_number}`}>
-                                          {`NF ${row.invoice_number} | ultima rota: ${row.trip_id || '-'} | pendencia desde ${row.invoice_date || '-'}`}
-                                        </p>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : null}
                               </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-2 md:border-t-0 md:pt-0">
-                              <button
-                                type="button"
-                                onClick={() => moveNoteUp(note)}
-                                disabled={canReorderTripNote(sortedNotes, note, 'up') === false}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
-                                aria-label={`Subir NF ${note.invoice_number}`}
-                              >
-                                <FaArrowUpLong />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveNoteDown(note)}
-                                disabled={canReorderTripNote(sortedNotes, note, 'down') === false}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
-                                aria-label={`Descer NF ${note.invoice_number}`}
-                              >
-                                <FaArrowDownLong />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeNoteFromList(note)}
-                                disabled={noteIsLocked}
-                                className="rounded border border-rose-700/70 bg-rose-950/30 px-3 py-2 text-xs text-rose-200 disabled:opacity-45"
-                              >
-                                Remover
-                              </button>
-                            </div>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-3 py-2 text-xs">
+                      <span className="text-muted"><strong className="text-text">{sortedNotes.length}</strong> notas adicionadas</span>
+                      <span className="text-muted">Peso total: <strong className="text-text">{countWeight.toFixed(2)}</strong></span>
+                      <span className="inline-flex items-center gap-1 text-muted"><Truck className="h-3.5 w-3.5" /> {sortedNotes.filter((note) => !isMutableTripNoteStatus(note.status)).length} bloqueada(s)</span>
+                    </div>
+                  </div>
+                  {showJumpToLatest ? (
+                    <button
+                      type="button"
+                      onClick={jumpToLatest}
+                      className="absolute bottom-12 right-3 inline-flex items-center gap-1 rounded-full border border-sky-700/70 bg-sky-950/80 px-3 py-1.5 text-xs text-sky-100 shadow-[var(--shadow-2)]"
+                    >
+                      Ir para a última <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
-                {showJumpToLatest ? (
-                  <button
-                    type="button"
-                    onClick={jumpToLatest}
-                    className="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full border border-sky-700/70 bg-sky-950/80 px-3 py-1.5 text-xs text-sky-100 shadow-[var(--shadow-2)]"
-                  >
-                    Ir para a última <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
+              </div>
+            </section>
+          ) : (
+            <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
+                <div className="flex items-center gap-2">
+                  <DatePicker
+                    selected={tripDateFilter}
+                    onChange={(date) => setTripDateFilter(date)}
+                    dateFormat="dd/MM/yyyy"
+                    locale={ptBR}
+                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
+                  />
+                  <IconButton
+                    icon={Search}
+                    label="Buscar rotas por data"
+                    onClick={handleTripSearch}
+                    size="lg"
+                    className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                  />
+                </div>
               </div>
 
-              <div className="mt-2 flex shrink-0 items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs">
-                <span className="text-muted"><strong className="text-text">{sortedNotes.length}</strong> notas adicionadas</span>
-                <span className="text-muted">Peso total: <strong className="text-text">{countWeight.toFixed(2)}</strong></span>
-                <span className="inline-flex items-center gap-1 text-muted"><Truck className="h-3.5 w-3.5" /> {sortedNotes.filter((note) => !isMutableTripNoteStatus(note.status)).length} bloqueada(s)</span>
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
-              <div className="flex items-center gap-2">
-                <DatePicker
-                  selected={tripDateFilter}
-                  onChange={(date) => setTripDateFilter(date)}
-                  dateFormat="dd/MM/yyyy"
-                  locale={ptBR}
-                  className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                />
-                <IconButton
-                  icon={Search}
-                  label="Buscar rotas por data"
-                  onClick={handleTripSearch}
-                  size="lg"
-                  className="h-10 w-10 min-h-10 min-w-10 rounded-md"
-                />
-              </div>
-            </div>
-
-            {isTripsLoading ? (
-              <div className="grid gap-2 md:grid-cols-2"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
-            ) : (
-              <div className="scrollbar-ui min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                {!sortedDisplayedTrips.length ? (
-                  <div className="rounded-md border border-border bg-surface-2/70 p-3 text-sm text-muted">Nenhuma rota encontrada para essa data.</div>
-                ) : (
-                  sortedDisplayedTrips.map((trip) => (
-                    <article key={trip.id} className="rounded-md border border-border bg-surface-2/70 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-text">{trip.Driver.name} | {trip.Car.license_plate}</p>
-                          <p className="text-xs text-muted">{formatDateBR(trip.date)} | saída #{trip.run_number || 1} | {trip.TripNotes.length} notas</p>
+              {isTripsLoading ? (
+                <div className="grid gap-2 md:grid-cols-2"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
+              ) : (
+                <div className="scrollbar-ui min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                  {!sortedDisplayedTrips.length ? (
+                    <div className="rounded-md border border-border bg-surface-2/70 p-3 text-sm text-muted">Nenhuma rota encontrada para essa data.</div>
+                  ) : (
+                    sortedDisplayedTrips.map((trip) => (
+                      <article key={trip.id} className="rounded-md border border-border bg-surface-2/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-text">{trip.Driver.name} | {trip.Car.license_plate}</p>
+                            <p className="text-xs text-muted">{formatDateBR(trip.date)} | saída #{trip.run_number || 1} | {trip.TripNotes.length} notas</p>
+                          </div>
+                          <span className="rounded-full border border-sky-700/60 bg-sky-950/30 px-2 py-1 text-xs text-sky-200">{isTripActive(trip) ? 'Ativa' : 'Finalizada'}</span>
                         </div>
-                        <span className="rounded-full border border-sky-700/60 bg-sky-950/30 px-2 py-1 text-xs text-sky-200">{isTripActive(trip) ? 'Ativa' : 'Finalizada'}</span>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
-                        <IconButton
-                          icon={Pencil}
-                          label="Editar rota"
-                          onClick={() => startEditModeFromTrip(trip)}
-                          className="rounded-md"
-                        />
-                        <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
-                        <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
-                      </div>
-                    </article>
-                  ))
-                )}
-              </div>
-            )}
-          </section>
-        )}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
+                          <IconButton
+                            icon={Pencil}
+                            label="Editar rota"
+                            onClick={() => startEditModeFromTrip(trip)}
+                            className="rounded-md"
+                          />
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              )}
+            </section>
+          )}
         </div>
 
         {showPopup && (

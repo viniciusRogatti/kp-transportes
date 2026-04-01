@@ -1403,7 +1403,7 @@ function RoutePlanning() {
         danfes: sortedNotes.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
       });
 
-      const createdTripResponse = await axios.post(`${API_URL}/trips/create`, {
+      await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
         date: todayApiDate,
@@ -1414,18 +1414,9 @@ function RoutePlanning() {
         tripNotes: sortedNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
-      const createdTrip = createdTripResponse?.data;
-
       if (isUpdating && tripToUpdate) {
         await axios.delete(`${API_URL}/trips/delete/${tripToUpdate.id}`, authConfig);
       }
-
-      downloadTripNotesTxt({
-        notes: sortedNotes,
-        tripId: createdTrip?.id ?? null,
-        tripDate: createdTrip?.date || todayApiDate,
-        runNumber: createdTrip?.run_number ?? tripToUpdate?.run_number ?? 1,
-      });
 
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
       setSelectedDriver('null');
@@ -1569,7 +1560,7 @@ function RoutePlanning() {
 
       const totalWeight = editNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
 
-      const recreatedTripResponse = await axios.post(`${API_URL}/trips/create`, {
+      await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
         date: editTrip.date,
@@ -1580,16 +1571,7 @@ function RoutePlanning() {
         tripNotes: editNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
       }, authConfig);
 
-      const recreatedTrip = recreatedTripResponse?.data;
-
       await axios.delete(`${API_URL}/trips/delete/${editTrip.id}`, authConfig);
-
-      downloadTripNotesTxt({
-        notes: editNotes,
-        tripId: recreatedTrip?.id ?? null,
-        tripDate: recreatedTrip?.date || editTrip.date,
-        runNumber: recreatedTrip?.run_number ?? editTrip.run_number ?? 1,
-      });
 
       alert('Rota atualizada com sucesso.');
       setEditTrip(null);

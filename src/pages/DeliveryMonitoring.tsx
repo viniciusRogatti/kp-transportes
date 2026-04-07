@@ -170,7 +170,7 @@ type AddressDiagnosticsResponse = {
   };
 };
 
-type DriverStopVisual = 'pending' | 'on_the_way' | 'on_site' | 'completed' | 'retained' | 'returned';
+type DriverStopVisual = 'pending' | 'assigned' | 'on_the_way' | 'on_site' | 'completed' | 'retained' | 'returned' | 'redelivery';
 type SelectedDriverStop = {
   tripId: number;
   sequence: number;
@@ -203,7 +203,8 @@ const stagePriority = (stage: DeliveryStage) => {
   return STAGE_PRIORITY[stage] ?? 99;
 };
 
-const RETURNED_STOP_STATUSES = new Set(['returned', 'redelivery', 'cancelled']);
+const RETURNED_STOP_STATUSES = new Set(['returned', 'cancelled']);
+const REDELIVERY_STOP_STATUSES = new Set(['redelivery']);
 const RETAINED_STOP_STATUSES = new Set(['retained']);
 const COMPLETED_STOP_STATUSES = new Set(['delivered', 'completed']);
 
@@ -214,6 +215,10 @@ const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
 
   if (RETURNED_STOP_STATUSES.has(stopStatus) || RETURNED_STOP_STATUSES.has(danfeStatus)) {
     return 'returned';
+  }
+
+  if (REDELIVERY_STOP_STATUSES.has(stopStatus) || REDELIVERY_STOP_STATUSES.has(danfeStatus)) {
+    return 'redelivery';
   }
 
   if (RETAINED_STOP_STATUSES.has(stopStatus) || RETAINED_STOP_STATUSES.has(danfeStatus)) {
@@ -236,6 +241,10 @@ const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
     return 'on_the_way';
   }
 
+  if (stopStatus === 'assigned' || danfeStatus === 'assigned' || row.stage === 'assigned') {
+    return 'assigned';
+  }
+
   return 'pending';
 };
 
@@ -244,6 +253,10 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
 
   if (RETURNED_STOP_STATUSES.has(normalized)) {
     return 'returned';
+  }
+
+  if (REDELIVERY_STOP_STATUSES.has(normalized)) {
+    return 'redelivery';
   }
 
   if (RETAINED_STOP_STATUSES.has(normalized)) {
@@ -262,23 +275,31 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
     return 'on_the_way';
   }
 
+  if (normalized === 'assigned') {
+    return 'assigned';
+  }
+
   return 'pending';
 };
 
 const getDriverStopLabel = (visual: DriverStopVisual) => {
   if (visual === 'completed') return 'entrega concluida';
+  if (visual === 'assigned') return 'entrega atribuida';
   if (visual === 'retained') return 'canhoto retido';
   if (visual === 'on_the_way') return 'motorista a caminho';
   if (visual === 'on_site') return 'motorista no local';
   if (visual === 'returned') return 'entrega devolvida';
+  if (visual === 'redelivery') return 'reentrega';
   return 'entrega pendente';
 };
 
 const getDriverStopTone = (visual: DriverStopVisual): SemanticTone => {
   if (visual === 'completed') return 'success';
   if (visual === 'retained') return 'warning';
+  if (visual === 'redelivery') return 'info';
   if (visual === 'on_the_way' || visual === 'on_site') return 'info';
   if (visual === 'returned') return 'danger';
+  if (visual === 'assigned') return 'neutral';
   return 'warning';
 };
 
@@ -288,10 +309,20 @@ const getDriverStopBadgeClassName = (visual: DriverStopVisual, isSelected = fals
 };
 
 const getDriverStopSegmentClassName = (visual: DriverStopVisual, isSelected = false) => {
+  const baseClassNameByVisual: Record<DriverStopVisual, string> = {
+    pending: 'border-amber-600 bg-amber-500 text-white',
+    assigned: 'border-border bg-surface text-text',
+    on_the_way: 'border-sky-700 bg-sky-600 text-white',
+    on_site: 'border-cyan-700 bg-cyan-600 text-white',
+    completed: 'border-emerald-700 bg-emerald-600 text-white',
+    retained: 'border-amber-700 bg-amber-500 text-white',
+    returned: 'border-red-700 bg-red-600 text-white',
+    redelivery: 'border-blue-700 bg-blue-600 text-white',
+  };
   const selectedState = isSelected
-    ? 'z-[1] shadow-[inset_0_0_0_2px_rgba(15,23,42,0.32)]'
+    ? 'z-[1] ring-2 ring-white/80 ring-offset-1 ring-offset-card shadow-[0_0_0_1px_rgba(15,23,42,0.22)]'
     : '';
-  return `${getSemanticToneClassName(getDriverStopTone(visual))} ${selectedState}`.trim();
+  return `${baseClassNameByVisual[visual]} ${selectedState}`.trim();
 };
 
 const getDriverRowClassName = (
@@ -690,18 +721,24 @@ function DeliveryMonitoring() {
     });
   }, [deliveries, statusFilter]);
 
-  const mapDeliveries = useMemo(
-    () => toGoogleDeliveryMapItems(filteredDeliveries),
-    [filteredDeliveries],
-  );
-  const mapDriverLocations = useMemo(
-    () => toGoogleDriverLocations(drivers),
-    [drivers],
-  );
+  const mapDeliveries = useMemo(() => {
+    const driverScopedDeliveries = selectedDriverId
+      ? filteredDeliveries.filter((row) => Number(row.driver_id || 0) === Number(selectedDriverId))
+      : filteredDeliveries;
+
+    return toGoogleDeliveryMapItems(driverScopedDeliveries);
+  }, [filteredDeliveries, selectedDriverId]);
+  const mapDriverLocations = useMemo(() => {
+    const driverScopedLocations = selectedDriverId
+      ? drivers.filter((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))
+      : drivers;
+
+    return toGoogleDriverLocations(driverScopedLocations);
+  }, [drivers, selectedDriverId]);
 
   const selectedDriverRoutes = useMemo(
-    () => toGoogleDeliveryRoutes(drivers, selectedDriverId, showRoutes),
-    [drivers, selectedDriverId, showRoutes],
+    () => toGoogleDeliveryRoutes(deliveries, selectedDriverId, showRoutes, mapInitialCenter),
+    [deliveries, mapInitialCenter, selectedDriverId, showRoutes],
   );
 
   const listRows = useMemo(() => {
@@ -1198,13 +1235,13 @@ function DeliveryMonitoring() {
                             }}
                             title={stopTitle}
                             aria-label={stopTitle}
-                            className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center px-0 text-[11px] font-semibold leading-none tabular-nums transition first:border-l-0 md:h-5 md:w-[22px] md:text-[10px] ${index > 0 ? 'border-l border-slate-500/30' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
+                            className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center border px-0 text-[11px] font-semibold leading-none tabular-nums transition hover:brightness-105 first:border-l md:h-5 md:w-[22px] md:text-[10px] ${index > 0 ? 'border-l-0' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
                             aria-pressed={selectedStopSequence === stop.sequence}
                           >
                             {stop.visual === 'completed' ? (
-                              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
                             ) : stop.visual === 'retained' ? (
-                              <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.5} />
+                              <AlertTriangle className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
                             ) : (
                               stop.sequence
                             )}
@@ -1311,7 +1348,13 @@ function DeliveryMonitoring() {
               routes={selectedDriverRoutes}
               selectedDriverId={selectedDriverId}
               selectedDeliveryId={selectedDeliveryInvoice}
-              onMarkerClick={setSelectedDeliveryInvoice}
+              onMarkerClick={(deliveryId) => {
+                setSelectedDeliveryInvoice(deliveryId);
+                const delivery = deliveries.find((row) => row.invoice_number === deliveryId) || null;
+                if (delivery?.driver_id) {
+                  setSelectedDriverId(Number(delivery.driver_id));
+                }
+              }}
               onMapBoundsChange={setMapViewport}
             />
 

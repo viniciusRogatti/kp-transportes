@@ -61,26 +61,26 @@ type GoogleDeliveriesMapProps = {
 const mapContainerStyle = { width: '100%', height: '100%' };
 const MAP_MIN_ZOOM = 4;
 const MAP_MAX_ZOOM = 20;
-const MAP_MARKER_ICON_SCALE = 0.42;
-const MAP_MARKER_ICON_MIN_SIZE = 13;
-const MAP_MARKER_PIN_MIN_SIZE = 22;
-const MAP_MARKER_ICON_STROKE_WIDTH = 1.5;
-const DRIVER_MARKER_ICON_SCALE = 0.46;
-const DRIVER_MARKER_PIN_MIN_SIZE = 30;
-const DRIVER_MARKER_ICON_MIN_SIZE = 15;
-const DRIVER_MARKER_ICON_STROKE_WIDTH = 1.65;
-const COMPANY_MARKER_ICON_SCALE = 0.42;
-const COMPANY_MARKER_PIN_MIN_SIZE = 26;
-const COMPANY_MARKER_ICON_MIN_SIZE = 14;
-const COMPANY_MARKER_ICON_STROKE_WIDTH = 1.5;
+const MAP_MARKER_ICON_SCALE = 0.38;
+const MAP_MARKER_ICON_MIN_SIZE = 11;
+const MAP_MARKER_PIN_MIN_SIZE = 18;
+const MAP_MARKER_ICON_STROKE_WIDTH = 1.4;
+const DRIVER_MARKER_ICON_SCALE = 0.4;
+const DRIVER_MARKER_PIN_MIN_SIZE = 24;
+const DRIVER_MARKER_ICON_MIN_SIZE = 12;
+const DRIVER_MARKER_ICON_STROKE_WIDTH = 1.5;
+const COMPANY_MARKER_ICON_SCALE = 0.38;
+const COMPANY_MARKER_PIN_MIN_SIZE = 22;
+const COMPANY_MARKER_ICON_MIN_SIZE = 12;
+const COMPANY_MARKER_ICON_STROKE_WIDTH = 1.4;
 const PIN_HEIGHT_RATIO = 1.35;
 
 const resolveMarkerSize = (zoom: number) => {
-  if (zoom <= 7) return 24;
-  if (zoom <= 10) return 26;
-  if (zoom <= 12) return 28;
-  if (zoom <= 14) return 32;
-  return 36;
+  if (zoom <= 7) return 18;
+  if (zoom <= 10) return 20;
+  if (zoom <= 12) return 22;
+  if (zoom <= 14) return 25;
+  return 28;
 };
 
 function GoogleDeliveriesMap({
@@ -299,16 +299,28 @@ function GoogleDeliveriesMap({
         onIdle={emitBoundsChange}
       >
         {routes.map((route) => (
-          <PolylineF
-            key={route.id}
-            path={route.points}
-            options={{
-              strokeColor: route.color,
-              strokeOpacity: 0.9,
-              strokeWeight: 4,
-              geodesic: false,
-            }}
-          />
+          route.segments.map((segment) => (
+            <PolylineF
+              key={segment.id}
+              path={segment.points}
+              options={{
+                strokeColor: route.color,
+                strokeOpacity: segment.completed ? 0.26 : 0.92,
+                strokeWeight: segment.completed ? 3 : 4,
+                geodesic: false,
+                icons: segment.completed ? [] : [{
+                  icon: {
+                    path: 'M 0,-1 0,1',
+                    strokeOpacity: 1,
+                    strokeWeight: 3,
+                    scale: 1,
+                  },
+                  offset: '0',
+                  repeat: '14px',
+                }],
+              }}
+            />
+          ))
         ))}
 
         {deliveries.map((delivery) => {

@@ -8,6 +8,8 @@ export type MonitoringDeliveryForMap = {
   stage: DeliveryStage;
   danfe_status?: string | null;
   stop_status?: string | null;
+  trip_id?: number | null;
+  sequence?: number | null;
   driver_id: number | null;
   driver_name: string | null;
   driver_color: string;
@@ -59,7 +61,11 @@ export type GoogleDeliveryMapItem = {
 export type GoogleDeliveryRoute = {
   id: string;
   color: string;
-  points: Array<{ lat: number; lng: number }>;
+  segments: Array<{
+    id: string;
+    points: Array<{ lat: number; lng: number }>;
+    completed: boolean;
+  }>;
 };
 
 export type GoogleDriverLocation = {
@@ -88,38 +94,56 @@ const isValidCoordinatePair = (latitude: unknown, longitude: unknown) => {
   return !(normalizedLatitude === 0 && normalizedLongitude === 0);
 };
 
-const areRoutePointsNear = (
-  left: { lat: number; lng: number } | null,
-  right: { lat: number; lng: number } | null,
-) => {
-  if (!left || !right) return false;
-  return Math.abs(left.lat - right.lat) < 0.00005 && Math.abs(left.lng - right.lng) < 0.00005;
+const COMPLETED_ROUTE_STATUSES = new Set(['delivered', 'completed']);
+const normalizeStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+const ROUTE_SEGMENT_SAMPLES = 10;
+
+type RoutePoint = {
+  lat: number;
+  lng: number;
+  completed: boolean;
 };
 
-const buildDriverRoutePoints = (driver: MonitoringDriverForMap) => {
-  const stopPoints = driver.highlighted_stops
-    .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
-    .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
-    .map((stop) => ({ lat: stop.latitude, lng: stop.longitude }));
+const interpolateCatmullRom = (
+  previous: RoutePoint,
+  start: RoutePoint,
+  end: RoutePoint,
+  next: RoutePoint,
+  t: number,
+) => {
+  const t2 = t * t;
+  const t3 = t2 * t;
 
-  const hasLiveLocation = isValidCoordinatePair(
-    driver.live_location?.latitude ?? null,
-    driver.live_location?.longitude ?? null,
-  );
-
-  if (!hasLiveLocation) return stopPoints;
-
-  const livePoint = {
-    lat: Number(driver.live_location?.latitude),
-    lng: Number(driver.live_location?.longitude),
+  return {
+    lat: 0.5 * (
+      (2 * start.lat)
+      + (-previous.lat + end.lat) * t
+      + ((2 * previous.lat) - (5 * start.lat) + (4 * end.lat) - next.lat) * t2
+      + (-previous.lat + (3 * start.lat) - (3 * end.lat) + next.lat) * t3
+    ),
+    lng: 0.5 * (
+      (2 * start.lng)
+      + (-previous.lng + end.lng) * t
+      + ((2 * previous.lng) - (5 * start.lng) + (4 * end.lng) - next.lng) * t2
+      + (-previous.lng + (3 * start.lng) - (3 * end.lng) + next.lng) * t3
+    ),
   };
+};
 
-  if (areRoutePointsNear(livePoint, stopPoints[0] || null)) {
-    return stopPoints;
-  }
+const buildSmoothedSegmentPoints = (routePoints: RoutePoint[], index: number) => {
+  const previous = routePoints[Math.max(0, index - 1)];
+  const start = routePoints[index];
+  const end = routePoints[index + 1];
+  const next = routePoints[Math.min(routePoints.length - 1, index + 2)];
 
-  // When the operator selects a driver, the route should start from the latest known driver position.
-  return [livePoint, ...stopPoints];
+  const points = Array.from({ length: ROUTE_SEGMENT_SAMPLES + 1 }, (_, sampleIndex) => (
+    interpolateCatmullRom(previous, start, end, next, sampleIndex / ROUTE_SEGMENT_SAMPLES)
+  ));
+
+  points[0] = { lat: start.lat, lng: start.lng };
+  points[points.length - 1] = { lat: end.lat, lng: end.lng };
+
+  return points;
 };
 
 export const hasDeliveryCoordinates = (row: MonitoringDeliveryForMap) => {
@@ -151,20 +175,58 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
 };
 
 export const toGoogleDeliveryRoutes = (
-  drivers: MonitoringDriverForMap[],
+  rows: MonitoringDeliveryForMap[],
   selectedDriverId: number | null,
   showRoutes: boolean,
+  companyLocation: { lat: number; lng: number },
 ): GoogleDeliveryRoute[] => {
   if (!selectedDriverId || !showRoutes) return [];
 
-  return drivers
-    .filter((driver) => Number(driver.driver_id) === Number(selectedDriverId))
-    .map((driver) => ({
-      id: `route-${driver.trip_id}`,
-      color: driver.color,
-      points: buildDriverRoutePoints(driver),
-    }))
-    .filter((route) => route.points.length >= 2);
+  const rowsByTrip = new Map<number, MonitoringDeliveryForMap[]>();
+
+  rows
+    .filter((row) => Number(row.driver_id || 0) === Number(selectedDriverId) && hasDeliveryCoordinates(row))
+    .forEach((row) => {
+      const tripId = Number(row.trip_id || 0);
+      if (tripId <= 0) return;
+      if (!rowsByTrip.has(tripId)) {
+        rowsByTrip.set(tripId, []);
+      }
+      rowsByTrip.get(tripId)?.push(row);
+    });
+
+  return Array.from(rowsByTrip.entries())
+    .map(([tripId, tripRows]) => {
+      const orderedStops = tripRows
+        .slice()
+        .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
+        .map((row) => ({
+          lat: Number(row.geolocation.latitude),
+          lng: Number(row.geolocation.longitude),
+          completed: COMPLETED_ROUTE_STATUSES.has(normalizeStatus(row.stop_status))
+            || COMPLETED_ROUTE_STATUSES.has(normalizeStatus(row.danfe_status))
+            || row.stage === 'completed',
+        }));
+
+      const routePoints = [
+        { lat: companyLocation.lat, lng: companyLocation.lng, completed: true },
+        ...orderedStops,
+        { lat: companyLocation.lat, lng: companyLocation.lng, completed: false },
+      ];
+
+      const segments = routePoints.slice(0, -1).map((point, index) => ({
+        id: `route-${tripId}-segment-${index}`,
+        points: buildSmoothedSegmentPoints(routePoints, index),
+        completed: routePoints[index + 1].completed,
+      }));
+
+      return {
+        id: `route-${tripId}`,
+        color: tripRows[0]?.driver_color || '#0f172a',
+        segments,
+      };
+    })
+    .filter((route) => route.segments.length > 0);
 };
 
 export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): GoogleDriverLocation[] => {

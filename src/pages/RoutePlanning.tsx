@@ -1964,7 +1964,7 @@ function RoutePlanning() {
   return (
     <ContainerRoutePlanning>
       <Header />
-      <Container className="h-[calc(100dvh-var(--header-height)-var(--space-2))] min-h-0 overflow-hidden pb-2 pt-[calc(var(--header-height)+var(--space-2))]">
+      <Container className="box-border h-[100dvh] min-h-[100dvh] overflow-hidden pb-0 pt-[calc(var(--header-height)+var(--space-2))]">
         <div className="flex h-full w-full min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
             <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">

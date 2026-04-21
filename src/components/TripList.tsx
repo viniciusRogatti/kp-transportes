@@ -11,6 +11,31 @@ interface TripListProps {
   setIsPrinting: (param: boolean) => void;
 }
 
+function groupProductsByCodeAndUnit(products: any[] = []) {
+  return products.reduce((accumulator: any[], product: any) => {
+    const code = String(product?.Product?.code || '').trim();
+    const unit = String(product?.type || product?.Product?.type || '').trim().toUpperCase();
+    const existingProduct = accumulator.find((item: any) => {
+      const existingCode = String(item?.Product?.code || '').trim();
+      const existingUnit = String(item?.type || item?.Product?.type || '').trim().toUpperCase();
+      return existingCode === code && existingUnit === unit;
+    });
+    const quantity = Number(product?.quantity || 0);
+
+    if (existingProduct) {
+      existingProduct.quantity += quantity;
+    } else {
+      accumulator.push({
+        ...product,
+        type: unit || product?.type || product?.Product?.type || '',
+        quantity,
+      });
+    }
+
+    return accumulator;
+  }, []);
+}
+
 function TripList({ trip, setIsPrinting }: TripListProps) {
 
   async function fetchDanfes(nf: string) {
@@ -37,16 +62,7 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
 
     const { allProducts } = await handleFetchData();
 
-    const groupedProducts = allProducts.reduce((accumulator: any, product) => {
-      const existingProduct = accumulator.find((p: any) => p.Product.code === product.Product.code);
-      const quantity = Number(product.quantity || 0);
-      if (existingProduct) {
-        existingProduct.quantity += quantity;
-      } else {
-        accumulator.push({ ...product, quantity });
-      }
-      return accumulator;
-    }, []);
+    const groupedProducts = groupProductsByCodeAndUnit(allProducts);
 
     const pdfBlob = await pdf(
       <ProductListPDF products={groupedProducts} driver={trip.Driver.name} />

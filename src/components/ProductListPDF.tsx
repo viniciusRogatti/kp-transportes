@@ -3,94 +3,259 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { IDanfe } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
 
-interface Product {
-  Product: {
-    code: string;
-    description: string;
-    type: string;
+interface ProductRow {
+  Product?: {
+    code?: string;
+    description?: string;
+    type?: string;
   };
+  code?: string;
+  description?: string;
+  type?: string;
   quantity: number;
 }
 
 interface ProductListPDFProps {
-  products?: Product[];
-  driver: String;
+  products?: ProductRow[];
+  driver: string;
+  vehiclePlate?: string;
+  tripId?: number | null;
+  tripDate?: string | null;
+  tripCreatedAt?: string | null;
+  totalWeight?: number | string | null;
+  noteCount?: number | null;
   danfes?: IDanfe[];
 }
 
 const styles = StyleSheet.create({
   page: {
-    flexDirection: 'column',
-    padding: 20,
+    paddingTop: 18,
+    paddingBottom: 18,
+    paddingHorizontal: 22,
+    fontSize: 8,
+    color: '#111827',
   },
-  listItem: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: -1,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000000',
-    paddingBottom: 5,
+    alignItems: 'flex-start',
+    marginBottom: 4,
   },
-  columnHeader: {
+  titleBlock: {
+    width: '70%',
+    paddingRight: 8,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 8,
+    color: '#4b5563',
+    marginBottom: 4,
+  },
+  topRightMeta: {
+    width: '30%',
+    alignItems: 'flex-end',
+  },
+  topRightText: {
+    fontSize: 8,
+    color: '#374151',
+    marginBottom: 2,
+  },
+  inlineInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    gap: 8,
+  },
+  inlineInfoText: {
     fontSize: 12,
     fontWeight: 'bold',
   },
-  columnValue: {
+  sectionTitle: {
     fontSize: 10,
-    padding: 5,
-  },
-  title: {
     fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 5,
+    marginBottom: 4,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#111827',
+    paddingVertical: 2,
+    marginBottom: 2,
+  },
+  row: {
+    flexDirection: 'row',
+    paddingVertical: 2,
+    minHeight: 14,
+  },
+  colCode: {
+    width: '8%',
+    paddingRight: 2,
+  },
+  colDescription: {
+    width: '74%',
+    paddingRight: 6,
+  },
+  colQty: {
+    width: '16%',
+    textAlign: 'right',
+  },
+  muted: {
+    color: '#6b7280',
+  },
+  deliveryBlock: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    padding: 7,
+    marginBottom: 8,
+  },
+  deliveryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  deliveryTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  deliveryMeta: {
+    fontSize: 8,
+    color: '#4b5563',
   },
 });
 
-const ProductListPDF: React.FC<ProductListPDFProps> = ({ products, driver, danfes }) => (
+const resolveEmissionDate = (tripCreatedAt?: string | null, tripDate?: string | null) => {
+  const source = String(tripCreatedAt || tripDate || '').trim();
+  if (!source) return '-';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(source)) return formatDateBR(source);
+
+  const parsed = new Date(source);
+  if (Number.isNaN(parsed.getTime())) return '-';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+};
+
+const formatDecimal = (value: number | string | null | undefined) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return '-';
+  return parsed.toFixed(2);
+};
+
+const normalizeProductRows = (products: ProductRow[] = []) => {
+  return products.map((product) => ({
+    code: String(product.Product?.code || product.code || '').trim() || '-',
+    description: String(product.Product?.description || product.description || '').trim() || 'Produto sem descricao',
+    type: String(product.type || product.Product?.type || '').trim().toUpperCase(),
+    quantity: Number(product.quantity || 0),
+  }));
+};
+
+const formatQuantityWithUnit = (value: number | string | null | undefined, unit?: string | null) => {
+  const formattedValue = formatDecimal(value);
+  const normalizedUnit = String(unit || '').trim().toUpperCase();
+  return normalizedUnit ? `${formattedValue} ${normalizedUnit}` : formattedValue;
+};
+
+const renderOperationalHeader = ({
+  driver,
+  vehiclePlate,
+  totalWeight,
+  noteCount,
+  tripDate,
+  tripCreatedAt,
+  tripId,
+}: ProductListPDFProps) => (
+  <>
+    <View style={styles.topBar}>
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>Romaneio de Produtos</Text>
+        <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
+      </View>
+
+      <View style={styles.topRightMeta}>
+        <Text style={styles.topRightText}>{`Data: ${resolveEmissionDate(tripCreatedAt, tripDate)}`}</Text>
+        <Text style={styles.topRightText}>{`Rota: ${tripId ? `#${tripId}` : '-'}`}</Text>
+      </View>
+    </View>
+
+    <View style={styles.inlineInfoRow}>
+      <Text style={styles.inlineInfoText}>{`Motorista: ${driver || '-'}`}</Text>
+      <Text style={styles.inlineInfoText}>{`Placa: ${vehiclePlate || '-'}`}</Text>
+      <Text style={styles.inlineInfoText}>{`Peso: ${formatDecimal(totalWeight)}`}</Text>
+      <Text style={styles.inlineInfoText}>{`Notas: ${noteCount ?? '-'}`}</Text>
+    </View>
+  </>
+);
+
+const renderProductsTable = (products: ProductRow[] = []) => {
+  const rows = normalizeProductRows(products);
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>Produtos carregados</Text>
+      <View style={styles.tableHeader}>
+        <Text style={styles.colCode}>Cod.</Text>
+        <Text style={styles.colDescription}>Descricao</Text>
+        <Text style={styles.colQty}>Qtd.</Text>
+      </View>
+
+      {rows.map((product, index) => (
+        <View key={`${product.code}-${index}`} style={styles.row}>
+          <Text style={styles.colCode}>{product.code}</Text>
+          <Text style={styles.colDescription}>{product.description}</Text>
+          <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type)}</Text>
+        </View>
+      ))}
+    </>
+  );
+};
+
+const renderDeliveryList = (danfes: IDanfe[] = []) => (
+  <>
+    <Text style={styles.sectionTitle}>Lista de entregas</Text>
+    {danfes.map((danfe, index) => (
+      <View key={`${danfe.invoice_number}-${index}`} style={styles.deliveryBlock}>
+        <View style={styles.deliveryHeader}>
+          <Text style={styles.deliveryTitle}>{`Entrega ${index + 1} | NF ${danfe.invoice_number}`}</Text>
+          <Text style={styles.deliveryMeta}>{formatDateBR(danfe.invoice_date)}</Text>
+        </View>
+        <Text>{danfe.Customer?.name_or_legal_entity || '-'}</Text>
+        <Text style={styles.muted}>{danfe.Customer?.city || 'Cidade nao informada'}</Text>
+        <View style={[styles.tableHeader, { marginTop: 5 }]}>
+          <Text style={styles.colCode}>Cod.</Text>
+          <Text style={styles.colDescription}>Descricao</Text>
+          <Text style={styles.colQty}>Qtd.</Text>
+        </View>
+        {(danfe.DanfeProducts || []).map((product, productIndex) => (
+          <View key={`${danfe.invoice_number}-${product.Product?.code || productIndex}`} style={styles.row}>
+            <Text style={styles.colCode}>{product.Product?.code || '-'}</Text>
+            <Text style={styles.colDescription}>{product.Product?.description || 'Produto sem descricao'}</Text>
+            <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type || product.Product?.type)}</Text>
+          </View>
+        ))}
+      </View>
+    ))}
+  </>
+);
+
+const ProductListPDF: React.FC<ProductListPDFProps> = (props) => (
   <Document>
     <Page size="A4" style={styles.page}>
-      {danfes && danfes.length > 0 ? (
-        danfes.map((danfe, index) => (
-          <View key={danfe.invoice_number}>
-            <Text style={styles.title}>{`${driver} Entrega nmr: ${index + 1}`}</Text>
-            <Text style={{ fontSize: 14, fontWeight: 'bold' }}>NF: {danfe.invoice_number}</Text>
-            <Text>{danfe.Customer.name_or_legal_entity}</Text>
-            <Text>{danfe.Customer.city}</Text>
-            <Text style={{ fontSize: 12 }}>{formatDateBR(danfe.invoice_date)}</Text>
-            <Text style={{ textAlign: 'center' }}>Lista de produtos</Text>
-            {danfe.DanfeProducts.map((product) => (
-              <View key={product.Product.code} style={styles.listItem}>
-                <Text style={styles.columnValue}>{product.Product.code}</Text>
-                <Text style={styles.columnValue}>{product.Product.description}</Text>
-                <Text style={styles.columnValue}>{product.quantity}</Text>
-              </View>
-            ))}
-            <View style={{ marginBottom: 20 }} />
-          </View>
-        ))
-      ) : (
-        <>
-          <Text style={styles.title}>{driver}</Text>
-          <View style={styles.listItem}>
-            <Text style={styles.columnHeader}>Código do Produto</Text>
-            <Text style={styles.columnHeader}>Descrição do Produto</Text>
-            <Text style={styles.columnHeader}>Quantidade</Text>
-          </View>
-          {products &&
-            products.map((product, index) => (
-              <View key={index}>
-                <View style={styles.listItem}>
-                  <Text style={styles.columnValue}>{product.Product.code}</Text>
-                  <Text style={styles.columnValue}>{product.Product.description}</Text>
-                  <Text style={styles.columnValue}>{product.quantity}</Text>
-                </View>
-                {index !== products.length - 1 && (
-                  <View style={{ borderBottomWidth: 1, borderBottomColor: '#000000', marginBottom: 5 }} />
-                )}
-              </View>
-            ))}
-        </>
-      )}
+      {renderOperationalHeader(props)}
+      {props.danfes && props.danfes.length > 0
+        ? renderDeliveryList(props.danfes)
+        : renderProductsTable(props.products)}
     </Page>
   </Document>
 );

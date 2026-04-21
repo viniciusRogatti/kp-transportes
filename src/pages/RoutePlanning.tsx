@@ -63,6 +63,10 @@ type RoutingModalState = {
   decision: Exclude<RoutePlanningDecision, { outcome: 'allow' }>;
 };
 
+type RouteSubmissionPromptState = {
+  shouldPrintProducts: boolean;
+};
+
 interface RoutingCityOption {
   city: string;
   danfes: RouteLookupDanfe[];
@@ -95,6 +99,24 @@ function parseSupportedDateInput(date: string) {
   }
 
   return null;
+}
+
+function buildDateRange(dateFrom: string, dateTo: string) {
+  const start = parseSupportedDateInput(dateFrom);
+  const end = parseSupportedDateInput(dateTo || dateFrom);
+  if (!start || !end) return [] as string[];
+
+  const normalizedStart = start.getTime() <= end.getTime() ? start : end;
+  const normalizedEnd = start.getTime() <= end.getTime() ? end : start;
+  const cursor = new Date(normalizedStart.getFullYear(), normalizedStart.getMonth(), normalizedStart.getDate());
+  const dates: string[] = [];
+
+  while (cursor.getTime() <= normalizedEnd.getTime()) {
+    dates.push(toApiDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
 }
 
 function resolveRoutingInvoiceDateCandidates(date: string) {
@@ -150,6 +172,11 @@ function buildTripNotePayload(note: ITripNote, order: number) {
     order,
     gross_weight: note.gross_weight,
   };
+}
+
+function hasTripAssignmentChanged(trip: ITrip | null, driverId: string, carId: string) {
+  if (!trip) return false;
+  return String(trip.driver_id) !== String(driverId) || String(trip.car_id) !== String(carId);
 }
 
 function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe {
@@ -221,6 +248,31 @@ function calculateTripNotesWeight(notes: ITripNote[]) {
   return notes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
 }
 
+function groupProductsByCodeAndUnit(products: any[] = []) {
+  return products.reduce((accumulator: any[], product: any) => {
+    const code = String(product?.Product?.code || '').trim();
+    const unit = String(product?.type || product?.Product?.type || '').trim().toUpperCase();
+    const existingProduct = accumulator.find((item: any) => {
+      const existingCode = String(item?.Product?.code || '').trim();
+      const existingUnit = String(item?.type || item?.Product?.type || '').trim().toUpperCase();
+      return existingCode === code && existingUnit === unit;
+    });
+    const quantity = Number(product?.quantity || 0);
+
+    if (existingProduct) {
+      existingProduct.quantity += quantity;
+    } else {
+      accumulator.push({
+        ...product,
+        type: unit || product?.type || product?.Product?.type || '',
+        quantity,
+      });
+    }
+
+    return accumulator;
+  }, []);
+}
+
 function buildTripNotesTxt(notes: ITripNote[]) {
   return sortTripNotesByOrder(Array.isArray(notes) ? notes : [])
     .map((note) => String(note?.invoice_number || '').trim())
@@ -251,6 +303,10 @@ function RoutePlanning() {
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [displayedTrips, setDisplayedTrips] = useState<ITrip[]>([]);
   const [tripDateFilter, setTripDateFilter] = useState<Date | null>(new Date());
+  const [tripEndDateFilter, setTripEndDateFilter] = useState<Date | null>(new Date());
+  const [tripIdSearch, setTripIdSearch] = useState<string>('');
+  const [tripDriverSearch, setTripDriverSearch] = useState<string>('');
+  const [tripPlateSearch, setTripPlateSearch] = useState<string>('');
   const [showPopup, setShowPopup] = useState<boolean>(false);
   const [titlePopup, setTitlePopup] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -286,6 +342,7 @@ function RoutePlanning() {
   const [isNotesNearBottom, setIsNotesNearBottom] = useState<boolean>(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
   const [manualOrderInputs, setManualOrderInputs] = useState<Record<string, string>>({});
+  const [routeSubmissionPrompt, setRouteSubmissionPrompt] = useState<RouteSubmissionPromptState | null>(null);
 
   const navigate = useNavigate();
   const noteLookupRef = useRef<HTMLInputElement>(null);
@@ -295,6 +352,9 @@ function RoutePlanning() {
   const notesContainerRef = useRef<HTMLDivElement>(null);
   const previousNotesCountRef = useRef<number>(0);
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addedNotesRef = useRef<RoutingTripNote[]>([]);
+  const pendingNoteLookupsRef = useRef<Set<string>>(new Set());
+  const pendingInvoiceNumbersRef = useRef<Set<string>>(new Set());
 
   const todayApiDate = useMemo(() => toApiDate(new Date()), []);
   const authConfig = useMemo(() => {
@@ -314,7 +374,11 @@ function RoutePlanning() {
   );
 
   const sortedDisplayedTrips = useMemo(
-    () => displayedTrips.slice().sort((a, b) => Number(a.run_number || 1) - Number(b.run_number || 1)),
+    () => displayedTrips.slice().sort((a, b) => {
+      const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
+      if (dateCompare !== 0) return dateCompare;
+      return Number(a.run_number || 1) - Number(b.run_number || 1);
+    }),
     [displayedTrips],
   );
 
@@ -476,12 +540,26 @@ function RoutePlanning() {
   }, [selectedDriver, selectedCar]);
 
   useEffect(() => {
+    addedNotesRef.current = addedNotes;
+  }, [addedNotes]);
+
+  useEffect(() => {
     const nextInputs: Record<string, string> = {};
     sortedNotes.forEach((note) => {
       nextInputs[getTripNoteKey(note)] = String(note.order);
     });
     setManualOrderInputs(nextInputs);
   }, [sortedNotes]);
+
+  const updateAddedNotes = useCallback((updater: RoutingTripNote[] | ((prev: RoutingTripNote[]) => RoutingTripNote[])) => {
+    setAddedNotes((prev) => {
+      const next = typeof updater === 'function'
+        ? (updater as (prev: RoutingTripNote[]) => RoutingTripNote[])(prev)
+        : updater;
+      addedNotesRef.current = next;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const current = sortedNotes.length;
@@ -512,6 +590,77 @@ function RoutePlanning() {
     const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
     return response.data as ITrip[];
   };
+
+  const filterTripsLocally = useCallback((trips: ITrip[], filters: {
+    startDate?: string;
+    endDate?: string;
+    tripId?: string;
+    driverName?: string;
+    licensePlate?: string;
+  }) => {
+    const startDate = filters.startDate ? toISODate(filters.startDate) : '';
+    const endDate = filters.endDate ? toISODate(filters.endDate) : startDate;
+    const tripId = String(filters.tripId || '').trim();
+    const driverName = String(filters.driverName || '').trim().toLowerCase();
+    const licensePlate = String(filters.licensePlate || '').trim().toUpperCase();
+
+    return trips.filter((trip) => {
+      const tripDate = toISODate(String(trip.date || ''));
+      const matchesDateRange = !startDate || !endDate || (tripDate >= startDate && tripDate <= endDate);
+      const matchesTripId = !tripId || String(trip.id) === tripId;
+      const matchesDriver = !driverName || String(trip.Driver?.name || '').toLowerCase().includes(driverName);
+      const matchesPlate = !licensePlate || String(trip.Car?.license_plate || '').toUpperCase().includes(licensePlate);
+
+      return matchesDateRange && matchesTripId && matchesDriver && matchesPlate;
+    });
+  }, []);
+
+  const searchTripsWithFallback = useCallback(async (filters: {
+    startDate?: string;
+    endDate?: string;
+    tripId?: string;
+    driverName?: string;
+    licensePlate?: string;
+  }) => {
+    const dateRange = buildDateRange(filters.startDate || todayApiDate, filters.endDate || filters.startDate || todayApiDate);
+    if (!dateRange.length) return [] as ITrip[];
+
+    const uniqueTrips = new Map<number, ITrip>();
+    const responses = await Promise.all(dateRange.map((date) => fetchTripsByDate(date)));
+
+    responses.flat().forEach((trip) => {
+      uniqueTrips.set(Number(trip.id), trip);
+    });
+
+    return filterTripsLocally(Array.from(uniqueTrips.values()), filters);
+  }, [fetchTripsByDate, filterTripsLocally, todayApiDate]);
+
+  const searchTripsWithFilters = useCallback(async (filters: {
+    startDate?: string;
+    endDate?: string;
+    tripId?: string;
+    driverName?: string;
+    licensePlate?: string;
+  }) => {
+    try {
+      const response = await axios.get<{ trips: ITrip[] }>(`${API_URL}/trips/search`, {
+        ...authConfig,
+        params: {
+          startDate: filters.startDate || undefined,
+          endDate: filters.endDate || undefined,
+          tripId: filters.tripId || undefined,
+          driverName: filters.driverName || undefined,
+          licensePlate: filters.licensePlate || undefined,
+        },
+      });
+      return Array.isArray(response.data?.trips) ? response.data.trips : [];
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        return searchTripsWithFallback(filters);
+      }
+      throw error;
+    }
+  }, [authConfig, searchTripsWithFallback]);
 
   const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string) => {
     const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`);
@@ -606,14 +755,20 @@ function RoutePlanning() {
 
   const appendDanfeToRoute = useCallback((danfeData: RouteLookupDanfe) => {
     const sanitizedDanfe = sanitizeRouteLookupDanfe(danfeData);
-    if (addedNotes.some((note) => String(note.invoice_number) === String(sanitizedDanfe.invoice_number))) {
-      return;
+    const invoiceNumber = String(sanitizedDanfe.invoice_number || '').trim();
+    if (!invoiceNumber) {
+      return false;
     }
 
-    const newNote = buildTripNoteFromDanfe(sanitizedDanfe, addedNotes.length + 1) as RoutingTripNote;
-    setAddedNotes((prev) => [...prev, newNote]);
+    if (addedNotesRef.current.some((note) => String(note.invoice_number) === invoiceNumber)) {
+      return false;
+    }
+
+    const newNote = buildTripNoteFromDanfe(sanitizedDanfe, addedNotesRef.current.length + 1) as RoutingTripNote;
+    updateAddedNotes((prev) => [...prev, newNote]);
     setLastScannedInvoice(String(newNote.invoice_number));
-  }, [addedNotes]);
+    return true;
+  }, [updateAddedNotes]);
 
   const refreshTrips = useCallback(async (date?: string) => {
     const targetDate = date || todayApiDate;
@@ -689,7 +844,7 @@ function RoutePlanning() {
     if (!trip) {
       setTripToUpdate(null);
       setIsUpdating(false);
-      setAddedNotes([]);
+      updateAddedNotes([]);
       previousDriverRef.current = 'null';
       previousCarRef.current = 'null';
       setShowAssignmentFields(true);
@@ -700,7 +855,7 @@ function RoutePlanning() {
 
     setTripToUpdate(trip);
     setIsUpdating(true);
-    setAddedNotes(tripNotes);
+    updateAddedNotes(tripNotes);
     setIsSecondRunMode(false);
     setSelectedDriver(String(trip.driver_id));
     setSelectedCar(String(trip.car_id));
@@ -1101,6 +1256,19 @@ function RoutePlanning() {
       return;
     }
 
+    const lookupKey = lookup.replace(/\s+/g, '').toLowerCase();
+    if (pendingNoteLookupsRef.current.has(lookupKey)) {
+      setNoteLookup('');
+      noteLookupRef.current?.focus();
+      return;
+    }
+
+    pendingNoteLookupsRef.current.add(lookupKey);
+    setNoteLookup('');
+    noteLookupRef.current?.focus();
+
+    let resolvedInvoiceNumber = '';
+
     try {
       const danfeData = await fetchDanfeByLookup(lookup);
       if (!danfeData) {
@@ -1108,11 +1276,17 @@ function RoutePlanning() {
         return;
       }
 
-      if (addedNotes.some((note) => String(danfeData.invoice_number) === String(note.invoice_number))) {
+      resolvedInvoiceNumber = String(danfeData.invoice_number || '').trim();
+      if (
+        !resolvedInvoiceNumber
+        || pendingInvoiceNumbersRef.current.has(resolvedInvoiceNumber)
+        || addedNotesRef.current.some((note) => String(note.invoice_number) === resolvedInvoiceNumber)
+      ) {
         alert('Esta nota já foi adicionada à viagem.');
         return;
       }
 
+      pendingInvoiceNumbersRef.current.add(resolvedInvoiceNumber);
       const decision = await resolveRoutingDecision(danfeData);
       if (decision.outcome === 'allow') {
         appendDanfeToRoute(danfeData);
@@ -1127,8 +1301,8 @@ function RoutePlanning() {
     } catch {
       alert('Não foi possível buscar essa nota.');
     } finally {
-      setNoteLookup('');
-      noteLookupRef.current?.focus();
+      pendingNoteLookupsRef.current.delete(lookupKey);
+      if (resolvedInvoiceNumber) pendingInvoiceNumbersRef.current.delete(resolvedInvoiceNumber);
     }
   };
 
@@ -1193,7 +1367,7 @@ function RoutePlanning() {
       }
 
       if (notesToAdd.length) {
-        setAddedNotes((prev) => [...prev, ...notesToAdd]);
+        updateAddedNotes((prev) => [...prev, ...notesToAdd]);
         setLastScannedInvoice(String(notesToAdd[notesToAdd.length - 1].invoice_number));
       }
 
@@ -1237,7 +1411,7 @@ function RoutePlanning() {
 
     const notesToAdd = cityOption.danfes.map((danfe, index) => buildTripNoteFromDanfe(danfe, addedNotes.length + index + 1));
 
-    setAddedNotes((prev) => [...prev, ...notesToAdd]);
+    updateAddedNotes((prev) => [...prev, ...notesToAdd]);
     setLastScannedInvoice(String(notesToAdd[notesToAdd.length - 1].invoice_number));
     setSelectedRoutingCity('');
     setNoteLookup('');
@@ -1260,7 +1434,7 @@ function RoutePlanning() {
         await axios.put(`${API_URL}/danfes/update-status`, {
           danfes: [{ invoice_number: nf, status: 'pending' }],
         });
-        setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
+        updateAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
         await refreshRoutingPool(tripToUpdate.date);
       } finally {
         setIsLoading(false);
@@ -1268,8 +1442,69 @@ function RoutePlanning() {
       return;
     }
 
-    setAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
+    updateAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
   };
+
+  const syncTripNotesInPlace = useCallback(async (trip: ITrip, nextNotes: RoutingTripNote[]) => {
+    const originalNotes = sortTripNotesByOrder((trip.TripNotes || []) as RoutingTripNote[]);
+    const originalByInvoice = new Map(originalNotes.map((note) => [String(note.invoice_number), note]));
+    const nextByInvoice = new Map(nextNotes.map((note) => [String(note.invoice_number), note]));
+
+    const notesToRemove = originalNotes.filter((note) => nextByInvoice.has(String(note.invoice_number)) === false);
+    const notesToAdd = nextNotes.filter((note) => originalByInvoice.has(String(note.invoice_number)) === false);
+
+    if (notesToRemove.length > 0) {
+      await axios.put(`${API_URL}/danfes/update-status`, {
+        danfes: notesToRemove.map((note) => ({ invoice_number: note.invoice_number, status: 'pending' })),
+      }, authConfig);
+
+      for (const note of notesToRemove) {
+        if (!note.id) continue;
+        await axios.put(`${API_URL}/trips/remove-note/${trip.id}`, { noteId: note.id }, authConfig);
+      }
+    }
+
+    if (notesToAdd.length > 0) {
+      await axios.put(`${API_URL}/danfes/update-status`, {
+        danfes: notesToAdd.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
+      }, authConfig);
+
+      for (const note of notesToAdd) {
+        await axios.put(`${API_URL}/trips/add-note/${trip.id}`, {
+          noteData: buildTripNotePayload(note, note.order),
+        }, authConfig);
+      }
+    }
+
+    const refreshedTrips = await fetchTripsByDate(trip.date);
+    const refreshedTrip = refreshedTrips.find((candidate) => Number(candidate.id) === Number(trip.id));
+    if (!refreshedTrip) {
+      throw new Error('Rota nao encontrada apos atualizar as notas.');
+    }
+
+    const refreshedNotes = sortTripNotesByOrder((refreshedTrip.TripNotes || []) as RoutingTripNote[]);
+    const desiredOrderByInvoice = new Map(nextNotes.map((note, index) => [String(note.invoice_number), index + 1]));
+    const reorderedNotes = sortTripNotesByOrder(refreshedNotes);
+
+    for (const note of reorderedNotes) {
+      const desiredOrder = desiredOrderByInvoice.get(String(note.invoice_number));
+      if (!note.id || !desiredOrder || Number(note.order) === desiredOrder) continue;
+      await axios.put(`${API_URL}/trips/change-order/${note.id}`, { newOrder: desiredOrder }, authConfig);
+    }
+
+    const finalTrips = await fetchTripsByDate(trip.date);
+    const finalTrip = finalTrips.find((candidate) => Number(candidate.id) === Number(trip.id));
+    if (!finalTrip) {
+      throw new Error('Rota nao encontrada apos reordenar as notas.');
+    }
+
+    if (trip.date === todayApiDate) {
+      setTodayTrips(finalTrips);
+    }
+    setDisplayedTrips(finalTrips);
+
+    return finalTrip;
+  }, [authConfig, todayApiDate]);
 
   const downloadTripNotesTxt = useCallback((options: {
     notes: ITripNote[];
@@ -1313,7 +1548,7 @@ function RoutePlanning() {
       alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
       return;
     }
-    setAddedNotes(reorderedNotes);
+    updateAddedNotes(reorderedNotes);
   };
 
   const moveNoteDown = (note: ITripNote) => {
@@ -1322,7 +1557,7 @@ function RoutePlanning() {
       alert('Nao e permitido reordenar notas em andamento ou finalizadas.');
       return;
     }
-    setAddedNotes(reorderedNotes);
+    updateAddedNotes(reorderedNotes);
   };
 
   const handleManualOrderInputChange = (note: ITripNote, value: string) => {
@@ -1363,29 +1598,64 @@ function RoutePlanning() {
       return;
     }
 
-    setAddedNotes(reorderedNotes);
+    updateAddedNotes(reorderedNotes);
   };
 
-  const sendTripsToBackend = async () => {
+  const requestTripSubmission = () => {
     const total = sortedNotes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
-
-    if (assignmentWarning) {
-      alert(assignmentWarning);
-      return;
-    }
 
     if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
       alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
       return;
     }
 
-    if (hasLockedNotesInRoutingEdit) {
-      alert('Esta rota possui notas em andamento ou finalizadas. Para evitar perda de historico, a atualizacao por recriacao esta bloqueada.');
+    const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
+
+    if (hasLockedNotesInRoutingEdit && assignmentChanged) {
+      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou finalize a troca de motorista/veiculo por outro fluxo.');
+      return;
+    }
+
+    if (Number(total) <= 0) {
+      alert('Nao foi possivel calcular o peso total da rota.');
+      return;
+    }
+
+    setRouteSubmissionPrompt({ shouldPrintProducts: true });
+  };
+
+  const sendTripsToBackend = async (options?: { shouldPrintProducts?: boolean }) => {
+    const shouldPrintProducts = Boolean(options?.shouldPrintProducts);
+    const total = sortedNotes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
+
+    if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
+      alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
+      return;
+    }
+
+    const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
+
+    if (hasLockedNotesInRoutingEdit && assignmentChanged) {
+      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou finalize a troca de motorista/veiculo por outro fluxo.');
       return;
     }
 
     try {
       setIsLoading(true);
+
+      if (isUpdating && tripToUpdate && assignmentChanged === false) {
+        const updatedTrip = await syncTripNotesInPlace(tripToUpdate, sortedNotes);
+
+        alert('Rota atualizada com sucesso.');
+        loadAssignmentFromTrip(updatedTrip);
+        setShowAssignmentFields(false);
+        await Promise.all([
+          refreshTrips(todayApiDate),
+          refreshRoutingPool(tripToUpdate.date),
+        ]);
+        return;
+      }
+
       const validation = await axios.post(`${API_URL}/trips/validate-assignment`, {
         date: todayApiDate,
         driver_id: Number(selectedDriver),
@@ -1403,7 +1673,7 @@ function RoutePlanning() {
         danfes: sortedNotes.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
       });
 
-      await axios.post(`${API_URL}/trips/create`, {
+      const createResponse = await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
         date: todayApiDate,
@@ -1418,11 +1688,16 @@ function RoutePlanning() {
         await axios.delete(`${API_URL}/trips/delete/${tripToUpdate.id}`, authConfig);
       }
 
+      const savedTrip = createResponse?.data as ITrip | undefined;
+      if (shouldPrintProducts && savedTrip?.id) {
+        await printTripProducts(savedTrip);
+      }
+
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
       setSelectedDriver('null');
       setSelectedCar('null');
       setShowAssignmentFields(true);
-      setAddedNotes([]);
+      updateAddedNotes([]);
       setIsUpdating(false);
       setTripToUpdate(null);
       setIsSecondRunMode(false);
@@ -1433,6 +1708,7 @@ function RoutePlanning() {
     } catch (error: any) {
       alert(error?.response?.data?.error || 'Erro ao enviar a viagem.');
     } finally {
+      setRouteSubmissionPrompt(null);
       setIsLoading(false);
     }
   };
@@ -1448,8 +1724,25 @@ function RoutePlanning() {
   };
 
   const handleTripSearch = async () => {
-    const date = tripDateFilter || new Date();
-    await refreshTrips(toApiDate(date));
+    const startDate = tripDateFilter ? toApiDate(tripDateFilter) : '';
+    const endDate = tripEndDateFilter ? toApiDate(tripEndDateFilter) : startDate;
+
+    setIsTripsLoading(true);
+    try {
+      const trips = await searchTripsWithFilters({
+        startDate,
+        endDate,
+        tripId: tripIdSearch.trim(),
+        driverName: tripDriverSearch.trim(),
+        licensePlate: tripPlateSearch.trim(),
+      });
+      setDisplayedTrips(trips);
+    } catch (error: any) {
+      console.error('Erro ao buscar rotas com filtros:', error);
+      alert(error?.response?.data?.error || 'Nao foi possivel buscar as rotas com os filtros informados.');
+    } finally {
+      setIsTripsLoading(false);
+    }
   };
 
   const fetchAvailableForTrip = async (tripDate: string, ignoreTripId?: number | null) => {
@@ -1480,7 +1773,7 @@ function RoutePlanning() {
     setIsUpdating(false);
     setTripToUpdate(null);
     setEditTrip(null);
-    setAddedNotes([]);
+    updateAddedNotes([]);
     setSelectedDriver('null');
     setSelectedCar('null');
     setIsSecondRunMode(false);
@@ -1523,13 +1816,28 @@ function RoutePlanning() {
       return;
     }
 
-    if (editHasLockedNotes) {
-      alert('Esta rota possui notas em andamento ou finalizadas. Para evitar perda de historico, a edicao por recriacao esta bloqueada.');
+    const assignmentChanged = hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar);
+
+    if (editHasLockedNotes && assignmentChanged) {
+      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou use outro fluxo para trocar motorista/veiculo.');
       return;
     }
 
     try {
       setIsSavingEdit(true);
+
+      if (assignmentChanged === false) {
+        const updatedTrip = await syncTripNotesInPlace(editTrip, sortTripNotesByOrder(editNotes));
+        alert('Rota atualizada com sucesso.');
+        setEditTrip(updatedTrip);
+        setEditNotes(sortTripNotesByOrder((updatedTrip.TripNotes || []) as RoutingTripNote[]));
+        await Promise.all([
+          refreshTrips(editTrip.date),
+          refreshRoutingPool(editTrip.date),
+        ]);
+        return;
+      }
+
       const validation = await axios.post(`${API_URL}/trips/validate-assignment`, {
         date: editTrip.date,
         driver_id: Number(selectedDriver),
@@ -1601,14 +1909,19 @@ function RoutePlanning() {
       setIsPrinting(true);
       const validDanfes: any[] = await fetchDanfesByTrip(trip);
       const allProducts = validDanfes.flatMap((danfe) => danfe.DanfeProducts || []);
-      const grouped = allProducts.reduce((acc: any[], product: any) => {
-        const existing = acc.find((item) => item.Product.code === product.Product.code);
-        const quantity = Number(product.quantity || 0);
-        if (existing) existing.quantity += quantity;
-        else acc.push({ ...product, quantity });
-        return acc;
-      }, []);
-      const pdfBlob = await pdf(<ProductListPDF products={grouped} driver={trip.Driver.name} />).toBlob();
+      const grouped = groupProductsByCodeAndUnit(allProducts);
+      const pdfBlob = await pdf(
+        <ProductListPDF
+          products={grouped}
+          driver={trip.Driver.name}
+          vehiclePlate={trip.Car?.license_plate}
+          tripId={trip.id}
+          tripDate={trip.date}
+          tripCreatedAt={trip.created_at}
+          totalWeight={trip.gross_weight}
+          noteCount={trip.TripNotes?.length || 0}
+        />,
+      ).toBlob();
       window.open(URL.createObjectURL(pdfBlob), '_blank');
     } finally {
       setIsPrinting(false);
@@ -1619,7 +1932,18 @@ function RoutePlanning() {
     try {
       setIsPrinting(true);
       const validDanfes: any[] = await fetchDanfesByTrip(trip);
-      const pdfBlob = await pdf(<ProductListPDF danfes={validDanfes} driver={trip.Driver.name} />).toBlob();
+      const pdfBlob = await pdf(
+        <ProductListPDF
+          danfes={validDanfes}
+          driver={trip.Driver.name}
+          vehiclePlate={trip.Car?.license_plate}
+          tripId={trip.id}
+          tripDate={trip.date}
+          tripCreatedAt={trip.created_at}
+          totalWeight={trip.gross_weight}
+          noteCount={trip.TripNotes?.length || 0}
+        />,
+      ).toBlob();
       window.open(URL.createObjectURL(pdfBlob), '_blank');
     } finally {
       setIsPrinting(false);
@@ -1641,7 +1965,7 @@ function RoutePlanning() {
     <ContainerRoutePlanning>
       <Header />
       <Container className="h-[calc(100dvh-var(--header-height)-var(--space-2))] min-h-0 overflow-hidden pb-2 pt-[calc(var(--header-height)+var(--space-2))]">
-        <div className="flex h-full w-full max-w-[1560px] min-h-0 flex-col">
+        <div className="flex h-full w-full min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
             <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
               <button
@@ -1672,7 +1996,7 @@ function RoutePlanning() {
                   <button type="button" onClick={() => addDriverOrCar('driver')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><UserPlus className="h-4 w-4" />Motorista</button>
                   <button type="button" onClick={() => addDriverOrCar('car')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><CarFront className="h-4 w-4" />Veículo</button>
                   <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2.5 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
-                  <button type="button" onClick={sendTripsToBackend} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
+                  <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
 
                 <div className="relative md:hidden">
@@ -1684,7 +2008,7 @@ function RoutePlanning() {
                       <button type="button" onClick={() => { addDriverOrCar('driver'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><UserPlus className="h-4 w-4" />Adicionar motorista</button>
                       <button type="button" onClick={() => { addDriverOrCar('car'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><CarFront className="h-4 w-4" />Adicionar veículo</button>
                       <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
-                      <button type="button" onClick={() => { sendTripsToBackend(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-2 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
+                      <button type="button" onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-2 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
                     </div>
                   ) : null}
                 </div>
@@ -1840,7 +2164,7 @@ function RoutePlanning() {
 
                 {hasLockedNotesInRoutingEdit ? (
                   <div className="mb-2 w-full rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
-                    Esta rota possui notas em andamento ou finalizadas. Elas aparecem para consulta, mas a atualizacao por recriacao fica bloqueada para preservar o historico operacional.
+                    Esta rota possui notas em andamento ou finalizadas. Ainda e possivel adicionar, remover e reordenar notas nesta rota; a troca de motorista ou veiculo continua bloqueada para preservar o historico operacional.
                   </div>
                 ) : null}
 
@@ -1911,10 +2235,10 @@ function RoutePlanning() {
                   </ActionButton>
                 </div>
 
-                <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
+                <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
                   <div className="flex h-full min-h-0 flex-col">
-                    <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1.5 md:p-2">
-                      <ul className="space-y-1.5">
+                    <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1 md:p-1.5">
+                      <ul className="space-y-1">
                         {sortedNotes.map((note) => {
                           const orderInputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);
                           const noteIsLocked = isMutableTripNoteStatus(note.status) === false;
@@ -1922,8 +2246,8 @@ function RoutePlanning() {
                             .filter((row) => String(row.invoice_number) !== String(note.invoice_number));
 
                           return (
-                            <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-2.5 py-2 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
-                              <div className="flex flex-col gap-2 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-3">
+                            <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-2.5 py-1.5 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
+                              <div className="flex flex-col gap-1.5 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-2.5">
                                 <div className="shrink-0">
                                   <input
                                     type="number"
@@ -1960,7 +2284,7 @@ function RoutePlanning() {
                                       </span>
                                     ) : null}
                                   </div>
-                                  <div className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-muted">
+                                  <div className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-muted">
                                     <span>{note.city}</span>
                                     <span>{note.gross_weight} Kg</span>
                                   </div>
@@ -1978,7 +2302,7 @@ function RoutePlanning() {
                                   ) : null}
                                 </div>
 
-                                <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-2 md:self-center md:border-t-0 md:pt-0">
+                                <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-1.5 md:self-center md:border-t-0 md:pt-0">
                                   <button
                                     type="button"
                                     onClick={() => moveNoteUp(note)}
@@ -2032,22 +2356,71 @@ function RoutePlanning() {
             </section>
           ) : (
             <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
-                <div className="flex items-center gap-2">
+              <div className="mb-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
+                      onClick={() => {
+                        setTripDateFilter(new Date());
+                        setTripEndDateFilter(new Date());
+                        setTripIdSearch('');
+                        setTripDriverSearch('');
+                        setTripPlateSearch('');
+                        void refreshTrips(todayApiDate);
+                      }}
+                    >
+                      Limpar
+                    </button>
+                    <IconButton
+                      icon={Search}
+                      label="Buscar rotas"
+                      onClick={handleTripSearch}
+                      size="lg"
+                      className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
                   <DatePicker
                     selected={tripDateFilter}
                     onChange={(date) => setTripDateFilter(date)}
                     dateFormat="dd/MM/yyyy"
                     locale={ptBR}
+                    placeholderText="Data inicial"
+                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
+                  />
+                  <DatePicker
+                    selected={tripEndDateFilter}
+                    onChange={(date) => setTripEndDateFilter(date)}
+                    dateFormat="dd/MM/yyyy"
+                    locale={ptBR}
+                    placeholderText="Data final"
+                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
+                  />
+                  <input
+                    type="text"
+                    value={tripIdSearch}
+                    onChange={(event) => setTripIdSearch(event.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="ID da rota"
                     className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
                   />
-                  <IconButton
-                    icon={Search}
-                    label="Buscar rotas por data"
-                    onClick={handleTripSearch}
-                    size="lg"
-                    className="h-10 w-10 min-h-10 min-w-10 rounded-md"
+                  <input
+                    type="text"
+                    value={tripPlateSearch}
+                    onChange={(event) => setTripPlateSearch(event.target.value.toUpperCase())}
+                    placeholder="Placa"
+                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
+                  />
+                  <input
+                    type="text"
+                    value={tripDriverSearch}
+                    onChange={(event) => setTripDriverSearch(event.target.value)}
+                    placeholder="Nome do motorista"
+                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
                   />
                 </div>
               </div>
@@ -2098,6 +2471,34 @@ function RoutePlanning() {
             existingCars={cars}
           />
         )}
+
+        {routeSubmissionPrompt ? (
+          <>
+            <div className="fixed inset-0 z-40 bg-black/55" />
+            <div className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-5 text-text shadow-[var(--shadow-3)]">
+              <h3 className="text-base font-semibold">Imprimir romaneio de produtos?</h3>
+              <p className="mt-2 text-sm text-muted">
+                Ao enviar a rota, deseja abrir também o PDF com a lista de produtos carregados no veículo?
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
+                  onClick={() => void sendTripsToBackend({ shouldPrintProducts: false })}
+                >
+                  Não imprimir
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 py-2 text-sm font-semibold text-[#04131e]"
+                  onClick={() => void sendTripsToBackend({ shouldPrintProducts: true })}
+                >
+                  Enviar e imprimir
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         {isBatchModalOpen ? (
           <div className="fixed inset-0 z-[1470] flex items-center justify-center bg-black/70 p-3">
@@ -2332,9 +2733,9 @@ function RoutePlanning() {
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
               </div>
 
-              {editHasLockedNotes ? (
+              {editHasLockedNotes && hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar) ? (
                 <div className="mb-3 rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
-                  Esta rota possui notas em andamento ou finalizadas. O salvamento fica bloqueado nesta tela para preservar o historico operacional.
+                  Esta rota possui notas em andamento ou finalizadas. Ainda e possivel adicionar/remover notas, mas a troca de motorista ou veiculo continua bloqueada para preservar o historico operacional.
                 </div>
               ) : null}
 
@@ -2367,7 +2768,7 @@ function RoutePlanning() {
 
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">Cancelar</button>
-                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit || editHasLockedNotes} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
+                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
                   {isSavingEdit ? 'Salvando...' : 'Salvar alterações'}
                 </button>
               </div>

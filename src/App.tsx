@@ -26,6 +26,7 @@ import {
   getDefaultRouteByPermission,
 } from './utils/permissions';
 import axios from 'axios';
+import { useEffect } from 'react';
 // import FreightSummary from './pages/FreightCalculation';
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
@@ -46,11 +47,42 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 function App() {
   useAppVersionAutoRefresh();
   const token = localStorage.getItem('token');
-  if (token) {
-    axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-  } else {
-    delete axios.defaults.headers.common.Authorization;
-  }
+
+  useEffect(() => {
+    const syncAuthorizationHeader = () => {
+      const currentToken = localStorage.getItem('token');
+      if (currentToken) {
+        axios.defaults.headers.common.Authorization = `Bearer ${currentToken}`;
+      } else {
+        delete axios.defaults.headers.common.Authorization;
+      }
+    };
+
+    syncAuthorizationHeader();
+
+    const requestInterceptorId = axios.interceptors.request.use((config) => {
+      const currentToken = localStorage.getItem('token');
+      const headers = config.headers ?? {};
+
+      if (currentToken) {
+        headers.Authorization = `Bearer ${currentToken}`;
+      } else if ('Authorization' in headers) {
+        delete headers.Authorization;
+      }
+
+      config.headers = headers;
+      return config;
+    });
+
+    window.addEventListener('storage', syncAuthorizationHeader);
+    window.addEventListener('focus', syncAuthorizationHeader);
+
+    return () => {
+      axios.interceptors.request.eject(requestInterceptorId);
+      window.removeEventListener('storage', syncAuthorizationHeader);
+      window.removeEventListener('focus', syncAuthorizationHeader);
+    };
+  }, []);
 
   return (
     <div>

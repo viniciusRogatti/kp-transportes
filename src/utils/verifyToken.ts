@@ -2,11 +2,17 @@ import axios from "axios";
 import { API_URL } from "../data";
 
 const verifyToken = async (token: string) => {
-  const clearSessionStorage = () => {
+  const clearSessionStorage = (expectedToken?: string) => {
+    const currentToken = localStorage.getItem('token');
+    if (expectedToken && currentToken && currentToken !== expectedToken) {
+      return;
+    }
+
     localStorage.removeItem('token');
     localStorage.removeItem('user_permission');
     localStorage.removeItem('user_name');
     localStorage.removeItem('user_login');
+    delete axios.defaults.headers.common.Authorization;
   };
 
   try {
@@ -20,10 +26,10 @@ const verifyToken = async (token: string) => {
       return true;
     }
 
-    clearSessionStorage();
+    clearSessionStorage(token);
     return false;
   } catch (error) {
-    clearSessionStorage();
+    clearSessionStorage(token);
     return false;
   }
 };

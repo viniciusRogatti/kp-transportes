@@ -33,13 +33,24 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     paddingHorizontal: 22,
     fontSize: 9,
-    color: '#111827',
+    color: '#000000',
+  },
+  headerCard: {
+    borderWidth: 1,
+    borderColor: '#000000',
+    paddingTop: 8,
+    paddingBottom: 7,
+    paddingHorizontal: 10,
+    marginBottom: 10,
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 4,
+    paddingBottom: 6,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
   },
   titleBlock: {
     width: '70%',
@@ -52,8 +63,8 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 8,
-    color: '#4b5563',
-    marginBottom: 4,
+    color: '#000000',
+    marginBottom: 0,
   },
   topRightMeta: {
     width: '30%',
@@ -61,36 +72,62 @@ const styles = StyleSheet.create({
   },
   topRightText: {
     fontSize: 8,
-    color: '#374151',
+    color: '#000000',
     marginBottom: 2,
   },
   inlineInfoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  infoCell: {
+    width: '24%',
+    borderWidth: 1,
+    borderColor: '#000000',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  infoLabel: {
+    fontSize: 7,
+    color: '#000000',
+    marginBottom: 1,
+    textTransform: 'uppercase',
   },
   inlineInfoText: {
     fontSize: 16,
     fontWeight: 'bold',
   },
+  citiesRow: {
+    borderWidth: 1,
+    borderColor: '#000000',
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  inlineInfoCitiesText: {
+    fontSize: 9,
+    color: '#000000',
+  },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   tableHeader: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#111827',
-    paddingVertical: 2,
-    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#000000',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    marginBottom: 0,
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 2,
-    minHeight: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    minHeight: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
   },
   colCode: {
     width: '8%',
@@ -105,11 +142,11 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   muted: {
-    color: '#6b7280',
+    color: '#000000',
   },
   deliveryBlock: {
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: '#000000',
     borderRadius: 4,
     padding: 7,
     marginBottom: 8,
@@ -125,17 +162,15 @@ const styles = StyleSheet.create({
   },
   deliveryMeta: {
     fontSize: 8,
-    color: '#4b5563',
+    color: '#000000',
   },
   invoiceListBlock: {
-    marginTop: 10,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#d1d5db',
+    marginTop: 2,
+    marginBottom: 2,
   },
   invoiceListText: {
-    fontSize: 8,
-    color: '#374151',
+    fontSize: 12,
+    color: '#000000',
     lineHeight: 1.4,
   },
 });
@@ -178,6 +213,20 @@ const formatQuantityWithUnit = (value: number | string | null | undefined, unit?
   return normalizedUnit ? `${formattedValue} ${normalizedUnit}` : formattedValue;
 };
 
+const resolveTripCities = (danfes: IDanfe[] = []) => {
+  const uniqueCities = new Map<string, string>();
+
+  danfes.forEach((danfe) => {
+    const city = String(danfe.Customer?.city || '').trim();
+    if (!city) return;
+
+    const normalizedKey = city.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (!uniqueCities.has(normalizedKey)) uniqueCities.set(normalizedKey, city);
+  });
+
+  return Array.from(uniqueCities.values());
+};
+
 const renderOperationalHeader = ({
   driver,
   vehiclePlate,
@@ -186,28 +235,50 @@ const renderOperationalHeader = ({
   tripDate,
   tripCreatedAt,
   tripId,
-}: ProductListPDFProps) => (
-  <>
-    <View style={styles.topBar}>
-      <View style={styles.titleBlock}>
-        <Text style={styles.title}>Romaneio de Produtos</Text>
-        <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
+  danfes,
+}: ProductListPDFProps) => {
+  const tripCities = resolveTripCities(danfes);
+
+  return (
+    <View style={styles.headerCard}>
+      <View style={styles.topBar}>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Romaneio de Produtos</Text>
+          <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
+        </View>
+
+        <View style={styles.topRightMeta}>
+          <Text style={styles.topRightText}>{`Data: ${resolveEmissionDate(tripCreatedAt, tripDate)}`}</Text>
+          <Text style={styles.topRightText}>{`Rota: ${tripId ? `#${tripId}` : '-'}`}</Text>
+        </View>
       </View>
 
-      <View style={styles.topRightMeta}>
-        <Text style={styles.topRightText}>{`Data: ${resolveEmissionDate(tripCreatedAt, tripDate)}`}</Text>
-        <Text style={styles.topRightText}>{`Rota: ${tripId ? `#${tripId}` : '-'}`}</Text>
+      <View style={styles.inlineInfoRow}>
+        <View style={styles.infoCell}>
+          <Text style={styles.infoLabel}>Motorista</Text>
+          <Text style={styles.inlineInfoText}>{driver || '-'}</Text>
+        </View>
+        <View style={styles.infoCell}>
+          <Text style={styles.infoLabel}>Placa</Text>
+          <Text style={styles.inlineInfoText}>{vehiclePlate || '-'}</Text>
+        </View>
+        <View style={styles.infoCell}>
+          <Text style={styles.infoLabel}>Peso</Text>
+          <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
+        </View>
+        <View style={styles.infoCell}>
+          <Text style={styles.infoLabel}>Notas</Text>
+          <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
+        </View>
       </View>
+      {tripCities.length ? (
+        <View style={styles.citiesRow}>
+          <Text style={styles.inlineInfoCitiesText}>{`Cidades: ${tripCities.join(', ')}`}</Text>
+        </View>
+      ) : null}
     </View>
-
-    <View style={styles.inlineInfoRow}>
-      <Text style={styles.inlineInfoText}>{`Motorista: ${driver || '-'}`}</Text>
-      <Text style={styles.inlineInfoText}>{`Placa: ${vehiclePlate || '-'}`}</Text>
-      <Text style={styles.inlineInfoText}>{`Peso: ${formatDecimal(totalWeight)}`}</Text>
-      <Text style={styles.inlineInfoText}>{`Notas: ${noteCount ?? '-'}`}</Text>
-    </View>
-  </>
-);
+  );
+};
 
 const renderProductsTable = (products: ProductRow[] = []) => {
   const rows = normalizeProductRows(products);
@@ -281,8 +352,8 @@ const renderPageContent = ({ products, danfes }: ProductListPDFProps) => {
   if (products && products.length > 0) {
     return (
       <>
-        {renderProductsTable(products)}
         {renderInvoiceList(danfes)}
+        {renderProductsTable(products)}
       </>
     );
   }

@@ -1913,6 +1913,7 @@ function RoutePlanning() {
       const pdfBlob = await pdf(
         <ProductListPDF
           products={grouped}
+          danfes={validDanfes}
           driver={trip.Driver.name}
           vehiclePlate={trip.Car?.license_plate}
           tripId={trip.id}

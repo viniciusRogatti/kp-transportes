@@ -60,12 +60,12 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
   async function handlePrintProductsList() {
     setIsPrinting(true);
 
-    const { allProducts } = await handleFetchData();
+    const { validDanfes, allProducts } = await handleFetchData();
 
     const groupedProducts = groupProductsByCodeAndUnit(allProducts);
 
     const pdfBlob = await pdf(
-      <ProductListPDF products={groupedProducts} driver={trip.Driver.name} />
+      <ProductListPDF products={groupedProducts} danfes={validDanfes} driver={trip.Driver.name} />
     ).toBlob();
 
     const pdfUrl = URL.createObjectURL(pdfBlob);

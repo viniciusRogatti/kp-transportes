@@ -32,7 +32,7 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 18,
     paddingHorizontal: 22,
-    fontSize: 8,
+    fontSize: 9,
     color: '#111827',
   },
   topBar: {
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inlineInfoText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   sectionTitle: {
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   },
   colCode: {
     width: '8%',
-    paddingRight: 2,
+    paddingRight: 4,
   },
   colDescription: {
     width: '74%',
@@ -126,6 +126,17 @@ const styles = StyleSheet.create({
   deliveryMeta: {
     fontSize: 8,
     color: '#4b5563',
+  },
+  invoiceListBlock: {
+    marginTop: 10,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#d1d5db',
+  },
+  invoiceListText: {
+    fontSize: 8,
+    color: '#374151',
+    lineHeight: 1.4,
   },
 });
 
@@ -221,6 +232,23 @@ const renderProductsTable = (products: ProductRow[] = []) => {
   );
 };
 
+const renderInvoiceList = (danfes: IDanfe[] = []) => {
+  if (!danfes.length) return null;
+
+  const invoiceNumbers = danfes
+    .map((danfe) => String(danfe.invoice_number || '').trim())
+    .filter(Boolean);
+
+  if (!invoiceNumbers.length) return null;
+
+  return (
+    <View style={styles.invoiceListBlock}>
+      <Text style={styles.sectionTitle}>NFs da rota</Text>
+      <Text style={styles.invoiceListText}>{invoiceNumbers.join(', ')}</Text>
+    </View>
+  );
+};
+
 const renderDeliveryList = (danfes: IDanfe[] = []) => (
   <>
     <Text style={styles.sectionTitle}>Lista de entregas</Text>
@@ -249,13 +277,28 @@ const renderDeliveryList = (danfes: IDanfe[] = []) => (
   </>
 );
 
+const renderPageContent = ({ products, danfes }: ProductListPDFProps) => {
+  if (products && products.length > 0) {
+    return (
+      <>
+        {renderProductsTable(products)}
+        {renderInvoiceList(danfes)}
+      </>
+    );
+  }
+
+  if (danfes && danfes.length > 0) {
+    return renderDeliveryList(danfes);
+  }
+
+  return null;
+};
+
 const ProductListPDF: React.FC<ProductListPDFProps> = (props) => (
   <Document>
     <Page size="A4" style={styles.page}>
       {renderOperationalHeader(props)}
-      {props.danfes && props.danfes.length > 0
-        ? renderDeliveryList(props.danfes)
-        : renderProductsTable(props.products)}
+      {renderPageContent(props)}
     </Page>
   </Document>
 );

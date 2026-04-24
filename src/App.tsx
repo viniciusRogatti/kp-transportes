@@ -63,11 +63,19 @@ function App() {
     const requestInterceptorId = axios.interceptors.request.use((config) => {
       const currentToken = localStorage.getItem('token');
       const headers = config.headers ?? {};
+      const explicitAuthorization = headers.Authorization || headers.authorization;
+
+      if (explicitAuthorization) {
+        config.headers = headers;
+        return config;
+      }
 
       if (currentToken) {
         headers.Authorization = `Bearer ${currentToken}`;
       } else if ('Authorization' in headers) {
         delete headers.Authorization;
+      } else if ('authorization' in headers) {
+        delete headers.authorization;
       }
 
       config.headers = headers;

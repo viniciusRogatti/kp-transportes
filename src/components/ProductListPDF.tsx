@@ -77,16 +77,38 @@ const styles = StyleSheet.create({
   },
   inlineInfoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
     marginBottom: 4,
   },
   infoCell: {
-    width: '24%',
     borderWidth: 1,
     borderColor: '#000000',
     paddingVertical: 4,
     paddingHorizontal: 6,
+    marginRight: 4,
+  },
+  driverInfoCell: {
+    flexGrow: 2.8,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  plateInfoCell: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  weightInfoCell: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  notesInfoCell: {
+    flexGrow: 0.7,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  lastInfoCell: {
+    marginRight: 0,
   },
   infoLabel: {
     fontSize: 7,
@@ -254,19 +276,19 @@ const renderOperationalHeader = ({
       </View>
 
       <View style={styles.inlineInfoRow}>
-        <View style={styles.infoCell}>
+        <View style={[styles.infoCell, styles.driverInfoCell]}>
           <Text style={styles.infoLabel}>Motorista</Text>
           <Text style={styles.inlineInfoText}>{driver || '-'}</Text>
         </View>
-        <View style={styles.infoCell}>
+        <View style={[styles.infoCell, styles.plateInfoCell]}>
           <Text style={styles.infoLabel}>Placa</Text>
           <Text style={styles.inlineInfoText}>{vehiclePlate || '-'}</Text>
         </View>
-        <View style={styles.infoCell}>
+        <View style={[styles.infoCell, styles.weightInfoCell]}>
           <Text style={styles.infoLabel}>Peso</Text>
           <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
         </View>
-        <View style={styles.infoCell}>
+        <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
           <Text style={styles.infoLabel}>Notas</Text>
           <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
         </View>

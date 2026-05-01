@@ -22,11 +22,24 @@ import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 
+const COMPANY_TAB_ORDER = ['mar_e_rio', 'brazilian_fish', 'pronto'] as const;
+
+const COMPANY_LABELS: Record<string, string> = {
+  all: 'Todas',
+  mar_e_rio: 'MAR E RIO',
+  brazilian_fish: 'BRASFISH',
+  pronto: 'PRONTO',
+};
+
+const resolveCompanyCode = (danfe: IDanfe) => String(danfe.company?.code || '').trim().toLowerCase();
+
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
   const { invoiceContextByNf, loadInvoiceContext } = useInvoiceSearchContext();
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
+  const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
+  const [allTabCompanyFilter, setAllTabCompanyFilter] = useState<string>('all');
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const navigate = useNavigate();
   const deferredFilters = useDeferredValue(filters);
@@ -90,33 +103,63 @@ function TodayInvoices() {
     [driverByInvoice],
   );
 
+  const companyOptions = useMemo(() => {
+    const dynamicOptions = Array.from(
+      new Set(
+        dataDanfes
+          .map((danfe) => resolveCompanyCode(danfe))
+          .filter(Boolean),
+      ),
+    );
+
+    return dynamicOptions.sort((a, b) => {
+      const orderDiff = COMPANY_TAB_ORDER.indexOf(a as typeof COMPANY_TAB_ORDER[number])
+        - COMPANY_TAB_ORDER.indexOf(b as typeof COMPANY_TAB_ORDER[number]);
+      if (orderDiff !== 0) return orderDiff;
+      return (COMPANY_LABELS[a] || a).localeCompare(COMPANY_LABELS[b] || b, 'pt-BR', { sensitivity: 'base' });
+    });
+  }, [dataDanfes]);
+
+  const visibleDanfes = useMemo(() => {
+    const scopedCompanyCode = activeCompanyTab === 'all' ? allTabCompanyFilter : activeCompanyTab;
+    if (!scopedCompanyCode || scopedCompanyCode === 'all') return dataDanfes;
+    return dataDanfes.filter((danfe) => resolveCompanyCode(danfe) === scopedCompanyCode);
+  }, [activeCompanyTab, allTabCompanyFilter, dataDanfes]);
+
   const loadOptions = useMemo(
     () => Array.from(
       new Set(
-        dataDanfes
+        visibleDanfes
           .map((danfe) => String(danfe.load_number || '').trim())
           .filter(Boolean),
       ),
     ).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })),
-    [dataDanfes],
+    [visibleDanfes],
   );
 
   const filteredDanfes = useMemo(
-    () => filterTodayInvoiceDanfes(dataDanfes, driverByInvoice, deferredFilters, invoiceContextByNf),
-    [dataDanfes, driverByInvoice, deferredFilters, invoiceContextByNf],
+    () => filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf),
+    [visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf],
   );
 
   const activeFilters = useMemo(() => {
-    const entries: Array<{ key: keyof typeof filters; label: string }> = [];
-    if (filters.nf.trim()) entries.push({ key: 'nf', label: `NF: ${filters.nf.trim()}` });
-    if (filters.product.trim()) entries.push({ key: 'product', label: `Produto: ${filters.product.trim()}` });
-    if (filters.customer.trim()) entries.push({ key: 'customer', label: `Cliente: ${filters.customer.trim()}` });
-    if (filters.city.trim()) entries.push({ key: 'city', label: `Cidade: ${filters.city.trim()}` });
-    if (filters.route !== 'Todas') entries.push({ key: 'route', label: `Rota: ${filters.route}` });
-    if (filters.driver.trim()) entries.push({ key: 'driver', label: `Motorista: ${filters.driver.trim()}` });
-    if (filters.status) entries.push({ key: 'status', label: `Status: ${filters.status}` });
+    const entries: Array<{ id: string; label: string; onClear: () => void }> = [];
+    if (filters.nf.trim()) entries.push({ id: 'nf', label: `NF: ${filters.nf.trim()}`, onClear: () => clearFilter('nf') });
+    if (filters.product.trim()) entries.push({ id: 'product', label: `Produto: ${filters.product.trim()}`, onClear: () => clearFilter('product') });
+    if (filters.customer.trim()) entries.push({ id: 'customer', label: `Cliente: ${filters.customer.trim()}`, onClear: () => clearFilter('customer') });
+    if (filters.city.trim()) entries.push({ id: 'city', label: `Cidade: ${filters.city.trim()}`, onClear: () => clearFilter('city') });
+    if (filters.route !== 'Todas') entries.push({ id: 'route', label: `Rota: ${filters.route}`, onClear: () => clearFilter('route') });
+    if (filters.driver.trim()) entries.push({ id: 'driver', label: `Motorista: ${filters.driver.trim()}`, onClear: () => clearFilter('driver') });
+    if (filters.status) entries.push({ id: 'status', label: `Status: ${filters.status}`, onClear: () => clearFilter('status') });
+    if (activeCompanyTab === 'all' && allTabCompanyFilter !== 'all') {
+      entries.push({
+        id: `company-${allTabCompanyFilter}`,
+        label: `Empresa: ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}`,
+        onClear: () => setAllTabCompanyFilter('all'),
+      });
+    }
     return entries;
-  }, [filters]);
+  }, [activeCompanyTab, allTabCompanyFilter, filters]);
 
   function updateFilter(key: keyof typeof filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -147,10 +190,11 @@ function TodayInvoices() {
 
   function resetFilters() {
     setFilters(createEmptyInvoiceListFilters());
+    setAllTabCompanyFilter('all');
   }
 
   async function openPDFInNewTab() {
-    const currentFilteredDanfes = filterTodayInvoiceDanfes(dataDanfes, driverByInvoice, filters, invoiceContextByNf);
+    const currentFilteredDanfes = filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, filters, invoiceContextByNf);
     const currentFilteredGroupedProducts = groupTodayInvoiceProducts(currentFilteredDanfes);
     if (currentFilteredGroupedProducts.length === 0) return;
 
@@ -176,10 +220,62 @@ function TodayInvoices() {
       <Container>
         <CompanyScopeBanner
           title="Notas do Dia"
-          description="Notas do dia em visão operacional multiempresa para a transportadora."
+          description="Notas do dia separadas por empresa para a operação da transportadora, com visão consolidada na aba Todas."
           totalLabel={`${filteredDanfes.length} NF(s)`}
         />
+        <div className="mb-s4 flex flex-wrap gap-2">
+          <button
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              activeCompanyTab === 'mar_e_rio'
+                ? 'border-accent bg-accent text-[#04131e]'
+                : 'border-border bg-surface/80 text-text hover:border-accent/60'
+            }`}
+            onClick={() => setActiveCompanyTab('mar_e_rio')}
+          >
+            MAR E RIO
+          </button>
+          <button
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              activeCompanyTab === 'brazilian_fish'
+                ? 'border-accent bg-accent text-[#04131e]'
+                : 'border-border bg-surface/80 text-text hover:border-accent/60'
+            }`}
+            onClick={() => setActiveCompanyTab('brazilian_fish')}
+          >
+            BRASFISH
+          </button>
+          <button
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              activeCompanyTab === 'pronto'
+                ? 'border-accent bg-accent text-[#04131e]'
+                : 'border-border bg-surface/80 text-text hover:border-accent/60'
+            }`}
+            onClick={() => setActiveCompanyTab('pronto')}
+          >
+            PRONTO
+          </button>
+          <button
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              activeCompanyTab === 'all'
+                ? 'border-accent bg-accent text-[#04131e]'
+                : 'border-border bg-surface/80 text-text hover:border-accent/60'
+            }`}
+            onClick={() => setActiveCompanyTab('all')}
+          >
+            Todas
+          </button>
+        </div>
         <FilterBar>
+          {activeCompanyTab === 'all' ? (
+            <select value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
+              <option value="all">Empresa: todas</option>
+              {companyOptions.map((companyCode) => (
+                <option key={companyCode} value={companyCode}>
+                  {COMPANY_LABELS[companyCode] || companyCode}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Filtrar por NF" />
           <input type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />
           <input type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Filtrar por nome do cliente" />
@@ -227,7 +323,7 @@ function TodayInvoices() {
         <DanfeStatusLegend
           activeStatusFilter={filters.status}
           onChange={(value) => updateFilter('status', value)}
-          totalCount={dataDanfes.length}
+          totalCount={visibleDanfes.length}
           filteredCount={filteredDanfes.length}
         />
         <div className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
@@ -236,9 +332,9 @@ function TodayInvoices() {
           </span>
           {activeFilters.map((filter) => (
             <button
-              key={filter.key}
+              key={filter.id}
               className="rounded-full border border-border bg-surface/75 px-2.5 py-1 text-muted hover:text-text"
-              onClick={() => clearFilter(filter.key)}
+              onClick={filter.onClear}
             >
               {filter.label} ×
             </button>
@@ -265,6 +361,13 @@ function TodayInvoices() {
             ) : (
               <>
                 <NotesFound>{`${filteredDanfes.length} Notas encontradas`}</NotesFound>
+                <span className="text-sm text-muted">
+                  {activeCompanyTab === 'all'
+                    ? allTabCompanyFilter === 'all'
+                      ? 'Exibindo notas de todas as empresas.'
+                      : `Exibindo apenas ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}.`
+                    : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
+                </span>
                 <CardDanfes
                   danfes={filteredDanfes}
                   driverByInvoice={driverByInvoice}

@@ -554,6 +554,7 @@ export interface IProduct {
 
 export interface IDanfe {
   customer_id: string;
+  company_id?: number;
   invoice_number: string;
   status?: string | null;
   replacement_invoice_number?: string | null;
@@ -580,6 +581,11 @@ export interface IDanfe {
   total_value: string;
   created_at: string;
   updated_at: string;
+  company?: {
+    id: number;
+    code: string;
+    name: string;
+  } | null;
   Customer: {
     name_or_legal_entity: string;
     phone: string | null;

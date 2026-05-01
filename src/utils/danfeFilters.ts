@@ -1,5 +1,6 @@
 import { cities } from '../data/danfes';
-import { IDanfe } from '../types/types';
+import { IDanfe, IInvoiceSearchContext } from '../types/types';
+import { DanfeLegendKey, matchesDanfeLegendFilter } from './statusStyles';
 
 export type InvoiceListFilters = {
   nf: string;
@@ -7,64 +8,100 @@ export type InvoiceListFilters = {
   customer: string;
   city: string;
   route: string;
-};
-
-export type TodayInvoiceFilters = InvoiceListFilters & {
   driver: string;
-  load: string;
+  loadNumbers: string[];
+  status: DanfeLegendKey | '';
 };
 
-function matchesInvoiceListFilters(danfe: IDanfe, filters: InvoiceListFilters) {
+export function createEmptyInvoiceListFilters(): InvoiceListFilters {
+  return {
+    nf: '',
+    product: '',
+    customer: '',
+    city: '',
+    route: 'Todas',
+    driver: '',
+    loadNumbers: [],
+    status: '',
+  };
+}
+
+function resolveDanfeDriverName(
+  danfe: IDanfe,
+  driverByInvoice?: Record<string, string>,
+  invoiceContextByNf?: Record<string, IInvoiceSearchContext>,
+) {
+  const invoiceNumber = String(danfe.invoice_number || '').trim();
+  return String(
+    driverByInvoice?.[invoiceNumber]
+    || invoiceContextByNf?.[invoiceNumber]?.driver_name
+    || '',
+  ).trim();
+}
+
+function matchesInvoiceListFilters(
+  danfe: IDanfe,
+  filters: InvoiceListFilters,
+  options?: {
+    driverByInvoice?: Record<string, string>;
+    invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
+  },
+) {
   const nfTerm = filters.nf.trim();
   const productTerm = filters.product.trim().toLowerCase();
   const customerTerm = filters.customer.trim().toLowerCase();
   const cityTerm = filters.city.trim().toLowerCase();
+  const driverTerm = filters.driver.trim().toLowerCase();
 
   if (nfTerm && !String(danfe.invoice_number).includes(nfTerm)) return false;
 
   if (productTerm) {
-    const hasProduct = danfe.DanfeProducts.some((product) => (
-      product.Product.code.toLowerCase().includes(productTerm)
-      || product.Product.description.toLowerCase().includes(productTerm)
+    const hasProduct = (danfe.DanfeProducts || []).some((product) => (
+      String(product.Product?.code || '').toLowerCase().includes(productTerm)
+      || String(product.Product?.description || '').toLowerCase().includes(productTerm)
     ));
 
     if (!hasProduct) return false;
   }
 
-  if (customerTerm && !danfe.Customer.name_or_legal_entity.toLowerCase().includes(customerTerm)) return false;
-  if (cityTerm && !danfe.Customer.city.toLowerCase().includes(cityTerm)) return false;
-  if (filters.route !== 'Todas' && cities[danfe.Customer.city] !== filters.route) return false;
+  if (customerTerm && !String(danfe.Customer?.name_or_legal_entity || '').toLowerCase().includes(customerTerm)) return false;
+  if (cityTerm && !String(danfe.Customer?.city || '').toLowerCase().includes(cityTerm)) return false;
+  if (filters.route !== 'Todas' && cities[String(danfe.Customer?.city || '')] !== filters.route) return false;
+
+  if (driverTerm) {
+    const driverName = resolveDanfeDriverName(danfe, options?.driverByInvoice, options?.invoiceContextByNf).toLowerCase();
+    if (!driverName.includes(driverTerm)) return false;
+  }
+
+  if (filters.loadNumbers.length > 0) {
+    const loadNumber = String(danfe.load_number || '').trim();
+    if (!filters.loadNumbers.includes(loadNumber)) return false;
+  }
+
+  if (filters.status && !matchesDanfeLegendFilter(danfe.status, filters.status)) return false;
 
   return true;
 }
 
-export function filterInvoiceListDanfes(dataDanfes: IDanfe[], filters: InvoiceListFilters) {
-  return dataDanfes.filter((danfe) => matchesInvoiceListFilters(danfe, filters));
+export function filterInvoiceListDanfes(
+  dataDanfes: IDanfe[],
+  filters: InvoiceListFilters,
+  options?: {
+    driverByInvoice?: Record<string, string>;
+    invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
+  },
+) {
+  return dataDanfes.filter((danfe) => matchesInvoiceListFilters(danfe, filters, options));
 }
 
 export function filterTodayInvoiceDanfes(
   dataDanfes: IDanfe[],
   driverByInvoice: Record<string, string>,
-  filters: TodayInvoiceFilters,
+  filters: InvoiceListFilters,
+  invoiceContextByNf?: Record<string, IInvoiceSearchContext>,
 ) {
-  const driverTerm = filters.driver.trim().toLowerCase();
-  const loadTerm = filters.load.trim().toLowerCase();
-
-  return dataDanfes.filter((danfe) => {
-    if (!matchesInvoiceListFilters(danfe, filters)) {
-      return false;
-    }
-
-    if (driverTerm) {
-      const driver = String(driverByInvoice[String(danfe.invoice_number)] || '').toLowerCase();
-      if (!driver.includes(driverTerm)) return false;
-    }
-
-    if (loadTerm) {
-      const loadNumber = String(danfe.load_number || '').toLowerCase();
-      if (loadNumber !== loadTerm) return false;
-    }
-
-    return true;
+  return filterInvoiceListDanfes(dataDanfes, filters, {
+    driverByInvoice,
+    invoiceContextByNf,
   });
 }

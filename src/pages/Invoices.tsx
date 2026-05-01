@@ -3,6 +3,7 @@ import { IDanfe } from "../types/types";
 import axios from "axios";
 import { Search } from "lucide-react";
 import CardDanfes from "../components/CardDanfes";
+import CompanyScopeBanner from "../components/CompanyScopeBanner";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
 import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
@@ -238,6 +239,11 @@ function Invoices() {
     <div>
       <Header />
       <Container>
+        <CompanyScopeBanner
+          title="Pesquisa de Notas"
+          description="Consulta histórica multiempresa para a operação da transportadora."
+          totalLabel={`${danfes.length} NF(s)`}
+        />
         <SearchBar>
           <SearchRow className="w-full grid-cols-1 max-[768px]:grid-cols-1">
             <SearchInput

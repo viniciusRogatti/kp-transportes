@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import CompanyScopeBanner from "../components/CompanyScopeBanner";
 import Header from "../components/Header"
 import { Container, FilterBar, FilterInput } from "../style/invoices"
 import verifyToken from "../utils/verifyToken";
@@ -120,6 +121,11 @@ function Customers() {
     <div>
       <Header />
       <Container className="max-[768px]:[&_table]:text-[0.75rem] max-[768px]:[&_th]:text-[0.7rem] max-[768px]:[&_td]:text-[0.75rem]">
+        <CompanyScopeBanner
+          title="Clientes"
+          description="Cadastro consolidado para a operação da transportadora, com separação por empresa mantida no banco."
+          totalLabel={`${filteredCustomers.length} cliente(s)`}
+        />
         {isLoading ? (
           <ProductsLoader />
         ) : (

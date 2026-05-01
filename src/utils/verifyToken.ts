@@ -12,6 +12,9 @@ const verifyToken = async (token: string) => {
     localStorage.removeItem('user_permission');
     localStorage.removeItem('user_name');
     localStorage.removeItem('user_login');
+    localStorage.removeItem('company_id');
+    localStorage.removeItem('company_code');
+    localStorage.removeItem('company_name');
     delete axios.defaults.headers.common.Authorization;
   };
 

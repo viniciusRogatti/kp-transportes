@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
+import CompanyScopeBanner from '../components/CompanyScopeBanner';
 import Header from '../components/Header';
 import { API_URL } from '../data';
 import verifyToken from '../utils/verifyToken';
@@ -466,6 +467,11 @@ function FileUploadPage() {
       <Header />
       <Container className="pb-s3 max-[768px]:pb-s3">
         <div className="w-full max-w-[1200px] space-y-3">
+          <CompanyScopeBanner
+            title="Importação de XML"
+            description="Para acessos operacionais, o XML entra na empresa identificada pelo CNPJ do emitente. Para torre de controle, o escopo continua separado por empresa."
+            totalLabel={selectedCount > 0 ? `${selectedCount} arquivo(s) na fila` : undefined}
+          />
           <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
             <h2 className="text-[1.1rem] font-semibold text-text">Importação de XML</h2>
             <p className="mt-1 text-sm text-muted">Arraste arquivos, acompanhe o processamento e consulte o relatório completo.</p>

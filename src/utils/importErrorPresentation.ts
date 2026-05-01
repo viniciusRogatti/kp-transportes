@@ -13,6 +13,7 @@ const ERROR_TITLES: Record<string, string> = {
   DUPLICATE_INVOICE: 'Nota já cadastrada',
   XML_COMPANY_MISMATCH: 'XML de outra empresa',
   COMPANY_NOT_CONFIGURED: 'Cadastro da empresa incompleto',
+  XML_COMPANY_UNREGISTERED: 'Empresa do XML ainda não cadastrada',
   DB_CONSTRAINT_ERROR: 'Conflito com dados já cadastrados',
   UNKNOWN_ERROR: 'Falha ao importar o arquivo',
 };
@@ -71,6 +72,10 @@ export function getImportErrorDescription(error?: IImportErrorDetail | null) {
     return 'Esse XML pertence a outra empresa e não pode ser importado neste acesso.';
   }
 
+  if (code === 'XML_COMPANY_UNREGISTERED' || message.includes('emitente do xml ainda nao esta cadastrado')) {
+    return 'O emitente deste XML ainda não foi cadastrado como empresa no sistema.';
+  }
+
   if (message.includes('destinatário não informado')) {
     return 'O XML veio sem os dados do cliente.';
   }
@@ -126,6 +131,8 @@ export function getImportErrorHint(error?: IImportErrorDetail | null) {
       return 'Use o acesso da empresa correta para importar esse XML.';
     case 'COMPANY_NOT_CONFIGURED':
       return 'Peça para ajustar o cadastro da empresa antes de tentar novamente.';
+    case 'XML_COMPANY_UNREGISTERED':
+      return 'Cadastre a empresa do emitente e depois tente importar novamente.';
     case 'DB_CONSTRAINT_ERROR':
       return 'Se continuar falhando, envie os detalhes para o suporte.';
     default:

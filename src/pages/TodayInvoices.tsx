@@ -1,5 +1,6 @@
 import React, { useDeferredValue, useMemo, useState, useEffect } from "react";
 import CardDanfes from "../components/CardDanfes";
+import CompanyScopeBanner from "../components/CompanyScopeBanner";
 import Header from "../components/Header";
 import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
@@ -173,6 +174,11 @@ function TodayInvoices() {
     <ContainerTodayInvoices>
       <Header />
       <Container>
+        <CompanyScopeBanner
+          title="Notas do Dia"
+          description="Notas do dia em visão operacional multiempresa para a transportadora."
+          totalLabel={`${filteredDanfes.length} NF(s)`}
+        />
         <FilterBar>
           <input type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Filtrar por NF" />
           <input type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />

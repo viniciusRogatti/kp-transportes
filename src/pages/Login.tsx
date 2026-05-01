@@ -119,6 +119,9 @@ function Login() {
         const permission = response.data?.data?.permission;
         const userName = response.data?.data?.name;
         const username = response.data?.data?.username;
+        const companyId = response.data?.data?.companyId;
+        const companyCode = response.data?.data?.companyCode;
+        const companyName = response.data?.data?.companyName;
         const isValidToken = await verifyToken(token);
         if (isValidToken) {
           localStorage.setItem('token', token);
@@ -136,6 +139,21 @@ function Login() {
             localStorage.setItem('user_login', String(username));
           } else {
             localStorage.removeItem('user_login');
+          }
+          if (companyId) {
+            localStorage.setItem('company_id', String(companyId));
+          } else {
+            localStorage.removeItem('company_id');
+          }
+          if (companyCode) {
+            localStorage.setItem('company_code', String(companyCode));
+          } else {
+            localStorage.removeItem('company_code');
+          }
+          if (companyName) {
+            localStorage.setItem('company_name', String(companyName));
+          } else {
+            localStorage.removeItem('company_name');
           }
 
           navigate(getDefaultRouteByPermission(permission || ''));

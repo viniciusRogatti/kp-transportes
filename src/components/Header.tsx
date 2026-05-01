@@ -130,6 +130,10 @@ function Header() {
   const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
   const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';
   const userDisplayName = String(localStorage.getItem('user_name') || localStorage.getItem('user_login') || permissionLabel || 'Usuário').trim();
+  const companyDisplayName = String(localStorage.getItem('company_name') || '').trim();
+  const scopeDisplayName = permission === 'control_tower'
+    ? companyDisplayName
+    : 'Multiempresa';
   const latestNotifications = notifications.slice(0, 10);
   const unreadNotificationClass = isLightTheme
     ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
@@ -324,7 +328,10 @@ function Header() {
               </span>
               <div className="leading-tight">
                 <p className="text-sm font-medium text-text">{userDisplayName}</p>
-                <p className="text-[10px] text-muted">{permissionLabel}</p>
+                <p className="text-[10px] text-muted">
+                  {permissionLabel}
+                  {scopeDisplayName ? ` • ${scopeDisplayName}` : ''}
+                </p>
               </div>
             </div>
           </div>

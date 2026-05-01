@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { IProduct } from "../types/types";
 import CardProducts from "../components/CardProducts";
+import CompanyScopeBanner from "../components/CompanyScopeBanner";
 import axios from "axios";
 import { API_URL } from "../data";
 import Header from "../components/Header";
@@ -63,6 +64,11 @@ function Products() {
     <div>
       <Header />
       <Container>
+      <CompanyScopeBanner
+        title="Produtos"
+        description="Consulta multiempresa para a operação da transportadora. Escopo por empresa fica restrito à torre de controle."
+        totalLabel={`${filteredProducts.length} produto(s)`}
+      />
       {isLoading ? (<ProductsLoader />) : (
         <>
           <FilterBar className="max-[768px]:grid-cols-1 max-[768px]:[grid-template-columns:minmax(0,1fr)]">

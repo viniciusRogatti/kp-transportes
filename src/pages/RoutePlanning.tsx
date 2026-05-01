@@ -1646,6 +1646,10 @@ function RoutePlanning() {
       if (isUpdating && tripToUpdate && assignmentChanged === false) {
         const updatedTrip = await syncTripNotesInPlace(tripToUpdate, sortedNotes);
 
+        if (shouldPrintProducts) {
+          await printTripProducts(updatedTrip);
+        }
+
         alert('Rota atualizada com sucesso.');
         loadAssignmentFromTrip(updatedTrip);
         setShowAssignmentFields(false);

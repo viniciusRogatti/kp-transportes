@@ -1991,7 +1991,7 @@ function RoutePlanning() {
                   : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
                   }`}
               >
-                Trips
+                Viagens
               </button>
             </div>
 

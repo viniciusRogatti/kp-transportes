@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import CompanyScopeBanner from "../components/CompanyScopeBanner";
+import { useEffect, useMemo, useState } from "react";
 import Header from "../components/Header"
 import { Container, FilterBar, FilterInput } from "../style/invoices"
 import verifyToken from "../utils/verifyToken";
@@ -14,6 +13,17 @@ type CustomerWithOptionalNumber = ICustomer & {
   number?: string | number | null;
   nro?: string | number | null;
 };
+
+const COMPANY_TAB_ORDER = ['mar_e_rio', 'brazilian_fish', 'pronto'] as const;
+
+const COMPANY_LABELS: Record<string, string> = {
+  all: 'Todas',
+  mar_e_rio: 'MAR E RIO',
+  brazilian_fish: 'BRASFISH',
+  pronto: 'PRONTO',
+};
+
+const resolveCompanyCode = (customer: ICustomer) => String(customer.company?.code || '').trim().toLowerCase();
 
 function normalizeSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -80,6 +90,7 @@ function Customers() {
   const [isLoading, setIsLoading] = useState(false);
   const [nameFilter, setNameFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
+  const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -110,7 +121,12 @@ function Customers() {
     }
   }
 
-  const filteredCustomers = customers.filter((customer) => {
+  const visibleCustomers = useMemo(() => {
+    if (activeCompanyTab === 'all') return customers;
+    return customers.filter((customer) => resolveCompanyCode(customer) === activeCompanyTab);
+  }, [activeCompanyTab, customers]);
+
+  const filteredCustomers = visibleCustomers.filter((customer) => {
     const name = (customer.name_or_legal_entity || "").toLowerCase();
     const city = (customer.city || "").toLowerCase();
     return name.includes(nameFilter.trim().toLowerCase())
@@ -121,15 +137,39 @@ function Customers() {
     <div>
       <Header />
       <Container className="max-[768px]:[&_table]:text-[0.75rem] max-[768px]:[&_th]:text-[0.7rem] max-[768px]:[&_td]:text-[0.75rem]">
-        <CompanyScopeBanner
-          title="Clientes"
-          description="Cadastro consolidado para a operação da transportadora, com separação por empresa mantida no banco."
-          totalLabel={`${filteredCustomers.length} cliente(s)`}
-        />
         {isLoading ? (
           <ProductsLoader />
         ) : (
           <>
+            <div className="mb-s4 flex w-full justify-start">
+              <div className="relative inline-flex max-w-full flex-wrap items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
+                {COMPANY_TAB_ORDER.map((companyCode) => (
+                  <button
+                    key={companyCode}
+                    type="button"
+                    onClick={() => setActiveCompanyTab(companyCode)}
+                    className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                      activeCompanyTab === companyCode
+                        ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                        : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                    }`}
+                  >
+                    {COMPANY_LABELS[companyCode] || companyCode}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setActiveCompanyTab('all')}
+                  className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                    activeCompanyTab === 'all'
+                      ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                      : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                  }`}
+                >
+                  Todas
+                </button>
+              </div>
+            </div>
             <FilterBar className="max-[768px]:grid-cols-1 max-[768px]:[grid-template-columns:minmax(0,1fr)]">
               <FilterInput
                 type="text"
@@ -146,6 +186,13 @@ function Customers() {
                 className="max-w-full max-[768px]:h-9 max-[768px]:text-[0.8rem]"
               />
             </FilterBar>
+            <div className="mb-s4 flex w-full max-w-[1200px] items-center justify-between text-sm text-muted">
+              <span>
+                {activeCompanyTab === 'all'
+                  ? `${filteredCustomers.length} cliente(s) em todas as empresas`
+                  : `${filteredCustomers.length} cliente(s) em ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}`}
+              </span>
+            </div>
             <div className="w-full max-w-[1200px] overflow-x-auto">
               <table className="min-w-[920px] max-[768px]:min-w-[720px] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:leading-tight">
                 <thead>

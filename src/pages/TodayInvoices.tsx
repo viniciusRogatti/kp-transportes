@@ -1,6 +1,5 @@
 import React, { useDeferredValue, useMemo, useState, useEffect } from "react";
 import CardDanfes from "../components/CardDanfes";
-import CompanyScopeBanner from "../components/CompanyScopeBanner";
 import Header from "../components/Header";
 import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
@@ -218,52 +217,53 @@ function TodayInvoices() {
     <ContainerTodayInvoices>
       <Header />
       <Container>
-        <CompanyScopeBanner
-          title="Notas do Dia"
-          description="Notas do dia separadas por empresa para a operação da transportadora, com visão consolidada na aba Todas."
-          totalLabel={`${filteredDanfes.length} NF(s)`}
-        />
-        <div className="mb-s4 flex flex-wrap gap-2">
-          <button
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              activeCompanyTab === 'mar_e_rio'
-                ? 'border-accent bg-accent text-[#04131e]'
-                : 'border-border bg-surface/80 text-text hover:border-accent/60'
-            }`}
-            onClick={() => setActiveCompanyTab('mar_e_rio')}
-          >
-            MAR E RIO
-          </button>
-          <button
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              activeCompanyTab === 'brazilian_fish'
-                ? 'border-accent bg-accent text-[#04131e]'
-                : 'border-border bg-surface/80 text-text hover:border-accent/60'
-            }`}
-            onClick={() => setActiveCompanyTab('brazilian_fish')}
-          >
-            BRASFISH
-          </button>
-          <button
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              activeCompanyTab === 'pronto'
-                ? 'border-accent bg-accent text-[#04131e]'
-                : 'border-border bg-surface/80 text-text hover:border-accent/60'
-            }`}
-            onClick={() => setActiveCompanyTab('pronto')}
-          >
-            PRONTO
-          </button>
-          <button
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-              activeCompanyTab === 'all'
-                ? 'border-accent bg-accent text-[#04131e]'
-                : 'border-border bg-surface/80 text-text hover:border-accent/60'
-            }`}
-            onClick={() => setActiveCompanyTab('all')}
-          >
-            Todas
-          </button>
+        <div className="mb-s4 flex w-full justify-start">
+          <div className="relative inline-flex max-w-full flex-wrap items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
+            <button
+              type="button"
+              onClick={() => setActiveCompanyTab('mar_e_rio')}
+              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                activeCompanyTab === 'mar_e_rio'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+              }`}
+            >
+              MAR E RIO
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveCompanyTab('brazilian_fish')}
+              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                activeCompanyTab === 'brazilian_fish'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+              }`}
+            >
+              BRASFISH
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveCompanyTab('pronto')}
+              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                activeCompanyTab === 'pronto'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+              }`}
+            >
+              PRONTO
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveCompanyTab('all')}
+              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
+                activeCompanyTab === 'all'
+                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
+                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+              }`}
+            >
+              Todas
+            </button>
+          </div>
         </div>
         <FilterBar>
           {activeCompanyTab === 'all' ? (

@@ -544,12 +544,18 @@ export interface IDanfeTrip {
 
 export interface IProduct {
   code: string,
+  company_id?: number,
   description: string,
   price: string,
   type: string,
   quantity?: number,
   created_at?: string,
-  updated_at?: string
+  updated_at?: string,
+  company?: {
+    id: number;
+    code: string;
+    name: string;
+  } | null
 }
 
 export interface IDanfe {
@@ -637,6 +643,7 @@ export interface IMapLocation {
 
 export interface ICustomer {
   name_or_legal_entity: string;
+  company_id?: number;
   phone: string | null;
   address: string | null;
   address_number?: string | null;
@@ -646,4 +653,9 @@ export interface ICustomer {
   neighborhood: string | null;
   representative_name?: string | null;
   cnpj_or_cpf: string;
+  company?: {
+    id: number;
+    code: string;
+    name: string;
+  } | null;
 }

@@ -8,7 +8,7 @@ function CompanyScopeBanner({ title, description, totalLabel }: CompanyScopeBann
   const permission = String(localStorage.getItem('user_permission') || '').trim().toLowerCase();
   const companyName = String(localStorage.getItem('company_name') || '').trim() || 'Empresa nao identificada';
   const companyCode = String(localStorage.getItem('company_code') || '').trim();
-  const isScopedByCompany = permission === 'control_tower';
+  const isScopedByCompany = permission !== 'master';
   const label = isScopedByCompany
     ? companyName
     : 'Todas as empresas configuradas';

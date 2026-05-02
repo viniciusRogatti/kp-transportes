@@ -1,39 +1,15 @@
 import axios from 'axios';
-import { ITrip } from '../types/types';
+import { IDanfe, ITrip } from '../types/types';
 import ProductListPDF from './ProductListPDF';
 import { pdf } from '@react-pdf/renderer';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { BoxButton, CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
+import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
 
 interface TripListProps {
   trip: ITrip;
   setIsPrinting: (param: boolean) => void;
-}
-
-function groupProductsByCodeAndUnit(products: any[] = []) {
-  return products.reduce((accumulator: any[], product: any) => {
-    const code = String(product?.Product?.code || '').trim();
-    const unit = String(product?.type || product?.Product?.type || '').trim().toUpperCase();
-    const existingProduct = accumulator.find((item: any) => {
-      const existingCode = String(item?.Product?.code || '').trim();
-      const existingUnit = String(item?.type || item?.Product?.type || '').trim().toUpperCase();
-      return existingCode === code && existingUnit === unit;
-    });
-    const quantity = Number(product?.quantity || 0);
-
-    if (existingProduct) {
-      existingProduct.quantity += quantity;
-    } else {
-      accumulator.push({
-        ...product,
-        type: unit || product?.type || product?.Product?.type || '',
-        quantity,
-      });
-    }
-
-    return accumulator;
-  }, []);
 }
 
 function TripList({ trip, setIsPrinting }: TripListProps) {
@@ -50,19 +26,17 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
 
   async function handleFetchData() {
     const danfeData = await Promise.all(trip.TripNotes.map(note => fetchDanfes(note.invoice_number)));
-
-    const validDanfes = danfeData.filter(data => data !== null);
-    const allProducts = validDanfes.flatMap(data => data.DanfeProducts);
-
-    return { validDanfes, allProducts };
+    const validDanfes = danfeData.filter((data): data is IDanfe => data !== null);
+    return { validDanfes };
   }
 
   async function handlePrintProductsList() {
     setIsPrinting(true);
 
-    const { validDanfes, allProducts } = await handleFetchData();
+    const { validDanfes } = await handleFetchData();
+    const allProducts = collectTripProductsByNote(trip.TripNotes || [], validDanfes);
 
-    const groupedProducts = groupProductsByCodeAndUnit(allProducts);
+    const groupedProducts = groupTripProductsByCodeAndUnit(allProducts);
 
     const pdfBlob = await pdf(
       <ProductListPDF products={groupedProducts} danfes={validDanfes} driver={trip.Driver.name} />

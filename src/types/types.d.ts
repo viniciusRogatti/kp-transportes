@@ -37,6 +37,12 @@ export interface ITripNote {
   gross_weight: string;
   created_at?: string | null;
   updated_at?: string | null;
+  products?: Array<{
+    code?: string;
+    description?: string;
+    type?: string | null;
+    quantity?: number | string;
+  }>;
 }
 
 

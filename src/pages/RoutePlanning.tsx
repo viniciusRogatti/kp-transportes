@@ -27,6 +27,7 @@ import ProductListPDF from '../components/ProductListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
@@ -246,31 +247,6 @@ function canReorderTripNote(notes: ITripNote[], note: ITripNote, direction: 'up'
 
 function calculateTripNotesWeight(notes: ITripNote[]) {
   return notes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
-}
-
-function groupProductsByCodeAndUnit(products: any[] = []) {
-  return products.reduce((accumulator: any[], product: any) => {
-    const code = String(product?.Product?.code || '').trim();
-    const unit = String(product?.type || product?.Product?.type || '').trim().toUpperCase();
-    const existingProduct = accumulator.find((item: any) => {
-      const existingCode = String(item?.Product?.code || '').trim();
-      const existingUnit = String(item?.type || item?.Product?.type || '').trim().toUpperCase();
-      return existingCode === code && existingUnit === unit;
-    });
-    const quantity = Number(product?.quantity || 0);
-
-    if (existingProduct) {
-      existingProduct.quantity += quantity;
-    } else {
-      accumulator.push({
-        ...product,
-        type: unit || product?.type || product?.Product?.type || '',
-        quantity,
-      });
-    }
-
-    return accumulator;
-  }, []);
 }
 
 function buildTripNotesTxt(notes: ITripNote[]) {
@@ -1911,9 +1887,9 @@ function RoutePlanning() {
   const printTripProducts = async (trip: ITrip) => {
     try {
       setIsPrinting(true);
-      const validDanfes: any[] = await fetchDanfesByTrip(trip);
-      const allProducts = validDanfes.flatMap((danfe) => danfe.DanfeProducts || []);
-      const grouped = groupProductsByCodeAndUnit(allProducts);
+      const validDanfes: IDanfe[] = await fetchDanfesByTrip(trip);
+      const allProducts = collectTripProductsByNote(trip.TripNotes || [], validDanfes);
+      const grouped = groupTripProductsByCodeAndUnit(allProducts);
       const pdfBlob = await pdf(
         <ProductListPDF
           products={grouped}

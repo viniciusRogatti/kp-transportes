@@ -3,7 +3,7 @@ import { IDanfe, ITripNote } from '../types/types';
 export type TripProductRow = {
   code?: string;
   description?: string;
-  type?: string | null;
+  type?: string;
   quantity: number;
 };
 
@@ -26,7 +26,7 @@ export function groupTripProductsByCodeAndUnit(products: TripProductRow[] = []) 
     accumulator.push({
       code,
       description: String(product?.description || '').trim(),
-      type: unit || null,
+      type: unit || '',
       quantity,
     });
 
@@ -48,7 +48,7 @@ function normalizeTripProductRow(product: {
   return {
     code: String(product?.Product?.code || product?.code || '').trim(),
     description: String(product?.Product?.description || product?.description || '').trim(),
-    type: String(product?.type || product?.Product?.type || '').trim().toUpperCase() || null,
+    type: String(product?.type || product?.Product?.type || '').trim().toUpperCase(),
     quantity: Number(product?.quantity || 0),
   };
 }

@@ -15,6 +15,7 @@ import Receipts from './pages/Receipts';
 import AlertsPage from './pages/Alerts';
 import DeliveryMonitoring from './pages/DeliveryMonitoring';
 import OperationalPendencies from './pages/OperationalPendencies';
+import CteManagement from './pages/CteManagement';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
@@ -110,6 +111,7 @@ function App() {
           <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Customers /></ProtectedRoute>} />
           <Route path="/trips" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
           <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><FileUploadPage /></ProtectedRoute>} />
+          <Route path="/cte-management" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><CteManagement /></ProtectedRoute>} />
           <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnsOccurrences /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedPermissions={[...ADMIN_MASTER_PERMISSIONS]}><UserManagement /></ProtectedRoute>} />
           <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={['master']}><UserSessions /></ProtectedRoute>} />

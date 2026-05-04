@@ -10,6 +10,7 @@ import {
   ClipboardList,
   FileArchive,
   FileImage,
+  FileText,
   Home,
   Menu,
   MapPinned,
@@ -82,6 +83,7 @@ const navItems: NavItem[] = [
   { to: '/operational-pendencies', label: 'Pendencias', shortLabel: 'Pendencias', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/alerts', label: 'Alertas', shortLabel: 'Alertas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
+  { to: '/cte-management', label: 'CT-e', shortLabel: 'CT-e', icon: <FileText className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/users', label: 'Usuários', shortLabel: 'Usuários', icon: <UserPlus className="h-4 w-4" />, allowedPermissions: [...ADMIN_MASTER_PERMISSIONS] },
   { to: '/user-sessions', label: 'Horários', shortLabel: 'Horários', icon: <Clock3 className="h-4 w-4" />, allowedPermissions: ['master'] },
 ];
@@ -100,6 +102,7 @@ const routeTitles: Record<string, string> = {
   '/operational-pendencies': 'Pendencias Operacionais',
   '/alerts': 'Alertas',
   '/uploadFiles': 'Envio de XML',
+  '/cte-management': 'Gestão de CT-e',
   '/users': 'Gerenciamento de Usuários',
   '/user-sessions': 'Horário de Sessões',
   '/control-tower/coletas': 'Torre de Controle',

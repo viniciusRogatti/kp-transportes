@@ -83,6 +83,11 @@ function Trips() {
     setIsPrinting(param);
   }
 
+  const handleDeleteTrip = async (tripId: number) => {
+    await axios.delete(`${API_URL}/trips/delete/${tripId}`);
+    setTrips((current) => current.filter((trip) => trip.id !== tripId));
+  };
+
   return (
     <div>
       <Header />
@@ -113,7 +118,7 @@ function Trips() {
             <ContainerTrips>
               {trips?.length > 0 && (
                 trips.map((trip, index) => (
-                  <TripList key={index} trip={trip} setIsPrinting={setPrinting} />
+                  <TripList key={index} trip={trip} setIsPrinting={setPrinting} onDeleteTrip={handleDeleteTrip} />
                 ))
               )}
             </ContainerTrips>

@@ -5,7 +5,7 @@ import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
-import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Search, Send, Truck, UserPlus } from 'lucide-react';
+import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Search, Send, Trash2, Truck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -1931,6 +1931,33 @@ function RoutePlanning() {
     }
   };
 
+  const handleDeleteListedTrip = useCallback(async (trip: ITrip) => {
+    const confirmed = window.confirm(`Deseja excluir a rota de ${trip.Driver.name} com ${trip.TripNotes.length} nota(s)?`);
+    if (!confirmed) return;
+
+    try {
+      await axios.delete(`${API_URL}/trips/delete/${trip.id}`, authConfig);
+
+      if (detailsTrip && Number(detailsTrip.id) === Number(trip.id)) {
+        setDetailsTrip(null);
+      }
+
+      const selectedDate = tripDateFilter ? toApiDate(tripDateFilter) : todayApiDate;
+      await Promise.all([
+        refreshTrips(selectedDate),
+        refreshRoutingPool(trip.date),
+      ]);
+
+      if (trip.date === todayApiDate) {
+        const refreshedToday = await fetchTripsByDate(todayApiDate);
+        setTodayTrips(refreshedToday);
+      }
+    } catch (error) {
+      console.error('Erro ao excluir rota:', error);
+      alert('Erro ao excluir a rota.');
+    }
+  }, [authConfig, detailsTrip, fetchTripsByDate, refreshRoutingPool, refreshTrips, todayApiDate, tripDateFilter]);
+
   if (isLoading) {
     return (
       <ContainerRoutePlanning>
@@ -2424,15 +2451,24 @@ function RoutePlanning() {
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => exportTripNotesTxt(trip)}>Baixar TXT</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
                           <IconButton
                             icon={Pencil}
                             label="Editar rota"
                             onClick={() => startEditModeFromTrip(trip)}
                             className="rounded-md"
                           />
-                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => exportTripNotesTxt(trip)}>Baixar TXT</button>
-                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
-                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
+                          <button
+                            type="button"
+                            className="inline-flex h-10 w-10 min-h-10 min-w-10 items-center justify-center rounded-md border border-rose-700/70 bg-rose-950/30 text-rose-200 transition hover:bg-rose-900/40"
+                            onClick={() => void handleDeleteListedTrip(trip)}
+                            aria-label={`Excluir rota ${trip.id}`}
+                            title="Excluir rota"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </article>
                     ))

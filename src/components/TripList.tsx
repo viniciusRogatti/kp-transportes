@@ -2,6 +2,7 @@ import axios from 'axios';
 import { IDanfe, ITrip } from '../types/types';
 import ProductListPDF from './ProductListPDF';
 import { pdf } from '@react-pdf/renderer';
+import { Trash2 } from 'lucide-react';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { BoxButton, CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
@@ -10,9 +11,10 @@ import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../ut
 interface TripListProps {
   trip: ITrip;
   setIsPrinting: (param: boolean) => void;
+  onDeleteTrip: (tripId: number) => Promise<void>;
 }
 
-function TripList({ trip, setIsPrinting }: TripListProps) {
+function TripList({ trip, setIsPrinting, onDeleteTrip }: TripListProps) {
 
   async function fetchDanfes(nf: string) {
     try {
@@ -67,6 +69,18 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
     }, 3000);
   }
 
+  async function handleDeleteTrip() {
+    const confirmed = window.confirm(`Deseja excluir a viagem do motorista ${trip.Driver.name}?`);
+    if (!confirmed) return;
+
+    try {
+      await onDeleteTrip(trip.id);
+    } catch (error) {
+      console.error('Erro ao excluir viagem:', error);
+      alert('Não foi possível excluir a viagem.');
+    }
+  }
+
   return (
     <CardTrips>
       <CardHeader>
@@ -81,7 +95,7 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
         </RightHeader>
       </CardHeader>
 
-      <TripNotesContainer>
+      <TripNotesContainer className="w-[calc(100%-72px)]">
         <TripNotesList>
           {trip.TripNotes.map((note) => (
             <TripNoteItem key={`${note.invoice_number}-${note.order}`}>
@@ -92,6 +106,16 @@ function TripList({ trip, setIsPrinting }: TripListProps) {
           ))}
         </TripNotesList>
       </TripNotesContainer>
+
+      <button
+        type="button"
+        aria-label={`Excluir viagem ${trip.id}`}
+        title="Excluir viagem"
+        onClick={() => void handleDeleteTrip()}
+        className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-rose-300/80 bg-rose-50 text-rose-700 transition hover:bg-rose-100"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
 
       <BoxButton>
         <button onClick={handlePrintProductsList}>Imprimir Lista De Produtos</button>

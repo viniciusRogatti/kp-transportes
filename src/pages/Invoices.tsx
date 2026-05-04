@@ -11,6 +11,7 @@ import Header from "../components/Header";
 import IconButton from "../components/ui/IconButton";
 import SearchInput from "../components/ui/SearchInput";
 import ScrollToTopButton from "../components/ScrollToTopButton";
+import CompanyTabs from "../components/CompanyTabs";
 import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchRow } from "../style/invoices";
 import { FilterBar, NotesFound } from "../style/TodayInvoices";
 import { routes } from "../data/danfes";
@@ -23,6 +24,7 @@ import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 import TodayProductList from "../components/TodayProductList";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import { pdf } from "@react-pdf/renderer";
+import { COMPANY_LABELS, resolveDanfeCompanyCode } from "../utils/companyTabs";
 registerLocale('ptBR', ptBR);
 
 function Invoices() {
@@ -32,6 +34,7 @@ function Invoices() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
+  const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
   const [isPrinting, setIsPrinting] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -177,15 +180,20 @@ function Invoices() {
     [invoiceContextByNf],
   );
 
+  const visibleDanfes = useMemo(() => {
+    if (activeCompanyTab === 'all') return dataDanfes;
+    return dataDanfes.filter((danfe) => resolveDanfeCompanyCode(danfe) === activeCompanyTab);
+  }, [activeCompanyTab, dataDanfes]);
+
   const loadOptions = useMemo(
     () => Array.from(
       new Set(
-        dataDanfes
+        visibleDanfes
           .map((danfe) => String(danfe.load_number || '').trim())
           .filter(Boolean),
       ),
     ).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })),
-    [dataDanfes],
+    [visibleDanfes],
   );
 
   const activeFilters = useMemo(() => {
@@ -197,16 +205,17 @@ function Invoices() {
     if (filters.route !== 'Todas') entries.push({ key: 'route', label: `Rota: ${filters.route}` });
     if (filters.driver.trim()) entries.push({ key: 'driver', label: `Motorista: ${filters.driver.trim()}` });
     if (filters.status) entries.push({ key: 'status', label: `Status: ${filters.status}` });
+    if (activeCompanyTab !== 'all') entries.push({ key: 'status', label: `Empresa: ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}` });
     return entries;
-  }, [filters]);
+  }, [activeCompanyTab, filters]);
 
   const danfes = useMemo(
-    () => filterInvoiceListDanfes(dataDanfes, deferredFilters, { invoiceContextByNf }),
-    [dataDanfes, deferredFilters, invoiceContextByNf],
+    () => filterInvoiceListDanfes(visibleDanfes, deferredFilters, { invoiceContextByNf }),
+    [visibleDanfes, deferredFilters, invoiceContextByNf],
   );
 
   async function openPDFInNewTab() {
-    const currentFilteredDanfes = filterInvoiceListDanfes(dataDanfes, filters, { invoiceContextByNf });
+    const currentFilteredDanfes = filterInvoiceListDanfes(visibleDanfes, filters, { invoiceContextByNf });
     const currentFilteredGroupedProducts = groupTodayInvoiceProducts(currentFilteredDanfes);
     if (currentFilteredGroupedProducts.length === 0) return;
 
@@ -238,6 +247,7 @@ function Invoices() {
     <div>
       <Header />
       <Container>
+        <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
         <SearchBar>
           <SearchRow className="w-full grid-cols-1 max-[768px]:grid-cols-1">
             <SearchInput
@@ -335,9 +345,16 @@ function Invoices() {
         <DanfeStatusLegend
           activeStatusFilter={filters.status}
           onChange={(value) => updateFilter('status', value)}
-          totalCount={dataDanfes.length}
+          totalCount={visibleDanfes.length}
           filteredCount={danfes.length}
         />
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted">
+          <span className="rounded-full border border-border bg-surface px-3 py-1">
+            {activeCompanyTab === 'all'
+              ? 'Exibindo notas de todas as empresas.'
+              : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
+          </span>
+        </div>
         <div className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)

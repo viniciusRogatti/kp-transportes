@@ -8,6 +8,7 @@ import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import TodayProductList from "../components/TodayProductList";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
+import CompanyTabs from "../components/CompanyTabs";
 import { routes } from "../data/danfes";
 import { API_URL } from "../data";
 import { Container } from "../style/invoices";
@@ -20,17 +21,7 @@ import { createEmptyInvoiceListFilters, filterTodayInvoiceDanfes } from "../util
 import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
-
-const COMPANY_TAB_ORDER = ['mar_e_rio', 'brazilian_fish', 'pronto'] as const;
-
-const COMPANY_LABELS: Record<string, string> = {
-  all: 'Todas',
-  mar_e_rio: 'MAR E RIO',
-  brazilian_fish: 'BRASFISH',
-  pronto: 'PRONTO',
-};
-
-const resolveCompanyCode = (danfe: IDanfe) => String(danfe.company?.code || '').trim().toLowerCase();
+import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveDanfeCompanyCode } from "../utils/companyTabs";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
@@ -104,9 +95,9 @@ function TodayInvoices() {
 
   const companyOptions = useMemo(() => {
     const dynamicOptions = Array.from(
-      new Set(
-        dataDanfes
-          .map((danfe) => resolveCompanyCode(danfe))
+          new Set(
+            dataDanfes
+          .map((danfe) => resolveDanfeCompanyCode(danfe))
           .filter(Boolean),
       ),
     );
@@ -122,7 +113,7 @@ function TodayInvoices() {
   const visibleDanfes = useMemo(() => {
     const scopedCompanyCode = activeCompanyTab === 'all' ? allTabCompanyFilter : activeCompanyTab;
     if (!scopedCompanyCode || scopedCompanyCode === 'all') return dataDanfes;
-    return dataDanfes.filter((danfe) => resolveCompanyCode(danfe) === scopedCompanyCode);
+    return dataDanfes.filter((danfe) => resolveDanfeCompanyCode(danfe) === scopedCompanyCode);
   }, [activeCompanyTab, allTabCompanyFilter, dataDanfes]);
 
   const loadOptions = useMemo(
@@ -217,54 +208,7 @@ function TodayInvoices() {
     <ContainerTodayInvoices>
       <Header />
       <Container>
-        <div className="mb-s4 flex w-full justify-start">
-          <div className="relative inline-flex max-w-full flex-wrap items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
-            <button
-              type="button"
-              onClick={() => setActiveCompanyTab('mar_e_rio')}
-              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
-                activeCompanyTab === 'mar_e_rio'
-                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-              }`}
-            >
-              MAR E RIO
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveCompanyTab('brazilian_fish')}
-              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
-                activeCompanyTab === 'brazilian_fish'
-                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-              }`}
-            >
-              BRASFISH
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveCompanyTab('pronto')}
-              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
-                activeCompanyTab === 'pronto'
-                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-              }`}
-            >
-              PRONTO
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveCompanyTab('all')}
-              className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
-                activeCompanyTab === 'all'
-                  ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
-              }`}
-            >
-              Todas
-            </button>
-          </div>
-        </div>
+        <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
         <FilterBar>
           {activeCompanyTab === 'all' ? (
             <select value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>

@@ -26,6 +26,7 @@ import Popup from '../components/Popup';
 import ProductListPDF from '../components/ProductListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
+import { cn } from '../lib/cn';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
 import verifyToken from '../utils/verifyToken';
@@ -134,6 +135,12 @@ function resolveRoutingInvoiceDateCandidates(date: string) {
 
 function isTripActive(trip: ITrip) {
   return isRoutePlanningTripActive(trip);
+}
+
+function getTripStatusBadgeClassName(isActive: boolean) {
+  return isActive
+    ? 'border-sky-700 bg-sky-700 text-white'
+    : 'border-slate-700 bg-slate-700 text-white';
 }
 
 function normalizeTripNoteStatus(status: unknown) {
@@ -2028,14 +2035,14 @@ function RoutePlanning() {
             <section className="flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
               <div className="flex min-h-0 flex-1 flex-col">
                 {isUpdating && tripToUpdate ? (
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700/60 bg-sky-950/30 px-2 py-1.5 text-xs text-sky-200">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700 bg-sky-700 px-2 py-1.5 text-xs text-white">
                     <span>
                       Modo edição: rota #{tripToUpdate.id} | Motorista {tripToUpdate.Driver.name} | Placa {tripToUpdate.Car.license_plate}
                     </span>
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        className="rounded border border-sky-700/65 bg-sky-900/25 px-2 py-1 text-sky-100"
+                        className="rounded border border-sky-950 bg-sky-950 px-2 py-1 text-white transition hover:bg-sky-900"
                         onClick={() => setIsSwapModalOpen(true)}
                       >
                         Trocar com rota...
@@ -2165,13 +2172,13 @@ function RoutePlanning() {
                 ) : null}
 
                 {assignmentWarning ? (
-                  <div className="mb-2 w-full rounded-md border border-rose-700/65 bg-rose-950/30 px-3 py-2 text-sm text-rose-200">
+                  <div className="mb-2 w-full rounded-md border border-rose-700 bg-rose-700 px-3 py-2 text-sm text-white">
                     {assignmentWarning}
                   </div>
                 ) : null}
 
                 {hasLockedNotesInRoutingEdit ? (
-                  <div className="mb-2 w-full rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                  <div className="mb-2 w-full rounded-md border border-amber-700 bg-amber-600 px-3 py-2 text-sm text-[#1f1300]">
                     Esta rota possui notas em andamento ou finalizadas. Ainda e possivel adicionar, remover e reordenar notas nesta rota; a troca de motorista ou veiculo continua bloqueada para preservar o historico operacional.
                   </div>
                 ) : null}
@@ -2333,7 +2340,7 @@ function RoutePlanning() {
                                     type="button"
                                     onClick={() => removeNoteFromList(note)}
                                     disabled={noteIsLocked}
-                                    className="rounded border border-rose-700/70 bg-rose-950/30 px-2.5 py-1.5 text-[11px] text-rose-200 disabled:opacity-45"
+                                    className="rounded border border-rose-700 bg-rose-700 px-2.5 py-1.5 text-[11px] text-white transition hover:bg-rose-600 disabled:opacity-45"
                                   >
                                     Remover
                                   </button>
@@ -2354,7 +2361,7 @@ function RoutePlanning() {
                     <button
                       type="button"
                       onClick={jumpToLatest}
-                      className="absolute bottom-12 right-3 inline-flex items-center gap-1 rounded-full border border-sky-700/70 bg-sky-950/80 px-3 py-1.5 text-xs text-sky-100 shadow-[var(--shadow-2)]"
+                      className="absolute bottom-12 right-3 inline-flex items-center gap-1 rounded-full border border-sky-700 bg-sky-700 px-3 py-1.5 text-xs font-semibold text-white shadow-[var(--shadow-2)] transition hover:bg-sky-600"
                     >
                       Ir para a última <ChevronDown className="h-3.5 w-3.5" />
                     </button>
@@ -2447,7 +2454,14 @@ function RoutePlanning() {
                             <p className="text-sm font-semibold text-text">{trip.Driver.name} | {trip.Car.license_plate}</p>
                             <p className="text-xs text-muted">{formatDateBR(trip.date)} | saída #{trip.run_number || 1} | {trip.TripNotes.length} notas</p>
                           </div>
-                          <span className="rounded-full border border-sky-700/60 bg-sky-950/30 px-2 py-1 text-xs text-sky-200">{isTripActive(trip) ? 'Ativa' : 'Finalizada'}</span>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2 py-1 text-xs font-semibold',
+                              getTripStatusBadgeClassName(isTripActive(trip)),
+                            )}
+                          >
+                            {isTripActive(trip) ? 'Ativa' : 'Finalizada'}
+                          </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
@@ -2462,7 +2476,7 @@ function RoutePlanning() {
                           />
                           <button
                             type="button"
-                            className="inline-flex h-10 w-10 min-h-10 min-w-10 items-center justify-center rounded-md border border-rose-700/70 bg-rose-950/30 text-rose-200 transition hover:bg-rose-900/40"
+                            className="inline-flex h-10 w-10 min-h-10 min-w-10 items-center justify-center rounded-md border border-rose-700 bg-rose-700 text-white transition hover:bg-rose-600"
                             onClick={() => void handleDeleteListedTrip(trip)}
                             aria-label={`Excluir rota ${trip.id}`}
                             title="Excluir rota"
@@ -2589,7 +2603,7 @@ function RoutePlanning() {
               </div>
 
               {routingModalState.decision.outcome === 'assignment_conflict' ? (
-                <div className="mt-3 rounded-md border border-sky-700/65 bg-sky-950/25 px-3 py-2 text-sm text-sky-100">
+                <div className="mt-3 rounded-md border border-sky-700 bg-sky-700 px-3 py-2 text-sm text-white">
                   <p><strong>NF:</strong> {routingModalState.danfe.invoice_number}</p>
                   <p><strong>Motorista atual:</strong> {routingModalState.decision.assignment.driverName || 'Nao informado'}</p>
                   <p><strong>Rota atual:</strong> #{routingModalState.decision.assignment.tripId} {routingModalState.decision.assignment.runNumber ? `| saida #${routingModalState.decision.assignment.runNumber}` : ''}</p>
@@ -2598,7 +2612,7 @@ function RoutePlanning() {
               ) : null}
 
               {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'returned_active' ? (
-                <div className="mt-3 rounded-md border border-rose-700/65 bg-rose-950/25 px-3 py-2 text-sm text-rose-100">
+                <div className="mt-3 rounded-md border border-rose-700 bg-rose-700 px-3 py-2 text-sm text-white">
                   <p><strong>Lote de devolucao:</strong> {routingModalState.decision.returnInfo?.batchCode || '-'}</p>
                   <p><strong>Tipo:</strong> {routingModalState.decision.returnInfo?.returnType || '-'}</p>
                   <p><strong>Data da devolucao:</strong> {routingModalState.decision.returnInfo?.returnDate || '-'}</p>
@@ -2657,7 +2671,7 @@ function RoutePlanning() {
                   : `Veículo selecionado já está na rota ${pendingConflict.targetTrip.id}.`}
               </p>
               <div className="mt-3 grid gap-2">
-                <button type="button" className="rounded-md border border-sky-700/70 bg-sky-950/30 px-3 py-2 text-left text-sm text-sky-200" onClick={resolveConflictSwap}>
+                <button type="button" className="rounded-md border border-sky-700 bg-sky-700 px-3 py-2 text-left text-sm font-semibold text-white transition hover:bg-sky-600" onClick={resolveConflictSwap}>
                   A) Trocar com outra rota (Swap) - Recomendado
                 </button>
                 <button type="button" className="rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-3 py-2 text-left text-sm font-semibold text-[#1f1300] hover:brightness-105" onClick={resolveConflictSecondRun}>
@@ -2751,7 +2765,7 @@ function RoutePlanning() {
               </div>
 
               {editHasLockedNotes && hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar) ? (
-                <div className="mb-3 rounded-md border border-amber-700/65 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                <div className="mb-3 rounded-md border border-amber-700 bg-amber-600 px-3 py-2 text-sm text-[#1f1300]">
                   Esta rota possui notas em andamento ou finalizadas. Ainda e possivel adicionar/remover notas, mas a troca de motorista ou veiculo continua bloqueada para preservar o historico operacional.
                 </div>
               ) : null}
@@ -2763,7 +2777,7 @@ function RoutePlanning() {
                     {editNotes.slice().sort((a, b) => a.order - b.order).map((note, index) => (
                       <li key={`${note.invoice_number}-${index}`} className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2/70' : 'border-amber-700/55 bg-amber-950/15'}`}>
                         <span className="min-w-0 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
-                        <button type="button" className="rounded border border-rose-700/70 bg-rose-950/30 px-2 py-0.5 text-xs text-rose-200 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
+                        <button type="button" className="rounded border border-rose-700 bg-rose-700 px-2 py-0.5 text-xs text-white transition hover:bg-rose-600 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
                       </li>
                     ))}
                   </ul>
@@ -2776,7 +2790,7 @@ function RoutePlanning() {
                     {filteredAvailableDanfes.map((danfe) => (
                       <li key={danfe.invoice_number} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm">
                         <span className="min-w-0 truncate text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}</span>
-                        <button type="button" className="rounded border border-sky-700/70 bg-sky-950/35 px-2 py-0.5 text-xs text-sky-200" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
+                        <button type="button" className="rounded border border-sky-700 bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white transition hover:bg-sky-600" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
                       </li>
                     ))}
                   </ul>

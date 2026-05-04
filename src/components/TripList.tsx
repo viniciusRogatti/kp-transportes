@@ -112,7 +112,7 @@ function TripList({ trip, setIsPrinting, onDeleteTrip }: TripListProps) {
         aria-label={`Excluir viagem ${trip.id}`}
         title="Excluir viagem"
         onClick={() => void handleDeleteTrip()}
-        className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-rose-300/80 bg-rose-50 text-rose-700 transition hover:bg-rose-100"
+        className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-rose-700 bg-rose-700 text-white transition hover:bg-rose-600"
       >
         <Trash2 className="h-4 w-4" />
       </button>

@@ -54,7 +54,7 @@ export function PopupButton({ className, $tone, ...props }: BtnProps & { $tone?:
       className={cn(
         'h-10 w-full cursor-pointer rounded-md border px-3 text-sm font-semibold transition hover:-translate-y-px',
         $tone === 'danger'
-          ? 'border-rose-700/70 bg-rose-950/35 text-rose-200 hover:bg-rose-900/40'
+          ? 'border-rose-700 bg-rose-700 text-white hover:bg-rose-600'
           : 'border-white/15 bg-gradient-to-r from-accent to-accent-strong text-[#04131e]',
         className,
       )}

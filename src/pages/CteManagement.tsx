@@ -129,30 +129,30 @@ const emptyConfigForm = () => ({
   notes: '',
 });
 
-const CONFIG_FIELDS: Array<{ key: string; label: string; className?: string }> = [
-  { key: 'freight_per_kg', label: 'Frete por KG', className: 'xl:col-span-1' },
-  { key: 'ad_valorem_percent', label: 'Ad valorem %', className: 'xl:col-span-1' },
-  { key: 'gris_percent', label: 'GRIS %', className: 'xl:col-span-1' },
-  { key: 'toll_fee', label: 'Pedágio fixo', className: 'xl:col-span-1' },
-  { key: 'dispatch_fee', label: 'Taxa de despacho', className: 'xl:col-span-1' },
-  { key: 'insurance_fee', label: 'Seguro fixo', className: 'xl:col-span-1' },
-  { key: 'intra_state_cfop', label: 'CFOP intraestadual', className: 'xl:col-span-1' },
-  { key: 'inter_state_cfop', label: 'CFOP interestadual', className: 'xl:col-span-1' },
-  { key: 'issuer_name', label: 'Razão social emissora', className: 'xl:col-span-3' },
-  { key: 'issuer_trade_name', label: 'Nome fantasia', className: 'xl:col-span-2' },
-  { key: 'issuer_tax_id', label: 'CNPJ emissor', className: 'xl:col-span-1' },
-  { key: 'issuer_state_registration', label: 'Inscrição estadual', className: 'xl:col-span-1' },
-  { key: 'issuer_rntrc', label: 'RNTRC', className: 'xl:col-span-1' },
-  { key: 'issuer_crt', label: 'CRT', className: 'xl:col-span-1' },
-  { key: 'issuer_phone', label: 'Telefone', className: 'xl:col-span-1' },
-  { key: 'issuer_email', label: 'Email', className: 'xl:col-span-2' },
-  { key: 'issuer_street', label: 'Logradouro', className: 'xl:col-span-3' },
-  { key: 'issuer_number', label: 'Número', className: 'xl:col-span-1' },
-  { key: 'issuer_neighborhood', label: 'Bairro', className: 'xl:col-span-2' },
-  { key: 'issuer_city_code', label: 'Código município IBGE', className: 'xl:col-span-1' },
-  { key: 'issuer_city_name', label: 'Município', className: 'xl:col-span-2' },
-  { key: 'issuer_state', label: 'UF', className: 'xl:col-span-1' },
-  { key: 'issuer_zip_code', label: 'CEP', className: 'xl:col-span-1' },
+const CONFIG_FIELDS: Array<{ key: string; label: string; helper: string; className?: string }> = [
+  { key: 'freight_per_kg', label: 'Frete por KG', helper: 'Valor cobrado por quilo transportado. Ex.: 0,80 para R$ 0,80/kg.', className: 'xl:col-span-1' },
+  { key: 'ad_valorem_percent', label: 'Ad valorem %', helper: 'Percentual sobre o valor total da NF usado no seguro do transporte. Ex.: 0,30 para 0,30%.', className: 'xl:col-span-1' },
+  { key: 'gris_percent', label: 'GRIS %', helper: 'Percentual de gerenciamento de risco sobre o valor da NF. Ex.: 0,25 para 0,25%.', className: 'xl:col-span-1' },
+  { key: 'toll_fee', label: 'Pedágio fixo', helper: 'Valor fixo somado ao frete quando houver cobrança padrão de pedágio.', className: 'xl:col-span-1' },
+  { key: 'dispatch_fee', label: 'Taxa de despacho', helper: 'Taxa fixa operacional adicionada à prestação.', className: 'xl:col-span-1' },
+  { key: 'insurance_fee', label: 'Seguro fixo', helper: 'Use se existir um valor fixo de seguro além do ad valorem. Pode ficar em branco.', className: 'xl:col-span-1' },
+  { key: 'intra_state_cfop', label: 'CFOP intraestadual', helper: 'CFOP sugerido quando origem e destino estão na mesma UF.', className: 'xl:col-span-1' },
+  { key: 'inter_state_cfop', label: 'CFOP interestadual', helper: 'CFOP sugerido quando origem e destino estão em UFs diferentes.', className: 'xl:col-span-1' },
+  { key: 'issuer_name', label: 'Razão social emissora', helper: 'Nome jurídico da transportadora emissora do CT-e.', className: 'xl:col-span-3' },
+  { key: 'issuer_trade_name', label: 'Nome fantasia', helper: 'Nome comercial da transportadora. Pode ficar em branco se não usar.', className: 'xl:col-span-2' },
+  { key: 'issuer_tax_id', label: 'CNPJ emissor', helper: 'CNPJ da transportadora que vai emitir o CT-e.', className: 'xl:col-span-1' },
+  { key: 'issuer_state_registration', label: 'Inscrição estadual', helper: 'Inscrição estadual da transportadora emissora.', className: 'xl:col-span-1' },
+  { key: 'issuer_rntrc', label: 'RNTRC', helper: 'Registro Nacional de Transportadores Rodoviários de Cargas.', className: 'xl:col-span-1' },
+  { key: 'issuer_crt', label: 'CRT', helper: 'Código de regime tributário informado pelo fiscal/contador.', className: 'xl:col-span-1' },
+  { key: 'issuer_phone', label: 'Telefone', helper: 'Telefone principal da transportadora emissora.', className: 'xl:col-span-1' },
+  { key: 'issuer_email', label: 'Email', helper: 'Email de contato fiscal/operacional da emissão.', className: 'xl:col-span-2' },
+  { key: 'issuer_street', label: 'Logradouro', helper: 'Rua, avenida ou rodovia do endereço fiscal da transportadora.', className: 'xl:col-span-3' },
+  { key: 'issuer_number', label: 'Número', helper: 'Número do endereço fiscal.', className: 'xl:col-span-1' },
+  { key: 'issuer_neighborhood', label: 'Bairro', helper: 'Bairro do endereço fiscal.', className: 'xl:col-span-2' },
+  { key: 'issuer_city_code', label: 'Código município IBGE', helper: 'Código IBGE do município emissor.', className: 'xl:col-span-1' },
+  { key: 'issuer_city_name', label: 'Município', helper: 'Município do endereço fiscal da transportadora.', className: 'xl:col-span-2' },
+  { key: 'issuer_state', label: 'UF', helper: 'UF do emissor. Ex.: SP, RJ, SC.', className: 'xl:col-span-1' },
+  { key: 'issuer_zip_code', label: 'CEP', helper: 'CEP do endereço fiscal.', className: 'xl:col-span-1' },
 ];
 
 const statusTone = (status: string) => {
@@ -188,6 +188,8 @@ function CteManagement() {
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [configForm, setConfigForm] = useState(emptyConfigForm);
   const [certificateInfo, setCertificateInfo] = useState<CteConfigPayload['active_certificate']>(null);
+  const [hasSavedConfiguration, setHasSavedConfiguration] = useState(false);
+  const [isEditingConfig, setIsEditingConfig] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [uploadingCertificate, setUploadingCertificate] = useState(false);
@@ -312,10 +314,15 @@ function CteManagement() {
       });
       setConfigForm(next);
       setCertificateInfo(data?.active_certificate || null);
+      const hasConfig = Boolean(data?.configuration);
+      setHasSavedConfiguration(hasConfig);
+      setIsEditingConfig(!hasConfig && isAdminManager);
     } catch (error) {
       console.error(error);
       setConfigForm(emptyConfigForm());
       setCertificateInfo(null);
+      setHasSavedConfiguration(false);
+      setIsEditingConfig(isAdminManager);
     } finally {
       setLoading(false);
     }
@@ -345,6 +352,8 @@ function CteManagement() {
         ...configForm,
       });
       setSuccessMessage('Configuração de CT-e salva com sucesso.');
+      setHasSavedConfiguration(true);
+      setIsEditingConfig(false);
       await loadConfiguration(selectedCompanyId);
     } catch (error: any) {
       console.error(error);
@@ -499,22 +508,34 @@ function CteManagement() {
                     Os campos em branco são tratados como zero nos componentes opcionais. O cálculo usa o valor total da NF, peso bruto e volumes importados do XML.
                   </p>
                 </div>
-                <Badge tone={isAdminManager ? 'info' : 'neutral'}>
-                  {isAdminManager ? 'Edição liberada' : 'Somente leitura'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge tone={isAdminManager ? (isEditingConfig ? 'info' : 'neutral') : 'neutral'}>
+                    {isAdminManager ? (isEditingConfig ? 'Modo edição' : 'Modo visualização') : 'Somente leitura'}
+                  </Badge>
+                  {isAdminManager && hasSavedConfiguration ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingConfig((prev) => !prev)}
+                      className="inline-flex h-9 items-center rounded-md border border-border bg-surface-2 px-3 text-xs font-semibold text-text transition hover:border-accent"
+                    >
+                      {isEditingConfig ? 'Cancelar edição' : 'Editar configuração'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {CONFIG_FIELDS.map(({ key, label, className }) => (
+                {CONFIG_FIELDS.map(({ key, label, helper, className }) => (
                   <label key={key} className={className || 'block'}>
                     <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
                     <input
                       type="text"
                       value={(configForm as Record<string, string>)[key]}
                       onChange={(event) => setConfigForm((prev) => ({ ...prev, [key]: event.target.value }))}
-                      disabled={!isAdminManager}
+                      disabled={!isAdminManager || !isEditingConfig}
                       className="h-10 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
                     />
+                    <span className="mt-1 block text-[11px] leading-relaxed text-muted">{helper}</span>
                   </label>
                 ))}
 
@@ -523,12 +544,13 @@ function CteManagement() {
                   <select
                     value={configForm.environment}
                     onChange={(event) => setConfigForm((prev) => ({ ...prev, environment: event.target.value }))}
-                    disabled={!isAdminManager}
+                    disabled={!isAdminManager || !isEditingConfig}
                     className="h-10 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <option value="homologation">Homologação</option>
                     <option value="production">Produção</option>
                   </select>
+                  <span className="mt-1 block text-[11px] leading-relaxed text-muted">Homologação para testes com SEFAZ; produção para emissão real.</span>
                 </label>
               </div>
 
@@ -537,16 +559,17 @@ function CteManagement() {
                 <textarea
                   value={configForm.notes}
                   onChange={(event) => setConfigForm((prev) => ({ ...prev, notes: event.target.value }))}
-                  disabled={!isAdminManager}
+                  disabled={!isAdminManager || !isEditingConfig}
                   className="min-h-[96px] w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-70"
                 />
+                <span className="mt-1 block text-[11px] leading-relaxed text-muted">Use para observações fiscais ou operacionais específicas da empresa.</span>
               </label>
 
               <div className="mt-4">
                 <button
                   type="button"
                   onClick={handleSaveConfig}
-                  disabled={!isAdminManager || savingConfig || !selectedCompanyId}
+                  disabled={!isAdminManager || !isEditingConfig || savingConfig || !selectedCompanyId}
                   className="inline-flex h-10 items-center rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {savingConfig ? 'Salvando...' : 'Salvar configuração'}

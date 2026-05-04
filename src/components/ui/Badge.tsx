@@ -20,7 +20,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 function Badge({ className, tone = 'neutral', ...props }: BadgeProps) {
   return (
     <span
-      className={cn('inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-semibold', toneMap[tone], className)}
+      className={cn('inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-semibold whitespace-nowrap', toneMap[tone], className)}
       {...props}
     />
   );

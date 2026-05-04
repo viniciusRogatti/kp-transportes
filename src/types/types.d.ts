@@ -569,6 +569,16 @@ export interface IDanfe {
   company_id?: number;
   invoice_number: string;
   status?: string | null;
+  current_cte?: {
+    id: number | null;
+    number: number | null;
+    series: string | null;
+    status: string | null;
+    cfop: string | null;
+    taker_role: string | null;
+    total_service_value: string | null;
+    created_at: string | null;
+  } | null;
   replacement_invoice_number?: string | null;
   replacement_reason?: string | null;
   replacement_invoice?: {

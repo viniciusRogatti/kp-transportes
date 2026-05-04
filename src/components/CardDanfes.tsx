@@ -44,6 +44,24 @@ function getOccurrenceDetailStatusLabel(value: unknown) {
   return String(value || '').trim().toLowerCase() === 'resolved' ? 'Resolvida' : 'Pendente';
 }
 
+function getCteStatusLabel(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'authorized') return 'CT-e autorizado';
+  if (normalized === 'rejected') return 'CT-e rejeitado';
+  if (normalized === 'cancelled') return 'CT-e cancelado';
+  if (normalized === 'failed') return 'Falha no CT-e';
+  if (normalized === 'ready') return 'CT-e pronto';
+  if (normalized === 'draft') return 'CT-e rascunho';
+  return 'CT-e vinculado';
+}
+
+function getCteStatusTone(value: unknown) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'authorized') return 'success' as const;
+  if (normalized === 'rejected' || normalized === 'failed' || normalized === 'cancelled') return 'danger' as const;
+  return 'warning' as const;
+}
+
 function CardDanfes({
   danfes,
   driverByInvoice = {},
@@ -247,6 +265,9 @@ function CardDanfes({
             const latestOccurrenceTone = latestOccurrence ? getOccurrenceTone(latestOccurrence.status) : 'warning';
             const creditLetterTone = invoiceContext?.credit_letter_pending_count ? 'warning' : 'success';
             const driverTone = resolvedDriverName ? 'success' : 'warning';
+            const currentCte = danfe.current_cte || null;
+            const currentCteLabel = currentCte ? getCteStatusLabel(currentCte.status) : null;
+            const currentCteNumber = currentCte?.number ? `${currentCte.number}/${currentCte.series || '1'}` : `rascunho ${currentCte?.id || ''}`.trim();
 
             return (
               <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
@@ -307,6 +328,11 @@ function CardDanfes({
                           {replacedInvoiceNumber ? (
                             <Badge tone="info" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                               {`Substitui NF ${replacedInvoiceNumber}`}
+                            </Badge>
+                          ) : null}
+                          {currentCte ? (
+                            <Badge tone={getCteStatusTone(currentCte.status)} className="h-auto px-2 py-0.5 text-[10px] leading-tight">
+                              {`${currentCteLabel}: ${currentCteNumber}`}
                             </Badge>
                           ) : null}
                         </div>
@@ -392,6 +418,16 @@ function CardDanfes({
                         <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                         <p><strong>Motorista:</strong> {resolvedDriverName || 'Sem motorista'}</p>
+                        {currentCte ? (
+                          <>
+                            <p><strong>CT-e atual:</strong> {`${currentCteLabel} (${currentCteNumber})`}</p>
+                            <p><strong>CFOP sugerido/usado:</strong> {currentCte.cfop || '-'}</p>
+                            <p><strong>Tomador:</strong> {currentCte.taker_role || '-'}</p>
+                            <p><strong>Valor do frete:</strong> {currentCte.total_service_value || '-'}</p>
+                          </>
+                        ) : (
+                          <p><strong>CT-e:</strong> nenhum CT-e vinculado ainda.</p>
+                        )}
                         {replacementInvoiceNumber ? (
                           <>
                             <p><strong>Motivo/observacao:</strong> {normalizeTextValue(danfe.replacement_reason) || 'Refaturada'}</p>

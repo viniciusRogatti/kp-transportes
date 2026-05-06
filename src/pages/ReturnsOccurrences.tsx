@@ -2341,6 +2341,30 @@ function ReturnsOccurrences() {
                     )}
 
                   </BoxDescription>
+                  {!selectedBatch && (
+                    <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                      <div>
+                        <InlineText>Motorista</InlineText>
+                        <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
+                          <option value="">Selecione</option>
+                          {drivers.map((driver) => (
+                            <option key={driver.id} value={driver.id}>{driver.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <InlineText>Veiculo / Placa</InlineText>
+                        <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
+                          <option value="">Selecione</option>
+                          {cars.map((car) => (
+                            <option key={car.id} value={car.id}>
+                              {car.model} - {car.license_plate}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </Grid>
+                  )}
                   <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
                   <div className="space-y-2">
                     <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
@@ -2780,29 +2804,6 @@ function ReturnsOccurrences() {
 
                   {!selectedBatch && (
                     <>
-                      <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-                        <div>
-                          <InlineText>Motorista</InlineText>
-                          <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
-                            <option value="">Selecione</option>
-                            {drivers.map((driver) => (
-                              <option key={driver.id} value={driver.id}>{driver.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <InlineText>Veiculo / Placa</InlineText>
-                          <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
-                            <option value="">Selecione</option>
-                            {cars.map((car) => (
-                              <option key={car.id} value={car.id}>
-                                {car.model} - {car.license_plate}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </Grid>
-
                       <div className="mt-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:justify-between">
                         <div className="min-w-0 md:w-[240px] md:shrink-0">
                           <InlineText>Data da devolucao</InlineText>

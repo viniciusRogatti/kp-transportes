@@ -156,4 +156,80 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     expect(pdf).toHaveBeenCalled();
   });
+
+  it('converte caixas em unidades ao registrar devolucao parcial em UN', async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/drivers')) {
+        return Promise.resolve({ data: [{ id: '1', name: 'Motorista Teste' }] });
+      }
+
+      if (url.includes('/cars')) {
+        return Promise.resolve({ data: [{ id: '1', model: 'Truck', license_plate: 'ABC-1234' }] });
+      }
+
+      if (url.includes('/products')) {
+        return Promise.resolve({
+          data: [{ code: 'PA000014', description: 'FILE DE MERLUZA ARGENTINA CONG PCT 400GR CX 20UN', type: 'CX', price: '10.00' }],
+        });
+      }
+
+      if (url.includes('/occurrences/search')) {
+        return Promise.resolve({ data: [] });
+      }
+
+      if (url.includes('/returns/batches/search')) {
+        return Promise.resolve({ data: [] });
+      }
+
+      if (url.includes('/collection-requests/action-queue')) {
+        return Promise.resolve({ data: [] });
+      }
+
+      if (url.includes('/danfes/nf/1754803')) {
+        return Promise.resolve({
+          data: {
+            invoice_number: '1754803',
+            Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+            DanfeProducts: [{
+              Product: {
+                code: 'PA000014',
+                description: 'FILE DE MERLUZA ARGENTINA CONG PCT 400GR CX 20UN',
+                type: 'CX',
+              },
+              quantity: 2,
+              type: 'CX',
+            }],
+          },
+        });
+      }
+
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage();
+
+    await screen.findByText('NF + tipo de devolucao');
+
+    fireEvent.click(screen.getByLabelText('Parcial'));
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1754803' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+
+    await screen.findByText('NF carregada: 1754803 | Cliente: Cliente Teste');
+
+    fireEvent.change(screen.getByRole('combobox', { name: '' }), {
+      target: { value: 'PA000014' },
+    });
+
+    const selects = screen.getAllByRole('combobox');
+    fireEvent.change(selects[1], { target: { value: 'UN' } });
+
+    await screen.findByText('Limite da NF para o tipo selecionado: 40 | Restante para adicionar: 40');
+
+    fireEvent.change(screen.getByDisplayValue('1'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
+
+    expect(screen.getByText(/PA000014/)).toBeInTheDocument();
+    expect(screen.getByText(/Tipo: UN \| Qtd: 3/)).toBeInTheDocument();
+    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Quantidade excede o limite da NF'));
+  });
 });

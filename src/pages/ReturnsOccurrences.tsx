@@ -193,6 +193,40 @@ const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
 const normalizeQtyByType = (value: number, isKg: boolean) => (
   isKg ? Math.round(value * KG_QUANTITY_PRECISION) / KG_QUANTITY_PRECISION : value
 );
+const parseUnitsPerBoxFromDescription = (description?: string | null) => {
+  const normalizedDescription = String(description || '').toUpperCase();
+  const match = normalizedDescription.match(/\bCX\s*(\d+(?:[.,]\d+)?)\s*UN\b/);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const parsed = Number(normalizeDecimalInput(match[1]));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+const getDanfeProductQuantityLimitByType = (product?: IDanfe['DanfeProducts'][number] | null, selectedType?: string | null) => {
+  if (!product) {
+    return 0;
+  }
+
+  const baseQuantity = Number(normalizeDecimalInput(String(product.quantity ?? '0')));
+  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
+    return 0;
+  }
+
+  const normalizedSelectedType = normalizeProductType(selectedType);
+  const normalizedProductType = normalizeProductType(product.type || product.Product.type);
+  const unitsPerBox = parseUnitsPerBoxFromDescription(product.Product.description);
+
+  if (
+    unitsPerBox
+    && normalizedProductType.includes('CX')
+    && (normalizedSelectedType === 'UN' || normalizedSelectedType === 'PCT')
+  ) {
+    return baseQuantity * unitsPerBox;
+  }
+
+  return baseQuantity;
+};
 const formatKgInputValue = (value: number) => (
   normalizeQtyByType(value, true).toFixed(3).replace(/\.?0+$/, '')
 );
@@ -544,10 +578,7 @@ function ReturnsOccurrences() {
     return Array.from(new Set([...fromDanfe, ...DEFAULT_RETURN_UNIT_TYPES]));
   }, [selectedPartialDanfeProduct]);
 
-  const selectedPartialMaxQtyRaw = selectedPartialDanfeProduct
-    ? Number(normalizeDecimalInput(String(selectedPartialDanfeProduct.quantity ?? '0')))
-    : 0;
-  const selectedPartialMaxQty = Number.isFinite(selectedPartialMaxQtyRaw) ? selectedPartialMaxQtyRaw : 0;
+  const selectedPartialMaxQty = getDanfeProductQuantityLimitByType(selectedPartialDanfeProduct, partialProductType);
   const selectedPartialAlreadyAddedQty = partialProductCode && partialProductType
     ? partialItems
       .filter((item) => (
@@ -1232,8 +1263,7 @@ function ReturnsOccurrences() {
     const normalizedType = normalizeProductType(partialProductType);
     const isKg = normalizedType.includes('KG');
     const minAllowed = isKg ? KG_QUANTITY_MIN : 1;
-    const maxAllowedRaw = Number(normalizeDecimalInput(String(foundProduct.quantity ?? '0')));
-    const maxAllowed = Number.isFinite(maxAllowedRaw) ? maxAllowedRaw : 0;
+    const maxAllowed = getDanfeProductQuantityLimitByType(foundProduct, normalizedType);
     const existingQty = partialItems
       .filter((item) => (
         item.product_id === foundProduct.Product.code

@@ -5,7 +5,7 @@ import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
-import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Search, Send, Trash2, Truck, UserPlus } from 'lucide-react';
+import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -101,24 +101,6 @@ function parseSupportedDateInput(date: string) {
   }
 
   return null;
-}
-
-function buildDateRange(dateFrom: string, dateTo: string) {
-  const start = parseSupportedDateInput(dateFrom);
-  const end = parseSupportedDateInput(dateTo || dateFrom);
-  if (!start || !end) return [] as string[];
-
-  const normalizedStart = start.getTime() <= end.getTime() ? start : end;
-  const normalizedEnd = start.getTime() <= end.getTime() ? end : start;
-  const cursor = new Date(normalizedStart.getFullYear(), normalizedStart.getMonth(), normalizedStart.getDate());
-  const dates: string[] = [];
-
-  while (cursor.getTime() <= normalizedEnd.getTime()) {
-    dates.push(toApiDate(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return dates;
 }
 
 function resolveRoutingInvoiceDateCandidates(date: string) {
@@ -598,52 +580,26 @@ function RoutePlanning() {
     });
   }, []);
 
-  const searchTripsWithFallback = useCallback(async (filters: {
-    startDate?: string;
-    endDate?: string;
-    tripId?: string;
-    driverName?: string;
-    licensePlate?: string;
-  }) => {
-    const dateRange = buildDateRange(filters.startDate || todayApiDate, filters.endDate || filters.startDate || todayApiDate);
-    if (!dateRange.length) return [] as ITrip[];
+  const filteredDisplayedTrips = useMemo(() => {
+    const startDate = tripDateFilter ? toApiDate(tripDateFilter) : '';
+    const endDate = tripEndDateFilter ? toApiDate(tripEndDateFilter) : startDate;
 
-    const uniqueTrips = new Map<number, ITrip>();
-    const responses = await Promise.all(dateRange.map((date) => fetchTripsByDate(date)));
-
-    responses.flat().forEach((trip) => {
-      uniqueTrips.set(Number(trip.id), trip);
+    return filterTripsLocally(sortedDisplayedTrips, {
+      startDate,
+      endDate,
+      tripId: tripIdSearch.trim(),
+      driverName: tripDriverSearch.trim(),
+      licensePlate: tripPlateSearch.trim(),
     });
-
-    return filterTripsLocally(Array.from(uniqueTrips.values()), filters);
-  }, [fetchTripsByDate, filterTripsLocally, todayApiDate]);
-
-  const searchTripsWithFilters = useCallback(async (filters: {
-    startDate?: string;
-    endDate?: string;
-    tripId?: string;
-    driverName?: string;
-    licensePlate?: string;
-  }) => {
-    try {
-      const response = await axios.get<{ trips: ITrip[] }>(`${API_URL}/trips/search`, {
-        ...authConfig,
-        params: {
-          startDate: filters.startDate || undefined,
-          endDate: filters.endDate || undefined,
-          tripId: filters.tripId || undefined,
-          driverName: filters.driverName || undefined,
-          licensePlate: filters.licensePlate || undefined,
-        },
-      });
-      return Array.isArray(response.data?.trips) ? response.data.trips : [];
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
-        return searchTripsWithFallback(filters);
-      }
-      throw error;
-    }
-  }, [authConfig, searchTripsWithFallback]);
+  }, [
+    sortedDisplayedTrips,
+    tripDateFilter,
+    tripEndDateFilter,
+    tripIdSearch,
+    tripDriverSearch,
+    tripPlateSearch,
+    filterTripsLocally,
+  ]);
 
   const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string) => {
     const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`);
@@ -1710,28 +1666,6 @@ function RoutePlanning() {
     else setCars((prev) => [...prev, data]);
   };
 
-  const handleTripSearch = async () => {
-    const startDate = tripDateFilter ? toApiDate(tripDateFilter) : '';
-    const endDate = tripEndDateFilter ? toApiDate(tripEndDateFilter) : startDate;
-
-    setIsTripsLoading(true);
-    try {
-      const trips = await searchTripsWithFilters({
-        startDate,
-        endDate,
-        tripId: tripIdSearch.trim(),
-        driverName: tripDriverSearch.trim(),
-        licensePlate: tripPlateSearch.trim(),
-      });
-      setDisplayedTrips(trips);
-    } catch (error: any) {
-      console.error('Erro ao buscar rotas com filtros:', error);
-      alert(error?.response?.data?.error || 'Nao foi possivel buscar as rotas com os filtros informados.');
-    } finally {
-      setIsTripsLoading(false);
-    }
-  };
-
   const fetchAvailableForTrip = async (tripDate: string, ignoreTripId?: number | null) => {
     try {
       const [danfes, trips] = await Promise.all([
@@ -2379,23 +2313,15 @@ function RoutePlanning() {
                       type="button"
                       className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
                       onClick={() => {
-                        setTripDateFilter(new Date());
-                        setTripEndDateFilter(new Date());
+                        setTripDateFilter(null);
+                        setTripEndDateFilter(null);
                         setTripIdSearch('');
                         setTripDriverSearch('');
                         setTripPlateSearch('');
-                        void refreshTrips(todayApiDate);
                       }}
                     >
                       Limpar
                     </button>
-                    <IconButton
-                      icon={Search}
-                      label="Buscar rotas"
-                      onClick={handleTripSearch}
-                      size="lg"
-                      className="h-10 w-10 min-h-10 min-w-10 rounded-md"
-                    />
                   </div>
                 </div>
 
@@ -2438,16 +2364,20 @@ function RoutePlanning() {
                     className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
                   />
                 </div>
+
+                {isTripsLoading && filteredDisplayedTrips.length > 0 ? (
+                  <div className="text-xs text-muted">Atualizando rotas...</div>
+                ) : null}
               </div>
 
-              {isTripsLoading ? (
+              {isTripsLoading && !filteredDisplayedTrips.length ? (
                 <div className="grid gap-2 md:grid-cols-2"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
               ) : (
                 <div className="scrollbar-ui min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                  {!sortedDisplayedTrips.length ? (
+                  {!filteredDisplayedTrips.length ? (
                     <div className="rounded-md border border-border bg-surface-2/70 p-3 text-sm text-muted">Nenhuma rota encontrada para essa data.</div>
                   ) : (
-                    sortedDisplayedTrips.map((trip) => (
+                    filteredDisplayedTrips.map((trip) => (
                       <article key={trip.id} className="rounded-md border border-border bg-surface-2/70 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>

@@ -28,6 +28,7 @@ import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
 import { cn } from '../lib/cn';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
 import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
@@ -1820,9 +1821,55 @@ function RoutePlanning() {
   };
 
   const fetchDanfesByTrip = async (trip: ITrip) => {
-    const requests = trip.TripNotes.map((note) => axios.get(`${API_URL}/danfes/nf/${note.invoice_number}`).then((res) => res.data).catch(() => null));
+    const requests = trip.TripNotes.map((note) => axios.get(`${API_URL}/danfes/nf/${note.invoice_number}`)
+      .then((res) => sanitizeDanfeTextFields(res.data))
+      .catch(() => null));
     const danfes = await Promise.all(requests);
-    return danfes.filter((item) => item !== null);
+    return danfes.filter((item): item is IDanfe => item !== null);
+  };
+
+  const fetchDanfesByInvoiceNumbers = async (invoiceNumbers: string[]) => {
+    const uniqueInvoices = Array.from(new Set(invoiceNumbers.map((invoiceNumber) => String(invoiceNumber || '').trim()).filter(Boolean)));
+    const requests = uniqueInvoices.map((invoiceNumber) => axios.get(`${API_URL}/danfes/nf/${invoiceNumber}`)
+      .then((res) => sanitizeDanfeTextFields(res.data))
+      .catch(() => null));
+    const danfes = await Promise.all(requests);
+    return danfes.filter((item): item is IDanfe => item !== null);
+  };
+
+  const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[]) => {
+    if (!tripDanfes.length || !retainedContextRows.length) return [];
+
+    const sameDayTrips = await fetchTripsByDate(trip.date);
+    const sameDayCustomerIds = new Set(
+      sameDayTrips
+        .flatMap((dayTrip) => dayTrip.TripNotes || [])
+        .map((note) => String(note.customer_id || '').trim())
+        .filter(Boolean),
+    );
+
+    const relevantRetainedRows = selectRetainedRowsForRoute({
+      routeDanfes: tripDanfes,
+      retainedRows: retainedContextRows,
+      sameDayCustomerIds,
+    });
+
+    if (!relevantRetainedRows.length) return [];
+
+    const retainedInvoiceNumbersNeedingAddress = relevantRetainedRows
+      .filter((row) => {
+        const customerId = String(row.customer_id || '').trim();
+        return customerId ? sameDayCustomerIds.has(customerId) === false : true;
+      })
+      .map((row) => row.invoice_number);
+
+    const retainedDanfes = await fetchDanfesByInvoiceNumbers(retainedInvoiceNumbersNeedingAddress);
+    const retainedDanfesByInvoice = retainedDanfes.reduce<Map<string, IDanfe>>((accumulator, danfe) => {
+      accumulator.set(String(danfe.invoice_number || '').trim(), danfe);
+      return accumulator;
+    }, new Map());
+
+    return buildRetainedReminders(tripDanfes, relevantRetainedRows, retainedDanfesByInvoice);
   };
 
   const printTripProducts = async (trip: ITrip) => {
@@ -1831,10 +1878,12 @@ function RoutePlanning() {
       const validDanfes: IDanfe[] = await fetchDanfesByTrip(trip);
       const allProducts = collectTripProductsByNote(trip.TripNotes || [], validDanfes);
       const grouped = groupTripProductsByCodeAndUnit(allProducts);
+      const retainedReminders = await resolveRetainedRemindersForTrip(trip, validDanfes);
       const pdfBlob = await pdf(
         <ProductListPDF
           products={grouped}
           danfes={validDanfes}
+          retainedReminders={retainedReminders}
           driver={trip.Driver.name}
           vehiclePlate={trip.Car?.license_plate}
           tripId={trip.id}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { IDanfe } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
+import { RetainedReminder } from '../utils/retainedReminders';
 
 interface ProductRow {
   Product?: {
@@ -25,6 +26,7 @@ interface ProductListPDFProps {
   totalWeight?: number | string | null;
   noteCount?: number | null;
   danfes?: IDanfe[];
+  retainedReminders?: RetainedReminder[];
 }
 
 const styles = StyleSheet.create({
@@ -125,6 +127,34 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
     paddingVertical: 4,
     paddingHorizontal: 6,
+  },
+  attentionCard: {
+    borderWidth: 1.2,
+    borderColor: '#92400e',
+    backgroundColor: '#fef3c7',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 4,
+  },
+  attentionTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#7c2d12',
+    marginBottom: 4,
+  },
+  attentionItem: {
+    marginBottom: 4,
+  },
+  attentionItemTitle: {
+    fontSize: 8.5,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 1,
+  },
+  attentionItemText: {
+    fontSize: 8,
+    color: '#111827',
+    lineHeight: 1.35,
   },
   inlineInfoCitiesText: {
     fontSize: 9,
@@ -258,6 +288,7 @@ const renderOperationalHeader = ({
   tripCreatedAt,
   tripId,
   danfes,
+  retainedReminders,
 }: ProductListPDFProps) => {
   const tripCities = resolveTripCities(danfes);
 
@@ -293,6 +324,35 @@ const renderOperationalHeader = ({
           <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
         </View>
       </View>
+      {retainedReminders?.length ? (
+        <View style={styles.attentionCard}>
+          <Text style={styles.attentionTitle}>ATENCAO: recolher canhotos retidos nesta rota</Text>
+          {retainedReminders.map((reminder) => (
+            <View
+              key={`${reminder.matchType}-${reminder.retainedInvoiceNumber}`}
+              style={styles.attentionItem}
+            >
+              <Text style={styles.attentionItemTitle}>
+                {`NF ${reminder.retainedInvoiceNumber} | ${reminder.retainedCustomerName}`}
+              </Text>
+              {reminder.matchType === 'customer' ? (
+                <Text style={styles.attentionItemText}>
+                  {`Voce tem entrega no cliente ${reminder.retainedCustomerName}. Lembre-se de recolher o canhoto retido da NF ${reminder.retainedInvoiceNumber} ao atender a(s) NF(s) ${reminder.routeInvoiceNumbers.join(', ')}.`}
+                </Text>
+              ) : (
+                <>
+                  <Text style={styles.attentionItemText}>
+                    {`Nao ha entrega deste cliente na rota atual. Aproveite a passagem por ${reminder.city || 'esta cidade'} para recolher o canhoto retido do cliente ${reminder.retainedCustomerName}.`}
+                  </Text>
+                  <Text style={styles.attentionItemText}>
+                    {`Endereco: ${reminder.addressLine || 'Endereco nao localizado.'}`}
+                  </Text>
+                </>
+              )}
+            </View>
+          ))}
+        </View>
+      ) : null}
       {tripCities.length ? (
         <View style={styles.citiesRow}>
           <Text style={styles.inlineInfoCitiesText}>{`Cidades: ${tripCities.join(', ')}`}</Text>

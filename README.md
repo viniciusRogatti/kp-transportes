@@ -63,6 +63,8 @@ Aplicacao web da operacao KP Transportes. O painel concentra busca de notas, rot
 - `RoutePlanning`: cria e edita rotas, adiciona notas por NF/codigo de barras, reordena paradas, troca motorista/veiculo e remove notas.
 - Fluxo de validacao de conflito de atribuicao de motorista e veiculo.
 - O sistema acusa conflito operacional antes de salvar quando motorista ou veiculo ja estao ocupados em outra rota ativa.
+- O romaneio de produtos agora incorpora lembretes operacionais de canhoto retido: se houver nova entrega para o mesmo cliente no dia, o PDF destaca o cliente e a NF pendente; se nao houver entrega do cliente, mas existir passagem pela mesma cidade, o PDF usa esse contexto para orientar a coleta do canhoto com endereco completo.
+- A regra evita ruído entre rotas do mesmo dia: quando o cliente ja aparece em alguma rota, o lembrete fica restrito a essa rota, em vez de se repetir em qualquer outra viagem da mesma cidade.
 - Exportacao de TXT, PDF de produtos e PDF de entregas.
 - Exclusao de rotas pela propria tela.
 - Existe tambem uma implementacao auxiliar em `Trips.tsx`, mas a navegacao principal de rotas/viagens hoje passa por `RoutePlanning`.
@@ -83,6 +85,7 @@ Aplicacao web da operacao KP Transportes. O painel concentra busca de notas, rot
 - Marcacao de revisao manual em recibos.
 - `OperationalPendencies`: backlog operacional por fila (`pending`, `retained`, `returned`, `cancelled`, `unassigned`) com upload corretivo de canhoto.
 - O backlog cruza status operacional da NF, atribuicao de rota/motorista e evidencia de canhoto para separar gargalos reais da operacao.
+- O fluxo de `canhoto retido` nao para na tela de pendencias: ele reaparece como lembrete preventivo dentro do romaneio da proxima rota relevante, transformando uma pendencia historica em acao concreta para o motorista.
 
 ### Monitoramento e alertas
 - `DeliveryMonitoring`: visao operacional em Google Maps com motoristas, entregas, estagios da rota, alertas e acao manual sobre status da parada.
@@ -153,4 +156,4 @@ Aplicacao local: `http://localhost:3000`
 ## Observacoes
 - O app possui refresh automatico de versao para evitar sessao antiga carregando bundle desatualizado.
 - O frontend depende do backend para autenticacao, escopo de dados, notificacoes, upload de XML e pipeline de canhotos.
-- Parte importante do valor do sistema esta nas regras operacionais refletidas na UI, especialmente em devolucoes, conflitos de roteirizacao, backlog de canhotos e monitoramento assistido por alertas.
+- Parte importante do valor do sistema esta nas regras operacionais refletidas na UI, especialmente em devolucoes, conflitos de roteirizacao, backlog de canhotos, roteirizacao com memoria operacional de canhotos retidos e monitoramento assistido por alertas.

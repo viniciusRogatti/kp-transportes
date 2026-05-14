@@ -81,6 +81,10 @@ function toApiDate(date: Date) {
   return format(date, 'dd-MM-yyyy');
 }
 
+function toQueryDate(date: Date) {
+  return format(date, 'yyyy-MM-dd');
+}
+
 function toISODate(date: string) {
   const normalized = String(date || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
@@ -557,6 +561,24 @@ function RoutePlanning() {
     return response.data as ITrip[];
   };
 
+  const fetchTripsByRange = async (startDate?: Date | null, endDate?: Date | null) => {
+    const resolvedStart = startDate || endDate;
+    const resolvedEnd = endDate || startDate;
+
+    if (!resolvedStart && !resolvedEnd) {
+      return fetchTripsByDate(todayApiDate);
+    }
+
+    const response = await axios.get<{ trips: ITrip[] }>(`${API_URL}/trips/search`, {
+      params: {
+        startDate: resolvedStart ? toQueryDate(resolvedStart) : undefined,
+        endDate: resolvedEnd ? toQueryDate(resolvedEnd) : undefined,
+      },
+    });
+
+    return Array.isArray(response.data?.trips) ? response.data.trips : [];
+  };
+
   const filterTripsLocally = useCallback((trips: ITrip[], filters: {
     startDate?: string;
     endDate?: string;
@@ -721,6 +743,16 @@ function RoutePlanning() {
       setIsTripsLoading(false);
     }
   }, [todayApiDate]);
+
+  const refreshTripsBySelectedRange = useCallback(async () => {
+    setIsTripsLoading(true);
+    try {
+      const trips = await fetchTripsByRange(tripDateFilter, tripEndDateFilter);
+      setDisplayedTrips(trips);
+    } finally {
+      setIsTripsLoading(false);
+    }
+  }, [tripDateFilter, tripEndDateFilter, todayApiDate]);
 
   const fetchDanfesForTripDate = useCallback(async (tripDate: string) => {
     const candidateDates = resolveRoutingInvoiceDateCandidates(tripDate);
@@ -2362,14 +2394,25 @@ function RoutePlanning() {
                       type="button"
                       className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
                       onClick={() => {
-                        setTripDateFilter(null);
-                        setTripEndDateFilter(null);
+                        const today = new Date();
+                        setTripDateFilter(today);
+                        setTripEndDateFilter(today);
                         setTripIdSearch('');
                         setTripDriverSearch('');
                         setTripPlateSearch('');
+                        void refreshTrips(todayApiDate);
                       }}
                     >
                       Limpar
+                    </button>
+                    <button
+                      type="button"
+                      className="h-10 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
+                      onClick={() => {
+                        void refreshTripsBySelectedRange();
+                      }}
+                    >
+                      Buscar período
                     </button>
                   </div>
                 </div>

@@ -1126,9 +1126,22 @@ function RoutePlanning() {
     if (nearBottom) setShowJumpToLatest(false);
   };
 
+  const focusNoteLookupInput = useCallback((select = false) => {
+    window.setTimeout(() => {
+      noteLookupRef.current?.focus();
+      if (select) noteLookupRef.current?.select();
+    }, 0);
+  }, []);
+
+  const alertAndRefocusNoteLookup = useCallback((message: string, select = false) => {
+    alert(message);
+    focusNoteLookupInput(select);
+  }, [focusNoteLookupInput]);
+
   const closeRoutingModal = () => {
     if (isResolvingNoteConflict) return;
     setRoutingModalState(null);
+    focusNoteLookupInput(true);
   };
 
   const handleUseReplacementInvoice = () => {
@@ -1144,12 +1157,12 @@ function RoutePlanning() {
     });
   };
 
-  const handleResolveAssignmentConflict = async () => {
+  const handleResolveAssignmentConflict = useCallback(async () => {
     if (!routingModalState || routingModalState.decision.outcome !== 'assignment_conflict') return;
 
     const assignment = routingModalState.decision.assignment;
     if (!assignment?.tripId || !assignment?.noteId) {
-      alert(`A NF ${routingModalState.danfe.invoice_number} esta atribuida, mas nao foi possivel localizar a parada atual para remocao assistida.`);
+      alertAndRefocusNoteLookup(`A NF ${routingModalState.danfe.invoice_number} esta atribuida, mas nao foi possivel localizar a parada atual para remocao assistida.`, true);
       return;
     }
 
@@ -1174,12 +1187,13 @@ function RoutePlanning() {
         refreshTrips(todayApiDate),
         refreshRoutingPool(tripToUpdate?.date || todayApiDate),
       ]);
+      focusNoteLookupInput(true);
     } catch (error: any) {
-      alert(error?.response?.data?.error || `Nao foi possivel remover a NF ${routingModalState.danfe.invoice_number} da rota atual.`);
+      alertAndRefocusNoteLookup(error?.response?.data?.error || `Nao foi possivel remover a NF ${routingModalState.danfe.invoice_number} da rota atual.`, true);
     } finally {
       setIsResolvingNoteConflict(false);
     }
-  };
+  }, [alertAndRefocusNoteLookup, appendDanfeToRoute, authConfig, focusNoteLookupInput, refreshRoutingPool, refreshTrips, routingModalState, todayApiDate, tripToUpdate?.date]);
 
   const buildAssignmentConflictMessage = useCallback((conflicts: any, secondRunEnabled: boolean) => {
     if (conflicts?.hasCarConflict) {
@@ -1218,13 +1232,13 @@ function RoutePlanning() {
 
   const handleAddNote = async () => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
-      alert('Selecione um motorista e um veículo antes de adicionar uma nota.');
+      alertAndRefocusNoteLookup('Selecione um motorista e um veículo antes de adicionar uma nota.');
       return;
     }
 
     const lookup = noteLookup.trim();
     if (!lookup) {
-      alert('Digite a NF ou código de barras da nota.');
+      alertAndRefocusNoteLookup('Digite a NF ou código de barras da nota.');
       return;
     }
 
@@ -1244,7 +1258,7 @@ function RoutePlanning() {
     try {
       const danfeData = await fetchDanfeByLookup(lookup);
       if (!danfeData) {
-        alert('Nota não encontrada. Confira a NF/código de barras e tente novamente.');
+        alertAndRefocusNoteLookup('Nota não encontrada. Confira a NF/código de barras e tente novamente.', true);
         return;
       }
 
@@ -1254,7 +1268,7 @@ function RoutePlanning() {
         || pendingInvoiceNumbersRef.current.has(resolvedInvoiceNumber)
         || addedNotesRef.current.some((note) => String(note.invoice_number) === resolvedInvoiceNumber)
       ) {
-        alert('Esta nota já foi adicionada à viagem.');
+        alertAndRefocusNoteLookup('Esta nota já foi adicionada à viagem.', true);
         return;
       }
 
@@ -1271,7 +1285,7 @@ function RoutePlanning() {
         decision,
       });
     } catch {
-      alert('Não foi possível buscar essa nota.');
+      alertAndRefocusNoteLookup('Não foi possível buscar essa nota.', true);
     } finally {
       pendingNoteLookupsRef.current.delete(lookupKey);
       if (resolvedInvoiceNumber) pendingInvoiceNumbersRef.current.delete(resolvedInvoiceNumber);

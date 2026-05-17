@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   AlertTriangle,
   Check,
 } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import ptBR from 'date-fns/locale/pt-BR';
+import 'react-datepicker/dist/react-datepicker.css';
 import { useNavigate } from 'react-router';
 import { io, Socket } from 'socket.io-client';
 import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';
@@ -32,6 +35,7 @@ import {
   getReadAlertIds,
   subscribeToAlertReadChanges,
 } from '../utils/alertReadState';
+import { COMPANY_LABELS } from '../utils/companyTabs';
 import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
 import {
   canManuallyUpdateStopStatus,
@@ -42,6 +46,10 @@ import {
 
 type DeliveryRow = {
   invoice_number: string;
+  company?: {
+    code: string;
+    name: string;
+  } | null;
   customer_name: string;
   city: string;
   state: string;
@@ -69,6 +77,10 @@ type DeliveryRow = {
 
 type DriverSummary = {
   trip_id: number;
+  company?: {
+    code: string;
+    name: string;
+  } | null;
   driver_id: number | null;
   driver_name: string;
   run_number: number;
@@ -124,6 +136,8 @@ type MonitoringSummary = {
   geolocated: number;
   missing_geolocation: number;
 };
+
+type CompanyFilterOption = 'all' | 'mar_e_rio' | 'brazilian_fish' | 'pronto' | string;
 
 type MonitoringAlert = {
   id: number;
@@ -196,11 +210,30 @@ const resolveGoogleMapsApiKey = () => {
 
 const COMPANY_MARKER_ADDRESS = 'Av. Ricardo Bassoli Cezare, 3666 - Jardim Itatinga';
 const MOBILE_MONITORING_BREAKPOINT = 768;
+const DEFAULT_COMPANY_FILTER = 'mar_e_rio';
 
 const getTodayMonitoringDate = () => format(new Date(), 'yyyy-MM-dd');
+const parseMonitoringDate = (value: string) => {
+  try {
+    const parsed = parseISO(`${value}T00:00:00`);
+    return Number.isFinite(parsed.getTime()) ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+};
 
 const stagePriority = (stage: DeliveryStage) => {
   return STAGE_PRIORITY[stage] ?? 99;
+};
+
+const resolveCompanyCode = (company?: { code?: string | null } | null) => {
+  const code = String(company?.code || '').trim().toLowerCase();
+  return code || 'unknown';
+};
+
+const resolveCompanyLabel = (company?: { code?: string | null; name?: string | null } | null) => {
+  const code = resolveCompanyCode(company);
+  return COMPANY_LABELS[code] || String(company?.name || '').trim() || 'Empresa nao identificada';
 };
 
 const RETURNED_STOP_STATUSES = new Set(['returned', 'cancelled']);
@@ -364,8 +397,17 @@ const areSameGeolocation = (left: DeliveryRow['geolocation'], right: DeliveryRow
     && left.last_geocoded_at === right.last_geocoded_at;
 };
 
+const areSameCompany = (
+  left?: { code?: string | null; name?: string | null } | null,
+  right?: { code?: string | null; name?: string | null } | null,
+) => {
+  return resolveCompanyCode(left) === resolveCompanyCode(right)
+    && resolveCompanyLabel(left) === resolveCompanyLabel(right);
+};
+
 const areSameDeliveryRow = (left: DeliveryRow, right: DeliveryRow) => {
-  return left.invoice_number === right.invoice_number
+  return areSameCompany(left.company, right.company)
+    && left.invoice_number === right.invoice_number
     && left.customer_name === right.customer_name
     && left.city === right.city
     && left.state === right.state
@@ -430,7 +472,8 @@ const areSameAlerts = (left: MonitoringAlert[] = [], right: MonitoringAlert[] = 
 };
 
 const areSameDriverSummary = (left: DriverSummary, right: DriverSummary) => {
-  return left.trip_id === right.trip_id
+  return areSameCompany(left.company, right.company)
+    && left.trip_id === right.trip_id
     && left.driver_id === right.driver_id
     && left.driver_name === right.driver_name
     && left.run_number === right.run_number
@@ -496,7 +539,9 @@ const getStopStatusUpdateErrorMessage = (error: unknown) => {
 
 function DeliveryMonitoring() {
   const navigate = useNavigate();
+  const datePickerRef = useRef<DatePicker | null>(null);
   const [date, setDate] = useState<string>(getTodayMonitoringDate());
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilterOption>(DEFAULT_COMPANY_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(null);
@@ -683,7 +728,6 @@ function DeliveryMonitoring() {
       });
   }, [overview]);
   const alerts = useMemo(() => overview?.alerts || [], [overview]);
-  const summary = overview?.summary;
   const alertSummary = overview?.alert_summary;
   const unreadAlertsCount = useMemo(
     () => alerts.reduce((count, alert) => {
@@ -693,20 +737,75 @@ function DeliveryMonitoring() {
     [alerts, readAlertIds],
   );
   const totalOpenAlerts = alertSummary?.total ?? alerts.length;
+  const availableCompanies = useMemo(() => {
+    const companyMap = new Map<string, string>();
+
+    drivers.forEach((driver) => {
+      const code = resolveCompanyCode(driver.company);
+      if (!companyMap.has(code)) {
+        companyMap.set(code, resolveCompanyLabel(driver.company));
+      }
+    });
+
+    deliveries.forEach((row) => {
+      const code = resolveCompanyCode(row.company);
+      if (!companyMap.has(code)) {
+        companyMap.set(code, resolveCompanyLabel(row.company));
+      }
+    });
+
+    return Array.from(companyMap.entries())
+      .map(([code, label]) => ({ code, label }))
+      .sort((left, right) => left.label.localeCompare(right.label, 'pt-BR', { sensitivity: 'base' }));
+  }, [deliveries, drivers]);
+  useEffect(() => {
+    if (companyFilter === 'all') return;
+    if (availableCompanies.some((company) => company.code === companyFilter)) return;
+    setCompanyFilter(availableCompanies.some((company) => company.code === DEFAULT_COMPANY_FILTER) ? DEFAULT_COMPANY_FILTER : 'all');
+  }, [availableCompanies, companyFilter]);
+  const companyFilteredDeliveries = useMemo(() => {
+    if (companyFilter === 'all') return deliveries;
+    return deliveries.filter((row) => resolveCompanyCode(row.company) === companyFilter);
+  }, [companyFilter, deliveries]);
+  const filteredDrivers = useMemo(() => {
+    if (companyFilter === 'all') return drivers;
+    return drivers.filter((driver) => resolveCompanyCode(driver.company) === companyFilter);
+  }, [companyFilter, drivers]);
+  const filteredSummary = useMemo<MonitoringSummary>(() => {
+    return companyFilteredDeliveries.reduce<MonitoringSummary>((acc, row) => {
+      acc.total += 1;
+      if (acc[row.stage] !== undefined) acc[row.stage] += 1;
+      if (Number.isFinite(row.geolocation.latitude) && Number.isFinite(row.geolocation.longitude)) {
+        acc.geolocated += 1;
+      } else {
+        acc.missing_geolocation += 1;
+      }
+      return acc;
+    }, {
+      total: 0,
+      unassigned: 0,
+      assigned: 0,
+      on_the_way: 0,
+      on_site: 0,
+      completed: 0,
+      geolocated: 0,
+      missing_geolocation: 0,
+    });
+  }, [companyFilteredDeliveries]);
   const mobileSummaryCards = useMemo(
     () => [
-      { label: 'Motoristas', value: drivers.length },
-      { label: 'Entregas', value: summary?.total || 0 },
-      { label: 'Em rota', value: (summary?.on_the_way || 0) + (summary?.on_site || 0) },
-      { label: 'Concluídas', value: summary?.completed || 0 },
+      { label: 'Motoristas', value: filteredDrivers.length },
+      { label: 'Entregas', value: filteredSummary.total || 0 },
+      { label: 'Em rota', value: (filteredSummary.on_the_way || 0) + (filteredSummary.on_site || 0) },
+      { label: 'Concluídas', value: filteredSummary.completed || 0 },
     ],
-    [drivers.length, summary],
+    [filteredDrivers.length, filteredSummary],
   );
 
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
-    return deliveries.find((row) => row.invoice_number === selectedDeliveryInvoice) || null;
-  }, [deliveries, selectedDeliveryInvoice]);
+    return companyFilteredDeliveries.find((row) => row.invoice_number === selectedDeliveryInvoice) || null;
+  }, [companyFilteredDeliveries, selectedDeliveryInvoice]);
 
   useEffect(() => {
     if (!selectedDeliveryInvoice) return;
@@ -715,11 +814,11 @@ function DeliveryMonitoring() {
   }, [selectedDeliveryInvoice, selectedDelivery]);
 
   const filteredDeliveries = useMemo(() => {
-    return deliveries.filter((row) => {
+    return companyFilteredDeliveries.filter((row) => {
       if (statusFilter !== 'all' && row.stage !== statusFilter) return false;
       return true;
     });
-  }, [deliveries, statusFilter]);
+  }, [companyFilteredDeliveries, statusFilter]);
 
   const mapDeliveries = useMemo(() => {
     const driverScopedDeliveries = selectedDriverId
@@ -730,15 +829,15 @@ function DeliveryMonitoring() {
   }, [filteredDeliveries, selectedDriverId]);
   const mapDriverLocations = useMemo(() => {
     const driverScopedLocations = selectedDriverId
-      ? drivers.filter((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))
-      : drivers;
+      ? filteredDrivers.filter((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))
+      : filteredDrivers;
 
     return toGoogleDriverLocations(driverScopedLocations);
-  }, [drivers, selectedDriverId]);
+  }, [filteredDrivers, selectedDriverId]);
 
   const selectedDriverRoutes = useMemo(
-    () => toGoogleDeliveryRoutes(deliveries, selectedDriverId, showRoutes, mapInitialCenter),
-    [deliveries, mapInitialCenter, selectedDriverId, showRoutes],
+    () => toGoogleDeliveryRoutes(companyFilteredDeliveries, selectedDriverId, showRoutes, mapInitialCenter),
+    [companyFilteredDeliveries, mapInitialCenter, selectedDriverId, showRoutes],
   );
 
   const listRows = useMemo(() => {
@@ -760,7 +859,7 @@ function DeliveryMonitoring() {
   const driverStopsByTrip = useMemo(() => {
     const nextMap = new Map<number, Map<number, DriverStopVisual>>();
 
-    deliveries.forEach((row) => {
+    companyFilteredDeliveries.forEach((row) => {
       const tripId = Number(row.trip_id || 0);
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
@@ -773,12 +872,12 @@ function DeliveryMonitoring() {
     });
 
     return nextMap;
-  }, [deliveries]);
+  }, [companyFilteredDeliveries]);
 
   const deliveriesByTripAndSequence = useMemo(() => {
     const nextMap = new Map<number, Map<number, DeliveryRow>>();
 
-    deliveries.forEach((row) => {
+    companyFilteredDeliveries.forEach((row) => {
       const tripId = Number(row.trip_id || 0);
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
@@ -791,21 +890,48 @@ function DeliveryMonitoring() {
     });
 
     return nextMap;
-  }, [deliveries]);
+  }, [companyFilteredDeliveries]);
+  const groupedDrivers = useMemo(() => {
+    const groups = new Map<string, { code: string; label: string; drivers: DriverSummary[] }>();
+
+    filteredDrivers.forEach((driver) => {
+      const code = resolveCompanyCode(driver.company);
+      const current = groups.get(code);
+
+      if (current) {
+        current.drivers.push(driver);
+        return;
+      }
+
+      groups.set(code, {
+        code,
+        label: resolveCompanyLabel(driver.company),
+        drivers: [driver],
+      });
+    });
+
+    return Array.from(groups.values()).sort((left, right) => left.label.localeCompare(right.label, 'pt-BR', { sensitivity: 'base' }));
+  }, [filteredDrivers]);
+
+  useEffect(() => {
+    if (!selectedDriverId) return;
+    if (filteredDrivers.some((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))) return;
+    setSelectedDriverId(null);
+  }, [filteredDrivers, selectedDriverId]);
 
   useEffect(() => {
     if (!selectedDriverStop) return;
 
     const tripDeliveries = deliveriesByTripAndSequence.get(selectedDriverStop.tripId);
     const stopExists = tripDeliveries?.has(selectedDriverStop.sequence)
-      || drivers.some((driver) => (
+      || filteredDrivers.some((driver) => (
         driver.trip_id === selectedDriverStop.tripId
         && selectedDriverStop.sequence <= Number(driver.total_deliveries || 0)
       ));
 
     if (stopExists) return;
     setSelectedDriverStop(null);
-  }, [deliveriesByTripAndSequence, drivers, selectedDriverStop]);
+  }, [deliveriesByTripAndSequence, filteredDrivers, selectedDriverStop]);
 
   useEffect(() => {
     if (!selectedDriverStop) {
@@ -997,14 +1123,35 @@ function DeliveryMonitoring() {
             {!isMobileView ? (
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Data
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
+                <DatePicker
+                  ref={datePickerRef}
+                  selected={parseMonitoringDate(date)}
+                  onChange={(selectedDate) => {
+                    if (!selectedDate) return;
+                    setDate(format(selectedDate, 'yyyy-MM-dd'));
+                    datePickerRef.current?.setOpen(false);
+                  }}
+                  dateFormat="dd/MM/yyyy"
+                  locale={ptBR}
+                  className="date-picker-input"
+                  popperPlacement="bottom-start"
+                  shouldCloseOnSelect
                 />
               </label>
             ) : null}
+            <label className={`flex flex-col gap-1 text-xs text-muted ${isMobileView ? 'w-full' : ''}`}>
+              Empresa
+              <select
+                value={companyFilter}
+                onChange={(event) => setCompanyFilter(event.target.value)}
+                className={`h-10 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
+              >
+                <option value="all">Todas</option>
+                {availableCompanies.map((company) => (
+                  <option key={company.code} value={company.code}>{company.label}</option>
+                ))}
+              </select>
+            </label>
             <label className={`flex flex-col gap-1 text-xs text-muted ${isMobileView ? 'w-full' : ''}`}>
               Status
               <select
@@ -1069,13 +1216,13 @@ function DeliveryMonitoring() {
           ) : (
             <>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Total: {summary?.total || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Sem motorista: {summary?.unassigned || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {summary?.assigned || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {summary?.on_the_way || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {summary?.on_site || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {summary?.completed || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {summary?.geolocated || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Total: {filteredSummary.total || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Sem motorista: {filteredSummary.unassigned || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {filteredSummary.assigned || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {filteredSummary.on_the_way || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {filteredSummary.on_site || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {filteredSummary.completed || 0}</span>
+                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {filteredSummary.geolocated || 0}</span>
               </div>
 
               {diagnostics ? (
@@ -1114,7 +1261,15 @@ function DeliveryMonitoring() {
               : 'Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.'}
           </p>
           <div className="space-y-1">
-            {drivers.map((driver) => {
+            {groupedDrivers.map((group) => (
+              <div key={group.code} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface-2 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-text">{group.label}</p>
+                    <p className="text-xs text-muted">{`${group.drivers.length} motorista(s)`}</p>
+                  </div>
+                </div>
+                {group.drivers.map((driver) => {
               const numericDriverId = Number(driver.driver_id || 0);
               const canHighlight = numericDriverId > 0;
               const isActive = Number(selectedDriverId) === numericDriverId;
@@ -1321,10 +1476,12 @@ function DeliveryMonitoring() {
                   ) : null}
                 </div>
               );
-            })}
-            {!drivers.length ? (
+                })}
+              </div>
+            ))}
+            {!filteredDrivers.length ? (
               <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-                {isMobileView ? 'Nenhuma rota disponível para hoje.' : 'Nenhuma rota para a data selecionada.'}
+                {isMobileView ? 'Nenhuma rota disponível para os filtros de hoje.' : 'Nenhuma rota para os filtros selecionados.'}
               </div>
             ) : null}
           </div>
@@ -1333,7 +1490,7 @@ function DeliveryMonitoring() {
         <section className="mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
           <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
             <span>Visualizacao operacional no Google Maps (POIs e nomes de lugares).</span>
-            <span>{`Pontos no mapa: ${mapDeliveries.length} entregas • ${mapDriverLocations.length} motoristas • 1 empresa`}</span>
+            <span>{`Pontos no mapa: ${mapDeliveries.length} entregas • ${mapDriverLocations.length} motoristas • ${companyFilter === 'all' ? availableCompanies.length : 1} empresa${companyFilter === 'all' ? 's' : ''}`}</span>
           </div>
 
           <div className="relative h-[calc(100vh-360px)] min-h-[380px] overflow-hidden rounded-md border border-border">
@@ -1350,7 +1507,7 @@ function DeliveryMonitoring() {
               selectedDeliveryId={selectedDeliveryInvoice}
               onMarkerClick={(deliveryId) => {
                 setSelectedDeliveryInvoice(deliveryId);
-                const delivery = deliveries.find((row) => row.invoice_number === deliveryId) || null;
+                const delivery = filteredDeliveries.find((row) => row.invoice_number === deliveryId) || null;
                 if (delivery?.driver_id) {
                   setSelectedDriverId(Number(delivery.driver_id));
                 }

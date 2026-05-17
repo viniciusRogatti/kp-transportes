@@ -50,6 +50,10 @@ const buildOverview = (status: MonitoringStatus) => ({
   deliveries: [
     {
       invoice_number: '123456',
+      company: {
+        code: 'mar_e_rio',
+        name: 'MAR E RIO',
+      },
       customer_name: 'Cliente Teste',
       city: 'Campinas',
       state: 'SP',
@@ -78,6 +82,10 @@ const buildOverview = (status: MonitoringStatus) => ({
   drivers: [
     {
       trip_id: 11,
+      company: {
+        code: 'mar_e_rio',
+        name: 'MAR E RIO',
+      },
       driver_id: 7,
       driver_name: 'Motorista Teste',
       run_number: 1,

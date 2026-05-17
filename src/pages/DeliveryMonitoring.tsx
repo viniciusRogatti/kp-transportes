@@ -256,6 +256,11 @@ const compareCompanyCodes = (leftCode: string, rightCode: string) => {
   return (COMPANY_LABELS[leftCode] || leftCode).localeCompare(COMPANY_LABELS[rightCode] || rightCode, 'pt-BR', { sensitivity: 'base' });
 };
 
+const buildDriverScopeKey = (tripId: number, companyCode: string, companyFilter: CompanyFilterOption) => {
+  if (companyFilter === 'all') return `${tripId}:all`;
+  return `${tripId}:${companyCode}`;
+};
+
 const RETURNED_STOP_STATUSES = new Set(['returned', 'cancelled']);
 const REDELIVERY_STOP_STATUSES = new Set(['redelivery']);
 const RETAINED_STOP_STATUSES = new Set(['retained']);
@@ -881,7 +886,7 @@ function DeliveryMonitoring() {
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
       const companyCode = resolveCompanyCode(row.company);
-      const scopeKey = `${tripId}:${companyCode}`;
+      const scopeKey = buildDriverScopeKey(tripId, companyCode, companyFilter);
 
       if (!nextMap.has(scopeKey)) {
         nextMap.set(scopeKey, new Map<number, DriverStopVisual>());
@@ -891,7 +896,7 @@ function DeliveryMonitoring() {
     });
 
     return nextMap;
-  }, [companyFilteredDeliveries]);
+  }, [companyFilteredDeliveries, companyFilter]);
 
   const deliveriesByScopeAndSequence = useMemo(() => {
     const nextMap = new Map<string, Map<number, DeliveryRow>>();
@@ -901,7 +906,7 @@ function DeliveryMonitoring() {
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
       const companyCode = resolveCompanyCode(row.company);
-      const scopeKey = `${tripId}:${companyCode}`;
+      const scopeKey = buildDriverScopeKey(tripId, companyCode, companyFilter);
 
       if (!nextMap.has(scopeKey)) {
         nextMap.set(scopeKey, new Map<number, DeliveryRow>());
@@ -911,7 +916,7 @@ function DeliveryMonitoring() {
     });
 
     return nextMap;
-  }, [companyFilteredDeliveries]);
+  }, [companyFilteredDeliveries, companyFilter]);
   const scopedDrivers = useMemo<ScopedDriverSummary[]>(() => {
     const baseDriverByTrip = new Map(drivers.map((driver) => [driver.trip_id, driver]));
     const groupedRows = new Map<string, DeliveryRow[]>();
@@ -922,7 +927,7 @@ function DeliveryMonitoring() {
       if (tripId <= 0 || sequence <= 0) return;
 
       const companyCode = resolveCompanyCode(row.company);
-      const groupKey = `${tripId}:${companyCode}`;
+      const groupKey = buildDriverScopeKey(tripId, companyCode, companyFilter);
       const current = groupedRows.get(groupKey) || [];
       current.push(row);
       groupedRows.set(groupKey, current);
@@ -961,7 +966,9 @@ function DeliveryMonitoring() {
       nextDrivers.push({
         ...baseDriver,
         company_scope_key: groupKey,
-        company: sortedRows[0]?.company || baseDriver.company || null,
+        company: companyFilter === 'all'
+          ? null
+          : sortedRows[0]?.company || baseDriver.company || null,
         total_deliveries: totalDeliveries,
         completed_deliveries: completedDeliveries,
         progress_pct: totalDeliveries > 0 ? Math.round((completedDeliveries / totalDeliveries) * 100) : 0,
@@ -983,8 +990,16 @@ function DeliveryMonitoring() {
         }
         return String(left.driver_name || '').localeCompare(String(right.driver_name || ''));
       });
-  }, [companyFilteredDeliveries, drivers]);
+  }, [companyFilteredDeliveries, companyFilter, drivers]);
   const groupedDrivers = useMemo(() => {
+    if (companyFilter === 'all') {
+      return [{
+        code: 'all',
+        label: 'Todas as empresas',
+        drivers: scopedDrivers,
+      }];
+    }
+
     const groups = new Map<string, { code: string; label: string; drivers: ScopedDriverSummary[] }>();
 
     scopedDrivers.forEach((driver) => {
@@ -1004,7 +1019,7 @@ function DeliveryMonitoring() {
     });
 
     return Array.from(groups.values()).sort((left, right) => compareCompanyCodes(left.code, right.code));
-  }, [scopedDrivers]);
+  }, [companyFilter, scopedDrivers]);
   const progressDriverCount = scopedDrivers.length;
   const mobileSummaryCards = useMemo(
     () => [

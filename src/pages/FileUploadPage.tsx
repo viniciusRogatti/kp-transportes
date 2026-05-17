@@ -44,6 +44,30 @@ interface IUploadEndpointErrorResponse {
   };
 }
 
+type UploadCompanyOption = {
+  id: number;
+  code: string;
+  name: string;
+  tax_id: string;
+};
+
+type UnregisteredIssuerCandidate = {
+  issuerDocument: string;
+  issuerName: string;
+  invoiceNumbers: string[];
+  fileNames: string[];
+};
+
+type CompanyTaxIdAliasResponse = {
+  created: boolean;
+  alias: {
+    tax_id: string;
+    company_id: number;
+  };
+  company: UploadCompanyOption;
+  message: string;
+};
+
 const createEmptySummary = (selected = 0): IImportSummary => ({
   selected,
   processed: 0,
@@ -73,6 +97,12 @@ const formatBytes = (value: number) => {
 
 const formatRate = (rate: number) => `${rate.toFixed(2)} arq/s`;
 const formatEta = (seconds: number) => `${Math.max(0, Math.ceil(seconds))}s`;
+const normalizeDigits = (value: unknown) => String(value || '').replace(/\D/g, '');
+const formatTaxId = (value: unknown) => {
+  const digits = normalizeDigits(value);
+  if (digits.length !== 14) return digits;
+  return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+};
 
 const uniqueProducts = (products: IUploadImportReportResponse['newProducts']) => {
   const map = new Map<string, IUploadImportReportResponse['newProducts'][number]>();
@@ -161,6 +191,16 @@ function FileUploadPage() {
   const [progressTotal, setProgressTotal] = useState(0);
   const [progressRate, setProgressRate] = useState(0);
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null);
+  const [uploadCompanies, setUploadCompanies] = useState<UploadCompanyOption[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [companiesError, setCompaniesError] = useState('');
+  const [isIssuerModalOpen, setIsIssuerModalOpen] = useState(false);
+  const [registeredIssuerDocuments, setRegisteredIssuerDocuments] = useState<string[]>([]);
+  const [selectedIssuerDocument, setSelectedIssuerDocument] = useState('');
+  const [selectedAliasCompanyId, setSelectedAliasCompanyId] = useState('');
+  const [aliasSaveError, setAliasSaveError] = useState('');
+  const [aliasSaveSuccess, setAliasSaveSuccess] = useState('');
+  const [isSavingAlias, setIsSavingAlias] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -190,6 +230,44 @@ function FileUploadPage() {
   const progressPercent = progressTotal > 0 ? (progressProcessed / progressTotal) * 100 : 0;
   const rateLabel = progressRate > 0 ? formatRate(progressRate) : '';
   const etaLabel = etaSeconds !== null && Number.isFinite(etaSeconds) ? formatEta(etaSeconds) : '';
+  const unregisteredIssuerCandidates = useMemo<UnregisteredIssuerCandidate[]>(() => {
+    const candidatesMap = new Map<string, UnregisteredIssuerCandidate>();
+
+    (report?.results || []).forEach((item) => {
+      if (item.status !== 'error' || item.error?.code !== 'XML_COMPANY_UNREGISTERED') return;
+
+      const issuerDocument = normalizeDigits(item.error?.metadata?.issuerDocument);
+      if (!issuerDocument) return;
+
+      const issuerName = String(item.error?.metadata?.issuerName || '').trim() || 'Empresa nao identificada';
+      const invoiceNumber = String(item.error?.metadata?.invoiceNumber || '').trim();
+      const current = candidatesMap.get(issuerDocument) || {
+        issuerDocument,
+        issuerName,
+        invoiceNumbers: [],
+        fileNames: [],
+      };
+
+      if (invoiceNumber && !current.invoiceNumbers.includes(invoiceNumber)) {
+        current.invoiceNumbers.push(invoiceNumber);
+      }
+      if (item.fileName && !current.fileNames.includes(item.fileName)) {
+        current.fileNames.push(item.fileName);
+      }
+
+      candidatesMap.set(issuerDocument, current);
+    });
+
+    return Array.from(candidatesMap.values()).sort((left, right) => left.issuerName.localeCompare(right.issuerName, 'pt-BR', { sensitivity: 'base' }));
+  }, [report]);
+  const pendingUnregisteredIssuerCandidates = useMemo(
+    () => unregisteredIssuerCandidates.filter((item) => !registeredIssuerDocuments.includes(item.issuerDocument)),
+    [registeredIssuerDocuments, unregisteredIssuerCandidates],
+  );
+  const selectedIssuerCandidate = useMemo(
+    () => pendingUnregisteredIssuerCandidates.find((item) => item.issuerDocument === selectedIssuerDocument) || pendingUnregisteredIssuerCandidates[0] || null,
+    [pendingUnregisteredIssuerCandidates, selectedIssuerDocument],
+  );
 
   function resetProgress() {
     setProgressProcessed(0);
@@ -258,12 +336,19 @@ function FileUploadPage() {
     setSelectionIssues(notes);
     setReport(null);
     setActiveTab('summary');
+    setIsIssuerModalOpen(false);
+    setRegisteredIssuerDocuments([]);
+    setSelectedIssuerDocument('');
+    setSelectedAliasCompanyId('');
+    setAliasSaveError('');
+    setAliasSaveSuccess('');
   }
 
   function removeQueueItem(id: string) {
     if (isUploading) return;
     setQueue((previous) => previous.filter((item) => item.id !== id));
     setReport(null);
+    setIsIssuerModalOpen(false);
   }
 
   function clearSelection() {
@@ -273,7 +358,27 @@ function FileUploadPage() {
     setReport(null);
     setActiveTab('summary');
     setIsQueueOpen(false);
+    setIsIssuerModalOpen(false);
+    setRegisteredIssuerDocuments([]);
+    setSelectedIssuerDocument('');
+    setSelectedAliasCompanyId('');
+    setAliasSaveError('');
+    setAliasSaveSuccess('');
     resetProgress();
+  }
+
+  async function fetchUploadCompanies() {
+    setCompaniesLoading(true);
+    setCompaniesError('');
+
+    try {
+      const { data } = await axios.get<UploadCompanyOption[]>(`${API_URL}/upload/companies`);
+      setUploadCompanies(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setCompaniesError('Nao foi possivel carregar as empresas para cadastro de CNPJ.');
+    } finally {
+      setCompaniesLoading(false);
+    }
   }
 
   async function uploadBatch(batch: UploadQueueItem[]) {
@@ -377,6 +482,11 @@ function FileUploadPage() {
 
     setIsUploading(true);
     setActiveTab('summary');
+    setIsIssuerModalOpen(false);
+    setRegisteredIssuerDocuments([]);
+    setSelectedIssuerDocument('');
+    setAliasSaveError('');
+    setAliasSaveSuccess('');
     updateProgressCounters(0, target.length, startedAt);
 
     setQueue((previous) => previous.map((item) => (
@@ -461,6 +571,67 @@ function FileUploadPage() {
 
   const successResults = report?.results.filter((item) => item.status === 'success') || [];
 
+  async function handleRegisterIssuerTaxId() {
+    if (!selectedIssuerCandidate) return;
+    if (!selectedAliasCompanyId) {
+      setAliasSaveError('Selecione a empresa que deve receber esse CNPJ.');
+      return;
+    }
+
+    setIsSavingAlias(true);
+    setAliasSaveError('');
+    setAliasSaveSuccess('');
+
+    try {
+      const { data } = await axios.post<CompanyTaxIdAliasResponse>(`${API_URL}/upload/company-tax-id-aliases`, {
+        company_id: Number(selectedAliasCompanyId),
+        tax_id: selectedIssuerCandidate.issuerDocument,
+      });
+
+      setRegisteredIssuerDocuments((previous) => (
+        previous.includes(selectedIssuerCandidate.issuerDocument)
+          ? previous
+          : [...previous, selectedIssuerCandidate.issuerDocument]
+      ));
+      setAliasSaveSuccess(data.message || 'CNPJ alternativo cadastrado com sucesso.');
+      setAliasSaveError('');
+      setSelectedAliasCompanyId('');
+    } catch (error) {
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? String(error.response?.data?.message || '').trim()
+        : '';
+      setAliasSaveError(message || 'Nao foi possivel cadastrar esse CNPJ alternativo.');
+    } finally {
+      setIsSavingAlias(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchUploadCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (!pendingUnregisteredIssuerCandidates.length) {
+      setIsIssuerModalOpen(false);
+      setSelectedIssuerDocument('');
+      return;
+    }
+
+    setIsIssuerModalOpen(true);
+    setSelectedIssuerDocument((current) => {
+      if (current && pendingUnregisteredIssuerCandidates.some((item) => item.issuerDocument === current)) {
+        return current;
+      }
+      return pendingUnregisteredIssuerCandidates[0]?.issuerDocument || '';
+    });
+  }, [pendingUnregisteredIssuerCandidates]);
+
+  useEffect(() => {
+    if (uploadCompanies.length === 1) {
+      setSelectedAliasCompanyId(String(uploadCompanies[0].id));
+    }
+  }, [uploadCompanies]);
+
   return (
     <div>
       <Header />
@@ -497,6 +668,26 @@ function FileUploadPage() {
               {selectionIssues.map((message) => (
                 <p key={message} className="text-xs">{message}</p>
               ))}
+            </div>
+          )}
+
+          {!!pendingUnregisteredIssuerCandidates.length && !isIssuerModalOpen && (
+            <div className="rounded-xl border semantic-panel-warning p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">Existem CNPJs de emitente ainda nao cadastrados.</p>
+                  <p className="mt-1 text-xs">
+                    Cadastre os CNPJs alternativos para tentar novamente os XMLs com erro.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsIssuerModalOpen(true)}
+                  className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-text"
+                >
+                  Abrir cadastro
+                </button>
+              </div>
             </div>
           )}
 
@@ -677,6 +868,136 @@ function FileUploadPage() {
           )}
         </div>
       </Container>
+
+      {isIssuerModalOpen && selectedIssuerCandidate ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-3xl rounded-2xl border border-border bg-surface p-4 shadow-[var(--shadow-1)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-text">CNPJ do XML nao cadastrado</h3>
+                <p className="mt-1 text-sm text-muted">
+                  O sistema encontrou emitentes novos no lote. Cadastre o CNPJ alternativo e depois use "Reenviar apenas com erro".
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsIssuerModalOpen(false)}
+                className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-semibold text-text"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">CNPJs pendentes</p>
+                <div className="max-h-[320px] space-y-2 overflow-auto">
+                  {pendingUnregisteredIssuerCandidates.map((candidate) => {
+                    const isActive = candidate.issuerDocument === selectedIssuerCandidate.issuerDocument;
+                    return (
+                      <button
+                        key={candidate.issuerDocument}
+                        type="button"
+                        onClick={() => {
+                          setSelectedIssuerDocument(candidate.issuerDocument);
+                          setAliasSaveError('');
+                          setAliasSaveSuccess('');
+                        }}
+                        className={`w-full rounded-xl border px-3 py-3 text-left ${isActive ? 'border-accent/60 bg-accent/15' : 'border-border bg-card'}`}
+                      >
+                        <p className="text-sm font-semibold text-text">{candidate.issuerName}</p>
+                        <p className="mt-1 text-xs text-muted">{formatTaxId(candidate.issuerDocument)}</p>
+                        {candidate.invoiceNumbers.length ? (
+                          <p className="mt-1 text-xs text-muted">{`NF(s): ${candidate.invoiceNumbers.join(', ')}`}</p>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Emitente do XML</p>
+                  <p className="mt-1 text-sm font-semibold text-text">{selectedIssuerCandidate.issuerName}</p>
+                  <p className="mt-1 text-sm text-muted">{formatTaxId(selectedIssuerCandidate.issuerDocument)}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(selectedIssuerCandidate.issuerDocument)}
+                    className="inline-flex h-9 items-center rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
+                  >
+                    Copiar CNPJ
+                  </button>
+                  {selectedIssuerCandidate.fileNames.length ? (
+                    <span className="inline-flex min-h-9 items-center rounded-md border border-border bg-surface px-3 text-xs text-muted">
+                      {`${selectedIssuerCandidate.fileNames.length} arquivo(s) afetado(s)`}
+                    </span>
+                  ) : null}
+                </div>
+
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  Empresa de destino
+                  <select
+                    value={selectedAliasCompanyId}
+                    onChange={(event) => setSelectedAliasCompanyId(event.target.value)}
+                    className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
+                    disabled={companiesLoading || isSavingAlias}
+                  >
+                    <option value="">Selecione a empresa</option>
+                    {uploadCompanies.map((company) => (
+                      <option key={company.id} value={company.id}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {companiesLoading ? (
+                  <p className="text-xs text-muted">Carregando empresas...</p>
+                ) : null}
+                {companiesError ? (
+                  <p className="text-xs text-[color:var(--color-danger)]">{companiesError}</p>
+                ) : null}
+                {aliasSaveError ? (
+                  <p className="text-xs text-[color:var(--color-danger)]">{aliasSaveError}</p>
+                ) : null}
+                {aliasSaveSuccess ? (
+                  <p className="text-xs text-[color:var(--color-success)]">{aliasSaveSuccess}</p>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRegisterIssuerTaxId}
+                    disabled={!selectedAliasCompanyId || isSavingAlias || companiesLoading}
+                    className="inline-flex h-10 items-center rounded-md border border-accent/40 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {isSavingAlias ? 'Cadastrando...' : 'Cadastrar CNPJ'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsIssuerModalOpen(false)}
+                    className="inline-flex h-10 items-center rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+                  >
+                    Fechar por agora
+                  </button>
+                </div>
+
+                <div className="rounded-lg border border-border bg-surface p-3 text-xs text-muted">
+                  Depois do cadastro, use o botão "Reenviar apenas com erro" para tentar novamente os XMLs que falharam.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

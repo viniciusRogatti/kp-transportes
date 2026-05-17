@@ -19,6 +19,7 @@ export interface IImportErrorDetail {
   message: string;
   details?: string;
   hint?: string;
+  metadata?: Record<string, unknown>;
   stack?: string;
 }
 

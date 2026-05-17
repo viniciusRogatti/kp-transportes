@@ -912,50 +912,51 @@ function DeliveryMonitoring() {
       groupedRows.set(groupKey, current);
     });
 
-    return Array.from(groupedRows.entries())
-      .map(([groupKey, rows]) => {
-        const [tripIdRaw] = groupKey.split(':');
-        const tripId = Number(tripIdRaw);
-        const baseDriver = baseDriverByTrip.get(tripId);
-        if (!baseDriver) return null;
+    const nextDrivers: ScopedDriverSummary[] = [];
 
-        const sortedRows = rows
-          .slice()
-          .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
-        const totalDeliveries = sortedRows.length;
-        const completedDeliveries = sortedRows.filter((row) => FINAL_STAGE_SET.has(row.stage)).length;
-        const hasOnSite = sortedRows.some((row) => row.stage === 'on_site');
-        const hasOnTheWay = sortedRows.some((row) => row.stage === 'on_the_way');
-        const scopedStage = totalDeliveries === 0
-          ? 'idle'
-          : completedDeliveries >= totalDeliveries
-            ? 'completed'
-            : hasOnSite
-              ? 'on_site'
-              : hasOnTheWay
-                ? 'on_the_way'
-                : 'assigned';
+    Array.from(groupedRows.entries()).forEach(([groupKey, rows]) => {
+      const [tripIdRaw] = groupKey.split(':');
+      const tripId = Number(tripIdRaw);
+      const baseDriver = baseDriverByTrip.get(tripId);
+      if (!baseDriver) return;
 
-        const scopedSequences = sortedRows
-          .map((row) => Number(row.sequence || 0))
-          .filter((sequence) => sequence > 0);
-        const scopedSequenceSet = new Set(scopedSequences);
+      const sortedRows = rows
+        .slice()
+        .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
+      const totalDeliveries = sortedRows.length;
+      const completedDeliveries = sortedRows.filter((row) => FINAL_STAGE_SET.has(row.stage)).length;
+      const hasOnSite = sortedRows.some((row) => row.stage === 'on_site');
+      const hasOnTheWay = sortedRows.some((row) => row.stage === 'on_the_way');
+      const scopedStage: DriverSummary['stage'] = totalDeliveries === 0
+        ? 'idle'
+        : completedDeliveries >= totalDeliveries
+          ? 'completed'
+          : hasOnSite
+            ? 'on_site'
+            : hasOnTheWay
+              ? 'on_the_way'
+              : 'assigned';
 
-        return {
-          ...baseDriver,
-          company_scope_key: groupKey,
-          company: sortedRows[0]?.company || baseDriver.company || null,
-          total_deliveries: totalDeliveries,
-          completed_deliveries: completedDeliveries,
-          progress_pct: totalDeliveries > 0 ? Math.round((completedDeliveries / totalDeliveries) * 100) : 0,
-          stage: scopedStage,
-          stops: (baseDriver.stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
-          highlighted_stops: (baseDriver.highlighted_stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
-          scoped_sequences: scopedSequences,
-        };
-      })
-      .filter((driver): driver is ScopedDriverSummary => Boolean(driver))
-      .sort((left, right) => {
+      const scopedSequences = sortedRows
+        .map((row) => Number(row.sequence || 0))
+        .filter((sequence) => sequence > 0);
+      const scopedSequenceSet = new Set(scopedSequences);
+
+      nextDrivers.push({
+        ...baseDriver,
+        company_scope_key: groupKey,
+        company: sortedRows[0]?.company || baseDriver.company || null,
+        total_deliveries: totalDeliveries,
+        completed_deliveries: completedDeliveries,
+        progress_pct: totalDeliveries > 0 ? Math.round((completedDeliveries / totalDeliveries) * 100) : 0,
+        stage: scopedStage,
+        stops: (baseDriver.stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
+        highlighted_stops: (baseDriver.highlighted_stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
+        scoped_sequences: scopedSequences,
+      });
+    });
+
+    return nextDrivers.sort((left, right) => {
         const severityDiff = alertSeverityPriority(left.attention_level) - alertSeverityPriority(right.attention_level);
         if (severityDiff !== 0) return severityDiff;
         if (Boolean(left.stale_location) !== Boolean(right.stale_location)) {
@@ -1368,6 +1369,7 @@ function DeliveryMonitoring() {
                 driverStops.map((stop) => [Number(stop.sequence || 0), stop]),
               );
               const selectedStopSequence = selectedDriverStop?.tripId === driver.trip_id
+                && driver.scoped_sequences.includes(selectedDriverStop.sequence)
                 ? selectedDriverStop.sequence
                 : null;
               const selectedStopMeta = selectedStopSequence
@@ -1395,8 +1397,7 @@ function DeliveryMonitoring() {
               const selectedStopFeedbackMessage = selectedStopSequence && stopStatusFeedback?.tripId === driver.trip_id && stopStatusFeedback.sequence === selectedStopSequence
                 ? stopStatusFeedback
                 : null;
-              const visualStops = Array.from({ length: Number(driver.total_deliveries || 0) }, (_, index) => {
-                const sequence = index + 1;
+              const visualStops = driver.scoped_sequences.map((sequence) => {
                 const stopMeta = driverStopsBySequence.get(sequence) || null;
                 return {
                   sequence,
@@ -1407,7 +1408,7 @@ function DeliveryMonitoring() {
 
               return (
                 <div
-                  key={`${driver.trip_id}-${driver.driver_id}`}
+                  key={driver.company_scope_key}
                   className={`w-full rounded-xl border px-3 py-2 transition md:px-2 md:py-1.5 ${getDriverRowClassName(driver, isActive)} ${canHighlight ? '' : 'opacity-85'}`}
                 >
                   <div className="flex flex-col gap-2 md:gap-1.5 lg:flex-row lg:items-center">
@@ -1453,7 +1454,7 @@ function DeliveryMonitoring() {
 
                           return (
                           <button
-                            key={`${driver.trip_id}-${stop.sequence}`}
+                            key={`${driver.company_scope_key}-${stop.sequence}`}
                             type="button"
                             onClick={() => {
                               const isSelectedStop = selectedStopSequence === stop.sequence;
@@ -1521,7 +1522,7 @@ function DeliveryMonitoring() {
 
                           return (
                             <button
-                              key={`${driver.trip_id}-${selectedStopSequence}-${action.status}`}
+                              key={`${driver.company_scope_key}-${selectedStopSequence}-${action.status}`}
                               type="button"
                               onClick={() => handleStopStatusUpdate({
                                 tripId: driver.trip_id,

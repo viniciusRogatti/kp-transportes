@@ -114,6 +114,7 @@ type DriverSummary = {
   stops?: Array<{
     note_id: number;
     invoice_number: string;
+    customer_name?: string | null;
     sequence: number | null;
     status: string;
   }>;
@@ -124,6 +125,11 @@ type DriverSummary = {
     latitude: number;
     longitude: number;
   }>;
+};
+
+type ScopedDriverSummary = DriverSummary & {
+  company_scope_key: string;
+  scoped_sequences: number[];
 };
 
 type MonitoringSummary = {
@@ -225,6 +231,8 @@ const parseMonitoringDate = (value: string) => {
 const stagePriority = (stage: DeliveryStage) => {
   return STAGE_PRIORITY[stage] ?? 99;
 };
+
+const FINAL_STAGE_SET = new Set<DeliveryStage>(['completed']);
 
 const resolveCompanyCode = (company?: { code?: string | null } | null) => {
   const code = String(company?.code || '').trim().toLowerCase();
@@ -767,10 +775,6 @@ function DeliveryMonitoring() {
     if (companyFilter === 'all') return deliveries;
     return deliveries.filter((row) => resolveCompanyCode(row.company) === companyFilter);
   }, [companyFilter, deliveries]);
-  const filteredDrivers = useMemo(() => {
-    if (companyFilter === 'all') return drivers;
-    return drivers.filter((driver) => resolveCompanyCode(driver.company) === companyFilter);
-  }, [companyFilter, drivers]);
   const filteredSummary = useMemo<MonitoringSummary>(() => {
     return companyFilteredDeliveries.reduce<MonitoringSummary>((acc, row) => {
       acc.total += 1;
@@ -792,16 +796,6 @@ function DeliveryMonitoring() {
       missing_geolocation: 0,
     });
   }, [companyFilteredDeliveries]);
-  const mobileSummaryCards = useMemo(
-    () => [
-      { label: 'Motoristas', value: filteredDrivers.length },
-      { label: 'Entregas', value: filteredSummary.total || 0 },
-      { label: 'Em rota', value: (filteredSummary.on_the_way || 0) + (filteredSummary.on_site || 0) },
-      { label: 'Concluídas', value: filteredSummary.completed || 0 },
-    ],
-    [filteredDrivers.length, filteredSummary],
-  );
-
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
     return companyFilteredDeliveries.find((row) => row.invoice_number === selectedDeliveryInvoice) || null;
@@ -819,6 +813,14 @@ function DeliveryMonitoring() {
       return true;
     });
   }, [companyFilteredDeliveries, statusFilter]);
+  const companyFilteredTripIds = useMemo(
+    () => new Set(
+      companyFilteredDeliveries
+        .map((row) => Number(row.trip_id || 0))
+        .filter((tripId) => tripId > 0),
+    ),
+    [companyFilteredDeliveries],
+  );
 
   const mapDeliveries = useMemo(() => {
     const driverScopedDeliveries = selectedDriverId
@@ -829,11 +831,14 @@ function DeliveryMonitoring() {
   }, [filteredDeliveries, selectedDriverId]);
   const mapDriverLocations = useMemo(() => {
     const driverScopedLocations = selectedDriverId
-      ? filteredDrivers.filter((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))
-      : filteredDrivers;
+      ? drivers.filter((driver) => (
+        Number(driver.driver_id || 0) === Number(selectedDriverId)
+        && companyFilteredTripIds.has(Number(driver.trip_id))
+      ))
+      : drivers.filter((driver) => companyFilteredTripIds.has(Number(driver.trip_id)));
 
     return toGoogleDriverLocations(driverScopedLocations);
-  }, [filteredDrivers, selectedDriverId]);
+  }, [companyFilteredTripIds, drivers, selectedDriverId]);
 
   const selectedDriverRoutes = useMemo(
     () => toGoogleDeliveryRoutes(companyFilteredDeliveries, selectedDriverId, showRoutes, mapInitialCenter),
@@ -891,10 +896,81 @@ function DeliveryMonitoring() {
 
     return nextMap;
   }, [companyFilteredDeliveries]);
-  const groupedDrivers = useMemo(() => {
-    const groups = new Map<string, { code: string; label: string; drivers: DriverSummary[] }>();
+  const scopedDrivers = useMemo<ScopedDriverSummary[]>(() => {
+    const baseDriverByTrip = new Map(drivers.map((driver) => [driver.trip_id, driver]));
+    const groupedRows = new Map<string, DeliveryRow[]>();
 
-    filteredDrivers.forEach((driver) => {
+    companyFilteredDeliveries.forEach((row) => {
+      const tripId = Number(row.trip_id || 0);
+      const sequence = Number(row.sequence || 0);
+      if (tripId <= 0 || sequence <= 0) return;
+
+      const companyCode = resolveCompanyCode(row.company);
+      const groupKey = `${tripId}:${companyCode}`;
+      const current = groupedRows.get(groupKey) || [];
+      current.push(row);
+      groupedRows.set(groupKey, current);
+    });
+
+    return Array.from(groupedRows.entries())
+      .map(([groupKey, rows]) => {
+        const [tripIdRaw] = groupKey.split(':');
+        const tripId = Number(tripIdRaw);
+        const baseDriver = baseDriverByTrip.get(tripId);
+        if (!baseDriver) return null;
+
+        const sortedRows = rows
+          .slice()
+          .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0));
+        const totalDeliveries = sortedRows.length;
+        const completedDeliveries = sortedRows.filter((row) => FINAL_STAGE_SET.has(row.stage)).length;
+        const hasOnSite = sortedRows.some((row) => row.stage === 'on_site');
+        const hasOnTheWay = sortedRows.some((row) => row.stage === 'on_the_way');
+        const scopedStage = totalDeliveries === 0
+          ? 'idle'
+          : completedDeliveries >= totalDeliveries
+            ? 'completed'
+            : hasOnSite
+              ? 'on_site'
+              : hasOnTheWay
+                ? 'on_the_way'
+                : 'assigned';
+
+        const scopedSequences = sortedRows
+          .map((row) => Number(row.sequence || 0))
+          .filter((sequence) => sequence > 0);
+        const scopedSequenceSet = new Set(scopedSequences);
+
+        return {
+          ...baseDriver,
+          company_scope_key: groupKey,
+          company: sortedRows[0]?.company || baseDriver.company || null,
+          total_deliveries: totalDeliveries,
+          completed_deliveries: completedDeliveries,
+          progress_pct: totalDeliveries > 0 ? Math.round((completedDeliveries / totalDeliveries) * 100) : 0,
+          stage: scopedStage,
+          stops: (baseDriver.stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
+          highlighted_stops: (baseDriver.highlighted_stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
+          scoped_sequences: scopedSequences,
+        };
+      })
+      .filter((driver): driver is ScopedDriverSummary => Boolean(driver))
+      .sort((left, right) => {
+        const severityDiff = alertSeverityPriority(left.attention_level) - alertSeverityPriority(right.attention_level);
+        if (severityDiff !== 0) return severityDiff;
+        if (Boolean(left.stale_location) !== Boolean(right.stale_location)) {
+          return left.stale_location ? -1 : 1;
+        }
+        if (Boolean(left.tracking_active) !== Boolean(right.tracking_active)) {
+          return left.tracking_active ? -1 : 1;
+        }
+        return String(left.driver_name || '').localeCompare(String(right.driver_name || ''));
+      });
+  }, [companyFilteredDeliveries, drivers]);
+  const groupedDrivers = useMemo(() => {
+    const groups = new Map<string, { code: string; label: string; drivers: ScopedDriverSummary[] }>();
+
+    scopedDrivers.forEach((driver) => {
       const code = resolveCompanyCode(driver.company);
       const current = groups.get(code);
 
@@ -911,27 +987,37 @@ function DeliveryMonitoring() {
     });
 
     return Array.from(groups.values()).sort((left, right) => left.label.localeCompare(right.label, 'pt-BR', { sensitivity: 'base' }));
-  }, [filteredDrivers]);
+  }, [scopedDrivers]);
+  const progressDriverCount = scopedDrivers.length;
+  const mobileSummaryCards = useMemo(
+    () => [
+      { label: 'Motoristas', value: progressDriverCount },
+      { label: 'Entregas', value: filteredSummary.total || 0 },
+      { label: 'Em rota', value: (filteredSummary.on_the_way || 0) + (filteredSummary.on_site || 0) },
+      { label: 'Concluídas', value: filteredSummary.completed || 0 },
+    ],
+    [filteredSummary, progressDriverCount],
+  );
 
   useEffect(() => {
     if (!selectedDriverId) return;
-    if (filteredDrivers.some((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))) return;
+    if (scopedDrivers.some((driver) => Number(driver.driver_id || 0) === Number(selectedDriverId))) return;
     setSelectedDriverId(null);
-  }, [filteredDrivers, selectedDriverId]);
+  }, [scopedDrivers, selectedDriverId]);
 
   useEffect(() => {
     if (!selectedDriverStop) return;
 
     const tripDeliveries = deliveriesByTripAndSequence.get(selectedDriverStop.tripId);
     const stopExists = tripDeliveries?.has(selectedDriverStop.sequence)
-      || filteredDrivers.some((driver) => (
+      || scopedDrivers.some((driver) => (
         driver.trip_id === selectedDriverStop.tripId
-        && selectedDriverStop.sequence <= Number(driver.total_deliveries || 0)
+        && driver.scoped_sequences.includes(selectedDriverStop.sequence)
       ));
 
     if (stopExists) return;
     setSelectedDriverStop(null);
-  }, [deliveriesByTripAndSequence, filteredDrivers, selectedDriverStop]);
+  }, [deliveriesByTripAndSequence, scopedDrivers, selectedDriverStop]);
 
   useEffect(() => {
     if (!selectedDriverStop) {
@@ -1297,7 +1383,7 @@ function DeliveryMonitoring() {
                 selectedStopMeta?.status || selectedStopDelivery?.stop_status || selectedStopDelivery?.danfe_status,
               ) || 'pending';
               const selectedStopInvoiceNumber = selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number || null;
-              const selectedStopCustomerName = selectedStopDelivery?.customer_name || null;
+              const selectedStopCustomerName = selectedStopDelivery?.customer_name || selectedStopMeta?.customer_name || null;
               const selectedStopAllowsManualUpdate = MANUAL_STOP_STATUS_ACTIONS.some((action) => (
                 canManuallyUpdateStopStatus(selectedStopStatus, action.status)
               ));
@@ -1479,7 +1565,7 @@ function DeliveryMonitoring() {
                 })}
               </div>
             ))}
-            {!filteredDrivers.length ? (
+            {!scopedDrivers.length ? (
               <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
                 {isMobileView ? 'Nenhuma rota disponível para os filtros de hoje.' : 'Nenhuma rota para os filtros selecionados.'}
               </div>

@@ -35,7 +35,7 @@ import {
   getReadAlertIds,
   subscribeToAlertReadChanges,
 } from '../utils/alertReadState';
-import { COMPANY_LABELS } from '../utils/companyTabs';
+import { COMPANY_LABELS, COMPANY_TAB_ORDER } from '../utils/companyTabs';
 import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
 import {
   canManuallyUpdateStopStatus,
@@ -192,6 +192,7 @@ type AddressDiagnosticsResponse = {
 
 type DriverStopVisual = 'pending' | 'assigned' | 'on_the_way' | 'on_site' | 'completed' | 'retained' | 'returned' | 'redelivery';
 type SelectedDriverStop = {
+  companyScopeKey: string;
   tripId: number;
   sequence: number;
 };
@@ -242,6 +243,17 @@ const resolveCompanyCode = (company?: { code?: string | null } | null) => {
 const resolveCompanyLabel = (company?: { code?: string | null; name?: string | null } | null) => {
   const code = resolveCompanyCode(company);
   return COMPANY_LABELS[code] || String(company?.name || '').trim() || 'Empresa nao identificada';
+};
+
+const compareCompanyCodes = (leftCode: string, rightCode: string) => {
+  const leftIndex = COMPANY_TAB_ORDER.indexOf(leftCode as typeof COMPANY_TAB_ORDER[number]);
+  const rightIndex = COMPANY_TAB_ORDER.indexOf(rightCode as typeof COMPANY_TAB_ORDER[number]);
+
+  if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
+  if (leftIndex >= 0) return -1;
+  if (rightIndex >= 0) return 1;
+
+  return (COMPANY_LABELS[leftCode] || leftCode).localeCompare(COMPANY_LABELS[rightCode] || rightCode, 'pt-BR', { sensitivity: 'base' });
 };
 
 const RETURNED_STOP_STATUSES = new Set(['returned', 'cancelled']);
@@ -764,7 +776,7 @@ function DeliveryMonitoring() {
 
     return Array.from(companyMap.entries())
       .map(([code, label]) => ({ code, label }))
-      .sort((left, right) => left.label.localeCompare(right.label, 'pt-BR', { sensitivity: 'base' }));
+      .sort((left, right) => compareCompanyCodes(left.code, right.code));
   }, [deliveries, drivers]);
   useEffect(() => {
     if (companyFilter === 'all') return;
@@ -861,37 +873,41 @@ function DeliveryMonitoring() {
     return selectedDriverId ? sortedRows : sortedRows.slice(0, 120);
   }, [filteredDeliveries, selectedDriverId]);
 
-  const driverStopsByTrip = useMemo(() => {
-    const nextMap = new Map<number, Map<number, DriverStopVisual>>();
+  const driverStopsByScope = useMemo(() => {
+    const nextMap = new Map<string, Map<number, DriverStopVisual>>();
 
     companyFilteredDeliveries.forEach((row) => {
       const tripId = Number(row.trip_id || 0);
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
+      const companyCode = resolveCompanyCode(row.company);
+      const scopeKey = `${tripId}:${companyCode}`;
 
-      if (!nextMap.has(tripId)) {
-        nextMap.set(tripId, new Map<number, DriverStopVisual>());
+      if (!nextMap.has(scopeKey)) {
+        nextMap.set(scopeKey, new Map<number, DriverStopVisual>());
       }
 
-      nextMap.get(tripId)?.set(sequence, resolveDriverStopVisual(row));
+      nextMap.get(scopeKey)?.set(sequence, resolveDriverStopVisual(row));
     });
 
     return nextMap;
   }, [companyFilteredDeliveries]);
 
-  const deliveriesByTripAndSequence = useMemo(() => {
-    const nextMap = new Map<number, Map<number, DeliveryRow>>();
+  const deliveriesByScopeAndSequence = useMemo(() => {
+    const nextMap = new Map<string, Map<number, DeliveryRow>>();
 
     companyFilteredDeliveries.forEach((row) => {
       const tripId = Number(row.trip_id || 0);
       const sequence = Number(row.sequence || 0);
       if (tripId <= 0 || sequence <= 0) return;
+      const companyCode = resolveCompanyCode(row.company);
+      const scopeKey = `${tripId}:${companyCode}`;
 
-      if (!nextMap.has(tripId)) {
-        nextMap.set(tripId, new Map<number, DeliveryRow>());
+      if (!nextMap.has(scopeKey)) {
+        nextMap.set(scopeKey, new Map<number, DeliveryRow>());
       }
 
-      nextMap.get(tripId)?.set(sequence, row);
+      nextMap.get(scopeKey)?.set(sequence, row);
     });
 
     return nextMap;
@@ -987,7 +1003,7 @@ function DeliveryMonitoring() {
       });
     });
 
-    return Array.from(groups.values()).sort((left, right) => left.label.localeCompare(right.label, 'pt-BR', { sensitivity: 'base' }));
+    return Array.from(groups.values()).sort((left, right) => compareCompanyCodes(left.code, right.code));
   }, [scopedDrivers]);
   const progressDriverCount = scopedDrivers.length;
   const mobileSummaryCards = useMemo(
@@ -1009,16 +1025,17 @@ function DeliveryMonitoring() {
   useEffect(() => {
     if (!selectedDriverStop) return;
 
-    const tripDeliveries = deliveriesByTripAndSequence.get(selectedDriverStop.tripId);
+    const tripDeliveries = deliveriesByScopeAndSequence.get(selectedDriverStop.companyScopeKey);
     const stopExists = tripDeliveries?.has(selectedDriverStop.sequence)
       || scopedDrivers.some((driver) => (
-        driver.trip_id === selectedDriverStop.tripId
+        driver.company_scope_key === selectedDriverStop.companyScopeKey
+        && driver.trip_id === selectedDriverStop.tripId
         && driver.scoped_sequences.includes(selectedDriverStop.sequence)
       ));
 
     if (stopExists) return;
     setSelectedDriverStop(null);
-  }, [deliveriesByTripAndSequence, scopedDrivers, selectedDriverStop]);
+  }, [deliveriesByScopeAndSequence, scopedDrivers, selectedDriverStop]);
 
   useEffect(() => {
     if (!selectedDriverStop) {
@@ -1360,15 +1377,16 @@ function DeliveryMonitoring() {
               const numericDriverId = Number(driver.driver_id || 0);
               const canHighlight = numericDriverId > 0;
               const isActive = Number(selectedDriverId) === numericDriverId;
-              const routeStops = driverStopsByTrip.get(driver.trip_id) || new Map<number, DriverStopVisual>();
-              const tripDeliveries = deliveriesByTripAndSequence.get(driver.trip_id) || new Map<number, DeliveryRow>();
+              const routeStops = driverStopsByScope.get(driver.company_scope_key) || new Map<number, DriverStopVisual>();
+              const tripDeliveries = deliveriesByScopeAndSequence.get(driver.company_scope_key) || new Map<number, DeliveryRow>();
               const driverStops = Array.isArray(driver.stops)
                 ? driver.stops.slice().sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
                 : [];
               const driverStopsBySequence = new Map(
                 driverStops.map((stop) => [Number(stop.sequence || 0), stop]),
               );
-              const selectedStopSequence = selectedDriverStop?.tripId === driver.trip_id
+              const selectedStopSequence = selectedDriverStop?.companyScopeKey === driver.company_scope_key
+                && selectedDriverStop.tripId === driver.trip_id
                 && driver.scoped_sequences.includes(selectedDriverStop.sequence)
                 ? selectedDriverStop.sequence
                 : null;
@@ -1467,7 +1485,11 @@ function DeliveryMonitoring() {
                                 return;
                               }
 
-                              setSelectedDriverStop({ tripId: driver.trip_id, sequence: stop.sequence });
+                              setSelectedDriverStop({
+                                companyScopeKey: driver.company_scope_key,
+                                tripId: driver.trip_id,
+                                sequence: stop.sequence,
+                              });
                               if (canHighlight) {
                                 setSelectedDriverId(numericDriverId);
                               }

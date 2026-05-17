@@ -566,6 +566,7 @@ function DeliveryMonitoring() {
   const navigate = useNavigate();
   const datePickerRef = useRef<DatePicker | null>(null);
   const [date, setDate] = useState<string>(getTodayMonitoringDate());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilterOption>(DEFAULT_COMPANY_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
@@ -1244,11 +1245,23 @@ function DeliveryMonitoring() {
                 Data
                 <DatePicker
                   ref={datePickerRef}
+                  open={isDatePickerOpen}
                   selected={parseMonitoringDate(date)}
+                  onInputClick={() => setIsDatePickerOpen(true)}
+                  onCalendarOpen={() => setIsDatePickerOpen(true)}
+                  onCalendarClose={() => setIsDatePickerOpen(false)}
+                  onClickOutside={() => setIsDatePickerOpen(false)}
+                  onSelect={() => {
+                    window.setTimeout(() => {
+                      setIsDatePickerOpen(false);
+                    }, 0);
+                  }}
                   onChange={(selectedDate) => {
                     if (!selectedDate) return;
                     setDate(format(selectedDate, 'yyyy-MM-dd'));
-                    datePickerRef.current?.setOpen(false);
+                    window.setTimeout(() => {
+                      setIsDatePickerOpen(false);
+                    }, 0);
                   }}
                   dateFormat="dd/MM/yyyy"
                   locale={ptBR}

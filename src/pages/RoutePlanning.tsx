@@ -160,6 +160,7 @@ function getTripNoteStatusLabel(status: unknown) {
 
 function buildTripNotePayload(note: ITripNote, order: number) {
   return {
+    company_id: note.company_id,
     invoice_number: note.invoice_number,
     city: note.city,
     customer_name: note.customer_name,
@@ -180,6 +181,7 @@ function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe
 
 function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITripNote {
   return {
+    company_id: danfeData.company_id || undefined,
     customer_name: normalizeTextValue(danfeData.Customer?.name_or_legal_entity) || '-',
     customer_id: danfeData.customer_id || null,
     invoice_number: String(danfeData.invoice_number),
@@ -210,7 +212,11 @@ function canReuseVehicleOnSecondRun(trips: ITrip[], driverId: string | number, c
 }
 
 function getTripNoteKey(note: ITripNote) {
-  return String(note.invoice_number);
+  return `${String(note.company_id || 0)}::${String(note.invoice_number)}`;
+}
+
+function getDanfeRouteKey(danfe: Partial<IDanfe> & { invoice_number?: string | number | null; company_id?: number | null }) {
+  return `${String(danfe.company_id || 0)}::${String(danfe.invoice_number || '')}`;
 }
 
 function reorderTripNotes(notes: ITripNote[], movingNote: ITripNote, nextOrder: number): ITripNote[] | null {
@@ -425,10 +431,10 @@ function RoutePlanning() {
 
   const filteredAvailableDanfes = useMemo(() => {
     const term = editSearch.trim().toLowerCase();
-    const alreadyInTrip = new Set(editNotes.map((note) => String(note.invoice_number)));
+    const alreadyInTrip = new Set(editNotes.map((note) => getTripNoteKey(note)));
 
     return availableDanfes
-      .filter((danfe) => !alreadyInTrip.has(String(danfe.invoice_number)))
+      .filter((danfe) => !alreadyInTrip.has(getDanfeRouteKey(danfe)))
       .filter((danfe) => {
         if (!term) return true;
         return String(danfe.invoice_number).includes(term)
@@ -439,15 +445,16 @@ function RoutePlanning() {
   }, [availableDanfes, editNotes, editSearch]);
 
   const availableRoutingCityOptions = useMemo(() => {
-    const invoicesAlreadyAdded = new Set(addedNotes.map((note) => String(note.invoice_number)));
+    const invoicesAlreadyAdded = new Set(addedNotes.map((note) => getTripNoteKey(note)));
     const seenInvoices = new Set<string>();
     const groupedByCity = new Map<string, RoutingCityOption>();
 
     routingPoolDanfes.forEach((danfe) => {
       const invoiceNumber = String(danfe.invoice_number || '').trim();
-      if (!invoiceNumber || invoicesAlreadyAdded.has(invoiceNumber) || seenInvoices.has(invoiceNumber)) return;
+      const danfeKey = getDanfeRouteKey(danfe);
+      if (!invoiceNumber || invoicesAlreadyAdded.has(danfeKey) || seenInvoices.has(danfeKey)) return;
 
-      seenInvoices.add(invoiceNumber);
+      seenInvoices.add(danfeKey);
 
       const city = normalizeCityLabel(danfe.Customer?.city) || 'Cidade não informada';
       const existing = groupedByCity.get(city);
@@ -624,8 +631,10 @@ function RoutePlanning() {
     filterTripsLocally,
   ]);
 
-  const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string) => {
-    const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`);
+  const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string, companyId?: number | null) => {
+    const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
     return Array.isArray(response.data) ? response.data : [];
   }, []);
 
@@ -648,14 +657,14 @@ function RoutePlanning() {
           trip.TripNotes || []
         ))
         .filter((note) => !isRouteFinalStatus(note.status))
-        .map((note) => String(note.invoice_number || '').trim())
+        .map((note) => getTripNoteKey(note as ITripNote))
         .filter(Boolean),
     );
 
     return danfes.filter((danfe) => {
       const invoiceNumber = String(danfe.invoice_number || '').trim();
       if (!invoiceNumber) return false;
-      if (assignedInvoiceNumbers.has(invoiceNumber)) return false;
+      if (assignedInvoiceNumbers.has(getDanfeRouteKey(danfe))) return false;
       return canDanfeAppearInRoutingPool(danfe.status);
     });
   }, []);
@@ -697,7 +706,7 @@ function RoutePlanning() {
     const normalizedStatus = normalizeRoutePlanningStatus(danfeData.status);
 
     const [tripRows, returnBatches] = await Promise.all([
-      normalizedStatus === 'assigned' ? searchTripsByInvoiceNumber(invoiceNumber) : Promise.resolve([] as ITrip[]),
+      normalizedStatus === 'assigned' ? searchTripsByInvoiceNumber(invoiceNumber, danfeData.company_id) : Promise.resolve([] as ITrip[]),
       normalizedStatus === 'returned' ? searchReturnBatchesByInvoiceNumber(invoiceNumber) : Promise.resolve([] as IReturnBatch[]),
     ]);
 
@@ -722,7 +731,7 @@ function RoutePlanning() {
       return false;
     }
 
-    if (addedNotesRef.current.some((note) => String(note.invoice_number) === invoiceNumber)) {
+    if (addedNotesRef.current.some((note) => getTripNoteKey(note) === getDanfeRouteKey(sanitizedDanfe))) {
       return false;
     }
 
@@ -771,8 +780,9 @@ function RoutePlanning() {
       response.data.forEach((danfe: RouteLookupDanfe) => {
         const sanitized = sanitizeRouteLookupDanfe(danfe);
         const invoiceNumber = String(sanitized.invoice_number || '').trim();
-        if (!invoiceNumber || danfesByInvoice.has(invoiceNumber)) return;
-        danfesByInvoice.set(invoiceNumber, sanitized);
+        const invoiceKey = getDanfeRouteKey(sanitized);
+        if (!invoiceNumber || danfesByInvoice.has(invoiceKey)) return;
+        danfesByInvoice.set(invoiceKey, sanitized);
       });
     });
 
@@ -1173,6 +1183,7 @@ function RoutePlanning() {
       }, authConfig);
       await axios.put(`${API_URL}/danfes/update-status`, {
         danfes: [{
+          company_id: routingModalState.danfe.company_id,
           invoice_number: routingModalState.danfe.invoice_number,
           status: 'pending',
         }],
@@ -1262,12 +1273,12 @@ function RoutePlanning() {
         return;
       }
 
-      resolvedInvoiceNumber = String(danfeData.invoice_number || '').trim();
-      if (
-        !resolvedInvoiceNumber
-        || pendingInvoiceNumbersRef.current.has(resolvedInvoiceNumber)
-        || addedNotesRef.current.some((note) => String(note.invoice_number) === resolvedInvoiceNumber)
-      ) {
+	      resolvedInvoiceNumber = getDanfeRouteKey(danfeData);
+	      if (
+	        !resolvedInvoiceNumber
+	        || pendingInvoiceNumbersRef.current.has(resolvedInvoiceNumber)
+	        || addedNotesRef.current.some((note) => getTripNoteKey(note) === resolvedInvoiceNumber)
+	      ) {
         alertAndRefocusNoteLookup('Esta nota já foi adicionada à viagem.', true);
         return;
       }
@@ -1310,7 +1321,7 @@ function RoutePlanning() {
 
     setIsBatchAdding(true);
     try {
-      const existingInvoiceNumbers = new Set(addedNotes.map((note) => String(note.invoice_number)));
+	      const existingInvoiceNumbers = new Set(addedNotes.map((note) => getTripNoteKey(note)));
       const seenLookups = new Set<string>();
       const notesToAdd: ITripNote[] = [];
       const errors: string[] = [];
@@ -1331,9 +1342,9 @@ function RoutePlanning() {
             continue;
           }
 
-          const invoiceKey = String(danfeData.invoice_number);
-          if (existingInvoiceNumbers.has(invoiceKey)) {
-            errors.push(`${lookup}: NF ${invoiceKey} já adicionada na viagem.`);
+	          const invoiceKey = getDanfeRouteKey(danfeData);
+	          if (existingInvoiceNumbers.has(invoiceKey)) {
+	            errors.push(`${lookup}: NF ${danfeData.invoice_number} já adicionada na viagem.`);
             continue;
           }
 
@@ -1433,15 +1444,19 @@ function RoutePlanning() {
 
   const syncTripNotesInPlace = useCallback(async (trip: ITrip, nextNotes: RoutingTripNote[]) => {
     const originalNotes = sortTripNotesByOrder((trip.TripNotes || []) as RoutingTripNote[]);
-    const originalByInvoice = new Map(originalNotes.map((note) => [String(note.invoice_number), note]));
-    const nextByInvoice = new Map(nextNotes.map((note) => [String(note.invoice_number), note]));
+    const originalByInvoice = new Map(originalNotes.map((note) => [getTripNoteKey(note), note]));
+    const nextByInvoice = new Map(nextNotes.map((note) => [getTripNoteKey(note), note]));
 
-    const notesToRemove = originalNotes.filter((note) => nextByInvoice.has(String(note.invoice_number)) === false);
-    const notesToAdd = nextNotes.filter((note) => originalByInvoice.has(String(note.invoice_number)) === false);
+    const notesToRemove = originalNotes.filter((note) => nextByInvoice.has(getTripNoteKey(note)) === false);
+    const notesToAdd = nextNotes.filter((note) => originalByInvoice.has(getTripNoteKey(note)) === false);
 
     if (notesToRemove.length > 0) {
       await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: notesToRemove.map((note) => ({ invoice_number: note.invoice_number, status: 'pending' })),
+        danfes: notesToRemove.map((note) => ({
+          company_id: note.company_id,
+          invoice_number: note.invoice_number,
+          status: 'pending',
+        })),
       }, authConfig);
 
       for (const note of notesToRemove) {
@@ -1452,7 +1467,11 @@ function RoutePlanning() {
 
     if (notesToAdd.length > 0) {
       await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: notesToAdd.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
+        danfes: notesToAdd.map((note) => ({
+          company_id: note.company_id,
+          invoice_number: note.invoice_number,
+          status: 'assigned',
+        })),
       }, authConfig);
 
       for (const note of notesToAdd) {
@@ -1469,11 +1488,11 @@ function RoutePlanning() {
     }
 
     const refreshedNotes = sortTripNotesByOrder((refreshedTrip.TripNotes || []) as RoutingTripNote[]);
-    const desiredOrderByInvoice = new Map(nextNotes.map((note, index) => [String(note.invoice_number), index + 1]));
+    const desiredOrderByInvoice = new Map(nextNotes.map((note, index) => [getTripNoteKey(note), index + 1]));
     const reorderedNotes = sortTripNotesByOrder(refreshedNotes);
 
     for (const note of reorderedNotes) {
-      const desiredOrder = desiredOrderByInvoice.get(String(note.invoice_number));
+      const desiredOrder = desiredOrderByInvoice.get(getTripNoteKey(note));
       if (!note.id || !desiredOrder || Number(note.order) === desiredOrder) continue;
       await axios.put(`${API_URL}/trips/change-order/${note.id}`, { newOrder: desiredOrder }, authConfig);
     }
@@ -1660,7 +1679,11 @@ function RoutePlanning() {
       }
 
       await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: sortedNotes.map((note) => ({ invoice_number: note.invoice_number, status: 'assigned' })),
+        danfes: sortedNotes.map((note) => ({
+          company_id: note.company_id,
+          invoice_number: note.invoice_number,
+          status: 'assigned',
+        })),
       });
 
       const createResponse = await axios.post(`${API_URL}/trips/create`, {
@@ -1754,6 +1777,7 @@ function RoutePlanning() {
     setEditNotes((prev) => [
       ...prev,
       {
+        company_id: danfe.company_id,
         invoice_number: danfe.invoice_number,
         customer_name: danfe.Customer.name_or_legal_entity,
         customer_id: danfe.customer_id || null,
@@ -1820,16 +1844,24 @@ function RoutePlanning() {
         return;
       }
 
-      const originalInvoices = new Set((editTrip.TripNotes || []).map((note) => String(note.invoice_number)));
-      const nextInvoices = new Set(editNotes.map((note) => String(note.invoice_number)));
+      const originalByKey = new Map((editTrip.TripNotes || []).map((note) => [getTripNoteKey(note), note]));
+      const nextByKey = new Map(editNotes.map((note) => [getTripNoteKey(note), note]));
 
-      const danfesToPending = Array.from(originalInvoices)
-        .filter((invoice) => nextInvoices.has(invoice) === false)
-        .map((invoice_number) => ({ invoice_number, status: 'pending' }));
+      const danfesToPending = Array.from(originalByKey.entries())
+        .filter(([key]) => nextByKey.has(key) === false)
+        .map(([, note]) => ({
+          company_id: note.company_id,
+          invoice_number: note.invoice_number,
+          status: 'pending',
+        }));
 
-      const danfesToAssigned = Array.from(nextInvoices)
-        .filter((invoice) => originalInvoices.has(invoice) === false)
-        .map((invoice_number) => ({ invoice_number, status: 'assigned' }));
+      const danfesToAssigned = Array.from(nextByKey.entries())
+        .filter(([key]) => originalByKey.has(key) === false)
+        .map(([, note]) => ({
+          company_id: note.company_id,
+          invoice_number: note.invoice_number,
+          status: 'assigned',
+        }));
 
       if (danfesToPending.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
       if (danfesToAssigned.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });

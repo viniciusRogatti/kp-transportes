@@ -1632,8 +1632,10 @@ function RoutePlanning() {
   const sendTripsToBackend = async (options?: { shouldPrintProducts?: boolean }) => {
     const shouldPrintProducts = Boolean(options?.shouldPrintProducts);
     const total = sortedNotes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
+    const pdfPreviewWindow = shouldPrintProducts ? openPdfTargetWindow() : null;
 
     if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
+      if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
       alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
       return;
     }
@@ -1641,6 +1643,7 @@ function RoutePlanning() {
     const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
 
     if (hasLockedNotesInRoutingEdit && assignmentChanged) {
+      if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
       alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou finalize a troca de motorista/veiculo por outro fluxo.');
       return;
     }
@@ -1652,7 +1655,7 @@ function RoutePlanning() {
         const updatedTrip = await syncTripNotesInPlace(tripToUpdate, sortedNotes);
 
         if (shouldPrintProducts) {
-          await printTripProducts(updatedTrip);
+          await printTripProducts(updatedTrip, pdfPreviewWindow);
         }
 
         alert('Rota atualizada com sucesso.');
@@ -1674,6 +1677,7 @@ function RoutePlanning() {
       }, authConfig);
 
       if (validation?.data?.ok !== true) {
+        if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
         alert(buildAssignmentConflictMessage(validation?.data?.conflicts, isSecondRunMode));
         return;
       }
@@ -1703,7 +1707,7 @@ function RoutePlanning() {
 
       const savedTrip = createResponse?.data as ITrip | undefined;
       if (shouldPrintProducts && savedTrip?.id) {
-        await printTripProducts(savedTrip);
+        await printTripProducts(savedTrip, pdfPreviewWindow);
       }
 
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
@@ -1719,6 +1723,7 @@ function RoutePlanning() {
         refreshRoutingPool(todayApiDate),
       ]);
     } catch (error: any) {
+      if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
       alert(error?.response?.data?.error || 'Erro ao enviar a viagem.');
     } finally {
       setRouteSubmissionPrompt(null);
@@ -1950,7 +1955,48 @@ function RoutePlanning() {
     return buildRetainedReminders(tripDanfes, relevantRetainedRows, retainedDanfesByInvoice);
   };
 
-  const printTripProducts = async (trip: ITrip) => {
+  const openPdfTargetWindow = () => {
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) return null;
+
+    previewWindow.document.write(`
+      <html>
+        <head>
+          <title>Gerando romaneio...</title>
+          <style>
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: grid;
+              place-items: center;
+              background: #0f1720;
+              color: #f3f5f7;
+              font-family: Arial, sans-serif;
+            }
+          </style>
+        </head>
+        <body>
+          <p>Gerando PDF...</p>
+        </body>
+      </html>
+    `);
+    previewWindow.document.close();
+    return previewWindow;
+  };
+
+  const attachPdfToWindow = (pdfBlob: Blob, previewWindow?: Window | null) => {
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+
+    if (previewWindow && !previewWindow.closed) {
+      previewWindow.location.href = pdfUrl;
+    } else {
+      window.open(pdfUrl, '_blank');
+    }
+
+    window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+  };
+
+  const printTripProducts = async (trip: ITrip, previewWindow?: Window | null) => {
     try {
       setIsPrinting(true);
       const validDanfes: IDanfe[] = await fetchDanfesByTrip(trip);
@@ -1971,13 +2017,13 @@ function RoutePlanning() {
           noteCount={trip.TripNotes?.length || 0}
         />,
       ).toBlob();
-      window.open(URL.createObjectURL(pdfBlob), '_blank');
+      attachPdfToWindow(pdfBlob, previewWindow);
     } finally {
       setIsPrinting(false);
     }
   };
 
-  const printTripDeliveries = async (trip: ITrip) => {
+  const printTripDeliveries = async (trip: ITrip, previewWindow?: Window | null) => {
     try {
       setIsPrinting(true);
       const validDanfes: any[] = await fetchDanfesByTrip(trip);
@@ -1993,7 +2039,7 @@ function RoutePlanning() {
           noteCount={trip.TripNotes?.length || 0}
         />,
       ).toBlob();
-      window.open(URL.createObjectURL(pdfBlob), '_blank');
+      attachPdfToWindow(pdfBlob, previewWindow);
     } finally {
       setIsPrinting(false);
     }

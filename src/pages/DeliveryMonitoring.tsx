@@ -203,6 +203,16 @@ type StopStatusUpdateState = {
   nextStatus: ManualStopStatus;
 };
 
+type CancelledReplacementDraft = {
+  tripId: number;
+  sequence: number;
+  stopId: number;
+  currentStatus: string;
+  driverId: number;
+  driverName: string | null;
+  invoiceNumber: string | null;
+};
+
 type StopStatusFeedback = {
   tripId: number;
   sequence: number;
@@ -578,6 +588,10 @@ function DeliveryMonitoring() {
   const [loading, setLoading] = useState<boolean>(false);
   const [stopStatusUpdate, setStopStatusUpdate] = useState<StopStatusUpdateState | null>(null);
   const [stopStatusFeedback, setStopStatusFeedback] = useState<StopStatusFeedback | null>(null);
+  const [cancelledReplacementDraft, setCancelledReplacementDraft] = useState<CancelledReplacementDraft | null>(null);
+  const [replacementInvoiceNumber, setReplacementInvoiceNumber] = useState<string>('');
+  const [replacementReason, setReplacementReason] = useState<string>('Refaturada');
+  const [replacementModalError, setReplacementModalError] = useState<string>('');
   const [mapViewport, setMapViewport] = useState<GoogleMapBoundsPayload | null>(null);
   const [readAlertIds, setReadAlertIds] = useState<Set<number>>(() => new Set(getReadAlertIds()));
   const [isMobileView, setIsMobileView] = useState<boolean>(() => {
@@ -1057,6 +1071,10 @@ function DeliveryMonitoring() {
     if (!selectedDriverStop) {
       setStopStatusUpdate(null);
       setStopStatusFeedback(null);
+      setCancelledReplacementDraft(null);
+      setReplacementInvoiceNumber('');
+      setReplacementReason('Refaturada');
+      setReplacementModalError('');
       return;
     }
 
@@ -1071,6 +1089,82 @@ function DeliveryMonitoring() {
       ? current
       : null));
   }, [selectedDriverStop]);
+
+  const closeReplacementModal = useCallback(() => {
+    if (stopStatusUpdate?.nextStatus === 'cancelled') return;
+    setCancelledReplacementDraft(null);
+    setReplacementInvoiceNumber('');
+    setReplacementReason('Refaturada');
+    setReplacementModalError('');
+  }, [stopStatusUpdate]);
+
+  const submitStopStatusUpdate = useCallback(async ({
+    tripId,
+    sequence,
+    stopId,
+    nextStatus,
+    driverId,
+    driverName,
+    invoiceNumber,
+    replacementInvoice,
+    replacementReasonValue,
+  }: {
+    tripId: number;
+    sequence: number;
+    stopId: number;
+    nextStatus: ManualStopStatus;
+    driverId: number;
+    driverName: string | null;
+    invoiceNumber: string | null;
+    replacementInvoice?: string | null;
+    replacementReasonValue?: string | null;
+  }) => {
+    const requestMetadata: Record<string, unknown> = {
+      origin: 'delivery_monitoring',
+      trip_id: tripId,
+      invoice_number: invoiceNumber,
+      sequence,
+    };
+
+    const normalizedReplacementInvoice = String(replacementInvoice || '').trim();
+    if (nextStatus === 'cancelled' && normalizedReplacementInvoice) {
+      requestMetadata.replacement_invoice_number = normalizedReplacementInvoice;
+      requestMetadata.replacement_reason = String(replacementReasonValue || '').trim() || 'Refaturada';
+    }
+
+    await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
+      status: nextStatus,
+      driver_id: driverId,
+      driver_name: driverName,
+      source: 'delivery_monitoring_manual_update',
+      metadata: requestMetadata,
+    });
+
+    if (nextStatus === 'cancelled') {
+      if (!invoiceNumber) {
+        throw new Error('Nao foi possivel identificar a NF cancelada para vincular o refaturamento.');
+      }
+
+      if (!normalizedReplacementInvoice) {
+        throw new Error('Informe a NF substituta para concluir o cancelamento por refaturamento.');
+      }
+
+      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(invoiceNumber)}/replacement`, {
+        replacementInvoiceNumber: normalizedReplacementInvoice,
+        replacementReason: String(replacementReasonValue || '').trim() || 'Refaturada',
+      });
+    }
+
+    await fetchOverview();
+    setStopStatusFeedback({
+      tripId,
+      sequence,
+      tone: 'success',
+      message: nextStatus === 'cancelled'
+        ? `${invoiceNumber ? `NF ${invoiceNumber}` : 'Parada'} cancelada e vinculada à NF ${normalizedReplacementInvoice}.`
+        : `${invoiceNumber ? `NF ${invoiceNumber}` : 'Parada'} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
+    });
+  }, [fetchOverview]);
 
   const handleStopStatusUpdate = useCallback(async ({
     tripId,
@@ -1121,6 +1215,22 @@ function DeliveryMonitoring() {
       return;
     }
 
+    if (nextStatus === 'cancelled') {
+      setCancelledReplacementDraft({
+        tripId,
+        sequence,
+        stopId,
+        currentStatus,
+        driverId,
+        driverName,
+        invoiceNumber,
+      });
+      setReplacementInvoiceNumber('');
+      setReplacementReason('Refaturada');
+      setReplacementModalError('');
+      return;
+    }
+
     const invoiceLabel = invoiceNumber ? `NF ${invoiceNumber}` : 'esta parada';
     const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
       ? true
@@ -1132,25 +1242,14 @@ function DeliveryMonitoring() {
     setStopStatusFeedback(null);
 
     try {
-      await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
-        status: nextStatus,
-        driver_id: driverId,
-        driver_name: driverName,
-        source: 'delivery_monitoring_manual_update',
-        metadata: {
-          origin: 'delivery_monitoring',
-          trip_id: tripId,
-          invoice_number: invoiceNumber,
-          sequence,
-        },
-      });
-
-      await fetchOverview();
-      setStopStatusFeedback({
+      await submitStopStatusUpdate({
         tripId,
         sequence,
-        tone: 'success',
-        message: `${invoiceLabel} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
+        stopId,
+        nextStatus,
+        driverId,
+        driverName,
+        invoiceNumber,
       });
     } catch (error) {
       setStopStatusFeedback({
@@ -1168,7 +1267,51 @@ function DeliveryMonitoring() {
           : current
       ));
     }
-  }, [fetchOverview]);
+  }, [submitStopStatusUpdate]);
+
+  const handleConfirmCancelledReplacement = useCallback(async () => {
+    if (!cancelledReplacementDraft) return;
+
+    const replacementInvoice = String(replacementInvoiceNumber || '').trim();
+    if (!replacementInvoice) {
+      setReplacementModalError('Informe a NF nova para concluir o cancelamento por refaturamento.');
+      return;
+    }
+
+    if (replacementInvoice === String(cancelledReplacementDraft.invoiceNumber || '').trim()) {
+      setReplacementModalError('A NF nova precisa ser diferente da NF cancelada.');
+      return;
+    }
+
+    setStopStatusUpdate({
+      tripId: cancelledReplacementDraft.tripId,
+      sequence: cancelledReplacementDraft.sequence,
+      nextStatus: 'cancelled',
+    });
+    setReplacementModalError('');
+
+    try {
+      await submitStopStatusUpdate({
+        ...cancelledReplacementDraft,
+        nextStatus: 'cancelled',
+        replacementInvoice,
+        replacementReasonValue: replacementReason,
+      });
+      setCancelledReplacementDraft(null);
+      setReplacementInvoiceNumber('');
+      setReplacementReason('Refaturada');
+    } catch (error) {
+      setReplacementModalError(getStopStatusUpdateErrorMessage(error));
+    } finally {
+      setStopStatusUpdate((current) => (
+        current
+        && current.tripId === cancelledReplacementDraft.tripId
+        && current.sequence === cancelledReplacementDraft.sequence
+          ? null
+          : current
+      ));
+    }
+  }, [cancelledReplacementDraft, replacementInvoiceNumber, replacementReason, submitStopStatusUpdate]);
 
   return (
     <div className="min-h-screen">
@@ -1798,6 +1941,84 @@ function DeliveryMonitoring() {
             </table>
           </div>
         </section>
+
+        {cancelledReplacementDraft ? (
+          <div className="fixed inset-0 z-[1200] flex items-center justify-center p-3">
+            <button
+              type="button"
+              className="absolute inset-0 bg-slate-950/80"
+              aria-label="Fechar modal de refaturamento"
+              onClick={closeReplacementModal}
+            />
+            <div className="relative z-[1210] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold">
+                    {`Cancelar ${cancelledReplacementDraft.invoiceNumber ? `NF ${cancelledReplacementDraft.invoiceNumber}` : 'parada'} por refaturamento`}
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Informe a NF nova para que a busca da NF cancelada mostre a substituta automaticamente.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReplacementModal}
+                  className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
+                  disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <label className="mt-4 text-xs text-muted">
+                NF nova
+                <input
+                  value={replacementInvoiceNumber}
+                  onChange={(event) => setReplacementInvoiceNumber(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text"
+                  placeholder="Ex.: 1722999"
+                  disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
+                />
+              </label>
+
+              <label className="mt-3 text-xs text-muted">
+                Motivo/observacao
+                <input
+                  value={replacementReason}
+                  onChange={(event) => setReplacementReason(event.target.value)}
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text"
+                  placeholder="Refaturada"
+                  disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
+                />
+              </label>
+
+              {replacementModalError ? (
+                <div className={`mt-3 rounded-md border px-3 py-2 text-sm ${getSemanticToneClassName('danger', 'panel')}`}>
+                  {replacementModalError}
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeReplacementModal}
+                  className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text disabled:opacity-50"
+                  disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCancelledReplacement}
+                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                  disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
+                >
+                  {stopStatusUpdate?.nextStatus === 'cancelled' ? 'Salvando...' : 'Confirmar cancelamento'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </Container>
     </div>
   );

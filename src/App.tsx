@@ -29,6 +29,7 @@ import {
 import axios from 'axios';
 import { useEffect } from 'react';
 import { isAuthenticationError, redirectToLoginBecauseSessionExpired } from './utils/authErrorHandler';
+import useSessionInactivityLogout from './hooks/useSessionInactivityLogout';
 // import FreightSummary from './pages/FreightCalculation';
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
@@ -48,6 +49,7 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 
 function App() {
   useAppVersionAutoRefresh();
+  useSessionInactivityLogout();
   const token = localStorage.getItem('token');
 
   useEffect(() => {

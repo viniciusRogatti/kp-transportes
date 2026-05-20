@@ -568,6 +568,11 @@ function RoutePlanning() {
     return response.data as ITrip[];
   };
 
+  const isLikelyBarcodeLookup = (lookup: string) => {
+    const sanitized = String(lookup || '').replace(/\s+/g, '');
+    return /^\d{44}$/.test(sanitized);
+  };
+
   const fetchTripsByRange = async (startDate?: Date | null, endDate?: Date | null) => {
     const resolvedStart = startDate || endDate;
     const resolvedEnd = endDate || startDate;
@@ -769,7 +774,13 @@ function RoutePlanning() {
 
     const responses = await Promise.all(
       candidateDates.map((candidateDate) => (
-        axios.get(`${API_URL}/danfes/date/?startDate=${candidateDate}&endDate=${candidateDate}`)
+        axios.get(`${API_URL}/danfes/date`, {
+          params: {
+            startDate: candidateDate,
+            endDate: candidateDate,
+            view: 'routing',
+          },
+        })
       )),
     );
 
@@ -1228,17 +1239,29 @@ function RoutePlanning() {
   const fetchDanfeByLookup = async (lookup: string): Promise<RouteLookupDanfe | null> => {
     const normalizedLookup = String(lookup || '').trim();
     if (!normalizedLookup) return null;
-
-    try {
-      const byNf = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/nf/${normalizedLookup}`);
-      if (byNf?.data) return sanitizeRouteLookupDanfe(byNf.data);
-    } catch {
-      // Ignora e tenta buscar por barcode
-    }
-
     const sanitizedBarcode = normalizedLookup.replace(/\s+/g, '');
-    const byBarcode = await axios.get<RouteLookupDanfe>(`${API_URL}/danfes/barcode/${sanitizedBarcode}`);
-    return byBarcode?.data ? sanitizeRouteLookupDanfe(byBarcode.data) : null;
+    const viewParams = { params: { view: 'routing' } };
+    const primaryLookupIsBarcode = isLikelyBarcodeLookup(normalizedLookup);
+
+    const attempts = primaryLookupIsBarcode
+      ? [
+        () => axios.get<RouteLookupDanfe>(`${API_URL}/danfes/barcode/${sanitizedBarcode}`, viewParams),
+        () => axios.get<RouteLookupDanfe>(`${API_URL}/danfes/nf/${normalizedLookup}`, viewParams),
+      ]
+      : [
+        () => axios.get<RouteLookupDanfe>(`${API_URL}/danfes/nf/${normalizedLookup}`, viewParams),
+        () => axios.get<RouteLookupDanfe>(`${API_URL}/danfes/barcode/${sanitizedBarcode}`, viewParams),
+      ];
+
+    for (const attempt of attempts) {
+      try {
+        const response = await attempt();
+        if (response?.data) return sanitizeRouteLookupDanfe(response.data);
+      } catch {
+        // Tenta a proxima estrategia de consulta
+      }
+    }
+    return null;
   };
 
   const handleAddNote = async () => {
@@ -1904,20 +1927,22 @@ function RoutePlanning() {
   };
 
   const fetchDanfesByTrip = async (trip: ITrip) => {
-    const requests = trip.TripNotes.map((note) => axios.get(`${API_URL}/danfes/nf/${note.invoice_number}`)
-      .then((res) => sanitizeDanfeTextFields(res.data))
-      .catch(() => null));
-    const danfes = await Promise.all(requests);
-    return danfes.filter((item): item is IDanfe => item !== null);
+    return fetchDanfesByInvoiceNumbers((trip.TripNotes || []).map((note) => String(note.invoice_number || '')));
   };
 
   const fetchDanfesByInvoiceNumbers = async (invoiceNumbers: string[]) => {
     const uniqueInvoices = Array.from(new Set(invoiceNumbers.map((invoiceNumber) => String(invoiceNumber || '').trim()).filter(Boolean)));
-    const requests = uniqueInvoices.map((invoiceNumber) => axios.get(`${API_URL}/danfes/nf/${invoiceNumber}`)
-      .then((res) => sanitizeDanfeTextFields(res.data))
-      .catch(() => null));
-    const danfes = await Promise.all(requests);
-    return danfes.filter((item): item is IDanfe => item !== null);
+    if (!uniqueInvoices.length) return [];
+
+    const response = await axios.get<IDanfe[]>(`${API_URL}/danfes/batch`, {
+      params: {
+        invoices: uniqueInvoices.join(','),
+      },
+    });
+
+    return Array.isArray(response.data)
+      ? response.data.map((danfe) => sanitizeDanfeTextFields(danfe))
+      : [];
   };
 
   const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[]) => {

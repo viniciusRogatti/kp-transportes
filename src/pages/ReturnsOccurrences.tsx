@@ -52,6 +52,7 @@ import {
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
+import { handleAuthenticationError } from '../utils/authErrorHandler';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 const RETURN_BATCH_LOOKBACK_OPTIONS = [
@@ -1788,6 +1789,7 @@ function ReturnsOccurrences() {
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao confirmar envio do lote.');
       } else {
@@ -1824,6 +1826,7 @@ function ReturnsOccurrences() {
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao confirmar recebimento do lote.');
       } else {
@@ -1998,6 +2001,7 @@ function ReturnsOccurrences() {
       await loadOccurrences();
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao salvar ocorrencia.');
       } else {
@@ -2080,6 +2084,7 @@ function ReturnsOccurrences() {
       }
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao atualizar status da ocorrencia.');
       } else {

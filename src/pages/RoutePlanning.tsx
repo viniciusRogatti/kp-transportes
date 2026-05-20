@@ -31,6 +31,7 @@ import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from 
 import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
 import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
 import verifyToken from '../utils/verifyToken';
+import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { listReceiptBacklog } from '../services/receiptsService';
@@ -1104,6 +1105,7 @@ function RoutePlanning() {
       setSwapReason('');
       alert('Troca aplicada com sucesso.');
     } catch (error: any) {
+      if (handleAuthenticationError(error)) return;
       alert(error?.response?.data?.error || 'Erro ao executar troca de rota.');
     } finally {
       setIsSwapping(false);
@@ -1211,6 +1213,7 @@ function RoutePlanning() {
       ]);
       focusNoteLookupInput(true);
     } catch (error: any) {
+      if (handleAuthenticationError(error)) return;
       alertAndRefocusNoteLookup(error?.response?.data?.error || `Nao foi possivel remover a NF ${routingModalState.danfe.invoice_number} da rota atual.`, true);
     } finally {
       setIsResolvingNoteConflict(false);
@@ -1746,6 +1749,7 @@ function RoutePlanning() {
         refreshRoutingPool(todayApiDate),
       ]);
     } catch (error: any) {
+      if (handleAuthenticationError(error)) return;
       if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
       alert(error?.response?.data?.error || 'Erro ao enviar a viagem.');
     } finally {
@@ -1920,6 +1924,7 @@ function RoutePlanning() {
       const refreshedToday = await fetchTripsByDate(todayApiDate);
       setTodayTrips(refreshedToday);
     } catch (error: any) {
+      if (handleAuthenticationError(error)) return;
       alert(error?.response?.data?.error || 'Erro ao salvar edição da rota.');
     } finally {
       setIsSavingEdit(false);

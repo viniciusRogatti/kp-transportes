@@ -22,6 +22,7 @@ import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/
 import { formatDateBR } from '../utils/dateDisplay';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { logoutSession } from '../utils/logoutSession';
+import { handleAuthenticationError } from '../utils/authErrorHandler';
 import ThemeToggleButton from '../components/ui/ThemeToggleButton';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import { useTheme } from '../context/ThemeContext';
@@ -1119,6 +1120,7 @@ function ControlTowerCollections() {
       await refreshAll();
       alert(`Lote ${batchCode} marcado como recebido.`);
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao confirmar recebimento do lote.');
       } else {
@@ -1160,6 +1162,7 @@ function ControlTowerCollections() {
           : `Prioridade removida da coleta #${request.id}.`,
       );
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao atualizar prioridade da coleta.');
       } else {
@@ -1176,6 +1179,7 @@ function ControlTowerCollections() {
       await refreshAll();
       alert('Ocorrência registrada e enviada para a transportadora.');
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao registrar ocorrência.');
         return;
@@ -1200,6 +1204,7 @@ function ControlTowerCollections() {
       await refreshAll();
       alert(`Crédito da ocorrência #${occurrenceId} finalizado com sucesso.`);
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao finalizar crédito da ocorrência.');
       } else {
@@ -1303,6 +1308,7 @@ function ControlTowerCollections() {
           : `NF ${nf} validada. Pronta para registrar nova coleta.`,
       );
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 404) {
           alert(NF_NOT_FOUND_MESSAGE);
@@ -1433,6 +1439,7 @@ function ControlTowerCollections() {
       setCollectionTrackingNf(nf);
       alert(`Coleta parcial registrada para a NF ${nf} (${selectedPayloads.length} item(ns)).`);
     } catch (error) {
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 404) {
           alert(NF_NOT_FOUND_MESSAGE);

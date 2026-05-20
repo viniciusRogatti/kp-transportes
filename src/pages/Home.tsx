@@ -31,6 +31,7 @@ import { ICollectionRequest, IDanfe, IOccurrence } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { getSemanticToneClassName } from '../utils/statusStyles';
+import { handleAuthenticationError } from '../utils/authErrorHandler';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -1064,6 +1065,7 @@ function Home() {
       await loadPendingOccurrences();
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao salvar ocorrencia.');
       } else {
@@ -1108,6 +1110,7 @@ function Home() {
       await loadPendingOccurrences();
     } catch (error) {
       console.error('Erro ao resolver ocorrencia:', error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao atualizar status da ocorrencia.');
       } else {
@@ -1199,6 +1202,7 @@ function Home() {
       alert('Data da coleta atualizada com sucesso.');
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao atualizar data da coleta.');
       } else {
@@ -1232,6 +1236,7 @@ function Home() {
       return true;
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return false;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao atualizar status da coleta.');
       } else {
@@ -1273,6 +1278,7 @@ function Home() {
       alert('Cancelamento aprovado e coleta encerrada.');
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao aprovar cancelamento da coleta.');
       } else {
@@ -1309,6 +1315,7 @@ function Home() {
       alert('Solicitação recusada. Coleta mantida como agendada.');
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao manter coleta agendada.');
       } else {
@@ -1343,6 +1350,7 @@ function Home() {
       alert('Observacao registrada com sucesso.');
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao registrar observacao da coleta.');
       } else {
@@ -1360,6 +1368,7 @@ function Home() {
       setHistoryModalOpen(true);
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao carregar historico da coleta.');
       } else {
@@ -1395,6 +1404,7 @@ function Home() {
       setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
     } catch (error) {
       console.error(error);
+      if (handleAuthenticationError(error)) return;
       if (axios.isAxiosError(error)) {
         alert(error.response?.data?.error || 'Erro ao gerar PDF da coleta.');
       } else {

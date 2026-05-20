@@ -28,6 +28,7 @@ import {
 } from './utils/permissions';
 import axios from 'axios';
 import { useEffect } from 'react';
+import { isAuthenticationError, redirectToLoginBecauseSessionExpired } from './utils/authErrorHandler';
 // import FreightSummary from './pages/FreightCalculation';
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
@@ -83,11 +84,22 @@ function App() {
       return config;
     });
 
+    const responseInterceptorId = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (isAuthenticationError(error)) {
+          redirectToLoginBecauseSessionExpired();
+        }
+        return Promise.reject(error);
+      },
+    );
+
     window.addEventListener('storage', syncAuthorizationHeader);
     window.addEventListener('focus', syncAuthorizationHeader);
 
     return () => {
       axios.interceptors.request.eject(requestInterceptorId);
+      axios.interceptors.response.eject(responseInterceptorId);
       window.removeEventListener('storage', syncAuthorizationHeader);
       window.removeEventListener('focus', syncAuthorizationHeader);
     };

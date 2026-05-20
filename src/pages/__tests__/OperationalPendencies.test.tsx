@@ -47,6 +47,7 @@ describe('OperationalPendencies', () => {
           load_number: 'CARGA-99',
           customer_name: 'Cliente Teste',
           city: 'Campinas',
+          trip_note_id: 41,
           trip_id: 88,
           rota_id: 88,
           trip_date: '2026-03-25',
@@ -108,5 +109,7 @@ describe('OperationalPendencies', () => {
     expect(screen.getByText('Saida atual')).toBeInTheDocument();
     expect(screen.getByText('Motorista: Arlindo · Trip: 88')).toBeInTheDocument();
     expect(screen.getByText('Motorista: Jonas · Trip: 77')).toBeInTheDocument();
+    expect(screen.getByText('Corrigir status')).toBeInTheDocument();
+    expect(screen.getByText('Marcar canhoto retido')).toBeInTheDocument();
   });
 });

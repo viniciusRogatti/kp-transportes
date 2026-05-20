@@ -30,6 +30,13 @@ import {
   getSemanticToneClassName,
   SemanticTone,
 } from '../utils/statusStyles';
+import {
+  getManualStopStatusLabel,
+  MANUAL_STOP_STATUS_ACTIONS,
+  ManualStopStatus,
+} from './deliveryMonitoring/stopStatusActions';
+import { API_URL } from '../data';
+import { handleAuthenticationError } from '../utils/authErrorHandler';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -37,6 +44,26 @@ type UploadPreviewReport = {
   width: number;
   height: number;
   usedCompression: boolean;
+};
+
+type BacklogStatusUpdateState = {
+  invoiceNumber: string;
+  nextStatus: ManualStopStatus;
+};
+
+type BacklogStatusFeedback = {
+  invoiceNumber: string;
+  tone: SemanticTone;
+  message: string;
+};
+
+type CancelledReplacementDraft = {
+  invoiceNumber: string;
+  tripNoteId: number;
+  tripId: number | null;
+  motoristaId: number;
+  motoristaName: string | null;
+  currentStatus: string;
 };
 
 type BacklogTabConfig = {
@@ -225,6 +252,34 @@ const isCurrentRouteHistoryEntry = (row: IReceiptBacklogRow, historyRow: IReceip
   return false;
 };
 
+const BACKLOG_MANUAL_STATUS_SET = new Set<ManualStopStatus>(['returned', 'redelivery', 'retained', 'cancelled']);
+
+const canCorrectBacklogStatus = (currentStatus: unknown, nextStatus: ManualStopStatus) => {
+  const normalizedCurrent = String(currentStatus || '').trim().toLowerCase() as ManualStopStatus;
+  if (!BACKLOG_MANUAL_STATUS_SET.has(nextStatus)) return false;
+  if (!normalizedCurrent) return false;
+
+  if (BACKLOG_MANUAL_STATUS_SET.has(normalizedCurrent)) {
+    return normalizedCurrent !== nextStatus;
+  }
+
+  return true;
+};
+
+const resolveBacklogOperationalTarget = (row: IReceiptBacklogRow) => {
+  const routeHistory = Array.isArray(row.route_history) ? row.route_history : [];
+  const fallbackHistoryRow = routeHistory.find((historyRow) => (
+    Boolean(historyRow?.trip_note_id) && Boolean(historyRow?.motorista_id)
+  )) || null;
+
+  return {
+    tripNoteId: Number(row.trip_note_id || fallbackHistoryRow?.trip_note_id || 0),
+    motoristaId: Number(row.motorista_id || fallbackHistoryRow?.motorista_id || 0),
+    motoristaName: row.motorista_name || fallbackHistoryRow?.motorista_name || null,
+    tripId: Number(row.trip_id || fallbackHistoryRow?.trip_id || 0) || null,
+  };
+};
+
 function OperationalPendencies() {
   const navigate = useNavigate();
 
@@ -239,6 +294,12 @@ function OperationalPendencies() {
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [pageError, setPageError] = useState('');
+  const [statusUpdate, setStatusUpdate] = useState<BacklogStatusUpdateState | null>(null);
+  const [statusFeedback, setStatusFeedback] = useState<BacklogStatusFeedback | null>(null);
+  const [cancelledReplacementDraft, setCancelledReplacementDraft] = useState<CancelledReplacementDraft | null>(null);
+  const [replacementInvoiceNumber, setReplacementInvoiceNumber] = useState('');
+  const [replacementReason, setReplacementReason] = useState('Refaturada');
+  const [replacementModalError, setReplacementModalError] = useState('');
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<IReceiptBacklogRow | null>(null);
@@ -368,6 +429,14 @@ function OperationalPendencies() {
     setIsUploadModalOpen(true);
   }
 
+  function closeReplacementModal() {
+    if (statusUpdate?.nextStatus === 'cancelled') return;
+    setCancelledReplacementDraft(null);
+    setReplacementInvoiceNumber('');
+    setReplacementReason('Refaturada');
+    setReplacementModalError('');
+  }
+
   function closeUploadModal() {
     setIsUploadModalOpen(false);
     setUploadTarget(null);
@@ -493,6 +562,180 @@ function OperationalPendencies() {
       setUploadError(error instanceof Error ? error.message : 'Falha ao enviar canhoto.');
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function submitBacklogStatusUpdate({
+    row,
+    nextStatus,
+    replacementInvoice,
+    replacementReasonValue,
+  }: {
+    row: IReceiptBacklogRow;
+    nextStatus: ManualStopStatus;
+    replacementInvoice?: string | null;
+    replacementReasonValue?: string | null;
+  }) {
+    const {
+      tripNoteId,
+      motoristaId,
+      motoristaName,
+      tripId,
+    } = resolveBacklogOperationalTarget(row);
+    if (!tripNoteId) {
+      throw new Error('Esta NF nao possui identificador operacional para correcao de status.');
+    }
+    if (!motoristaId) {
+      throw new Error('Esta NF nao possui motorista vinculado para correcao operacional.');
+    }
+
+    const metadata: Record<string, unknown> = {
+      origin: 'operational_pendencies',
+      trip_id: tripId,
+      invoice_number: row.invoice_number,
+    };
+
+    const normalizedReplacementInvoice = String(replacementInvoice || '').trim();
+    if (nextStatus === 'cancelled' && normalizedReplacementInvoice) {
+      metadata.replacement_invoice_number = normalizedReplacementInvoice;
+      metadata.replacement_reason = String(replacementReasonValue || '').trim() || 'Refaturada';
+    }
+
+    await axios.post(`${API_URL}/driver-app/trip-stops/${tripNoteId}/status`, {
+      status: nextStatus,
+      driver_id: motoristaId,
+      driver_name: motoristaName,
+      source: 'operational_pendencies_manual_update',
+      metadata,
+    });
+
+    if (nextStatus === 'cancelled') {
+      if (!normalizedReplacementInvoice) {
+        throw new Error('Informe a NF substituta para concluir o cancelamento.');
+      }
+
+      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(row.invoice_number)}/replacement`, {
+        replacementInvoiceNumber: normalizedReplacementInvoice,
+        replacementReason: String(replacementReasonValue || '').trim() || 'Refaturada',
+      });
+    }
+  }
+
+  async function handleManualStatusUpdate(row: IReceiptBacklogRow, nextStatus: ManualStopStatus) {
+    const currentStatus = String(row.latest_stop_status || row.source_status || '').trim().toLowerCase() || 'pending';
+    if (!canCorrectBacklogStatus(currentStatus, nextStatus)) {
+      setStatusFeedback({
+        invoiceNumber: row.invoice_number,
+        tone: 'warning',
+        message: 'Este status atual nao permite essa correcao manual.',
+      });
+      return;
+    }
+
+    if (nextStatus === 'cancelled') {
+      const operationalTarget = resolveBacklogOperationalTarget(row);
+      setCancelledReplacementDraft({
+        invoiceNumber: row.invoice_number,
+        tripNoteId: operationalTarget.tripNoteId,
+        tripId: operationalTarget.tripId,
+        motoristaId: operationalTarget.motoristaId,
+        motoristaName: operationalTarget.motoristaName,
+        currentStatus,
+      });
+      setReplacementInvoiceNumber('');
+      setReplacementReason('Refaturada');
+      setReplacementModalError('');
+      return;
+    }
+
+    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+      ? true
+      : window.confirm(`Confirmar ${getManualStopStatusLabel(nextStatus)} para NF ${row.invoice_number}?`);
+
+    if (!confirmed) return;
+
+    setStatusUpdate({ invoiceNumber: row.invoice_number, nextStatus });
+    setStatusFeedback(null);
+
+    try {
+      await submitBacklogStatusUpdate({ row, nextStatus });
+      await loadBacklog(activeTab);
+      setStatusFeedback({
+        invoiceNumber: row.invoice_number,
+        tone: 'success',
+        message: `NF ${row.invoice_number} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
+      });
+    } catch (error) {
+      if (handleAuthenticationError(error)) return;
+      setStatusFeedback({
+        invoiceNumber: row.invoice_number,
+        tone: 'danger',
+        message: axios.isAxiosError(error)
+          ? String(error.response?.data?.message || error.response?.data?.error || 'Nao foi possivel corrigir o status desta NF.')
+          : error instanceof Error
+            ? error.message
+            : 'Nao foi possivel corrigir o status desta NF.',
+      });
+    } finally {
+      setStatusUpdate((current) => (
+        current?.invoiceNumber === row.invoice_number ? null : current
+      ));
+    }
+  }
+
+  async function handleConfirmCancelledReplacement() {
+    if (!cancelledReplacementDraft) return;
+
+    const replacementInvoice = String(replacementInvoiceNumber || '').trim();
+    if (!replacementInvoice) {
+      setReplacementModalError('Informe a NF nova para concluir o cancelamento.');
+      return;
+    }
+
+    if (replacementInvoice === cancelledReplacementDraft.invoiceNumber) {
+      setReplacementModalError('A NF nova precisa ser diferente da NF cancelada.');
+      return;
+    }
+
+    const row = rows.find((candidate) => candidate.invoice_number === cancelledReplacementDraft.invoiceNumber);
+    if (!row) {
+      setReplacementModalError('Nao foi possivel localizar a NF na lista atual.');
+      return;
+    }
+
+    setStatusUpdate({
+      invoiceNumber: cancelledReplacementDraft.invoiceNumber,
+      nextStatus: 'cancelled',
+    });
+    setReplacementModalError('');
+
+    try {
+      await submitBacklogStatusUpdate({
+        row,
+        nextStatus: 'cancelled',
+        replacementInvoice,
+        replacementReasonValue: replacementReason,
+      });
+      await loadBacklog(activeTab);
+      setStatusFeedback({
+        invoiceNumber: cancelledReplacementDraft.invoiceNumber,
+        tone: 'success',
+        message: `NF ${cancelledReplacementDraft.invoiceNumber} cancelada e vinculada à NF ${replacementInvoice}.`,
+      });
+      setCancelledReplacementDraft(null);
+      setReplacementInvoiceNumber('');
+      setReplacementReason('Refaturada');
+    } catch (error) {
+      if (handleAuthenticationError(error)) return;
+      setReplacementModalError(axios.isAxiosError(error)
+        ? String(error.response?.data?.message || error.response?.data?.error || 'Nao foi possivel concluir o cancelamento.')
+        : error instanceof Error
+          ? error.message
+          : 'Nao foi possivel concluir o cancelamento.');
+    } finally {
+      setStatusUpdate((current) => (
+        current?.invoiceNumber === cancelledReplacementDraft.invoiceNumber ? null : current
+      ));
     }
   }
 
@@ -650,6 +893,14 @@ function OperationalPendencies() {
                     const operationalStatus = row.latest_stop_status || row.source_status || '';
                     const ageDays = Number(row.age_days || 0);
                     const ageLabel = ageDays > 0 ? `${ageDays} dia(s) em aberto` : 'Movimento do dia';
+                    const normalizedOperationalStatus = String(operationalStatus || '').trim().toLowerCase() || 'pending';
+                    const operationalTarget = resolveBacklogOperationalTarget(row);
+                    const canEditStatus = Boolean(operationalTarget.tripNoteId && operationalTarget.motoristaId);
+                    const availableStatusActions = canEditStatus
+                      ? MANUAL_STOP_STATUS_ACTIONS.filter((action) => canCorrectBacklogStatus(normalizedOperationalStatus, action.status))
+                      : [];
+                    const currentStatusUpdate = statusUpdate?.invoiceNumber === row.invoice_number ? statusUpdate : null;
+                    const currentStatusFeedback = statusFeedback?.invoiceNumber === row.invoice_number ? statusFeedback : null;
 
                     return (
                       <li key={`${row.queue_type}-${row.invoice_number}-${row.trip_id || 'sem-rota'}`} className="rounded-md border border-border bg-surface/90 p-3">
@@ -742,8 +993,36 @@ function OperationalPendencies() {
                                 ? 'Ao postar a foto, a fila sera atualizada automaticamente.'
                                 : row.queue_type === 'retained'
                                   ? 'Este canhoto retido sai da fila quando a foto for postada.'
-                                  : 'Esta NF esta visivel para controle, sem acao direta de upload nesta etapa.'}
+                                : 'Esta NF esta visivel para controle, sem acao direta de upload nesta etapa.'}
                             </div>
+                            {availableStatusActions.length ? (
+                              <div className="rounded-md border border-border bg-card px-3 py-2">
+                                <p className="text-[11px] font-semibold text-text">Corrigir status</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {availableStatusActions.map((action) => {
+                                    const isLoading = currentStatusUpdate?.nextStatus === action.status;
+                                    const disabled = Boolean(currentStatusUpdate);
+
+                                    return (
+                                      <button
+                                        key={`${row.invoice_number}-${action.status}`}
+                                        type="button"
+                                        onClick={() => handleManualStatusUpdate(row, action.status)}
+                                        disabled={disabled}
+                                        className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${getSemanticToneClassName(action.tone)} ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:brightness-95'}`}
+                                      >
+                                        {isLoading ? 'Salvando...' : action.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {currentStatusFeedback ? (
+                                  <div className={`mt-2 rounded-md border px-2 py-1.5 text-[11px] ${getSemanticToneClassName(currentStatusFeedback.tone, 'panel')}`}>
+                                    {currentStatusFeedback.message}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </li>
@@ -859,6 +1138,80 @@ function OperationalPendencies() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        ) : null}
+
+        {cancelledReplacementDraft ? (
+          <div className="fixed inset-0 z-[1320] flex items-center justify-center bg-black/65 p-3">
+            <div className="w-full max-w-[520px] rounded-md border border-border bg-surface p-4 shadow-[var(--shadow-3)]">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-semibold text-text">
+                    {`Cancelar NF ${cancelledReplacementDraft.invoiceNumber} por refaturamento`}
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Informe a NF nova para manter o vínculo visível nas buscas e auditorias.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReplacementModal}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text disabled:opacity-50"
+                  disabled={statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                <label className="text-xs text-muted">
+                  NF nova
+                  <input
+                    value={replacementInvoiceNumber}
+                    onChange={(event) => setReplacementInvoiceNumber(event.target.value)}
+                    placeholder="Ex.: 1722999"
+                    className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                    disabled={statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber}
+                  />
+                </label>
+
+                <label className="text-xs text-muted">
+                  Motivo/observacao
+                  <input
+                    value={replacementReason}
+                    onChange={(event) => setReplacementReason(event.target.value)}
+                    placeholder="Refaturada"
+                    className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                    disabled={statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber}
+                  />
+                </label>
+
+                {replacementModalError ? (
+                  <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
+                    {replacementModalError}
+                  </div>
+                ) : null}
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeReplacementModal}
+                    className="h-10 rounded-md border border-border bg-card px-4 text-sm text-text disabled:opacity-50"
+                    disabled={statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber}
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmCancelledReplacement}
+                    className={`h-10 rounded-md border px-4 text-sm font-semibold ${getSemanticToneClassName('neutral')} ${statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber ? 'cursor-not-allowed opacity-70' : 'hover:brightness-95'}`}
+                    disabled={statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber}
+                  >
+                    {statusUpdate?.invoiceNumber === cancelledReplacementDraft.invoiceNumber ? 'Salvando...' : 'Confirmar cancelamento'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

@@ -37,6 +37,8 @@ const RETURN_TYPE_LABELS: Record<string, string> = {
   coleta: 'Coleta',
 };
 
+const PRIORITY_CARD_STATUS_OVERRIDES = new Set(['retained', 'returned', 'cancelled', 'redelivery']);
+
 function getOccurrenceStatusLabel(value: unknown) {
   return String(value || '').trim().toLowerCase() === 'resolved'
     ? 'Ocorrencia resolvida'
@@ -63,6 +65,17 @@ function getCteStatusTone(value: unknown) {
   if (normalized === 'authorized') return 'success' as const;
   if (normalized === 'rejected' || normalized === 'failed' || normalized === 'cancelled') return 'danger' as const;
   return 'warning' as const;
+}
+
+function resolveDisplayStatus(danfeStatus: unknown, invoiceContext?: IInvoiceSearchContext | null) {
+  const baseStatus = String(danfeStatus || '').trim().toLowerCase();
+  const tripNoteStatus = String(invoiceContext?.trip_note_status || '').trim().toLowerCase();
+
+  if (PRIORITY_CARD_STATUS_OVERRIDES.has(tripNoteStatus) && tripNoteStatus !== baseStatus) {
+    return tripNoteStatus;
+  }
+
+  return baseStatus;
 }
 
 function CardDanfes({
@@ -303,10 +316,11 @@ function CardDanfes({
             const returnTypeLabels = invoiceContext?.return_types?.length
               ? invoiceContext.return_types.map((type) => RETURN_TYPE_LABELS[type] || type)
               : [];
+            const displayStatus = resolveDisplayStatus(danfe.status, invoiceContext);
             const replacementInvoiceNumber = normalizeTextValue(danfe.replacement_invoice_number) || null;
             const replacedInvoiceNumber = normalizeTextValue(danfe.replaced_invoice_number) || null;
-            const danfeStatusLabel = getOperationalStatusLabel(danfe.status);
-            const danfeStatusTone = getOperationalStatusTone(danfe.status);
+            const danfeStatusLabel = getOperationalStatusLabel(displayStatus);
+            const danfeStatusTone = getOperationalStatusTone(displayStatus);
             const latestOccurrence = invoiceContext?.latest_occurrence || null;
             const latestOccurrenceDescription = normalizeTextValue(latestOccurrence?.description) || 'Ocorrencia registrada para esta NF';
             const latestOccurrenceTone = latestOccurrence ? getOccurrenceTone(latestOccurrence.status) : 'warning';
@@ -332,7 +346,7 @@ function CardDanfes({
                     data-testid={`danfe-card-${invoiceNumber}`}
                     className={cn(
                       'absolute inset-0 select-text overflow-hidden',
-                      getOperationalStatusCardClassName(danfe.status),
+                      getOperationalStatusCardClassName(displayStatus),
                     )}
                     style={{ backfaceVisibility: 'hidden' }}
                   >
@@ -465,7 +479,7 @@ function CardDanfes({
                   <CardsDanfe
                     className={cn(
                       'absolute inset-0 select-text overflow-hidden',
-                      getOperationalStatusCardClassName(danfe.status),
+                      getOperationalStatusCardClassName(displayStatus),
                     )}
                     style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
                   >

@@ -294,6 +294,7 @@ export interface IInvoiceSearchContext {
   credit_letter_completed_count: number;
   return_count: number;
   return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
+  trip_note_status?: string | null;
   driver_name?: string | null;
   trip_id?: number | null;
   trip_date?: string | null;
@@ -406,6 +407,7 @@ export interface IReceiptBacklogRow {
   status: 'POSTED' | 'PENDING';
   source_status?: string | null;
   latest_stop_status?: string | null;
+  trip_note_id?: number | null;
   invoice_date?: string | null;
   load_number?: string | null;
   customer_name?: string | null;

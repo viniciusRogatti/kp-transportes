@@ -7,6 +7,7 @@ const VALID_RETURN_TYPES = new Set(['total', 'partial', 'sobra', 'coleta']);
 const REQUEST_BATCH_SIZE = 8;
 const CONTEXT_STALE_MS = 30000;
 const INACTIVE_TRIP_NOTE_STATUSES = new Set(['cancelled']);
+const PRIORITY_TRIP_NOTE_STATUSES = new Set(['retained', 'returned', 'cancelled', 'redelivery']);
 
 type LoadInvoiceContextOptions = {
   force?: boolean;
@@ -46,6 +47,17 @@ function pickLatestTrip(trips: ITrip[], invoiceNumber: string) {
   return matchingTrip || trips[0] || null;
 }
 
+function pickLatestTripNoteStatus(trip: ITrip | null, invoiceNumber: string) {
+  if (!trip) return null;
+
+  const normalizedInvoiceNumber = normalizeInvoiceNumber(invoiceNumber);
+  const matchingNote = (trip.TripNotes || []).find((note) => (
+    normalizeInvoiceNumber(note.invoice_number) === normalizedInvoiceNumber
+  ));
+
+  return matchingNote ? String(matchingNote.status || '').trim().toLowerCase() || null : null;
+}
+
 function buildInvoiceContext(
   invoiceNumber: string,
   occurrences: IOccurrence[],
@@ -56,6 +68,7 @@ function buildInvoiceContext(
   const includeTripDriver = Boolean(options?.includeTripDriver);
   const latestOccurrence = pickLatestOccurrence(occurrences);
   const latestTrip = includeTripDriver ? pickLatestTrip(trips, invoiceNumber) : null;
+  const latestTripNoteStatus = includeTripDriver ? pickLatestTripNoteStatus(latestTrip, invoiceNumber) : null;
   const creditLetterOccurrences = occurrences.filter((occurrence) => (
     String(occurrence.resolution_type || '').trim().toLowerCase() === 'talao_mercadoria_faltante'
   ));
@@ -84,6 +97,9 @@ function buildInvoiceContext(
     credit_letter_completed_count: creditLetterCompletedCount,
     return_count: returnTypes.length,
     return_types: returnTypes,
+    trip_note_status: includeTripDriver && PRIORITY_TRIP_NOTE_STATUSES.has(String(latestTripNoteStatus || ''))
+      ? latestTripNoteStatus
+      : null,
     driver_name: includeTripDriver ? latestTrip?.Driver?.name || null : undefined,
     trip_id: includeTripDriver ? (latestTrip?.id ? Number(latestTrip.id) : null) : undefined,
     trip_date: includeTripDriver ? latestTrip?.date || null : undefined,

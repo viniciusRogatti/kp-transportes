@@ -3,7 +3,7 @@ import CardDanfes from "../components/CardDanfes";
 import Header from "../components/Header";
 import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
-import { IDanfe } from "../types/types";
+import { IDanfe, ITrip } from "../types/types";
 import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "../style/TodayInvoices";
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import TodayProductList from "../components/TodayProductList";
@@ -22,9 +22,11 @@ import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveDanfeCompanyCode } from "../utils/companyTabs";
+import { handleAuthenticationError } from "../utils/authErrorHandler";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
+  const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
   const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
@@ -59,7 +61,7 @@ function TodayInvoices() {
         : [];
       setDataDanfes(sanitizedRows);
       await Promise.all([
-        loadTodayDrivers(),
+        loadTodayTrips(),
         loadInvoiceContext(sanitizedRows, { includeTripDriver: true }),
       ]);
     } catch (error) {
@@ -67,10 +69,10 @@ function TodayInvoices() {
     }
   }
 
-  async function loadTodayDrivers() {
+  async function loadTodayTrips() {
     try {
       const today = format(new Date(), 'dd-MM-yyyy');
-      const { data } = await axios.get(`${API_URL}/trips/search/date/${today}`);
+      const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
       const map: Record<string, string> = {};
       if (Array.isArray(data)) {
         data.forEach((trip: any) => {
@@ -82,9 +84,13 @@ function TodayInvoices() {
           });
         });
       }
+      setTodayTrips(Array.isArray(data) ? data : []);
       setDriverByInvoice(map);
+      return Array.isArray(data) ? data : [];
     } catch {
+      setTodayTrips([]);
       setDriverByInvoice({});
+      return [];
     }
   }
 
@@ -93,7 +99,7 @@ function TodayInvoices() {
 
     const refreshVisibleInvoiceContext = () => {
       void Promise.all([
-        loadTodayDrivers(),
+        loadTodayTrips(),
         refreshInvoiceContext(dataDanfes, { includeTripDriver: true }),
       ]);
     };
@@ -233,6 +239,55 @@ function TodayInvoices() {
     }
   }
 
+  const assignableTrips = useMemo(
+    () => todayTrips
+      .filter((trip) => Boolean(String(trip.Driver?.name || '').trim()))
+      .slice()
+      .sort((left, right) => {
+        const runDiff = Number(left.run_number || 1) - Number(right.run_number || 1);
+        if (runDiff !== 0) return runDiff;
+        return String(left.Driver?.name || '').localeCompare(String(right.Driver?.name || ''), 'pt-BR', { sensitivity: 'base' });
+      }),
+    [todayTrips],
+  );
+
+  async function handleAssignDanfeToTrip(danfe: IDanfe, tripId: number) {
+    const targetTrip = todayTrips.find((trip) => Number(trip.id) === Number(tripId));
+    if (!targetTrip) {
+      throw new Error('Rota selecionada não encontrada.');
+    }
+
+    try {
+      await axios.put(`${API_URL}/trips/add-note/${tripId}`, {
+        noteData: {
+          company_id: danfe.company_id,
+          invoice_number: danfe.invoice_number,
+          customer_name: danfe.Customer?.name_or_legal_entity || '-',
+          customer_id: danfe.customer_id || null,
+          city: danfe.Customer?.city || 'Cidade não informada',
+          gross_weight: String(danfe.gross_weight || 0),
+          status: 'assigned',
+        },
+      });
+
+      await axios.put(`${API_URL}/danfes/update-status`, {
+        danfes: [{
+          company_id: danfe.company_id,
+          invoice_number: danfe.invoice_number,
+          status: 'assigned',
+        }],
+      });
+
+      await loadTodayData();
+      window.alert(`NF ${danfe.invoice_number} atribuída à rota de ${targetTrip.Driver?.name || 'motorista selecionado'}.`);
+    } catch (error) {
+      if (handleAuthenticationError(error)) {
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
+      throw error;
+    }
+  }
+
   return (
     <ContainerTodayInvoices>
       <Header />
@@ -345,6 +400,8 @@ function TodayInvoices() {
                   danfes={filteredDanfes}
                   driverByInvoice={driverByInvoice}
                   invoiceContextByNf={invoiceContextByNf}
+                  assignableTrips={assignableTrips}
+                  onAssignDanfeToTrip={handleAssignDanfeToTrip}
                   showLegend={false}
                 />
               </>

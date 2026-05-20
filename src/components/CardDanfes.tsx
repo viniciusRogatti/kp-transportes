@@ -1,8 +1,9 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
 import { cn } from '../lib/cn';
-import { IDanfe, IInvoiceSearchContext } from '../types/types';
+import { IDanfe, IInvoiceSearchContext, ITrip } from '../types/types';
 import { CardsDanfe, ContainerCards, ContainerItems, DescriptionColumns, ItemsScrollArea, ListItems, TitleCard, TotalQuantity } from '../style/CardDanfes';
 import { formatDateBR } from '../utils/dateDisplay';
 import {
@@ -25,6 +26,8 @@ interface CardDanfesProps {
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   showLegend?: boolean;
   onDanfeUpdated?: (danfe: IDanfe) => void;
+  assignableTrips?: ITrip[];
+  onAssignDanfeToTrip?: (danfe: IDanfe, tripId: number) => Promise<void>;
 }
 
 const RETURN_TYPE_LABELS: Record<string, string> = {
@@ -68,6 +71,8 @@ function CardDanfes({
   invoiceContextByNf = {},
   showLegend = true,
   onDanfeUpdated,
+  assignableTrips = [],
+  onAssignDanfeToTrip,
 }: CardDanfesProps) {
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
   const [productsModalDanfe, setProductsModalDanfe] = useState<IDanfe | null>(null);
@@ -77,6 +82,10 @@ function CardDanfes({
   const [replacementError, setReplacementError] = useState('');
   const [isLinkingReplacement, setIsLinkingReplacement] = useState(false);
   const [activeStatusFilter, setActiveStatusFilter] = useState<DanfeLegendKey | null>(null);
+  const [assignmentModalDanfe, setAssignmentModalDanfe] = useState<IDanfe | null>(null);
+  const [selectedTripId, setSelectedTripId] = useState('');
+  const [isAssigningDanfe, setIsAssigningDanfe] = useState(false);
+  const [assignmentError, setAssignmentError] = useState('');
 
   const filteredDanfes = useMemo(() => {
     if (!activeStatusFilter) return danfes;
@@ -116,6 +125,40 @@ function CardDanfes({
     setReplacementInvoiceInput(danfe.replacement_invoice_number || '');
     setReplacementReasonInput(danfe.replacement_reason || 'Refaturada');
     setReplacementError('');
+  }
+
+  function openAssignmentModal(danfe: IDanfe) {
+    setAssignmentModalDanfe(danfe);
+    setSelectedTripId('');
+    setAssignmentError('');
+  }
+
+  function closeAssignmentModal(force = false) {
+    if (isAssigningDanfe && !force) return;
+    setAssignmentModalDanfe(null);
+    setSelectedTripId('');
+    setAssignmentError('');
+  }
+
+  async function handleAssignDanfeToTrip() {
+    if (!assignmentModalDanfe || !onAssignDanfeToTrip) return;
+
+    const tripId = Number(selectedTripId || 0);
+    if (!Number.isFinite(tripId) || tripId <= 0) {
+      setAssignmentError('Selecione uma rota para atribuir esta NF.');
+      return;
+    }
+
+    try {
+      setIsAssigningDanfe(true);
+      setAssignmentError('');
+      await onAssignDanfeToTrip(assignmentModalDanfe, tripId);
+      closeAssignmentModal(true);
+    } catch (error: any) {
+      setAssignmentError(error?.response?.data?.error || error?.message || 'Nao foi possivel atribuir esta NF agora.');
+    } finally {
+      setIsAssigningDanfe(false);
+    }
   }
 
   function closeReplacementModal(force = false) {
@@ -173,7 +216,7 @@ function CardDanfes({
   }
 
   useEffect(() => {
-    if (!productsModalDanfe && !replacementModalDanfe) return undefined;
+    if (!productsModalDanfe && !replacementModalDanfe && !assignmentModalDanfe) return undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -183,6 +226,10 @@ function CardDanfes({
         }
         if (replacementModalDanfe && !isLinkingReplacement) {
           closeReplacementModal();
+          return;
+        }
+        if (assignmentModalDanfe && !isAssigningDanfe) {
+          closeAssignmentModal();
         }
       }
     };
@@ -191,7 +238,7 @@ function CardDanfes({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
+  }, [assignmentModalDanfe, isAssigningDanfe, isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
 
   return (
     <>
@@ -268,6 +315,12 @@ function CardDanfes({
             const currentCte = danfe.current_cte || null;
             const currentCteLabel = currentCte ? getCteStatusLabel(currentCte.status) : null;
             const currentCteNumber = currentCte?.number ? `${currentCte.number}/${currentCte.series || '1'}` : `rascunho ${currentCte?.id || ''}`.trim();
+            const canAssignToTrip = Boolean(
+              onAssignDanfeToTrip
+              && assignableTrips.length
+              && !resolvedDriverName
+              && String(danfe.status || '').trim().toLowerCase() === 'pending',
+            );
 
             return (
               <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
@@ -287,9 +340,20 @@ function CardDanfes({
                       <h1>{`NF ${danfe.invoice_number}`}</h1>
                       <Badge
                         tone={driverTone}
-                        className="absolute left-1/2 top-1.5 h-auto -translate-x-1/2 px-2 py-0.5 text-[10px] leading-tight"
+                        className="absolute left-1/2 top-1.5 flex h-auto max-w-[72%] -translate-x-1/2 items-center gap-1 px-2 py-0.5 text-[10px] leading-tight"
                       >
-                        {resolvedDriverName ? `Motorista: ${resolvedDriverName}` : 'Sem motorista'}
+                        <span className="truncate">{resolvedDriverName ? `Motorista: ${resolvedDriverName}` : 'Sem motorista'}</span>
+                        {canAssignToTrip ? (
+                          <button
+                            type="button"
+                            onClick={() => openAssignmentModal(danfe)}
+                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current/40 bg-black/10 text-current transition hover:bg-black/20"
+                            aria-label={`Atribuir NF ${danfe.invoice_number} a uma rota`}
+                            title="Atribuir a uma rota"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
                       </Badge>
                       <h4>{formatDateBR(danfe.invoice_date)}</h4>
                     </TitleCard>
@@ -610,6 +674,96 @@ function CardDanfes({
                 disabled={isLinkingReplacement}
               >
                 {isLinkingReplacement ? 'Vinculando...' : 'Salvar vinculo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {assignmentModalDanfe ? (
+        <div className="fixed inset-0 z-[1400] flex items-center justify-center p-3">
+          <button
+            type="button"
+            aria-label="Fechar atribuição de rota"
+            className="absolute inset-0 bg-slate-950/80"
+            onClick={() => closeAssignmentModal()}
+          />
+          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">{`Atribuir NF ${assignmentModalDanfe.invoice_number}`}</h3>
+                <p className="text-xs text-muted">
+                  {`${normalizeTextValue(assignmentModalDanfe.Customer?.name_or_legal_entity) || '-'} | ${normalizeCityLabel(assignmentModalDanfe.Customer?.city) || '-'}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeAssignmentModal()}
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2 overflow-y-auto pr-1">
+              {assignableTrips.map((trip) => {
+                const tripId = String(trip.id);
+                const isSelected = selectedTripId === tripId;
+
+                return (
+                  <button
+                    key={`assign-trip-${trip.id}`}
+                    type="button"
+                    onClick={() => setSelectedTripId(tripId)}
+                    className={cn(
+                      'w-full rounded-lg border px-3 py-2 text-left transition',
+                      isSelected
+                        ? 'border-accent bg-accent/10'
+                        : 'border-border bg-surface-2/70 hover:border-accent/45 hover:bg-surface-2',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-text">{trip.Driver?.name || `Motorista #${trip.driver_id}`}</p>
+                        <p className="truncate text-xs text-muted">
+                          {`${trip.Car?.license_plate || '-'} | saída #${trip.run_number || 1} | ${trip.TripNotes?.length || 0} nota(s)`}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold',
+                        isSelected ? 'border-accent bg-accent text-[#04131e]' : 'border-border text-muted',
+                      )}
+                      >
+                        {isSelected ? '✓' : ''}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {assignmentError ? (
+              <p className="mt-3 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-2 text-xs text-rose-100">
+                {assignmentError}
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeAssignmentModal()}
+                className="inline-flex h-9 items-center rounded-md border border-border bg-surface-2/85 px-3 text-sm font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                disabled={isAssigningDanfe}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignDanfeToTrip}
+                className="inline-flex h-9 items-center rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-sm font-semibold text-[#04131e] transition disabled:opacity-60"
+                disabled={isAssigningDanfe}
+              >
+                {isAssigningDanfe ? 'Atribuindo...' : 'Confirmar atribuição'}
               </button>
             </div>
           </div>

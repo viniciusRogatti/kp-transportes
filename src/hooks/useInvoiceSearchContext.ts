@@ -5,6 +5,7 @@ import { IDanfe, IOccurrence, IReturnBatch, IInvoiceSearchContext, ITrip } from 
 
 const VALID_RETURN_TYPES = new Set(['total', 'partial', 'sobra', 'coleta']);
 const REQUEST_BATCH_SIZE = 8;
+const CONTEXT_STALE_MS = 30000;
 const INACTIVE_TRIP_NOTE_STATUSES = new Set(['cancelled']);
 
 type LoadInvoiceContextOptions = {
@@ -131,8 +132,10 @@ async function fetchInvoiceContext(invoiceNumber: string, options?: { includeTri
 export default function useInvoiceSearchContext() {
   const [invoiceContextByNf, setInvoiceContextByNf] = useState<Record<string, IInvoiceSearchContext>>({});
   const invoiceContextRef = useRef<Record<string, IInvoiceSearchContext>>({});
+  const fetchedAtByInvoiceRef = useRef<Record<string, number>>({});
 
   const loadInvoiceContext = useCallback(async (danfesToProcess: IDanfe[], options?: LoadInvoiceContextOptions) => {
+    const now = Date.now();
     const includeTripDriver = Boolean(options?.includeTripDriver);
     const uniqueInvoiceNumbers = Array.from(new Set(
       danfesToProcess
@@ -144,7 +147,9 @@ export default function useInvoiceSearchContext() {
       if (shouldForceReload) return true;
 
       const existingContext = invoiceContextRef.current[invoiceNumber];
+      const fetchedAt = fetchedAtByInvoiceRef.current[invoiceNumber] || 0;
       if (!existingContext) return true;
+      if (!fetchedAt || now - fetchedAt >= CONTEXT_STALE_MS) return true;
       if (includeTripDriver && existingContext.driver_name === undefined) return true;
       return false;
     });
@@ -168,14 +173,23 @@ export default function useInvoiceSearchContext() {
       const next = { ...previous };
       contextEntries.forEach(([invoiceNumber, context]) => {
         next[invoiceNumber] = context;
+        fetchedAtByInvoiceRef.current[invoiceNumber] = Date.now();
       });
       invoiceContextRef.current = next;
       return next;
     });
   }, []);
 
+  const refreshInvoiceContext = useCallback(async (danfesToProcess: IDanfe[], options?: Omit<LoadInvoiceContextOptions, 'force'>) => (
+    loadInvoiceContext(danfesToProcess, {
+      ...options,
+      force: true,
+    })
+  ), [loadInvoiceContext]);
+
   return {
     invoiceContextByNf,
     loadInvoiceContext,
+    refreshInvoiceContext,
   };
 }

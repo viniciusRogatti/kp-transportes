@@ -26,7 +26,7 @@ import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveDanfeCompanyCode } from "../u
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
-  const { invoiceContextByNf, loadInvoiceContext } = useInvoiceSearchContext();
+  const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
   const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
   const [allTabCompanyFilter, setAllTabCompanyFilter] = useState<string>('all');
@@ -60,7 +60,7 @@ function TodayInvoices() {
       setDataDanfes(sanitizedRows);
       await Promise.all([
         loadTodayDrivers(),
-        loadInvoiceContext(sanitizedRows),
+        loadInvoiceContext(sanitizedRows, { includeTripDriver: true }),
       ]);
     } catch (error) {
       console.error('Erro ao buscar notas do dia atual:', error);
@@ -87,6 +87,35 @@ function TodayInvoices() {
       setDriverByInvoice({});
     }
   }
+
+  useEffect(() => {
+    if (!dataDanfes.length) return undefined;
+
+    const refreshVisibleInvoiceContext = () => {
+      void Promise.all([
+        loadTodayDrivers(),
+        refreshInvoiceContext(dataDanfes, { includeTripDriver: true }),
+      ]);
+    };
+
+    const handleWindowFocus = () => {
+      refreshVisibleInvoiceContext();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshVisibleInvoiceContext();
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [dataDanfes, refreshInvoiceContext]);
 
   const driverOptions = useMemo(
     () => Array.from(new Set(Object.values(driverByInvoice))).sort((a, b) => a.localeCompare(b)),

@@ -29,7 +29,7 @@ registerLocale('ptBR', ptBR);
 
 function Invoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
-  const { invoiceContextByNf, loadInvoiceContext } = useInvoiceSearchContext();
+  const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
   const [searchNf, setSearchNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -69,7 +69,7 @@ function Invoices() {
         setStartDate(null);
         setEndDate(null);
         setDataDanfes(sanitizedRows);
-        await loadInvoiceContext(sanitizedRows, { includeTripDriver: true });
+        await refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
       } catch (error) {
         console.error('Não foi possível encontrar notas com essas datas', error);
       }
@@ -128,6 +128,32 @@ function Invoices() {
     fetchQueryNf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!dataDanfes.length) return undefined;
+
+    const refreshVisibleInvoiceContext = () => {
+      void refreshInvoiceContext(dataDanfes, { includeTripDriver: true });
+    };
+
+    const handleWindowFocus = () => {
+      refreshVisibleInvoiceContext();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshVisibleInvoiceContext();
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [dataDanfes, refreshInvoiceContext]);
 
   function formatDate(date: Date | null) {
     if (date) {

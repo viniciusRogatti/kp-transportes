@@ -32,8 +32,16 @@ const verifyToken = async (token: string) => {
     clearSessionStorage(token);
     return false;
   } catch (error) {
-    clearSessionStorage(token);
-    return false;
+    if (axios.isAxiosError(error)) {
+      const status = Number(error.response?.status || 0);
+      if (status === 401 || status === 403) {
+        clearSessionStorage(token);
+        return false;
+      }
+    }
+
+    console.error('[auth] verifyToken falhou sem indicar token invalido; sessao local preservada.', error);
+    return true;
   }
 };
 

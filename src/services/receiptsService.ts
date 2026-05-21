@@ -11,6 +11,11 @@ import {
 } from '../types/types';
 import { API_URL } from '../data';
 
+const getAuthConfig = () => {
+  const token = localStorage.getItem('token');
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+};
+
 type ReceiptListFilters = {
   nf?: string;
   motoristaId?: number | null;
@@ -47,20 +52,20 @@ const toQueryParams = (filters: ReceiptListFilters = {}) => {
 
 export async function listPostedReceipts(filters: ReceiptListFilters = {}): Promise<IReceiptsListResponse> {
   const params = toQueryParams(filters);
-  const { data } = await axios.get<IReceiptsListResponse>(`${API_URL}/api/receipts?${params.toString()}`);
+  const { data } = await axios.get<IReceiptsListResponse>(`${API_URL}/api/receipts?${params.toString()}`, getAuthConfig());
   return data;
 }
 
 export async function listPendingReceipts(filters: ReceiptListFilters = {}): Promise<IPendingReceiptsListResponse> {
   const params = toQueryParams(filters);
-  const { data } = await axios.get<IPendingReceiptsListResponse>(`${API_URL}/api/receipts/pending?${params.toString()}`);
+  const { data } = await axios.get<IPendingReceiptsListResponse>(`${API_URL}/api/receipts/pending?${params.toString()}`, getAuthConfig());
   return data;
 }
 
 export async function listReceiptBacklog(filters: ReceiptListFilters = {}): Promise<IReceiptBacklogResponse> {
   const params = toQueryParams(filters);
   const suffix = params.toString();
-  const { data } = await axios.get<IReceiptBacklogResponse>(`${API_URL}/api/receipts/backlog${suffix ? `?${suffix}` : ''}`);
+  const { data } = await axios.get<IReceiptBacklogResponse>(`${API_URL}/api/receipts/backlog${suffix ? `?${suffix}` : ''}`, getAuthConfig());
   return data;
 }
 
@@ -70,13 +75,16 @@ export async function listWhatsappReceiptActivity(
   const params = toQueryParams(filters);
   const { data } = await axios.get<IReceiptWhatsappActivityListResponse>(
     `${API_URL}/api/receipts/whatsapp-activity?${params.toString()}`,
+    getAuthConfig(),
   );
   return data;
 }
 
 export async function uploadReceipt(formData: FormData): Promise<IReceiptUploadResponse> {
   const { data } = await axios.post<IReceiptUploadResponse>(`${API_URL}/api/receipts`, formData, {
+    ...getAuthConfig(),
     headers: {
+      ...(getAuthConfig() as { headers?: Record<string, string> }).headers,
       'Content-Type': 'multipart/form-data',
     },
   });
@@ -96,6 +104,7 @@ export async function getReceiptSignedUrl(
   const suffix = params.toString();
   const { data } = await axios.get<IReceiptSignedUrlResponse>(
     `${API_URL}/api/receipts/${receiptId}/url${suffix ? `?${suffix}` : ''}`,
+    getAuthConfig(),
   );
 
   return data;
@@ -107,12 +116,12 @@ export async function updateReceiptManualReview(
 ): Promise<IReceiptRow> {
   const { data } = await axios.patch<IReceiptRow>(`${API_URL}/api/receipts/${receiptId}/manual-review`, {
     needsManualReview,
-  });
+  }, getAuthConfig());
 
   return data;
 }
 
 export async function listDriversForReceiptFilters(): Promise<IDriver[]> {
-  const { data } = await axios.get<IDriver[]>(`${API_URL}/drivers`);
+  const { data } = await axios.get<IDriver[]>(`${API_URL}/drivers`, getAuthConfig());
   return Array.isArray(data) ? data : [];
 }

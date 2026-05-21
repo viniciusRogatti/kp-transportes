@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import imageCompression from 'browser-image-compression';
 import {
@@ -36,7 +36,7 @@ import {
   ManualStopStatus,
 } from './deliveryMonitoring/stopStatusActions';
 import { API_URL } from '../data';
-import { handleAuthenticationError } from '../utils/authErrorHandler';
+import { getApiErrorMessage, handleAuthenticationError } from '../utils/authErrorHandler';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -282,6 +282,8 @@ const resolveBacklogOperationalTarget = (row: IReceiptBacklogRow) => {
 
 function OperationalPendencies() {
   const navigate = useNavigate();
+  const startDateInputRef = useRef<HTMLInputElement | null>(null);
+  const endDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>('pending');
   const [drivers, setDrivers] = useState<IDriver[]>([]);
@@ -354,6 +356,15 @@ function OperationalPendencies() {
     }
   }, [selectedPreviewUrl]);
 
+  function openNativeDatePicker(input: HTMLInputElement | null) {
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+  }
+
   async function loadBacklog(
     tab: ReceiptBacklogQueueType = activeTab,
     overrides: {
@@ -381,7 +392,9 @@ function OperationalPendencies() {
       setCutoffDate(String(response?.cutoff_date || ''));
     } catch (error) {
       console.error(error);
-      setPageError('Nao foi possivel carregar as pendencias operacionais de canhoto.');
+      if (handleAuthenticationError(error)) return;
+      const apiMessage = getApiErrorMessage(error);
+      setPageError(apiMessage || 'Nao foi possivel carregar as pendencias operacionais de canhoto.');
       setRows([]);
       setSummary(EMPTY_BACKLOG_SUMMARY);
     } finally {
@@ -800,20 +813,24 @@ function OperationalPendencies() {
               <label className="text-xs text-muted">
                 Data inicio
                 <input
+                  ref={startDateInputRef}
                   type="date"
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  onClick={() => openNativeDatePicker(startDateInputRef.current)}
+                  className="mt-1 h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
                 />
               </label>
 
               <label className="text-xs text-muted">
                 Data fim
                 <input
+                  ref={endDateInputRef}
                   type="date"
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  onClick={() => openNativeDatePicker(endDateInputRef.current)}
+                  className="mt-1 h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
                 />
               </label>
 

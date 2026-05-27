@@ -627,6 +627,8 @@ export interface IDanfe {
 }
 
 export interface IDanfeProduct {
+  company_id?: number;
+  product_id?: string;
   quantity: number | string;
   price: string;
   total_price: string;
@@ -636,7 +638,7 @@ export interface IDanfeProduct {
     description: string;
     price: string;
     type: string;
-  };
+  } | null;
 };
 
 interface ICities {

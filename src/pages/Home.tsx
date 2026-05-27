@@ -32,6 +32,7 @@ import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { getSemanticToneClassName } from '../utils/statusStyles';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
+import { sanitizeDanfeProduct, sanitizeDanfeTextFields } from '../utils/textNormalization';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -288,30 +289,27 @@ const sanitizeCollectionRequestRecord = (request: ICollectionRequest): ICollecti
     }))
     : [],
 });
-const sanitizeDanfeForDisplay = (danfe: IDanfe): IDanfe => ({
-  ...danfe,
-  representative_name: normalizeTextValue(danfe.representative_name) || null,
-  Customer: {
-    ...danfe.Customer,
-    name_or_legal_entity: normalizeTextValue(danfe.Customer?.name_or_legal_entity),
-    city: normalizeCityLabel(danfe.Customer?.city),
-    address: normalizeTextValue(danfe.Customer?.address) || null,
-    address_number: normalizeTextValue(danfe.Customer?.address_number) || null,
-    neighborhood: normalizeTextValue(danfe.Customer?.neighborhood) || null,
-    state: normalizeTextValue(danfe.Customer?.state) || null,
-    zip_code: normalizeTextValue(danfe.Customer?.zip_code) || null,
-  },
-  DanfeProducts: Array.isArray(danfe.DanfeProducts)
-    ? danfe.DanfeProducts.map((product) => ({
-      ...product,
-      type: normalizeTextValue(product.type),
-      Product: {
-        ...product.Product,
-        description: normalizeTextValue(product.Product?.description),
-      },
-    }))
-    : danfe.DanfeProducts,
-});
+const sanitizeDanfeForDisplay = (danfe: IDanfe): IDanfe => {
+  const sanitizedDanfe = sanitizeDanfeTextFields(danfe);
+
+  return {
+    ...sanitizedDanfe,
+    representative_name: normalizeTextValue(sanitizedDanfe.representative_name) || null,
+    Customer: {
+      ...sanitizedDanfe.Customer,
+      name_or_legal_entity: normalizeTextValue(sanitizedDanfe.Customer?.name_or_legal_entity),
+      city: normalizeCityLabel(sanitizedDanfe.Customer?.city),
+      address: normalizeTextValue(sanitizedDanfe.Customer?.address) || null,
+      address_number: normalizeTextValue(sanitizedDanfe.Customer?.address_number) || null,
+      neighborhood: normalizeTextValue(sanitizedDanfe.Customer?.neighborhood) || null,
+      state: normalizeTextValue(sanitizedDanfe.Customer?.state) || null,
+      zip_code: normalizeTextValue(sanitizedDanfe.Customer?.zip_code) || null,
+    },
+    DanfeProducts: Array.isArray(sanitizedDanfe.DanfeProducts)
+      ? sanitizedDanfe.DanfeProducts.map((product) => sanitizeDanfeProduct(product))
+      : sanitizedDanfe.DanfeProducts,
+  };
+};
 
 const buildCustomerAddress = (customer?: Partial<IDanfe['Customer']> | null) => {
   const street = normalizeTextValue(customer?.address);
@@ -741,7 +739,7 @@ function Home() {
 
   async function findDanfeByNf(nf: string) {
     const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
-    return data;
+    return sanitizeDanfeForDisplay(data);
   }
 
   function getItemsSummary(occurrence: IOccurrence): OccurrenceCardItemSummary[] {

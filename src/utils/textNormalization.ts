@@ -1,4 +1,4 @@
-import { IDanfe } from '../types/types';
+import { IDanfe, IDanfeProduct } from '../types/types';
 
 const XML_ENTITY_REGEX = /&(#\d+|#x[\da-fA-F]+|[a-zA-Z]+);/g;
 const XML_ENTITY_FALLBACK_MAP: Record<string, string> = {
@@ -63,6 +63,25 @@ function toNullableText(value: unknown) {
   return normalized || null;
 }
 
+export function sanitizeDanfeProduct(product: IDanfeProduct): IDanfeProduct {
+  const fallbackCode = normalizeTextValue(product.Product?.code || product.product_id);
+  const fallbackType = normalizeTextValue(product.Product?.type || product.type);
+  const fallbackDescription = normalizeTextValue(product.Product?.description) || 'Produto sem descricao';
+  const fallbackPrice = normalizeTextValue(product.Product?.price || product.price) || '0';
+
+  return {
+    ...product,
+    product_id: normalizeTextValue(product.product_id) || fallbackCode || undefined,
+    type: normalizeTextValue(product.type || fallbackType),
+    Product: {
+      code: fallbackCode,
+      description: fallbackDescription,
+      price: fallbackPrice,
+      type: fallbackType,
+    },
+  };
+}
+
 export function sanitizeDanfeTextFields(danfe: IDanfe): IDanfe {
   return {
     ...danfe,
@@ -98,16 +117,7 @@ export function sanitizeDanfeTextFields(danfe: IDanfe): IDanfe {
       representative_name: toNullableText(danfe.Customer?.representative_name),
     },
     DanfeProducts: Array.isArray(danfe.DanfeProducts)
-      ? danfe.DanfeProducts.map((product) => ({
-        ...product,
-        type: normalizeTextValue(product.type),
-        Product: {
-          ...product.Product,
-          code: normalizeTextValue(product.Product?.code),
-          description: normalizeTextValue(product.Product?.description),
-          type: normalizeTextValue(product.Product?.type),
-        },
-      }))
+      ? danfe.DanfeProducts.map((product) => sanitizeDanfeProduct(product))
       : danfe.DanfeProducts,
   };
 }

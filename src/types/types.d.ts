@@ -638,7 +638,7 @@ export interface IDanfeProduct {
     description: string;
     price: string;
     type: string;
-  } | null;
+  };
 };
 
 interface ICities {

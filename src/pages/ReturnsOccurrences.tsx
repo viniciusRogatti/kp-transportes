@@ -53,6 +53,7 @@ import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
+import { sanitizeDanfeTextFields } from '../utils/textNormalization';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 const RETURN_BATCH_LOOKBACK_OPTIONS = [
@@ -1003,7 +1004,7 @@ function ReturnsOccurrences() {
 
   async function findDanfeByNf(nf: string) {
     const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
-    return data;
+    return sanitizeDanfeTextFields(data);
   }
 
   async function hasActionQueueCollectionForInvoice(invoiceNumber: string) {

@@ -7,6 +7,7 @@ import axios from "axios";
 import { API_URL } from "../data";
 import { ICustomer } from "../types/types";
 import { ProductsLoader } from "../style/Loaders";
+import { resolveCustomerCompanyCode } from "../utils/companyTabs";
 
 type CustomerWithOptionalNumber = ICustomer & {
   address_number?: string | number | null;
@@ -23,10 +24,15 @@ const COMPANY_LABELS: Record<string, string> = {
   pronto: 'PRONTO',
 };
 
-const resolveCompanyCode = (customer: ICustomer) => String(customer.company?.code || '').trim().toLowerCase();
-
 function normalizeSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeSearchValue(value: string) {
+  return normalizeSpaces(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
 }
 
 function toTitleCase(value: string) {
@@ -113,7 +119,7 @@ function Customers() {
     try {
       setIsLoading(true);
       const response = await axios.get(`${API_URL}/customers`);
-      setCustomers(response.data);
+      setCustomers(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Erro ao buscar clientes:', error);
     } finally {
@@ -123,15 +129,31 @@ function Customers() {
 
   const visibleCustomers = useMemo(() => {
     if (activeCompanyTab === 'all') return customers;
-    return customers.filter((customer) => resolveCompanyCode(customer) === activeCompanyTab);
+    return customers.filter((customer) => resolveCustomerCompanyCode(customer) === activeCompanyTab);
   }, [activeCompanyTab, customers]);
 
-  const filteredCustomers = visibleCustomers.filter((customer) => {
-    const name = (customer.name_or_legal_entity || "").toLowerCase();
-    const city = (customer.city || "").toLowerCase();
-    return name.includes(nameFilter.trim().toLowerCase())
-      && city.includes(cityFilter.trim().toLowerCase());
-  });
+  const filteredCustomers = useMemo(() => {
+    const normalizedNameFilter = normalizeSearchValue(nameFilter);
+    const normalizedCityFilter = normalizeSearchValue(cityFilter);
+
+    return visibleCustomers
+      .filter((customer) => {
+        const name = normalizeSearchValue(customer.name_or_legal_entity || "");
+        const city = normalizeSearchValue(customer.city || "");
+
+        return name.includes(normalizedNameFilter)
+          && city.includes(normalizedCityFilter);
+      })
+      .sort((left, right) => {
+        const companyCompare = (left.company?.name || "").localeCompare(right.company?.name || "", "pt-BR", { sensitivity: "base" });
+        if (companyCompare !== 0) return companyCompare;
+
+        const nameCompare = (left.name_or_legal_entity || "").localeCompare(right.name_or_legal_entity || "", "pt-BR", { sensitivity: "base" });
+        if (nameCompare !== 0) return nameCompare;
+
+        return (left.city || "").localeCompare(right.city || "", "pt-BR", { sensitivity: "base" });
+      });
+  }, [cityFilter, nameFilter, visibleCustomers]);
   
   return (
     <div>
@@ -208,7 +230,7 @@ function Customers() {
                 </thead>
                 <tbody>
                   {filteredCustomers.map((customer) => (
-                    <tr key={customer.cnpj_or_cpf}>
+                    <tr key={`${customer.company_id || customer.company?.id || 'no-company'}-${customer.cnpj_or_cpf}`}>
                       <td>{toTitleCase(customer.name_or_legal_entity || "-")}</td>
                       <td>{formatRepresentativeName(customer.representative_name)}</td>
                       <td className="max-[768px]:text-[0.72rem] max-[768px]:leading-snug">{formatAddress(customer)}</td>

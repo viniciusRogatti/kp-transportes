@@ -187,4 +187,38 @@ describe('buildRetainedReminders', () => {
 
     expect(selectedRows).toEqual(retainedRows);
   });
+
+  it('nao usa fallback por cidade quando o customer_id do mesmo cliente varia so na formatacao', () => {
+    const routeDanfes: IDanfe[] = [
+      buildDanfe({
+        customer_id: '12.345.678/0001-90',
+        invoice_number: '300012',
+        Customer: {
+          ...buildDanfe().Customer,
+          name_or_legal_entity: 'Cliente Retido',
+          city: 'Campinas',
+        },
+      }),
+    ];
+
+    const retainedRows: IReceiptBacklogRow[] = [
+      {
+        queue_type: 'retained',
+        nf_id: '199012',
+        invoice_number: '199012',
+        customer_id: '12345678000190',
+        customer_name: 'Cliente Retido',
+        city: 'Campinas',
+        status: 'PENDING',
+      },
+    ];
+
+    const selectedRows = selectRetainedRowsForRoute({
+      routeDanfes,
+      retainedRows,
+      sameDayCustomerIds: ['12.345.678/0001-90'],
+    });
+
+    expect(selectedRows).toEqual(retainedRows);
+  });
 });

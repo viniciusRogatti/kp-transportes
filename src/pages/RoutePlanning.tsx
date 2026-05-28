@@ -1953,13 +1953,30 @@ function RoutePlanning() {
   const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[]) => {
     if (!tripDanfes.length || !retainedContextRows.length) return [];
 
+    const normalizeCustomerId = (value: unknown) => String(value || '')
+      .trim()
+      .replace(/[^0-9a-z]/gi, '')
+      .toUpperCase();
+
     const sameDayTrips = await fetchTripsByDate(trip.date);
-    const sameDayCustomerIds = new Set(
+    const sameDayInvoices = Array.from(new Set(
       sameDayTrips
+        .flatMap((dayTrip) => dayTrip.TripNotes || [])
+        .map((note) => String(note.invoice_number || '').trim())
+        .filter(Boolean),
+    ));
+    const sameDayTripDanfes = sameDayInvoices.length
+      ? await fetchDanfesByInvoiceNumbers(sameDayInvoices)
+      : [];
+    const sameDayCustomerIds = new Set([
+      ...sameDayTrips
         .flatMap((dayTrip) => dayTrip.TripNotes || [])
         .map((note) => String(note.customer_id || '').trim())
         .filter(Boolean),
-    );
+      ...sameDayTripDanfes
+        .map((danfe) => String(danfe.customer_id || '').trim())
+        .filter(Boolean),
+    ]);
 
     const relevantRetainedRows = selectRetainedRowsForRoute({
       routeDanfes: tripDanfes,
@@ -1971,7 +1988,7 @@ function RoutePlanning() {
 
     const retainedInvoiceNumbersNeedingAddress = relevantRetainedRows
       .filter((row) => {
-        const customerId = String(row.customer_id || '').trim();
+        const customerId = normalizeCustomerId(row.customer_id);
         return customerId ? sameDayCustomerIds.has(customerId) === false : true;
       })
       .map((row) => row.invoice_number);

@@ -16,6 +16,9 @@ interface RetainedRowSelectionOptions {
 }
 
 const normalizeText = (value: unknown) => String(value || '').trim();
+const normalizeCustomerId = (value: unknown) => normalizeText(value)
+  .replace(/[^0-9a-z]/gi, '')
+  .toUpperCase();
 
 const normalizeComparableText = (value: unknown) => normalizeText(value)
   .normalize('NFD')
@@ -43,17 +46,17 @@ export function selectRetainedRowsForRoute({
   sameDayCustomerIds = [],
 }: RetainedRowSelectionOptions): IReceiptBacklogRow[] {
   const routeCustomerIds = new Set(
-    routeDanfes.map((danfe) => normalizeText(danfe.customer_id)).filter(Boolean),
+    routeDanfes.map((danfe) => normalizeCustomerId(danfe.customer_id)).filter(Boolean),
   );
   const routeCities = new Set(
     routeDanfes.map((danfe) => normalizeComparableText(danfe.Customer?.city)).filter(Boolean),
   );
   const dayCustomerIds = new Set(
-    Array.from(sameDayCustomerIds, (customerId) => normalizeText(customerId)).filter(Boolean),
+    Array.from(sameDayCustomerIds, (customerId) => normalizeCustomerId(customerId)).filter(Boolean),
   );
 
   return retainedRows.filter((row) => {
-    const customerId = normalizeText(row.customer_id);
+    const customerId = normalizeCustomerId(row.customer_id);
     if (customerId && routeCustomerIds.has(customerId)) return true;
     if (customerId && dayCustomerIds.has(customerId)) return false;
 
@@ -71,7 +74,7 @@ export function buildRetainedReminders(
   const routeCities = new Set<string>();
 
   routeDanfes.forEach((danfe) => {
-    const customerId = normalizeText(danfe.customer_id);
+    const customerId = normalizeCustomerId(danfe.customer_id);
     const invoiceNumber = normalizeText(danfe.invoice_number);
     const cityKey = normalizeComparableText(danfe.Customer?.city);
 
@@ -91,7 +94,7 @@ export function buildRetainedReminders(
     const retainedInvoiceNumber = normalizeText(row.invoice_number);
     if (!retainedInvoiceNumber || seenInvoices.has(retainedInvoiceNumber)) return;
 
-    const customerId = normalizeText(row.customer_id);
+    const customerId = normalizeCustomerId(row.customer_id);
     const routeInvoiceNumbers = customerId ? (routeInvoicesByCustomerId.get(customerId) || []) : [];
     const city = normalizeText(row.city);
     const sameCity = city ? routeCities.has(normalizeComparableText(city)) : false;

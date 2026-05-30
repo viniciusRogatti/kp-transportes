@@ -155,6 +155,8 @@ function UserSessions() {
   const [toDate, setToDate] = useState('');
   const [canLoadData, setCanLoadData] = useState(false);
   const [currentSessionsPage, setCurrentSessionsPage] = useState(1);
+  const [botRestarting, setBotRestarting] = useState(false);
+  const [botActionMessage, setBotActionMessage] = useState('');
 
   async function loadUsers() {
     try {
@@ -226,6 +228,32 @@ function UserSessions() {
 
   async function refreshData() {
     await Promise.all([loadSessions(), loadAnalytics()]);
+  }
+
+  async function restartWhatsappBot() {
+    const confirmed = window.confirm(
+      'Deseja reiniciar agora o bot de leitura do grupo de WhatsApp no servidor?',
+    );
+    if (!confirmed) return;
+
+    try {
+      setBotRestarting(true);
+      setBotActionMessage('');
+
+      const { data } = await axios.post(`${API_URL}/users/sessions/whatsapp-bot/restart`);
+      const status = String(data?.status || '').trim();
+      const host = String(data?.host || '').trim();
+      setBotActionMessage(
+        `Bot reiniciado${host ? ` em ${host}` : ''}${status ? ` com status ${status}` : ''}.`,
+      );
+    } catch (error: any) {
+      console.error(error);
+      const message = error?.response?.data?.message || 'Nao foi possivel reiniciar o bot do WhatsApp.';
+      const details = error?.response?.data?.details ? ` Detalhes: ${error.response.data.details}` : '';
+      setBotActionMessage(`${message}${details}`);
+    } finally {
+      setBotRestarting(false);
+    }
   }
 
   useEffect(() => {
@@ -429,6 +457,27 @@ function UserSessions() {
             <p className="mt-1 text-xs text-muted">
               Visão ativa: {USER_GROUP_LABELS[selectedUserGroup]}. {audienceDescription}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-amber-400/20 bg-amber-500/8 p-3">
+              <div className="min-w-[220px] flex-1">
+                <p className="text-sm font-semibold text-text">Bot de leitura do WhatsApp</p>
+                <p className="mt-1 text-xs text-muted">
+                  Reinicia apenas o serviço do leitor do grupo no Hetzner, sem reiniciar a VPS inteira.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={restartWhatsappBot}
+                disabled={botRestarting}
+                className="h-10 rounded-md border border-amber-300/30 bg-amber-400/90 px-4 font-semibold text-[#2b1600] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {botRestarting ? 'Reiniciando bot...' : 'Reiniciar bot WhatsApp'}
+              </button>
+            </div>
+            {botActionMessage ? (
+              <p className={`mt-2 text-sm ${botActionMessage.toLowerCase().includes('nao foi possivel') || botActionMessage.toLowerCase().includes('falha') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {botActionMessage}
+              </p>
+            ) : null}
 
             <div className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-5">
               <select

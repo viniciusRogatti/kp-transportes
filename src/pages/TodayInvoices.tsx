@@ -258,7 +258,7 @@ function TodayInvoices() {
     }
 
     try {
-      await axios.put(`${API_URL}/trips/add-note/${tripId}`, {
+      const { data: createdTripNote } = await axios.put(`${API_URL}/trips/add-note/${tripId}`, {
         noteData: {
           company_id: danfe.company_id,
           invoice_number: danfe.invoice_number,
@@ -278,7 +278,37 @@ function TodayInvoices() {
         }],
       });
 
-      await loadTodayData();
+      const invoiceNumber = String(danfe.invoice_number);
+      const updatedDanfe = sanitizeDanfeTextFields({
+        ...danfe,
+        status: 'assigned',
+      });
+
+      setDataDanfes((previous) => previous.map((row) => (
+        String(row.invoice_number) === invoiceNumber && Number(row.company_id || 0) === Number(danfe.company_id || 0)
+          ? updatedDanfe
+          : row
+      )));
+      setDriverByInvoice((previous) => ({
+        ...previous,
+        [invoiceNumber]: targetTrip.Driver?.name || previous[invoiceNumber] || '',
+      }));
+      setTodayTrips((previous) => previous.map((trip) => (
+        Number(trip.id) === Number(tripId)
+          ? {
+            ...trip,
+            TripNotes: [
+              ...(trip.TripNotes || []),
+              {
+                ...createdTripNote,
+                status: createdTripNote?.status || 'assigned',
+              },
+            ],
+          }
+          : trip
+      )));
+
+      void refreshInvoiceContext([updatedDanfe], { includeTripDriver: true });
       window.alert(`NF ${danfe.invoice_number} atribuída à rota de ${targetTrip.Driver?.name || 'motorista selecionado'}.`);
     } catch (error) {
       if (handleAuthenticationError(error)) {

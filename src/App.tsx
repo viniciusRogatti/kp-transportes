@@ -28,8 +28,10 @@ import {
 } from './utils/permissions';
 import axios from 'axios';
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { isAuthenticationError, redirectToLoginBecauseSessionExpired } from './utils/authErrorHandler';
 import useSessionInactivityLogout from './hooks/useSessionInactivityLogout';
+import { clearLocalSession } from './utils/logoutSession';
 // import FreightSummary from './pages/FreightCalculation';
 
 function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
@@ -50,7 +52,10 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
 function App() {
   useAppVersionAutoRefresh();
   useSessionInactivityLogout();
+  const location = useLocation();
   const token = localStorage.getItem('token');
+  const isLoginRoute = location.pathname === '/';
+  const realtimeToken = isLoginRoute ? null : token;
 
   useEffect(() => {
     const syncAuthorizationHeader = () => {
@@ -90,6 +95,11 @@ function App() {
       (response) => response,
       (error) => {
         if (isAuthenticationError(error)) {
+          if (window.location.hash === '#/' || window.location.hash === '') {
+            clearLocalSession();
+            return Promise.reject(error);
+          }
+
           redirectToLoginBecauseSessionExpired();
         }
         return Promise.reject(error);
@@ -109,7 +119,7 @@ function App() {
 
   return (
     <div>
-      <RealtimeNotificationsProvider token={token}>
+      <RealtimeNotificationsProvider token={realtimeToken}>
         <GlobalAlertHost />
         <Routes>
           <Route path="/" element={<Login />} />

@@ -29,10 +29,13 @@ interface ProductListPDFProps {
   retainedReminders?: RetainedReminder[];
 }
 
+const HEADER_MIN_HEIGHT = 150;
+const FOOTER_HEIGHT = 24;
+
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 18,
-    paddingBottom: 18,
+    paddingTop: 18 + HEADER_MIN_HEIGHT,
+    paddingBottom: 18 + FOOTER_HEIGHT,
     paddingHorizontal: 22,
     fontSize: 9,
     color: '#000000',
@@ -44,6 +47,13 @@ const styles = StyleSheet.create({
     paddingBottom: 7,
     paddingHorizontal: 10,
     marginBottom: 10,
+    minHeight: HEADER_MIN_HEIGHT,
+  },
+  fixedHeader: {
+    position: 'absolute',
+    top: 18,
+    left: 22,
+    right: 22,
   },
   topBar: {
     flexDirection: 'row',
@@ -225,6 +235,37 @@ const styles = StyleSheet.create({
     color: '#000000',
     lineHeight: 1.4,
   },
+  separatorRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  separatorLabel: {
+    fontSize: 8,
+    marginRight: 6,
+    textTransform: 'uppercase',
+  },
+  separatorLine: {
+    flexGrow: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#000000',
+    minHeight: 10,
+  },
+  footer: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    bottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#000000',
+    paddingTop: 4,
+  },
+  footerText: {
+    fontSize: 8,
+    color: '#000000',
+  },
 });
 
 const resolveEmissionDate = (tripCreatedAt?: string | null, tripDate?: string | null) => {
@@ -279,21 +320,15 @@ const resolveTripCities = (danfes: IDanfe[] = []) => {
   return Array.from(uniqueCities.values());
 };
 
-const renderOperationalHeader = ({
+const renderHeaderMeta = ({
   driver,
   vehiclePlate,
-  totalWeight,
-  noteCount,
   tripDate,
   tripCreatedAt,
   tripId,
-  danfes,
-  retainedReminders,
 }: ProductListPDFProps) => {
-  const tripCities = resolveTripCities(danfes);
-
   return (
-    <View style={styles.headerCard}>
+    <>
       <View style={styles.topBar}>
         <View style={styles.titleBlock}>
           <Text style={styles.title}>Romaneio de Produtos</Text>
@@ -311,56 +346,109 @@ const renderOperationalHeader = ({
           <Text style={styles.infoLabel}>Motorista</Text>
           <Text style={styles.inlineInfoText}>{driver || '-'}</Text>
         </View>
-        <View style={[styles.infoCell, styles.plateInfoCell]}>
+        <View style={[styles.infoCell, styles.plateInfoCell, styles.lastInfoCell]}>
           <Text style={styles.infoLabel}>Placa</Text>
           <Text style={styles.inlineInfoText}>{vehiclePlate || '-'}</Text>
         </View>
-        <View style={[styles.infoCell, styles.weightInfoCell]}>
-          <Text style={styles.infoLabel}>Peso</Text>
-          <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
-        </View>
-        <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
-          <Text style={styles.infoLabel}>Notas</Text>
-          <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
-        </View>
       </View>
-      {retainedReminders?.length ? (
-        <View style={styles.attentionCard}>
-          <Text style={styles.attentionTitle}>ATENCAO: recolher canhotos retidos nesta rota</Text>
-          {retainedReminders.map((reminder) => (
-            <View
-              key={`${reminder.matchType}-${reminder.retainedInvoiceNumber}`}
-              style={styles.attentionItem}
-            >
-              <Text style={styles.attentionItemTitle}>
-                {`NF ${reminder.retainedInvoiceNumber} | ${reminder.retainedCustomerName}`}
-              </Text>
-              {reminder.matchType === 'customer' ? (
-                <Text style={styles.attentionItemText}>
-                  {`Voce tem entrega no cliente ${reminder.retainedCustomerName}. Lembre-se de recolher o canhoto retido da NF ${reminder.retainedInvoiceNumber} ao atender a(s) NF(s) ${reminder.routeInvoiceNumbers.join(', ')}.`}
-                </Text>
-              ) : (
-                <>
-                  <Text style={styles.attentionItemText}>
-                    {`Nao ha entrega deste cliente na rota atual. Aproveite a passagem por ${reminder.city || 'esta cidade'} para recolher o canhoto retido do cliente ${reminder.retainedCustomerName}.`}
-                  </Text>
-                  <Text style={styles.attentionItemText}>
-                    {`Endereco: ${reminder.addressLine || 'Endereco nao localizado.'}`}
-                  </Text>
-                </>
-              )}
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {tripCities.length ? (
-        <View style={styles.citiesRow}>
-          <Text style={styles.inlineInfoCitiesText}>{`Cidades: ${tripCities.join(', ')}`}</Text>
-        </View>
-      ) : null}
-    </View>
+    </>
   );
 };
+
+const renderOperationalHeader = ({
+  totalWeight,
+  noteCount,
+  danfes,
+  retainedReminders,
+  products,
+  ...rest
+}: ProductListPDFProps) => {
+  const tripCities = resolveTripCities(danfes);
+  const hasProducts = Boolean(products?.length);
+
+  return (
+    <View
+      style={[styles.headerCard, styles.fixedHeader]}
+      fixed
+      render={({ pageNumber }) => (pageNumber === 1 ? (
+        <>
+          {renderHeaderMeta(rest)}
+          <View style={styles.inlineInfoRow}>
+            <View style={[styles.infoCell, styles.weightInfoCell]}>
+              <Text style={styles.infoLabel}>Peso</Text>
+              <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
+            </View>
+            <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
+              <Text style={styles.infoLabel}>Notas</Text>
+              <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
+            </View>
+          </View>
+          {hasProducts ? (
+            <View style={styles.separatorRow}>
+              <Text style={styles.separatorLabel}>Separado por</Text>
+              <View style={styles.separatorLine} />
+            </View>
+          ) : null}
+          {retainedReminders?.length ? (
+            <View style={styles.attentionCard}>
+              <Text style={styles.attentionTitle}>ATENCAO: recolher canhotos retidos nesta rota</Text>
+              {retainedReminders.map((reminder) => (
+                <View
+                  key={`${reminder.matchType}-${reminder.retainedInvoiceNumber}`}
+                  style={styles.attentionItem}
+                >
+                  <Text style={styles.attentionItemTitle}>
+                    {`NF ${reminder.retainedInvoiceNumber} | ${reminder.retainedCustomerName}`}
+                  </Text>
+                  {reminder.matchType === 'customer' ? (
+                    <Text style={styles.attentionItemText}>
+                      {`Voce tem entrega no cliente ${reminder.retainedCustomerName}. Lembre-se de recolher o canhoto retido da NF ${reminder.retainedInvoiceNumber} ao atender a(s) NF(s) ${reminder.routeInvoiceNumbers.join(', ')}.`}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.attentionItemText}>
+                        {`Nao ha entrega deste cliente na rota atual. Aproveite a passagem por ${reminder.city || 'esta cidade'} para recolher o canhoto retido do cliente ${reminder.retainedCustomerName}.`}
+                      </Text>
+                      <Text style={styles.attentionItemText}>
+                        {`Endereco: ${reminder.addressLine || 'Endereco nao localizado.'}`}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {tripCities.length ? (
+            <View style={styles.citiesRow}>
+              <Text style={styles.inlineInfoCitiesText}>{`Cidades: ${tripCities.join(', ')}`}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : null)}
+    />
+  );
+};
+
+const renderSimplifiedHeader = (props: ProductListPDFProps) => (
+  <View
+    style={[styles.headerCard, styles.fixedHeader]}
+    fixed
+    render={({ pageNumber }) => (pageNumber > 1 ? (
+      <>
+        {renderHeaderMeta(props)}
+      </>
+    ) : null)}
+  />
+);
+
+const renderFooter = () => (
+  <View style={styles.footer} fixed>
+    <Text
+      style={styles.footerText}
+      render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
+    />
+  </View>
+);
 
 const renderProductsTable = (products: ProductRow[] = []) => {
   const rows = normalizeProductRows(products);
@@ -451,6 +539,8 @@ const ProductListPDF: React.FC<ProductListPDFProps> = (props) => (
   <Document>
     <Page size="A4" style={styles.page}>
       {renderOperationalHeader(props)}
+      {renderSimplifiedHeader(props)}
+      {renderFooter()}
       {renderPageContent(props)}
     </Page>
   </Document>

@@ -171,6 +171,39 @@ function buildTripNotePayload(note: ITripNote, order: number) {
   };
 }
 
+function buildDanfeSnapshotFromTripNotes(tripNotes: ITripNote[] = []): IDanfe[] {
+  return tripNotes.map((note) => ({
+    customer_id: String((note as RoutingTripNote).customer_id || ''),
+    company_id: note.company_id ?? undefined,
+    invoice_number: String(note.invoice_number || ''),
+    barcode: String(note.invoice_number || ''),
+    invoice_date: '',
+    departure_time: '',
+    total_quantity: 0,
+    gross_weight: String(note.gross_weight || 0),
+    net_weight: '0',
+    total_value: '0',
+    created_at: '',
+    updated_at: '',
+    Customer: {
+      name_or_legal_entity: String(note.customer_name || ''),
+      phone: null,
+      address: null,
+      city: String(note.city || ''),
+      cnpj_or_cpf: '',
+    },
+    DanfeProducts: [],
+  }));
+}
+
+function tripNeedsDanfeHydration(tripNotes: ITripNote[] = []) {
+  return tripNotes.some((note) => {
+    const routingNote = note as RoutingTripNote;
+    const hasProducts = Array.isArray(note.products) && note.products.length > 0;
+    return !routingNote.customer_id || !note.city || !hasProducts;
+  });
+}
+
 function hasTripAssignmentChanged(trip: ITrip | null, driverId: string, carId: string) {
   if (!trip) return false;
   return String(trip.driver_id) !== String(driverId) || String(trip.car_id) !== String(carId);
@@ -1958,7 +1991,11 @@ function RoutePlanning() {
       .replace(/[^0-9a-z]/gi, '')
       .toUpperCase();
 
-    const sameDayTrips = await fetchTripsByDate(trip.date);
+    const sameDayTrips = trip.date === todayApiDate && todayTrips.length
+      ? Array.from(new Map(
+        [trip, ...todayTrips].map((dayTrip) => [Number(dayTrip.id), dayTrip]),
+      ).values())
+      : await fetchTripsByDate(trip.date);
     const sameDayInvoices = Array.from(new Set(
       sameDayTrips
         .flatMap((dayTrip) => dayTrip.TripNotes || [])
@@ -2046,8 +2083,12 @@ function RoutePlanning() {
   const printTripProducts = async (trip: ITrip, previewWindow?: Window | null) => {
     try {
       setIsPrinting(true);
-      const validDanfes: IDanfe[] = await fetchDanfesByTrip(trip);
-      const allProducts = collectTripProductsByNote(trip.TripNotes || [], validDanfes);
+      const tripNotes = trip.TripNotes || [];
+      const snapshotDanfes = buildDanfeSnapshotFromTripNotes(tripNotes);
+      const validDanfes: IDanfe[] = tripNeedsDanfeHydration(tripNotes)
+        ? await fetchDanfesByTrip(trip)
+        : snapshotDanfes;
+      const allProducts = collectTripProductsByNote(tripNotes, validDanfes);
       const grouped = groupTripProductsByCodeAndUnit(allProducts);
       const retainedReminders = await resolveRetainedRemindersForTrip(trip, validDanfes);
       const pdfBlob = await pdf(
@@ -2061,7 +2102,7 @@ function RoutePlanning() {
           tripDate={trip.date}
           tripCreatedAt={trip.created_at}
           totalWeight={trip.gross_weight}
-          noteCount={trip.TripNotes?.length || 0}
+          noteCount={tripNotes.length || 0}
         />,
       ).toBlob();
       attachPdfToWindow(pdfBlob, previewWindow);

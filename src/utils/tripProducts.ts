@@ -9,33 +9,31 @@ export type TripProductRow = {
 };
 
 export function groupTripProductsByCodeAndUnit(products: TripProductRow[] = []) {
-  return products.reduce<TripProductRow[]>((accumulator, product) => {
+  const grouped = new Map<string, TripProductRow>();
+
+  products.forEach((product) => {
     const companyId = Number(product?.company_id || 0) || 0;
     const code = String(product?.code || '').trim();
     const unit = String(product?.type || '').trim().toUpperCase();
-    const existingProduct = accumulator.find((item) => {
-      const existingCompanyId = Number(item?.company_id || 0) || 0;
-      const existingCode = String(item?.code || '').trim();
-      const existingUnit = String(item?.type || '').trim().toUpperCase();
-      return existingCompanyId === companyId && existingCode === code && existingUnit === unit;
-    });
     const quantity = Number(product?.quantity || 0);
+    const key = `${companyId}::${code}::${unit}`;
+    const existingProduct = grouped.get(key);
 
     if (existingProduct) {
       existingProduct.quantity += quantity;
-      return accumulator;
+      return;
     }
 
-    accumulator.push({
+    grouped.set(key, {
       company_id: companyId || null,
       code,
       description: String(product?.description || '').trim(),
       type: unit || '',
       quantity,
     });
+  });
 
-    return accumulator;
-  }, []);
+  return Array.from(grouped.values());
 }
 
 function normalizeTripProductRow(product: {

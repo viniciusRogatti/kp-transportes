@@ -29,10 +29,12 @@ interface ProductListPDFProps {
   retainedReminders?: RetainedReminder[];
 }
 
+const CONTINUATION_HEADER_HEIGHT = 104;
+const FOOTER_HEIGHT = 18;
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 18,
-    paddingBottom: 18,
+    paddingTop: 18 + CONTINUATION_HEADER_HEIGHT,
+    paddingBottom: 18 + FOOTER_HEIGHT,
     paddingHorizontal: 22,
     fontSize: 9,
     color: '#000000',
@@ -44,6 +46,12 @@ const styles = StyleSheet.create({
     paddingBottom: 7,
     paddingHorizontal: 10,
     marginBottom: 10,
+  },
+  fixedHeader: {
+    position: 'absolute',
+    top: 18,
+    left: 22,
+    right: 22,
   },
   topBar: {
     flexDirection: 'row',
@@ -242,6 +250,21 @@ const styles = StyleSheet.create({
     borderBottomColor: '#000000',
     minHeight: 10,
   },
+  footer: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    bottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#000000',
+    paddingTop: 3,
+  },
+  footerText: {
+    fontSize: 8,
+    color: '#000000',
+  },
 });
 
 const resolveEmissionDate = (tripCreatedAt?: string | null, tripDate?: string | null) => {
@@ -296,7 +319,7 @@ const resolveTripCities = (danfes: IDanfe[] = []) => {
   return Array.from(uniqueCities.values());
 };
 
-const renderOperationalHeader = ({
+const renderHeaderSummary = ({
   driver,
   vehiclePlate,
   totalWeight,
@@ -304,6 +327,42 @@ const renderOperationalHeader = ({
   tripDate,
   tripCreatedAt,
   tripId,
+}: ProductListPDFProps) => (
+  <View>
+    <View style={styles.topBar}>
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>Romaneio de Produtos</Text>
+        <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
+      </View>
+
+      <View style={styles.topRightMeta}>
+        <Text style={styles.topRightText}>{`Data: ${resolveEmissionDate(tripCreatedAt, tripDate)}`}</Text>
+        <Text style={styles.topRightText}>{`Rota: ${tripId ? `#${tripId}` : '-'}`}</Text>
+      </View>
+    </View>
+
+    <View style={styles.inlineInfoRow}>
+      <View style={[styles.infoCell, styles.driverInfoCell]}>
+        <Text style={styles.infoLabel}>Motorista</Text>
+        <Text style={styles.inlineInfoText}>{driver || '-'}</Text>
+      </View>
+      <View style={[styles.infoCell, styles.plateInfoCell]}>
+        <Text style={styles.infoLabel}>Placa</Text>
+        <Text style={styles.inlineInfoText}>{vehiclePlate || '-'}</Text>
+      </View>
+      <View style={[styles.infoCell, styles.weightInfoCell]}>
+        <Text style={styles.infoLabel}>Peso</Text>
+        <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
+      </View>
+      <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
+        <Text style={styles.infoLabel}>Notas</Text>
+        <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
+      </View>
+    </View>
+  </View>
+);
+
+const renderFirstPageExtras = ({
   danfes,
   retainedReminders,
   products,
@@ -313,36 +372,6 @@ const renderOperationalHeader = ({
 
   return (
     <View style={styles.headerCard}>
-      <View style={styles.topBar}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.title}>Romaneio de Produtos</Text>
-          <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
-        </View>
-
-        <View style={styles.topRightMeta}>
-          <Text style={styles.topRightText}>{`Data: ${resolveEmissionDate(tripCreatedAt, tripDate)}`}</Text>
-          <Text style={styles.topRightText}>{`Rota: ${tripId ? `#${tripId}` : '-'}`}</Text>
-        </View>
-      </View>
-
-      <View style={styles.inlineInfoRow}>
-        <View style={[styles.infoCell, styles.driverInfoCell]}>
-          <Text style={styles.infoLabel}>Motorista</Text>
-          <Text style={styles.inlineInfoText}>{driver || '-'}</Text>
-        </View>
-        <View style={[styles.infoCell, styles.plateInfoCell]}>
-          <Text style={styles.infoLabel}>Placa</Text>
-          <Text style={styles.inlineInfoText}>{vehiclePlate || '-'}</Text>
-        </View>
-        <View style={[styles.infoCell, styles.weightInfoCell]}>
-          <Text style={styles.infoLabel}>Peso</Text>
-          <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
-        </View>
-        <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
-          <Text style={styles.infoLabel}>Notas</Text>
-          <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
-        </View>
-      </View>
       {hasProducts ? (
         <View style={styles.separatorRow}>
           <Text style={styles.separatorLabel}>Separado por</Text>
@@ -386,6 +415,29 @@ const renderOperationalHeader = ({
     </View>
   );
 };
+
+const renderFixedHeader = ({
+  driver,
+  vehiclePlate,
+  totalWeight,
+  noteCount,
+  tripDate,
+  tripCreatedAt,
+  tripId,
+}: ProductListPDFProps) => (
+  <View style={[styles.headerCard, styles.fixedHeader]} fixed>
+    {renderHeaderSummary({ driver, vehiclePlate, totalWeight, noteCount, tripDate, tripCreatedAt, tripId })}
+  </View>
+);
+
+const renderFooter = () => (
+  <View style={styles.footer} fixed>
+    <Text
+      style={styles.footerText}
+      render={({ pageNumber, totalPages }) => `${pageNumber}/${totalPages}`}
+    />
+  </View>
+);
 
 const renderProductsTable = (products: ProductRow[] = []) => {
   const rows = normalizeProductRows(products);
@@ -475,7 +527,9 @@ const renderPageContent = ({ products, danfes }: ProductListPDFProps) => {
 const ProductListPDF: React.FC<ProductListPDFProps> = (props) => (
   <Document>
     <Page size="A4" style={styles.page}>
-      {renderOperationalHeader(props)}
+      {renderFixedHeader(props)}
+      {renderFirstPageExtras(props)}
+      {renderFooter()}
       {renderPageContent(props)}
     </Page>
   </Document>

@@ -228,6 +228,7 @@ const resolveGoogleMapsApiKey = () => {
 const COMPANY_MARKER_ADDRESS = 'Av. Ricardo Bassoli Cezare, 3666 - Jardim Itatinga';
 const MOBILE_MONITORING_BREAKPOINT = 768;
 const DEFAULT_COMPANY_FILTER = 'mar_e_rio';
+const SOCKET_FALLBACK_POLL_MS = 120000;
 
 const getTodayMonitoringDate = () => format(new Date(), 'yyyy-MM-dd');
 const parseMonitoringDate = (value: string) => {
@@ -599,6 +600,7 @@ function DeliveryMonitoring() {
     return window.innerWidth < MOBILE_MONITORING_BREAKPOINT;
   });
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const todayDate = getTodayMonitoringDate();
   const effectiveDate = isMobileView ? todayDate : date;
 
@@ -695,55 +697,74 @@ function DeliveryMonitoring() {
     }, 450);
   }, [fetchOverview]);
 
+  const stopFallbackPolling = useCallback(() => {
+    if (!fallbackIntervalRef.current) return;
+    clearInterval(fallbackIntervalRef.current);
+    fallbackIntervalRef.current = null;
+  }, []);
+
+  const startFallbackPolling = useCallback(() => {
+    if (fallbackIntervalRef.current) return;
+
+    fallbackIntervalRef.current = setInterval(() => {
+      fetchOverview();
+    }, SOCKET_FALLBACK_POLL_MS);
+  }, [fetchOverview]);
+
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      fetchOverview();
-    }, 30000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [fetchOverview]);
-
-  useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) return undefined;
+    if (!token) {
+      startFallbackPolling();
+      return () => {
+        stopFallbackPolling();
+      };
+    }
 
     const socket: Socket = io(API_URL, {
       transports: ['websocket'],
       auth: { token },
     });
 
-    socket.on('delivery_monitoring_status', () => {
-      scheduleRefresh();
+    startFallbackPolling();
+
+    socket.on('connect', () => {
+      stopFallbackPolling();
     });
-    socket.on('delivery_monitoring_geolocation', () => {
+
+    socket.on('disconnect', () => {
+      startFallbackPolling();
+    });
+
+    socket.on('connect_error', () => {
+      startFallbackPolling();
+    });
+
+    socket.on('delivery_monitoring_status', () => {
       scheduleRefresh();
     });
     socket.on('delivery_monitoring_alert', () => {
       scheduleRefresh();
     });
-    socket.on('driver_location', () => {
-      scheduleRefresh();
-    });
 
     return () => {
+      stopFallbackPolling();
       socket.removeAllListeners();
       socket.disconnect();
     };
-  }, [scheduleRefresh]);
+  }, [scheduleRefresh, startFallbackPolling, stopFallbackPolling]);
 
   useEffect(() => {
     return () => {
+      stopFallbackPolling();
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
       }
     };
-  }, []);
+  }, [stopFallbackPolling]);
 
   useEffect(() => {
     return subscribeToAlertReadChanges(() => {

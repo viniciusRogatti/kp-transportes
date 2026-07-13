@@ -72,9 +72,11 @@ export function buildTripProductManifest(
       : (note.products || []);
 
     sourceProducts.forEach((product) => {
-      const code = String(product?.Product?.code || product?.code || '').trim();
-      const description = String(product?.Product?.description || product?.description || '').trim();
-      const type = String(product?.type || product?.Product?.type || '').trim().toUpperCase();
+      const nestedProduct = 'Product' in product ? product.Product : undefined;
+      const directProduct = 'code' in product ? product : undefined;
+      const code = String(nestedProduct?.code || directProduct?.code || '').trim();
+      const description = String(nestedProduct?.description || directProduct?.description || '').trim();
+      const type = String(product?.type || nestedProduct?.type || '').trim().toUpperCase();
       const quantity = Number(product?.quantity || 0);
 
       if (!isVariableWeightSalmon(description, type)) {

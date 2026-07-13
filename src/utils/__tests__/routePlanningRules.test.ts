@@ -153,9 +153,13 @@ describe('routePlanningRules', () => {
       },
     });
 
-    expect(decision.outcome).toBe('assignment_conflict');
-    expect(decision.assignment.driverName).toBe('Motorista Atual');
-    expect(decision.assignment.tripId).toBe(44);
+    expect(decision).toMatchObject({
+      outcome: 'assignment_conflict',
+      assignment: {
+        driverName: 'Motorista Atual',
+        tripId: 44,
+      },
+    });
   });
 
   it('bloqueia NF cancelada e direciona para a substituta quando houver refaturamento', () => {

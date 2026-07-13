@@ -77,6 +77,8 @@ describe('salmonLoadList', () => {
       driverId: 7,
       driverName: 'Motorista A',
       tripIds: [1],
+      totalBoxQuantity: 4,
+      tripBoxTotals: [{ tripId: 1, runNumber: 1, boxQuantity: 4 }],
       rows: [{
         customerName: 'Cliente A',
         customerDocument: '12345678000190',
@@ -85,5 +87,23 @@ describe('salmonLoadList', () => {
         invoiceNumbers: ['100', '101'],
       }],
     }]);
+  });
+
+  it('informa o total de caixas de cada viagem ao final da lista do motorista', () => {
+    const trips = [
+      buildTrip(10, 7, 'Motorista A', ['200']),
+      buildTrip(11, 7, 'Motorista A', ['201']),
+    ];
+    const danfes = [
+      buildDanfe('200', 'Cliente A', '12345678000190', 70),
+      buildDanfe('201', 'Cliente B', '98765432000109', 67),
+    ];
+
+    const [driver] = buildSalmonLoadList(trips, danfes);
+    expect(driver.tripBoxTotals).toEqual([
+      { tripId: 10, runNumber: 1, boxQuantity: 2 },
+      { tripId: 11, runNumber: 1, boxQuantity: 2 },
+    ]);
+    expect(driver.totalBoxQuantity).toBe(4);
   });
 });

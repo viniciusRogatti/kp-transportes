@@ -101,6 +101,22 @@ const styles = StyleSheet.create({
     minHeight: 50,
     padding: 7,
   },
+  totalsBlock: {
+    borderTopWidth: 1.2,
+    borderTopColor: '#000000',
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+  },
+  tripTotal: {
+    fontSize: 8,
+    marginBottom: 2,
+  },
+  driverTotal: {
+    marginTop: 2,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
   footer: {
     position: 'absolute',
     left: 22,
@@ -145,6 +161,7 @@ function SalmonLoadListPDF({ drivers, dateLabel }: SalmonLoadListPDFProps) {
         ...driver,
         rows: rowChunks[driverIndex][pageIndex] || [],
         continuation: pageIndex > 0,
+        isFinalPage: pageIndex === rowChunks[driverIndex].length - 1,
       })),
     }));
   });
@@ -192,6 +209,18 @@ function SalmonLoadListPDF({ drivers, dateLabel }: SalmonLoadListPDFProps) {
                     <Text>Sem outros clientes nesta pagina.</Text>
                   </View>
                 )}
+                {driver.isFinalPage ? (
+                  <View style={styles.totalsBlock}>
+                    {driver.tripBoxTotals.map((tripTotal) => (
+                      <Text key={tripTotal.tripId} style={styles.tripTotal}>
+                        {`Rota #${tripTotal.tripId} | saída #${tripTotal.runNumber}: ${tripTotal.boxQuantity} caixa(s)`}
+                      </Text>
+                    ))}
+                    <Text style={styles.driverTotal}>
+                      {`Total do motorista: ${driver.totalBoxQuantity} caixa(s)`}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             ))}
           </View>

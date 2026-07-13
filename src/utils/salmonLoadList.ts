@@ -13,6 +13,12 @@ export type SalmonLoadDriverGroup = {
   driverId: number;
   driverName: string;
   tripIds: number[];
+  totalBoxQuantity: number;
+  tripBoxTotals: Array<{
+    tripId: number;
+    runNumber: number;
+    boxQuantity: number;
+  }>;
   rows: SalmonLoadCustomerRow[];
 };
 
@@ -49,6 +55,10 @@ export function buildSalmonLoadList(
   const drivers = new Map<number, {
     driverName: string;
     tripIds: Set<number>;
+    tripCustomerWeights: Map<number, {
+      runNumber: number;
+      customerWeights: Map<string, number>;
+    }>;
     customers: Map<string, Omit<SalmonLoadCustomerRow, 'boxQuantity'>>;
   }>();
 
@@ -58,6 +68,7 @@ export function buildSalmonLoadList(
     const driver = drivers.get(driverId) || {
       driverName,
       tripIds: new Set<number>(),
+      tripCustomerWeights: new Map(),
       customers: new Map<string, Omit<SalmonLoadCustomerRow, 'boxQuantity'>>(),
     };
 
@@ -81,6 +92,16 @@ export function buildSalmonLoadList(
       ).trim();
       const customerDocument = String(danfe.Customer?.cnpj_or_cpf || danfe.customer_id || '').trim();
       const customerKey = normalizeKey(customerDocument || danfe.customer_id || customerName);
+      const tripId = Number(trip.id);
+      const tripWeights = driver.tripCustomerWeights.get(tripId) || {
+        runNumber: Number(trip.run_number || 1) || 1,
+        customerWeights: new Map<string, number>(),
+      };
+      tripWeights.customerWeights.set(
+        customerKey,
+        Number(tripWeights.customerWeights.get(customerKey) || 0) + salmonWeight,
+      );
+      driver.tripCustomerWeights.set(tripId, tripWeights);
       const existing = driver.customers.get(customerKey);
 
       if (existing) {
@@ -106,6 +127,16 @@ export function buildSalmonLoadList(
       driverId,
       driverName: driver.driverName,
       tripIds: Array.from(driver.tripIds).sort((left, right) => left - right),
+      totalBoxQuantity: Array.from(driver.customers.values())
+        .reduce((total, row) => total + calculateSalmonBoxes(row.weightKg), 0),
+      tripBoxTotals: Array.from(driver.tripCustomerWeights.entries())
+        .map(([tripId, tripWeights]) => ({
+          tripId,
+          runNumber: tripWeights.runNumber,
+          boxQuantity: Array.from(tripWeights.customerWeights.values())
+            .reduce((total, weight) => total + calculateSalmonBoxes(weight), 0),
+        }))
+        .sort((left, right) => left.tripId - right.tripId),
       rows: Array.from(driver.customers.values())
         .map((row) => ({ ...row, boxQuantity: calculateSalmonBoxes(row.weightKg) }))
         .sort((left, right) => left.customerName.localeCompare(right.customerName, 'pt-BR')),

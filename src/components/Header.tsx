@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bell,
   CalendarDays,
+  CircleCheck,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -27,6 +28,7 @@ import BottomNavMobile from './layout/BottomNavMobile';
 import ThemeToggleButton from './ui/ThemeToggleButton';
 import { useTheme } from '../context/ThemeContext';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 import { logoutSession } from '../utils/logoutSession';
 import {
   ADMIN_MASTER_PERMISSIONS,
@@ -48,6 +50,10 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   RETURN_BATCH_SENT: 'Lote enviado',
   OCCURRENCE_CREATED: 'Ocorrencia para credito',
   OCCURRENCE_ON_BATCH: 'Ocorrencia no lote',
+  BOT_UNAVAILABLE: 'Bot desconectado',
+  WHATSAPP_INVOICE_NOT_FOUND: 'NF inexistente',
+  OCCURRENCE_OVERDUE: 'Ocorrência atrasada',
+  INVOICE_PENDING_OVERDUE: 'NF pendente',
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -117,6 +123,7 @@ function Header() {
     unreadCount,
     connected,
     markAsRead,
+    resolveNotification,
   } = useRealtimeNotifications();
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -211,6 +218,24 @@ function Header() {
     if (!value) return;
     navigate(`/invoices?nf=${encodeURIComponent(value)}`);
     setQuickSearch('');
+  }
+
+  async function handleNotificationClick(notification: RealtimeNotification) {
+    await markAsRead(notification.id);
+    const canOpenAction = Boolean(notification.actionUrl)
+      && (notification.type !== 'BOT_UNAVAILABLE' || permission === 'master');
+    if (canOpenAction && notification.actionUrl) {
+      setIsNotificationOpen(false);
+      navigate(notification.actionUrl);
+    }
+  }
+
+  async function handleResolveNotification(notification: RealtimeNotification) {
+    const confirmed = window.confirm(
+      'Confirma que o problema foi resolvido? Esta notificação será removida para todos os usuários.',
+    );
+    if (!confirmed) return;
+    await resolveNotification(notification.id);
   }
 
   return (
@@ -375,23 +400,42 @@ function Header() {
                   const isUnread = !notification.read;
                   return (
                     <li key={`notif-${notification.id}`}>
-                      <button
-                        type="button"
-                        onClick={() => markAsRead(notification.id)}
+                      <div
                         className={cn(
-                          'w-full rounded-md border px-2 py-2 text-left transition',
+                          'w-full rounded-md border text-left transition',
                           isUnread
                             ? unreadNotificationClass
                             : 'border-border bg-surface-2/70 hover:bg-surface-2',
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-text">{typeLabel}</span>
-                          <span className="text-[11px] text-muted">{formatNotificationTime(notification.createdAt)}</span>
-                        </div>
-                        <p className="mt-1 text-xs font-semibold text-text">{notification.title}</p>
-                        <p className="mt-0.5 text-xs text-muted">{notification.message}</p>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleNotificationClick(notification)}
+                          className="w-full px-2 py-2 text-left"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-text">{typeLabel}</span>
+                            <span className="text-[11px] text-muted">{formatNotificationTime(notification.updatedAt)}</span>
+                          </div>
+                          <p className="mt-1 text-xs font-semibold text-text">{notification.title}</p>
+                          <p className="mt-0.5 text-xs text-muted">{notification.message}</p>
+                          {notification.actionUrl && (notification.type !== 'BOT_UNAVAILABLE' || permission === 'master') ? (
+                            <p className="mt-1 text-[11px] font-semibold text-sky-500">Clique para abrir</p>
+                          ) : null}
+                        </button>
+                        {notification.canResolve ? (
+                          <div className="border-t border-border px-2 py-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleResolveNotification(notification)}
+                              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-500"
+                            >
+                              <CircleCheck className="h-3.5 w-3.5" />
+                              Marcar como resolvida
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}

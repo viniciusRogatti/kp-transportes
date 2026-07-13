@@ -21,7 +21,13 @@ export type RealtimeNotification = {
     kind: string | null;
     id: string | null;
   };
+  metadata: Record<string, unknown>;
+  actionUrl: string | null;
+  resolutionMode: 'manual' | 'automatic';
+  canResolve: boolean;
+  status: 'active' | 'resolved';
   createdAt: string;
+  updatedAt: string;
   read: boolean;
 };
 
@@ -37,6 +43,7 @@ type RealtimeNotificationsContextValue = {
   lastReceivedAt: string | null;
   refreshNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
+  resolveNotification: (notificationId: string) => Promise<boolean>;
 };
 
 type RealtimeNotificationsProviderProps = {
@@ -55,6 +62,7 @@ const RealtimeNotificationsContext = createContext<RealtimeNotificationsContextV
   lastReceivedAt: null,
   refreshNotifications: async () => {},
   markAsRead: async () => {},
+  resolveNotification: async () => false,
 });
 
 const toTimestamp = (value: string | null | undefined) => {
@@ -73,6 +81,8 @@ const normalizeNotification = (input: any): RealtimeNotification | null => {
   const createdAtRaw = String(input?.createdAt || input?.created_at || '').trim();
   const createdAtTimestamp = toTimestamp(createdAtRaw);
   const createdAt = createdAtTimestamp ? new Date(createdAtTimestamp).toISOString() : new Date().toISOString();
+  const updatedAtRaw = String(input?.updatedAt || input?.updated_at || createdAt).trim();
+  const updatedAtTimestamp = toTimestamp(updatedAtRaw);
 
   return {
     id,
@@ -83,7 +93,13 @@ const normalizeNotification = (input: any): RealtimeNotification | null => {
       kind: input?.entity?.kind ? String(input.entity.kind).trim() : null,
       id: input?.entity?.id ? String(input.entity.id).trim() : null,
     },
+    metadata: input?.metadata && typeof input.metadata === 'object' ? input.metadata : {},
+    actionUrl: input?.actionUrl || input?.action_url ? String(input.actionUrl || input.action_url) : null,
+    resolutionMode: input?.resolutionMode === 'manual' || input?.resolution_mode === 'manual' ? 'manual' : 'automatic',
+    canResolve: Boolean(input?.canResolve ?? input?.can_resolve),
+    status: input?.status === 'resolved' ? 'resolved' : 'active',
     createdAt,
+    updatedAt: updatedAtTimestamp ? new Date(updatedAtTimestamp).toISOString() : createdAt,
     read: Boolean(input?.read),
   };
 };
@@ -110,8 +126,8 @@ const mergeNotifications = (
       return;
     }
 
-    const previousTs = toTimestamp(previous.createdAt);
-    const nextTs = toTimestamp(row.createdAt);
+    const previousTs = toTimestamp(previous.updatedAt);
+    const nextTs = toTimestamp(row.updatedAt);
 
     if (nextTs >= previousTs) {
       byId.set(row.id, {
@@ -128,7 +144,8 @@ const mergeNotifications = (
   });
 
   const rows = Array.from(byId.values())
-    .sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt))
+    .filter((row) => row.status === 'active')
+    .sort((left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt))
     .slice(0, 120);
 
   return {
@@ -220,15 +237,15 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
 
       const highestDate = normalizedIncoming.reduce<string | null>((acc, row) => {
         const accTs = toTimestamp(acc || undefined);
-        const rowTs = toTimestamp(row.createdAt);
+        const rowTs = toTimestamp(row.updatedAt);
         if (rowTs > accTs) {
-          return row.createdAt;
+          return row.updatedAt;
         }
         return acc;
       }, null);
 
       if (replace) {
-        setNotifications(normalizedIncoming.sort((left, right) => toTimestamp(right.createdAt) - toTimestamp(left.createdAt)));
+        setNotifications(normalizedIncoming.sort((left, right) => toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt)));
       } else if (normalizedIncoming.length) {
         setNotifications((currentRows) => mergeNotifications(currentRows, normalizedIncoming).rows);
       }
@@ -313,6 +330,27 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     }
   }, [loadNotifications]);
 
+  const resolveNotification = useCallback(async (notificationId: string) => {
+    const normalizedId = String(notificationId || '').trim();
+    const currentToken = tokenRef.current;
+    if (!normalizedId || !currentToken) return false;
+    try {
+      await axios.patch(
+        `${API_URL}/api/notifications/${encodeURIComponent(normalizedId)}/resolve`,
+        {},
+        { headers: { Authorization: `Bearer ${currentToken}` } },
+      );
+      await loadNotifications({ replace: true });
+      return true;
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[realtime-notifications] falha ao resolver notificacao', error);
+      }
+      await loadNotifications({ replace: true });
+      return false;
+    }
+  }, [loadNotifications]);
+
   useEffect(() => {
     if (!token) {
       stopFallbackPolling();
@@ -368,6 +406,12 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
         const normalized = normalizeNotification(rawPayload);
         if (!normalized) return;
 
+        if (normalized.status === 'resolved') {
+          setNotifications((currentRows) => currentRows.filter((row) => row.id !== normalized.id));
+          void loadNotifications({ replace: true });
+          return;
+        }
+
         let inserted = false;
         setNotifications((currentRows) => {
           const mergedResult = mergeNotifications(currentRows, [normalized]);
@@ -379,7 +423,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
           setUnreadCount((current) => current + 1);
         }
 
-        updateLastReceivedAt(normalized.createdAt);
+        updateLastReceivedAt(normalized.updatedAt);
       });
     };
 
@@ -399,7 +443,8 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     lastReceivedAt,
     refreshNotifications,
     markAsRead,
-  }), [notifications, unreadCount, connected, lastReceivedAt, refreshNotifications, markAsRead]);
+    resolveNotification,
+  }), [notifications, unreadCount, connected, lastReceivedAt, refreshNotifications, markAsRead, resolveNotification]);
 
   return (
     <RealtimeNotificationsContext.Provider value={contextValue}>

@@ -603,6 +603,7 @@ export interface IDanfe {
   invoice_date: string;
   departure_time: string;
   total_quantity: number;
+  box_quantity?: number | null;
   gross_weight: string;
   net_weight: string;
   total_value: string;

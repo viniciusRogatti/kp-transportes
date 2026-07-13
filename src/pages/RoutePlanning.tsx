@@ -185,7 +185,7 @@ function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITr
   return {
     company_id: danfeData.company_id || undefined,
     company_code: danfeData.company?.code || null,
-    box_quantity: null,
+    box_quantity: Number(danfeData.box_quantity || 0) || null,
     customer_name: normalizeTextValue(danfeData.Customer?.name_or_legal_entity) || '-',
     customer_id: danfeData.customer_id || null,
     invoice_number: String(danfeData.invoice_number),
@@ -1870,7 +1870,7 @@ function RoutePlanning() {
       {
         company_id: danfe.company_id,
         company_code: danfe.company?.code || null,
-        box_quantity: null,
+        box_quantity: Number(danfe.box_quantity || 0) || null,
         invoice_number: danfe.invoice_number,
         customer_name: danfe.Customer.name_or_legal_entity,
         customer_id: danfe.customer_id || null,
@@ -2545,6 +2545,7 @@ function RoutePlanning() {
                                         step={1}
                                         inputMode="numeric"
                                         value={note.box_quantity ?? ''}
+                                        autoFocus={lastScannedInvoice === String(note.invoice_number) && !note.box_quantity}
                                         onChange={(event) => updateAddedNoteBoxQuantity(note, event.target.value)}
                                         onFocus={(event) => event.currentTarget.select()}
                                         aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}

@@ -5,7 +5,7 @@ import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
-import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
+import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -24,12 +24,14 @@ import { TruckLoader } from '../style/Loaders';
 import Header from '../components/Header';
 import Popup from '../components/Popup';
 import ProductListPDF from '../components/ProductListPDF';
+import SalmonLoadListPDF from '../components/SalmonLoadListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
 import { cn } from '../lib/cn';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
 import { buildTripProductManifest } from '../utils/tripProductManifest';
+import { buildSalmonLoadList } from '../utils/salmonLoadList';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { formatDateBR } from '../utils/dateDisplay';
@@ -2212,6 +2214,46 @@ function RoutePlanning() {
     }
   };
 
+  const printSalmonLoadList = async () => {
+    if (!filteredDisplayedTrips.length) {
+      alert('Nenhuma viagem encontrada nos filtros atuais.');
+      return;
+    }
+
+    const previewWindow = openPdfTargetWindow();
+    try {
+      setIsPrinting(true);
+      const invoiceNumbers = filteredDisplayedTrips
+        .flatMap((trip) => trip.TripNotes || [])
+        .map((note) => String(note.invoice_number || '').trim());
+      const danfes = await fetchDanfesByInvoiceNumbers(invoiceNumbers);
+      const drivers = buildSalmonLoadList(filteredDisplayedTrips, danfes);
+
+      if (!drivers.length) {
+        if (previewWindow && !previewWindow.closed) previewWindow.close();
+        alert('Nenhum cliente com salmão foi encontrado nas viagens filtradas.');
+        return;
+      }
+
+      const tripDates = Array.from(new Set(
+        filteredDisplayedTrips.map((trip) => String(trip.date || '').trim()).filter(Boolean),
+      )).sort((left, right) => toISODate(left).localeCompare(toISODate(right)));
+      const dateLabel = tripDates.length <= 1
+        ? `Data: ${tripDates[0] ? formatDateBR(tripDates[0]) : '-'}`
+        : `Periodo: ${formatDateBR(tripDates[0])} a ${formatDateBR(tripDates[tripDates.length - 1])}`;
+      const pdfBlob = await pdf(
+        <SalmonLoadListPDF drivers={drivers} dateLabel={dateLabel} />,
+      ).toBlob();
+      attachPdfToWindow(pdfBlob, previewWindow);
+    } catch (error) {
+      if (previewWindow && !previewWindow.closed) previewWindow.close();
+      console.error('Erro ao gerar lista de salmão:', error);
+      alert('Não foi possível gerar a lista de salmão. Tente novamente.');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const handleDeleteListedTrip = useCallback(async (trip: ITrip) => {
     const confirmed = window.confirm(`Deseja excluir a rota de ${trip.Driver.name} com ${trip.TripNotes.length} nota(s)?`);
     if (!confirmed) return;
@@ -2667,6 +2709,15 @@ function RoutePlanning() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-55"
+                      onClick={() => void printSalmonLoadList()}
+                      disabled={isPrinting || !filteredDisplayedTrips.length}
+                    >
+                      <Printer className="h-4 w-4" />
+                      Imprimir lista de salmão
+                    </button>
                     <button
                       type="button"
                       className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"

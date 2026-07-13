@@ -388,7 +388,7 @@ function ReturnsOccurrences() {
   const [cars, setCars] = useState<ICar[]>([]);
   const [products, setProducts] = useState<IProduct[]>([]);
 
-  const [returnNf, setReturnNf] = useState('');
+  const [returnNf, setReturnNf] = useState(() => String(searchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
   const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra' | 'coleta'>('total');
   const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);

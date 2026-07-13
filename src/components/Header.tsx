@@ -54,6 +54,9 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   WHATSAPP_INVOICE_NOT_FOUND: 'NF inexistente',
   OCCURRENCE_OVERDUE: 'Ocorrência atrasada',
   INVOICE_PENDING_OVERDUE: 'NF pendente',
+  INVOICE_REDELIVERY_OVERDUE: 'Reentrega pendente',
+  RETAINED_RECEIPT_OVERDUE: 'Canhoto retido',
+  RETURN_PENDING_OVERDUE: 'Devolução pendente',
 };
 
 const PERMISSION_LABELS: Record<string, string> = {

@@ -118,6 +118,14 @@ const EMPTY_BACKLOG_SUMMARY: IReceiptBacklogSummary = {
   total: 0,
 };
 
+const getInitialNotificationSearchParams = () => {
+  const hashQuery = typeof window !== 'undefined' ? String(window.location.hash || '').split('?')[1] : '';
+  const query = typeof window !== 'undefined' && window.location.search
+    ? window.location.search
+    : hashQuery ? `?${hashQuery}` : '';
+  return new URLSearchParams(query);
+};
+
 const formatDateTime = (value: string | number | null | undefined) => {
   if (!value) return '-';
   const parsed = new Date(value);
@@ -282,15 +290,19 @@ const resolveBacklogOperationalTarget = (row: IReceiptBacklogRow) => {
 
 function OperationalPendencies() {
   const navigate = useNavigate();
+  const initialSearchParams = useMemo(() => getInitialNotificationSearchParams(), []);
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>('pending');
+  const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>(() => {
+    const requestedTab = initialSearchParams.get('tab') as ReceiptBacklogQueueType | null;
+    return requestedTab && requestedTab in BACKLOG_TAB_CONFIG ? requestedTab : 'pending';
+  });
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [rows, setRows] = useState<IReceiptBacklogRow[]>([]);
   const [summary, setSummary] = useState<IReceiptBacklogSummary>(EMPTY_BACKLOG_SUMMARY);
   const [cutoffDate, setCutoffDate] = useState('');
-  const [nfFilter, setNfFilter] = useState('');
+  const [nfFilter, setNfFilter] = useState(() => String(initialSearchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [motoristaFilter, setMotoristaFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

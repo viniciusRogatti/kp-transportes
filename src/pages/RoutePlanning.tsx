@@ -358,8 +358,10 @@ function RoutePlanning() {
   const [manualOrderInputs, setManualOrderInputs] = useState<Record<string, string>>({});
   const [routeSubmissionPrompt, setRouteSubmissionPrompt] = useState<RouteSubmissionPromptState | null>(null);
   const [isSalmonPrintModalOpen, setIsSalmonPrintModalOpen] = useState(false);
+  const [isSalmonPrintOptionsLoading, setIsSalmonPrintOptionsLoading] = useState(false);
   const [salmonPrintScope, setSalmonPrintScope] = useState<SalmonPrintScope>('all');
   const [selectedSalmonTripIds, setSelectedSalmonTripIds] = useState<Set<number>>(new Set());
+  const [salmonPrintTrips, setSalmonPrintTrips] = useState<ITrip[]>([]);
 
   const navigate = useNavigate();
   const noteLookupRef = useRef<HTMLInputElement>(null);
@@ -679,9 +681,9 @@ function RoutePlanning() {
 
   const salmonTripsToPrint = useMemo(() => (
     salmonPrintScope === 'all'
-      ? filteredDisplayedTrips
-      : filteredDisplayedTrips.filter((trip) => selectedSalmonTripIds.has(Number(trip.id)))
-  ), [filteredDisplayedTrips, salmonPrintScope, selectedSalmonTripIds]);
+      ? salmonPrintTrips
+      : salmonPrintTrips.filter((trip) => selectedSalmonTripIds.has(Number(trip.id)))
+  ), [salmonPrintTrips, salmonPrintScope, selectedSalmonTripIds]);
 
   const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string, companyId?: number | null) => {
     const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`, {
@@ -2237,16 +2239,33 @@ function RoutePlanning() {
     }
   };
 
-  const openSalmonPrintModal = () => {
-    const unprintedTripIds = new Set(
-      filteredDisplayedTrips
+  const openSalmonPrintModal = async () => {
+    try {
+      setIsSalmonPrintModalOpen(true);
+      setIsSalmonPrintOptionsLoading(true);
+      const currentDateTrips = await fetchTripsByDate(todayApiDate);
+      if (!currentDateTrips.length) {
+        setIsSalmonPrintModalOpen(false);
+        alert('Nenhuma viagem foi encontrada para a data de hoje.');
+        return;
+      }
+
+      setSalmonPrintTrips(currentDateTrips);
+      const unprintedTripIds = new Set(
+        currentDateTrips
         .filter((trip) => Number(trip.salmon_list_print_count || 0) === 0)
         .map((trip) => Number(trip.id)),
-    );
-    const hasPrintedTrips = unprintedTripIds.size < filteredDisplayedTrips.length;
-    setSalmonPrintScope(hasPrintedTrips ? 'selected' : 'all');
-    setSelectedSalmonTripIds(unprintedTripIds);
-    setIsSalmonPrintModalOpen(true);
+      );
+      const hasPrintedTrips = unprintedTripIds.size < currentDateTrips.length;
+      setSalmonPrintScope(hasPrintedTrips ? 'selected' : 'all');
+      setSelectedSalmonTripIds(unprintedTripIds);
+    } catch (error) {
+      console.error('Erro ao carregar viagens do dia para a lista de salmão:', error);
+      setIsSalmonPrintModalOpen(false);
+      alert('Não foi possível carregar as viagens de hoje. Tente novamente.');
+    } finally {
+      setIsSalmonPrintOptionsLoading(false);
+    }
   };
 
   const toggleSalmonTripSelection = (tripId: number) => {
@@ -2306,6 +2325,7 @@ function RoutePlanning() {
       });
       setDisplayedTrips(mergePrintTracking);
       setTodayTrips(mergePrintTracking);
+      setSalmonPrintTrips(mergePrintTracking);
 
       attachPdfToWindow(pdfBlob, previewWindow);
       setIsSalmonPrintModalOpen(false);
@@ -2776,8 +2796,8 @@ function RoutePlanning() {
                     <button
                       type="button"
                       className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-55"
-                      onClick={openSalmonPrintModal}
-                      disabled={isPrinting || !filteredDisplayedTrips.length}
+                      onClick={() => void openSalmonPrintModal()}
+                      disabled={isPrinting}
                     >
                       <Printer className="h-4 w-4" />
                       Imprimir lista de salmão
@@ -2914,7 +2934,7 @@ function RoutePlanning() {
                 <div>
                   <h3 className="text-base font-semibold text-text">Imprimir lista de salmão</h3>
                   <p className="mt-1 text-sm text-muted">
-                    Escolha todas as viagens filtradas ou somente as que devem entrar neste PDF.
+                    Somente viagens da data atual ({formatDateBR(todayApiDate)}). Escolha todas ou apenas algumas para este PDF.
                   </p>
                 </div>
                 <button
@@ -2936,7 +2956,7 @@ function RoutePlanning() {
                       checked={salmonPrintScope === 'all'}
                       onChange={() => setSalmonPrintScope('all')}
                     />
-                    Todas as viagens ({filteredDisplayedTrips.length})
+                    Todas as viagens de hoje ({salmonPrintTrips.length})
                   </span>
                   <span className="mt-1 block text-xs text-muted">Inclui também as viagens já impressas.</span>
                 </label>
@@ -2959,7 +2979,7 @@ function RoutePlanning() {
                   <button
                     type="button"
                     className="rounded border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text"
-                    onClick={() => setSelectedSalmonTripIds(new Set(filteredDisplayedTrips.map((trip) => Number(trip.id))))}
+                    onClick={() => setSelectedSalmonTripIds(new Set(salmonPrintTrips.map((trip) => Number(trip.id))))}
                   >
                     Selecionar todas
                   </button>
@@ -2967,7 +2987,7 @@ function RoutePlanning() {
                     type="button"
                     className="rounded border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text"
                     onClick={() => setSelectedSalmonTripIds(new Set(
-                      filteredDisplayedTrips
+                      salmonPrintTrips
                         .filter((trip) => Number(trip.salmon_list_print_count || 0) === 0)
                         .map((trip) => Number(trip.id)),
                     ))}
@@ -2985,7 +3005,9 @@ function RoutePlanning() {
               ) : null}
 
               <div className="scrollbar-ui mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                {filteredDisplayedTrips.map((trip) => {
+                {isSalmonPrintOptionsLoading ? (
+                  <div className="p-3 text-sm text-muted">Carregando viagens de hoje...</div>
+                ) : salmonPrintTrips.map((trip) => {
                   const printCount = Number(trip.salmon_list_print_count || 0);
                   const cities = Array.from(new Set(
                     (trip.TripNotes || []).map((note) => String(note.city || '').trim()).filter(Boolean),
@@ -3038,7 +3060,7 @@ function RoutePlanning() {
                     type="button"
                     className="inline-flex items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
                     onClick={() => void printSalmonLoadList(salmonTripsToPrint)}
-                    disabled={isPrinting || salmonTripsToPrint.length === 0}
+                    disabled={isPrinting || isSalmonPrintOptionsLoading || salmonTripsToPrint.length === 0}
                   >
                     <Printer className="h-4 w-4" />
                     {isPrinting ? 'Gerando PDF...' : 'Gerar PDF'}

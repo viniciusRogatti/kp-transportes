@@ -12,6 +12,7 @@ export type SalmonLoadCustomerRow = {
 export type SalmonLoadDriverGroup = {
   driverId: number;
   driverName: string;
+  tripIds: number[];
   rows: SalmonLoadCustomerRow[];
 };
 
@@ -47,6 +48,7 @@ export function buildSalmonLoadList(
   }, new Map());
   const drivers = new Map<number, {
     driverName: string;
+    tripIds: Set<number>;
     customers: Map<string, Omit<SalmonLoadCustomerRow, 'boxQuantity'>>;
   }>();
 
@@ -55,6 +57,7 @@ export function buildSalmonLoadList(
     const driverName = String(trip.Driver?.name || 'Motorista nao identificado').trim();
     const driver = drivers.get(driverId) || {
       driverName,
+      tripIds: new Set<number>(),
       customers: new Map<string, Omit<SalmonLoadCustomerRow, 'boxQuantity'>>(),
     };
 
@@ -71,6 +74,7 @@ export function buildSalmonLoadList(
         return total + Number(product.quantity || 0);
       }, 0);
       if (salmonWeight <= 0) return;
+      driver.tripIds.add(Number(trip.id));
 
       const customerName = String(
         danfe.Customer?.name_or_legal_entity || note.customer_name || 'Cliente nao identificado',
@@ -101,6 +105,7 @@ export function buildSalmonLoadList(
     .map(([driverId, driver]) => ({
       driverId,
       driverName: driver.driverName,
+      tripIds: Array.from(driver.tripIds).sort((left, right) => left - right),
       rows: Array.from(driver.customers.values())
         .map((row) => ({ ...row, boxQuantity: calculateSalmonBoxes(row.weightKg) }))
         .sort((left, right) => left.customerName.localeCompare(right.customerName, 'pt-BR')),

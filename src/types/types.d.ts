@@ -7,6 +7,9 @@ export interface ITrip {
   date: string;
   gross_weight: number;
   run_number?: number;
+  salmon_list_printed_at?: string | null;
+  salmon_list_printed_by_user_id?: number | null;
+  salmon_list_print_count?: number;
   Driver: {
     id: number;
     name: string;

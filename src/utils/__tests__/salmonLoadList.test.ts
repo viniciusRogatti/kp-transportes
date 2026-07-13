@@ -76,6 +76,7 @@ describe('salmonLoadList', () => {
     expect(buildSalmonLoadList(trips, danfes)).toEqual([{
       driverId: 7,
       driverName: 'Motorista A',
+      tripIds: [1],
       rows: [{
         customerName: 'Cliente A',
         customerDocument: '12345678000190',

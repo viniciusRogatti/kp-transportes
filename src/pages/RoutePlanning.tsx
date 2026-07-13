@@ -53,6 +53,7 @@ import {
 
 type PlanningTab = 'routing' | 'trips';
 type SwapMode = 'driver' | 'vehicle' | 'both';
+type SalmonPrintScope = 'all' | 'selected';
 type RouteLookupDanfe = IDanfe & { status?: string | null };
 type RoutingTripNote = ITripNote & { customer_id?: string | null };
 
@@ -113,6 +114,19 @@ function parseSupportedDateInput(date: string) {
   }
 
   return null;
+}
+
+function formatPrintTimestamp(value?: string | null) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
 }
 
 function resolveRoutingInvoiceDateCandidates(date: string) {
@@ -343,6 +357,9 @@ function RoutePlanning() {
   const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
   const [manualOrderInputs, setManualOrderInputs] = useState<Record<string, string>>({});
   const [routeSubmissionPrompt, setRouteSubmissionPrompt] = useState<RouteSubmissionPromptState | null>(null);
+  const [isSalmonPrintModalOpen, setIsSalmonPrintModalOpen] = useState(false);
+  const [salmonPrintScope, setSalmonPrintScope] = useState<SalmonPrintScope>('all');
+  const [selectedSalmonTripIds, setSelectedSalmonTripIds] = useState<Set<number>>(new Set());
 
   const navigate = useNavigate();
   const noteLookupRef = useRef<HTMLInputElement>(null);
@@ -659,6 +676,12 @@ function RoutePlanning() {
     tripPlateSearch,
     filterTripsLocally,
   ]);
+
+  const salmonTripsToPrint = useMemo(() => (
+    salmonPrintScope === 'all'
+      ? filteredDisplayedTrips
+      : filteredDisplayedTrips.filter((trip) => selectedSalmonTripIds.has(Number(trip.id)))
+  ), [filteredDisplayedTrips, salmonPrintScope, selectedSalmonTripIds]);
 
   const searchTripsByInvoiceNumber = useCallback(async (invoiceNumber: string, companyId?: number | null) => {
     const response = await axios.get<ITrip[]>(`${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`, {
@@ -2214,20 +2237,41 @@ function RoutePlanning() {
     }
   };
 
-  const printSalmonLoadList = async () => {
-    if (!filteredDisplayedTrips.length) {
-      alert('Nenhuma viagem encontrada nos filtros atuais.');
+  const openSalmonPrintModal = () => {
+    const unprintedTripIds = new Set(
+      filteredDisplayedTrips
+        .filter((trip) => Number(trip.salmon_list_print_count || 0) === 0)
+        .map((trip) => Number(trip.id)),
+    );
+    const hasPrintedTrips = unprintedTripIds.size < filteredDisplayedTrips.length;
+    setSalmonPrintScope(hasPrintedTrips ? 'selected' : 'all');
+    setSelectedSalmonTripIds(unprintedTripIds);
+    setIsSalmonPrintModalOpen(true);
+  };
+
+  const toggleSalmonTripSelection = (tripId: number) => {
+    setSelectedSalmonTripIds((current) => {
+      const next = new Set(current);
+      if (next.has(tripId)) next.delete(tripId);
+      else next.add(tripId);
+      return next;
+    });
+  };
+
+  const printSalmonLoadList = async (tripsToPrint: ITrip[]) => {
+    if (!tripsToPrint.length) {
+      alert('Selecione ao menos uma viagem para imprimir.');
       return;
     }
 
     const previewWindow = openPdfTargetWindow();
     try {
       setIsPrinting(true);
-      const invoiceNumbers = filteredDisplayedTrips
+      const invoiceNumbers = tripsToPrint
         .flatMap((trip) => trip.TripNotes || [])
         .map((note) => String(note.invoice_number || '').trim());
       const danfes = await fetchDanfesByInvoiceNumbers(invoiceNumbers);
-      const drivers = buildSalmonLoadList(filteredDisplayedTrips, danfes);
+      const drivers = buildSalmonLoadList(tripsToPrint, danfes);
 
       if (!drivers.length) {
         if (previewWindow && !previewWindow.closed) previewWindow.close();
@@ -2236,7 +2280,7 @@ function RoutePlanning() {
       }
 
       const tripDates = Array.from(new Set(
-        filteredDisplayedTrips.map((trip) => String(trip.date || '').trim()).filter(Boolean),
+        tripsToPrint.map((trip) => String(trip.date || '').trim()).filter(Boolean),
       )).sort((left, right) => toISODate(left).localeCompare(toISODate(right)));
       const dateLabel = tripDates.length <= 1
         ? `Data: ${tripDates[0] ? formatDateBR(tripDates[0]) : '-'}`
@@ -2244,7 +2288,27 @@ function RoutePlanning() {
       const pdfBlob = await pdf(
         <SalmonLoadListPDF drivers={drivers} dateLabel={dateLabel} />,
       ).toBlob();
+
+      const printedTripIds = Array.from(new Set(drivers.flatMap((driver) => driver.tripIds)));
+      const { data } = await axios.put<{
+        trips: Array<Pick<ITrip,
+          'id' | 'salmon_list_printed_at' | 'salmon_list_printed_by_user_id' | 'salmon_list_print_count'
+        >>;
+      }>(`${API_URL}/trips/salmon-list/printed`, {
+        trip_ids: printedTripIds,
+      }, authConfig);
+      const trackingByTripId = new Map(
+        (data.trips || []).map((trip) => [Number(trip.id), trip]),
+      );
+      const mergePrintTracking = (trips: ITrip[]) => trips.map((trip) => {
+        const tracking = trackingByTripId.get(Number(trip.id));
+        return tracking ? { ...trip, ...tracking } : trip;
+      });
+      setDisplayedTrips(mergePrintTracking);
+      setTodayTrips(mergePrintTracking);
+
       attachPdfToWindow(pdfBlob, previewWindow);
+      setIsSalmonPrintModalOpen(false);
     } catch (error) {
       if (previewWindow && !previewWindow.closed) previewWindow.close();
       console.error('Erro ao gerar lista de salmão:', error);
@@ -2712,7 +2776,7 @@ function RoutePlanning() {
                     <button
                       type="button"
                       className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-55"
-                      onClick={() => void printSalmonLoadList()}
+                      onClick={openSalmonPrintModal}
                       disabled={isPrinting || !filteredDisplayedTrips.length}
                     >
                       <Printer className="h-4 w-4" />
@@ -2842,6 +2906,148 @@ function RoutePlanning() {
             </section>
           )}
         </div>
+
+        {isSalmonPrintModalOpen ? (
+          <div className="fixed inset-0 z-[1480] flex items-center justify-center bg-black/75 p-3">
+            <div className="flex max-h-[90dvh] w-full max-w-[820px] flex-col rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-3)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-text">Imprimir lista de salmão</h3>
+                  <p className="mt-1 text-sm text-muted">
+                    Escolha todas as viagens filtradas ou somente as que devem entrar neste PDF.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded border border-border bg-surface-2 px-2 py-1 text-sm text-text disabled:opacity-50"
+                  onClick={() => setIsSalmonPrintModalOpen(false)}
+                  disabled={isPrinting}
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'all' ? 'border-emerald-600 bg-emerald-950/25' : 'border-border bg-surface-2/70'}`}>
+                  <span className="flex items-center gap-2 text-sm font-semibold text-text">
+                    <input
+                      type="radio"
+                      name="salmon-print-scope"
+                      checked={salmonPrintScope === 'all'}
+                      onChange={() => setSalmonPrintScope('all')}
+                    />
+                    Todas as viagens ({filteredDisplayedTrips.length})
+                  </span>
+                  <span className="mt-1 block text-xs text-muted">Inclui também as viagens já impressas.</span>
+                </label>
+                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'selected' ? 'border-emerald-600 bg-emerald-950/25' : 'border-border bg-surface-2/70'}`}>
+                  <span className="flex items-center gap-2 text-sm font-semibold text-text">
+                    <input
+                      type="radio"
+                      name="salmon-print-scope"
+                      checked={salmonPrintScope === 'selected'}
+                      onChange={() => setSalmonPrintScope('selected')}
+                    />
+                    Selecionar viagens ({selectedSalmonTripIds.size})
+                  </span>
+                  <span className="mt-1 block text-xs text-muted">Ao abrir, as ainda não impressas ficam pré-selecionadas.</span>
+                </label>
+              </div>
+
+              {salmonPrintScope === 'selected' ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text"
+                    onClick={() => setSelectedSalmonTripIds(new Set(filteredDisplayedTrips.map((trip) => Number(trip.id))))}
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text"
+                    onClick={() => setSelectedSalmonTripIds(new Set(
+                      filteredDisplayedTrips
+                        .filter((trip) => Number(trip.salmon_list_print_count || 0) === 0)
+                        .map((trip) => Number(trip.id)),
+                    ))}
+                  >
+                    Somente não impressas
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text"
+                    onClick={() => setSelectedSalmonTripIds(new Set())}
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="scrollbar-ui mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                {filteredDisplayedTrips.map((trip) => {
+                  const printCount = Number(trip.salmon_list_print_count || 0);
+                  const cities = Array.from(new Set(
+                    (trip.TripNotes || []).map((note) => String(note.city || '').trim()).filter(Boolean),
+                  )).join(', ');
+                  const isSelected = salmonPrintScope === 'all' || selectedSalmonTripIds.has(Number(trip.id));
+                  return (
+                    <label
+                      key={trip.id}
+                      className={`flex gap-3 rounded-md border p-3 ${isSelected ? 'border-emerald-700/70 bg-emerald-950/15' : 'border-border bg-surface-2/70'} ${salmonPrintScope === 'all' ? 'cursor-default' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 shrink-0"
+                        checked={isSelected}
+                        disabled={salmonPrintScope === 'all'}
+                        onChange={() => toggleSalmonTripSelection(Number(trip.id))}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-text">
+                            Rota #{trip.id} · {trip.Driver.name} · {trip.Car.license_plate}
+                          </span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${printCount > 0 ? 'border-amber-600 bg-amber-950/25 text-amber-300' : 'border-emerald-700 bg-emerald-950/25 text-emerald-300'}`}>
+                            {printCount > 0
+                              ? `Impressa${printCount > 1 ? ` ${printCount}x` : ''}${formatPrintTimestamp(trip.salmon_list_printed_at) ? ` · ${formatPrintTimestamp(trip.salmon_list_printed_at)}` : ''}`
+                              : 'Ainda não impressa'}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-xs text-muted">
+                          {formatDateBR(trip.date)} · saída #{trip.run_number || 1} · {trip.TripNotes.length} notas · {cities || 'Cidade não informada'}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                <span className="text-xs text-muted">{salmonTripsToPrint.length} viagem(ns) selecionada(s)</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-50"
+                    onClick={() => setIsSalmonPrintModalOpen(false)}
+                    disabled={isPrinting}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                    onClick={() => void printSalmonLoadList(salmonTripsToPrint)}
+                    disabled={isPrinting || salmonTripsToPrint.length === 0}
+                  >
+                    <Printer className="h-4 w-4" />
+                    {isPrinting ? 'Gerando PDF...' : 'Gerar PDF'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {showPopup && (
           <Popup

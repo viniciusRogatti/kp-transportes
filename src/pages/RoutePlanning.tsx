@@ -71,6 +71,10 @@ type RouteSubmissionPromptState = {
   shouldPrintProducts: boolean;
 };
 
+type ProntoBoxPromptState = {
+  danfe: RouteLookupDanfe;
+};
+
 interface RoutingCityOption {
   city: string;
   danfes: RouteLookupDanfe[];
@@ -329,6 +333,9 @@ function RoutePlanning() {
   const [routingModalState, setRoutingModalState] = useState<RoutingModalState | null>(null);
   const [isResolvingNoteConflict, setIsResolvingNoteConflict] = useState<boolean>(false);
   const [lastScannedInvoice, setLastScannedInvoice] = useState<string>('');
+  const [prontoBoxPrompt, setProntoBoxPrompt] = useState<ProntoBoxPromptState | null>(null);
+  const [prontoBoxInput, setProntoBoxInput] = useState('');
+  const [prontoBoxError, setProntoBoxError] = useState('');
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState<boolean>(false);
   const [isNotesNearBottom, setIsNotesNearBottom] = useState<boolean>(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
@@ -755,11 +762,45 @@ function RoutePlanning() {
       return false;
     }
 
+    const isPronto = String(sanitizedDanfe.company?.code || '').trim().toLowerCase() === 'pronto';
+    const savedBoxQuantity = Number(sanitizedDanfe.box_quantity || 0);
+    if (isPronto && (!Number.isInteger(savedBoxQuantity) || savedBoxQuantity <= 0)) {
+      setProntoBoxInput('');
+      setProntoBoxError('');
+      setProntoBoxPrompt({ danfe: sanitizedDanfe });
+      return true;
+    }
+
     const newNote = buildTripNoteFromDanfe(sanitizedDanfe, addedNotesRef.current.length + 1) as RoutingTripNote;
     updateAddedNotes((prev) => [...prev, newNote]);
     setLastScannedInvoice(String(newNote.invoice_number));
     return true;
   }, [updateAddedNotes]);
+
+  const confirmProntoBoxQuantity = () => {
+    if (!prontoBoxPrompt) return;
+    const boxQuantity = Number(prontoBoxInput);
+    if (!Number.isInteger(boxQuantity) || boxQuantity <= 0) {
+      setProntoBoxError('Informe uma quantidade inteira maior que zero.');
+      return;
+    }
+
+    const danfeWithBoxes = {
+      ...prontoBoxPrompt.danfe,
+      box_quantity: boxQuantity,
+    };
+    setProntoBoxPrompt(null);
+    setProntoBoxError('');
+    appendDanfeToRoute(danfeWithBoxes);
+    window.setTimeout(() => focusNoteLookupInput(true), 0);
+  };
+
+  const cancelProntoBoxQuantity = () => {
+    setProntoBoxPrompt(null);
+    setProntoBoxInput('');
+    setProntoBoxError('');
+    window.setTimeout(() => focusNoteLookupInput(true), 0);
+  };
 
   const refreshTrips = useCallback(async (date?: string) => {
     const targetDate = date || todayApiDate;
@@ -2836,6 +2877,63 @@ function RoutePlanning() {
                   disabled={isBatchAdding}
                 >
                   {isBatchAdding ? 'Validando lote...' : 'Enviar lote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {prontoBoxPrompt ? (
+          <div className="fixed inset-0 z-[1490] flex items-center justify-center bg-black/75 p-3">
+            <div className="w-full max-w-[460px] rounded-lg border border-sky-700/70 bg-surface p-4 shadow-[var(--shadow-3)]">
+              <h3 className="text-base font-semibold text-text">Quantidade de caixas da PRONTO</h3>
+              <p className="mt-1 text-sm text-muted">
+                {`Informe a quantidade escrita na NF ${prontoBoxPrompt.danfe.invoice_number} antes de adicioná-la à viagem.`}
+              </p>
+
+              <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Quantidade de caixas
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  autoFocus
+                  value={prontoBoxInput}
+                  onChange={(event) => {
+                    if (!/^\d*$/.test(event.target.value)) return;
+                    setProntoBoxInput(event.target.value);
+                    setProntoBoxError('');
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      confirmProntoBoxQuantity();
+                    }
+                  }}
+                  className="mt-1 h-12 w-full rounded-md border border-accent/45 bg-card px-3 text-lg font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
+                  placeholder="Ex.: 3"
+                  aria-label={`Quantidade de caixas da NF ${prontoBoxPrompt.danfe.invoice_number}`}
+                />
+              </label>
+              {prontoBoxError ? (
+                <p className="mt-2 text-sm font-semibold text-rose-500">{prontoBoxError}</p>
+              ) : null}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cancelProntoBoxQuantity}
+                  className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmProntoBoxQuantity}
+                  className="rounded-md border border-sky-700 bg-sky-700 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-600"
+                >
+                  Confirmar e adicionar
                 </button>
               </div>
             </div>

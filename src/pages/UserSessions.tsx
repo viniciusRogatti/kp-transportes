@@ -236,21 +236,46 @@ function UserSessions() {
     );
     if (!confirmed) return;
 
+    const connectionUrl = `${window.location.origin}${window.location.pathname}#/whatsapp-bot/connect`;
+    const connectionWindow = window.open(
+      connectionUrl,
+      'kp-whatsapp-bot-connection',
+      'popup=yes,width=720,height=820,resizable=yes,scrollbars=yes',
+    );
+
     try {
       setBotRestarting(true);
       setBotActionMessage('');
 
       const { data } = await axios.post(`${API_URL}/users/sessions/whatsapp-bot/restart`);
       const status = String(data?.status || '').trim();
-      const host = String(data?.host || '').trim();
+      const ready = Boolean(data?.ready);
+
+      if (ready) {
+        connectionWindow?.close();
+        setBotActionMessage('Bot reiniciado e conectado na VPS. Nenhuma leitura de QR foi necessária.');
+        return;
+      }
+
+      if (!connectionWindow) {
+        setBotActionMessage(
+          'O navegador bloqueou a página de conexão. Permita pop-ups e clique novamente para visualizar o QR da VPS.',
+        );
+        return;
+      }
+
+      connectionWindow.focus();
       setBotActionMessage(
-        `Bot reiniciado${host ? ` em ${host}` : ''}${status ? ` com status ${status}` : ''}.`,
+        status === 'qr_required'
+          ? 'A sessão precisa de novo pareamento. Leia o QR na página de conexão aberta.'
+          : 'A recuperação continua na página de conexão aberta.',
       );
     } catch (error: any) {
       console.error(error);
       const message = error?.response?.data?.message || 'Nao foi possivel reiniciar o bot do WhatsApp.';
       const details = error?.response?.data?.details ? ` Detalhes: ${error.response.data.details}` : '';
       setBotActionMessage(`${message}${details}`);
+      connectionWindow?.focus();
     } finally {
       setBotRestarting(false);
     }

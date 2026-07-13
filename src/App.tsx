@@ -11,6 +11,7 @@ import ReturnsOccurrences from './pages/ReturnsOccurrences';
 import ControlTowerCollections from './pages/ControlTowerCollections';
 import UserManagement from './pages/UserManagement';
 import UserSessions from './pages/UserSessions';
+import WhatsappBotConnection from './pages/WhatsappBotConnection';
 import Receipts from './pages/Receipts';
 import AlertsPage from './pages/Alerts';
 import DeliveryMonitoring from './pages/DeliveryMonitoring';
@@ -139,6 +140,7 @@ function App() {
           <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnsOccurrences /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedPermissions={[...ADMIN_MASTER_PERMISSIONS]}><UserManagement /></ProtectedRoute>} />
           <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={['master']}><UserSessions /></ProtectedRoute>} />
+          <Route path="/whatsapp-bot/connect" element={<ProtectedRoute allowedPermissions={['master']}><WhatsappBotConnection /></ProtectedRoute>} />
           <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={[CONTROL_TOWER_PERMISSION, 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
           <Route path="*" element={<Login />} />
         </Routes>

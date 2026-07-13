@@ -29,7 +29,7 @@ import Skeleton from '../components/ui/Skeleton';
 import { cn } from '../lib/cn';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
-import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
+import { buildTripProductManifest } from '../utils/tripProductManifest';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { formatDateBR } from '../utils/dateDisplay';
@@ -168,40 +168,8 @@ function buildTripNotePayload(note: ITripNote, order: number) {
     status: resolveTripNotePayloadStatus(note.status),
     order,
     gross_weight: note.gross_weight,
+    box_quantity: note.box_quantity ?? null,
   };
-}
-
-function buildDanfeSnapshotFromTripNotes(tripNotes: ITripNote[] = []): IDanfe[] {
-  return tripNotes.map((note) => ({
-    customer_id: String((note as RoutingTripNote).customer_id || ''),
-    company_id: note.company_id ?? undefined,
-    invoice_number: String(note.invoice_number || ''),
-    barcode: String(note.invoice_number || ''),
-    invoice_date: '',
-    departure_time: '',
-    total_quantity: 0,
-    gross_weight: String(note.gross_weight || 0),
-    net_weight: '0',
-    total_value: '0',
-    created_at: '',
-    updated_at: '',
-    Customer: {
-      name_or_legal_entity: String(note.customer_name || ''),
-      phone: null,
-      address: null,
-      city: String(note.city || ''),
-      cnpj_or_cpf: '',
-    },
-    DanfeProducts: [],
-  }));
-}
-
-function tripNeedsDanfeHydration(tripNotes: ITripNote[] = []) {
-  return tripNotes.some((note) => {
-    const routingNote = note as RoutingTripNote;
-    const hasProducts = Array.isArray(note.products) && note.products.length > 0;
-    return !routingNote.customer_id || !note.city || !hasProducts;
-  });
 }
 
 function hasTripAssignmentChanged(trip: ITrip | null, driverId: string, carId: string) {
@@ -216,6 +184,8 @@ function sanitizeRouteLookupDanfe(danfeData: RouteLookupDanfe): RouteLookupDanfe
 function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITripNote {
   return {
     company_id: danfeData.company_id || undefined,
+    company_code: danfeData.company?.code || null,
+    box_quantity: null,
     customer_name: normalizeTextValue(danfeData.Customer?.name_or_legal_entity) || '-',
     customer_id: danfeData.customer_id || null,
     invoice_number: String(danfeData.invoice_number),
@@ -224,6 +194,17 @@ function buildTripNoteFromDanfe(danfeData: RouteLookupDanfe, order: number): ITr
     gross_weight: String(danfeData.gross_weight || 0),
     status: 'pending',
   };
+}
+
+function isProntoTripNote(note: ITripNote) {
+  return String(note.company_code || '').trim().toLowerCase() === 'pronto';
+}
+
+function findProntoNoteWithoutBoxes(notes: ITripNote[]) {
+  return notes.find((note) => (
+    isProntoTripNote(note)
+    && (!Number.isInteger(Number(note.box_quantity)) || Number(note.box_quantity) <= 0)
+  ));
 }
 
 function sortTripNotesByOrder(notes: ITripNote[]) {
@@ -1508,6 +1489,10 @@ function RoutePlanning() {
 
     const notesToRemove = originalNotes.filter((note) => nextByInvoice.has(getTripNoteKey(note)) === false);
     const notesToAdd = nextNotes.filter((note) => originalByInvoice.has(getTripNoteKey(note)) === false);
+    const notesWithChangedBoxQuantity = nextNotes.filter((note) => {
+      const original = originalByInvoice.get(getTripNoteKey(note));
+      return original?.id && Number(original.box_quantity || 0) !== Number(note.box_quantity || 0);
+    });
 
     if (notesToRemove.length > 0) {
       await axios.put(`${API_URL}/danfes/update-status`, {
@@ -1538,6 +1523,14 @@ function RoutePlanning() {
           noteData: buildTripNotePayload(note, note.order),
         }, authConfig);
       }
+    }
+
+    for (const note of notesWithChangedBoxQuantity) {
+      const original = originalByInvoice.get(getTripNoteKey(note));
+      if (!original?.id) continue;
+      await axios.put(`${API_URL}/trips/note/${original.id}/boxes`, {
+        box_quantity: note.box_quantity,
+      }, authConfig);
     }
 
     const refreshedTrips = await fetchTripsByDate(trip.date);
@@ -1624,6 +1617,26 @@ function RoutePlanning() {
     updateAddedNotes(reorderedNotes);
   };
 
+  const updateAddedNoteBoxQuantity = (note: ITripNote, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const boxQuantity = value === '' ? null : Number(value);
+    updateAddedNotes((current) => current.map((row) => (
+      getTripNoteKey(row) === getTripNoteKey(note)
+        ? { ...row, box_quantity: boxQuantity }
+        : row
+    )));
+  };
+
+  const updateEditNoteBoxQuantity = (note: ITripNote, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const boxQuantity = value === '' ? null : Number(value);
+    setEditNotes((current) => current.map((row) => (
+      getTripNoteKey(row) === getTripNoteKey(note)
+        ? { ...row, box_quantity: boxQuantity }
+        : row
+    )));
+  };
+
   const handleManualOrderInputChange = (note: ITripNote, value: string) => {
     if (/^\d*$/.test(value) === false) return;
     setManualOrderInputs((prev) => ({
@@ -1673,6 +1686,12 @@ function RoutePlanning() {
       return;
     }
 
+    const prontoNoteWithoutBoxes = findProntoNoteWithoutBoxes(sortedNotes);
+    if (prontoNoteWithoutBoxes) {
+      alert(`Informe a quantidade de caixas da NF ${prontoNoteWithoutBoxes.invoice_number} da PRONTO.`);
+      return;
+    }
+
     const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
 
     if (hasLockedNotesInRoutingEdit && assignmentChanged) {
@@ -1696,6 +1715,13 @@ function RoutePlanning() {
     if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
       if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
       alert('Selecione motorista, veículo e adicione ao menos uma nota antes de enviar.');
+      return;
+    }
+
+    const prontoNoteWithoutBoxes = findProntoNoteWithoutBoxes(sortedNotes);
+    if (prontoNoteWithoutBoxes) {
+      if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
+      alert(`Informe a quantidade de caixas da NF ${prontoNoteWithoutBoxes.invoice_number} da PRONTO.`);
       return;
     }
 
@@ -1843,6 +1869,8 @@ function RoutePlanning() {
       ...prev,
       {
         company_id: danfe.company_id,
+        company_code: danfe.company?.code || null,
+        box_quantity: null,
         invoice_number: danfe.invoice_number,
         customer_name: danfe.Customer.name_or_legal_entity,
         customer_id: danfe.customer_id || null,
@@ -1870,6 +1898,12 @@ function RoutePlanning() {
     if (editTrip === null) return;
     if (editNotes.length === 0) {
       alert('A rota precisa ter ao menos uma nota.');
+      return;
+    }
+
+    const prontoNoteWithoutBoxes = findProntoNoteWithoutBoxes(editNotes);
+    if (prontoNoteWithoutBoxes) {
+      alert(`Informe a quantidade de caixas da NF ${prontoNoteWithoutBoxes.invoice_number} da PRONTO.`);
       return;
     }
 
@@ -2084,16 +2118,20 @@ function RoutePlanning() {
     try {
       setIsPrinting(true);
       const tripNotes = trip.TripNotes || [];
-      const snapshotDanfes = buildDanfeSnapshotFromTripNotes(tripNotes);
-      const validDanfes: IDanfe[] = tripNeedsDanfeHydration(tripNotes)
-        ? await fetchDanfesByTrip(trip)
-        : snapshotDanfes;
-      const allProducts = collectTripProductsByNote(tripNotes, validDanfes);
-      const grouped = groupTripProductsByCodeAndUnit(allProducts);
+      const validDanfes: IDanfe[] = await fetchDanfesByTrip(trip);
+      const manifest = buildTripProductManifest(tripNotes, validDanfes);
+      const missingProntoBoxes = manifest.prontoBoxes.find((row) => !row.boxQuantity);
+      if (missingProntoBoxes) {
+        if (previewWindow && !previewWindow.closed) previewWindow.close();
+        alert(`Edite a rota e informe a quantidade de caixas da NF ${missingProntoBoxes.invoiceNumber} antes de imprimir.`);
+        return;
+      }
       const retainedReminders = await resolveRetainedRemindersForTrip(trip, validDanfes);
       const pdfBlob = await pdf(
         <ProductListPDF
-          products={grouped}
+          products={manifest.products}
+          salmonSeparations={manifest.salmonSeparations}
+          prontoBoxes={manifest.prontoBoxes}
           danfes={validDanfes}
           retainedReminders={retainedReminders}
           driver={trip.Driver.name}
@@ -2498,6 +2536,23 @@ function RoutePlanning() {
                                     <span>{note.city}</span>
                                     <span>{note.gross_weight} Kg</span>
                                   </div>
+                                  {isProntoTripNote(note) ? (
+                                    <label className="mt-1.5 inline-flex items-center gap-2 rounded-md border border-sky-700/60 bg-sky-950/20 px-2 py-1 text-xs font-semibold text-text">
+                                      Caixas da PRONTO
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        inputMode="numeric"
+                                        value={note.box_quantity ?? ''}
+                                        onChange={(event) => updateAddedNoteBoxQuantity(note, event.target.value)}
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}
+                                        className="h-8 w-20 rounded border border-accent/40 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
+                                        placeholder="Ex.: 3"
+                                      />
+                                    </label>
+                                  ) : null}
                                   {retainedContexts.length ? (
                                     <div className="mt-1.5 rounded-md border border-amber-700/65 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
                                       <p className="font-semibold uppercase tracking-[0.08em]">Canhoto retido do cliente</p>
@@ -2951,6 +3006,7 @@ function RoutePlanning() {
                 {detailsTrip.TripNotes.slice().sort((a, b) => a.order - b.order).map((note) => (
                   <li key={`${note.invoice_number}-${note.order}`} className="rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm text-text">
                     {note.order}. NF {note.invoice_number} | {note.customer_name} | {note.city}
+                    {isProntoTripNote(note) ? ` | ${note.box_quantity || '-'} caixa(s)` : ''}
                   </li>
                 ))}
               </ul>
@@ -2977,8 +3033,22 @@ function RoutePlanning() {
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas atribuídas</p>
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {editNotes.slice().sort((a, b) => a.order - b.order).map((note, index) => (
-                      <li key={`${note.invoice_number}-${index}`} className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2/70' : 'border-amber-700/55 bg-amber-950/15'}`}>
-                        <span className="min-w-0 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
+                      <li key={`${note.invoice_number}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2/70' : 'border-amber-700/55 bg-amber-950/15'}`}>
+                        <span className="min-w-0 flex-1 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
+                        {isProntoTripNote(note) ? (
+                          <label className="inline-flex items-center gap-1 text-xs font-semibold text-text">
+                            Caixas
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={note.box_quantity ?? ''}
+                              onChange={(event) => updateEditNoteBoxQuantity(note, event.target.value)}
+                              aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}
+                              className="h-8 w-16 rounded border border-accent/40 bg-card px-1 text-center text-sm text-text"
+                            />
+                          </label>
+                        ) : null}
                         <button type="button" className="rounded border border-rose-700 bg-rose-700 px-2 py-0.5 text-xs text-white transition hover:bg-rose-600 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
                       </li>
                     ))}

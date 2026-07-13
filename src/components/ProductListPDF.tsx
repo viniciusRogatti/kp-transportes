@@ -3,6 +3,7 @@ import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { IDanfe } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
 import { RetainedReminder } from '../utils/retainedReminders';
+import { ProntoBoxRow, SalmonSeparationRow } from '../utils/tripProductManifest';
 
 interface ProductRow {
   Product?: {
@@ -27,6 +28,8 @@ interface ProductListPDFProps {
   noteCount?: number | null;
   danfes?: IDanfe[];
   retainedReminders?: RetainedReminder[];
+  salmonSeparations?: SalmonSeparationRow[];
+  prontoBoxes?: ProntoBoxRow[];
 }
 
 const CONTINUATION_HEADER_HEIGHT = 104;
@@ -201,6 +204,22 @@ const styles = StyleSheet.create({
     width: '16%',
     textAlign: 'right',
   },
+  colCustomer: {
+    width: '38%',
+    paddingRight: 6,
+  },
+  colSalmonProduct: {
+    width: '46%',
+    paddingRight: 6,
+  },
+  colInvoice: {
+    width: '70%',
+    paddingRight: 6,
+  },
+  colBoxes: {
+    width: '28%',
+    textAlign: 'right',
+  },
   muted: {
     color: '#000000',
   },
@@ -290,6 +309,12 @@ const formatDecimal = (value: number | string | null | undefined) => {
   return parsed.toFixed(2);
 };
 
+const formatBoxQuantity = (value: number | string | null | undefined) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 'NAO INFORMADO';
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(parsed);
+};
+
 const normalizeProductRows = (products: ProductRow[] = []) => {
   return products.map((product) => ({
     code: String(product.Product?.code || product.code || '').trim() || '-',
@@ -332,7 +357,7 @@ const renderHeaderSummary = ({
     <View style={styles.topBar}>
       <View style={styles.titleBlock}>
         <Text style={styles.title}>Romaneio de Produtos</Text>
-        <Text style={styles.subtitle}>Lista compacta para conferencia e consulta operacional da rota.</Text>
+        <Text style={styles.subtitle}>Lista para separacao previa e conferencia dos volumes da rota.</Text>
       </View>
 
       <View style={styles.topRightMeta}>
@@ -366,9 +391,11 @@ const renderFirstPageExtras = ({
   danfes,
   retainedReminders,
   products,
+  salmonSeparations,
+  prontoBoxes,
 }: ProductListPDFProps) => {
   const tripCities = resolveTripCities(danfes);
-  const hasProducts = Boolean(products?.length);
+  const hasProducts = Boolean(products?.length || salmonSeparations?.length || prontoBoxes?.length);
 
   return (
     <View style={styles.headerCard}>
@@ -462,6 +489,48 @@ const renderProductsTable = (products: ProductRow[] = []) => {
   );
 };
 
+const renderSalmonSeparations = (rows: SalmonSeparationRow[] = []) => {
+  if (!rows.length) return null;
+
+  return (
+    <View style={{ marginBottom: 10 }}>
+      <Text style={styles.sectionTitle}>Separacao de salmao por cliente</Text>
+      <View style={styles.tableHeader}>
+        <Text style={styles.colCustomer}>Cliente</Text>
+        <Text style={styles.colSalmonProduct}>Produto</Text>
+        <Text style={styles.colQty}>Qtd.</Text>
+      </View>
+      {rows.map((row) => (
+        <View key={`${row.customerName}-${row.code}-${row.type}`} style={styles.row}>
+          <Text style={styles.colCustomer}>{row.customerName}</Text>
+          <Text style={styles.colSalmonProduct}>{row.description}</Text>
+          <Text style={styles.colQty}>{formatQuantityWithUnit(row.quantity, row.type)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const renderProntoBoxes = (rows: ProntoBoxRow[] = []) => {
+  if (!rows.length) return null;
+
+  return (
+    <View>
+      <Text style={styles.sectionTitle}>Separacao de caixas por NF - PRONTO</Text>
+      <View style={styles.tableHeader}>
+        <Text style={styles.colInvoice}>Nota fiscal</Text>
+        <Text style={styles.colBoxes}>Caixas</Text>
+      </View>
+      {rows.map((row) => (
+        <View key={row.invoiceNumber} style={styles.row}>
+          <Text style={styles.colInvoice}>{`NF ${row.invoiceNumber}`}</Text>
+          <Text style={styles.colBoxes}>{formatBoxQuantity(row.boxQuantity)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
 const renderInvoiceList = (danfes: IDanfe[] = []) => {
   if (!danfes.length) return null;
 
@@ -507,12 +576,28 @@ const renderDeliveryList = (danfes: IDanfe[] = []) => (
   </>
 );
 
-const renderPageContent = ({ products, danfes }: ProductListPDFProps) => {
+const renderPageContent = ({ products, danfes, salmonSeparations, prontoBoxes }: ProductListPDFProps) => {
+  if (prontoBoxes && prontoBoxes.length > 0 && !products?.length && !salmonSeparations?.length) {
+    return renderProntoBoxes(prontoBoxes);
+  }
+
   if (products && products.length > 0) {
     return (
       <>
         {renderInvoiceList(danfes)}
+        {renderProntoBoxes(prontoBoxes)}
+        {renderSalmonSeparations(salmonSeparations)}
         {renderProductsTable(products)}
+      </>
+    );
+  }
+
+  if (salmonSeparations && salmonSeparations.length > 0) {
+    return (
+      <>
+        {renderInvoiceList(danfes)}
+        {renderProntoBoxes(prontoBoxes)}
+        {renderSalmonSeparations(salmonSeparations)}
       </>
     );
   }

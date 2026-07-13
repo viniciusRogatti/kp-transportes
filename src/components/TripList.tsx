@@ -6,7 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { BoxButton, CardHeader, CardTrips, LeftHeader, RightHeader, TripNoteItem, TripNotesContainer, TripNotesList } from '../style/trips';
-import { collectTripProductsByNote, groupTripProductsByCodeAndUnit } from '../utils/tripProducts';
+import { buildTripProductManifest } from '../utils/tripProductManifest';
 
 interface TripListProps {
   trip: ITrip;
@@ -36,12 +36,22 @@ function TripList({ trip, setIsPrinting, onDeleteTrip }: TripListProps) {
     setIsPrinting(true);
 
     const { validDanfes } = await handleFetchData();
-    const allProducts = collectTripProductsByNote(trip.TripNotes || [], validDanfes);
-
-    const groupedProducts = groupTripProductsByCodeAndUnit(allProducts);
+    const manifest = buildTripProductManifest(trip.TripNotes || [], validDanfes);
+    const missingProntoBoxes = manifest.prontoBoxes.find((row) => !row.boxQuantity);
+    if (missingProntoBoxes) {
+      alert(`Edite a rota e informe a quantidade de caixas da NF ${missingProntoBoxes.invoiceNumber} antes de imprimir.`);
+      setIsPrinting(false);
+      return;
+    }
 
     const pdfBlob = await pdf(
-      <ProductListPDF products={groupedProducts} danfes={validDanfes} driver={trip.Driver.name} />
+      <ProductListPDF
+        products={manifest.products}
+        salmonSeparations={manifest.salmonSeparations}
+        prontoBoxes={manifest.prontoBoxes}
+        danfes={validDanfes}
+        driver={trip.Driver.name}
+      />
     ).toBlob();
 
     const pdfUrl = URL.createObjectURL(pdfBlob);

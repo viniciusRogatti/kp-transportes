@@ -29,6 +29,8 @@ export interface IUploadResponse {
 export interface ITripNote {
   id?: number;
   company_id?: number | null;
+  company_code?: string | null;
+  box_quantity?: number | null;
   invoice_number: string;
   status: string;
   order: number;

@@ -156,6 +156,7 @@ function UserSessions() {
   const [canLoadData, setCanLoadData] = useState(false);
   const [currentSessionsPage, setCurrentSessionsPage] = useState(1);
   const [botRestarting, setBotRestarting] = useState(false);
+  const [botRecovering, setBotRecovering] = useState(false);
   const [botActionMessage, setBotActionMessage] = useState('');
 
   async function loadUsers() {
@@ -278,6 +279,29 @@ function UserSessions() {
       connectionWindow?.focus();
     } finally {
       setBotRestarting(false);
+    }
+  }
+
+  async function recoverPendingWhatsappMessages() {
+    const confirmed = window.confirm(
+      'O bot vai reler as fotos com legenda dos grupos configurados enviadas hoje e tentar dar baixa apenas nas NFs pendentes. Deseja continuar?',
+    );
+    if (!confirmed) return;
+
+    try {
+      setBotRecovering(true);
+      setBotActionMessage('Recuperando mensagens de hoje. Isso pode levar alguns minutos...');
+      const { data } = await axios.post(`${API_URL}/users/sessions/whatsapp-bot/recover-pending`);
+      const summary = data?.summary;
+      setBotActionMessage(summary
+        ? `Recuperação concluída: ${summary.photos || 0} foto(s), ${summary.delivered || 0} NF(s) baixada(s), ${summary.review || 0} para revisão.`
+        : 'Recuperação concluída.');
+    } catch (error: any) {
+      console.error(error);
+      const message = error?.response?.data?.message || 'Não foi possível recuperar as mensagens pendentes.';
+      setBotActionMessage(message);
+    } finally {
+      setBotRecovering(false);
     }
   }
 
@@ -496,6 +520,14 @@ function UserSessions() {
                 className="h-10 rounded-md border border-amber-300/30 bg-amber-400/90 px-4 font-semibold text-[#2b1600] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {botRestarting ? 'Reiniciando bot...' : 'Reiniciar bot WhatsApp'}
+              </button>
+              <button
+                type="button"
+                onClick={recoverPendingWhatsappMessages}
+                disabled={botRestarting || botRecovering}
+                className="h-10 rounded-md border border-emerald-300/30 bg-emerald-400/90 px-4 font-semibold text-[#082619] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {botRecovering ? 'Lendo mensagens...' : 'Recuperar fotos pendentes de hoje'}
               </button>
             </div>
             {botActionMessage ? (

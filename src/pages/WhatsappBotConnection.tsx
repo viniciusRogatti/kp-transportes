@@ -9,6 +9,14 @@ type ConnectionState = {
   reason?: string | null;
   message?: string | null;
   updatedAt?: string | null;
+  heartbeatAt?: string | null;
+  whatsappState?: string | null;
+  lastMessageReceivedAt?: string | null;
+  lastMessageProcessedAt?: string | null;
+  lastIgnoredMessageAt?: string | null;
+  lastIgnoredReason?: string | null;
+  lastMessageErrorAt?: string | null;
+  lastMessageError?: string | null;
 };
 
 type BotStatusResponse = {
@@ -28,6 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
   stopped: 'O serviço está parado.',
   error: 'O bot encontrou uma falha durante a inicialização.',
   timeout: 'A recuperação demorou mais que o esperado.',
+  stale: 'O processo está ativo, mas o bot não confirmou atividade recente.',
   unknown: 'Consultando o estado do bot...',
 };
 
@@ -86,6 +95,17 @@ function WhatsappBotConnection() {
             Serviço da VPS: {statusData?.serviceStatus || 'consultando'}
           </p>
         </div>
+
+        {statusData?.connectionState?.lastMessageReceivedAt ? (
+          <p className="mt-3 text-xs text-slate-300">
+            Última mensagem recebida: {new Date(statusData.connectionState.lastMessageReceivedAt).toLocaleString('pt-BR')}
+          </p>
+        ) : null}
+        {statusData?.connectionState?.lastIgnoredReason ? (
+          <p className="mt-1 text-xs text-amber-200">
+            Última mensagem ignorada: {statusData.connectionState.lastIgnoredReason}
+          </p>
+        ) : null}
 
         {qrValue ? (
           <div className="mt-6 flex flex-col items-center">

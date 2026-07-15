@@ -67,10 +67,56 @@ describe('tripProductManifest', () => {
 
     const manifest = buildTripProductManifest([buildNote('100')], [danfe]);
     expect(manifest.salmonSeparations).toEqual([
-      expect.objectContaining({ customerName: 'Cliente A', code: 'SAL-1', quantity: 12.5, type: 'KG' }),
+      expect.objectContaining({
+        companyName: 'MAR E RIO',
+        customerName: 'Cliente A',
+        customerDocument: 'customer-1',
+        code: 'SAL-1',
+        quantity: 12.5,
+        type: 'KG',
+      }),
     ]);
     expect(manifest.products).toEqual([
       expect.objectContaining({ code: 'BOL-1', quantity: 2, type: 'CX' }),
+    ]);
+  });
+
+  it('nao mistura file de salmao de empresas diferentes para o mesmo cliente', () => {
+    const marERioDanfe = buildDanfe({
+      invoice_number: '101',
+      DanfeProducts: [{
+        company_id: 1,
+        product_id: 'FILE-1',
+        quantity: 10,
+        price: '1',
+        total_price: '10',
+        type: 'KG',
+        Product: { code: 'FILE-1', description: 'FILE DE SALMAO C/ PELE', price: '1', type: 'KG' },
+      }],
+    });
+    const brazilianFishDanfe = buildDanfe({
+      company_id: 2,
+      invoice_number: '202',
+      company: { id: 2, code: 'brazilian_fish', name: 'BRAZILIAN FISH' },
+      DanfeProducts: [{
+        company_id: 2,
+        product_id: 'FILE-1',
+        quantity: 8,
+        price: '1',
+        total_price: '8',
+        type: 'KG',
+        Product: { code: 'FILE-1', description: 'FILE DE SALMAO C/ PELE', price: '1', type: 'KG' },
+      }],
+    });
+
+    const manifest = buildTripProductManifest(
+      [buildNote('101', 1), buildNote('202', 2)],
+      [marERioDanfe, brazilianFishDanfe],
+    );
+
+    expect(manifest.salmonSeparations).toEqual([
+      expect.objectContaining({ companyName: 'BRAZILIAN FISH', customerDocument: 'customer-1', quantity: 8 }),
+      expect.objectContaining({ companyName: 'MAR E RIO', customerDocument: 'customer-1', quantity: 10 }),
     ]);
   });
 

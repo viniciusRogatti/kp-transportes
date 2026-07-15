@@ -6,6 +6,7 @@ import { RetainedReminder } from '../utils/retainedReminders';
 import { ProntoBoxRow, SalmonSeparationRow } from '../utils/tripProductManifest';
 
 interface ProductRow {
+  company_name?: string;
   Product?: {
     code?: string;
     description?: string;
@@ -317,6 +318,7 @@ const formatBoxQuantity = (value: number | string | null | undefined) => {
 
 const normalizeProductRows = (products: ProductRow[] = []) => {
   return products.map((product) => ({
+    company_name: String(product.company_name || '').trim(),
     code: String(product.Product?.code || product.code || '').trim() || '-',
     description: String(product.Product?.description || product.description || '').trim() || 'Produto sem descricao',
     type: String(product.type || product.Product?.type || '').trim().toUpperCase(),
@@ -467,22 +469,29 @@ const renderFooter = () => (
 );
 
 const renderProductsTable = (products: ProductRow[] = []) => {
-  const rows = normalizeProductRows(products);
+  const rowsByCompany = normalizeProductRows(products).reduce<Map<string, ProductRow[]>>((groups, product) => {
+    const companyName = String(product.company_name || 'Empresa nao identificada').trim();
+    groups.set(companyName, [...(groups.get(companyName) || []), product]);
+    return groups;
+  }, new Map());
 
   return (
     <>
-      <Text style={styles.sectionTitle}>Produtos carregados</Text>
-      <View style={styles.tableHeader}>
-        <Text style={styles.colCode}>Cod.</Text>
-        <Text style={styles.colDescription}>Descricao</Text>
-        <Text style={styles.colQty}>Qtd.</Text>
-      </View>
-
-      {rows.map((product, index) => (
-        <View key={`${product.code}-${index}`} style={styles.row}>
-          <Text style={styles.colCode}>{product.code}</Text>
-          <Text style={styles.colDescription}>{product.description}</Text>
-          <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type)}</Text>
+      {Array.from(rowsByCompany.entries()).map(([companyName, companyRows]) => (
+        <View key={companyName} style={{ marginBottom: 10 }}>
+          <Text style={styles.sectionTitle}>{`Produtos carregados - ${companyName}`}</Text>
+          <View style={styles.tableHeader}>
+            <Text style={styles.colCode}>Cod.</Text>
+            <Text style={styles.colDescription}>Descricao</Text>
+            <Text style={styles.colQty}>Qtd.</Text>
+          </View>
+          {companyRows.map((product, index) => (
+            <View key={`${product.code}-${index}`} style={styles.row}>
+              <Text style={styles.colCode}>{product.code}</Text>
+              <Text style={styles.colDescription}>{product.description}</Text>
+              <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type)}</Text>
+            </View>
+          ))}
         </View>
       ))}
     </>
@@ -491,23 +500,32 @@ const renderProductsTable = (products: ProductRow[] = []) => {
 
 const renderSalmonSeparations = (rows: SalmonSeparationRow[] = []) => {
   if (!rows.length) return null;
+  const rowsByCompany = rows.reduce<Map<string, SalmonSeparationRow[]>>((groups, row) => {
+    const companyName = String(row.companyName || 'Empresa nao identificada').trim();
+    groups.set(companyName, [...(groups.get(companyName) || []), row]);
+    return groups;
+  }, new Map());
 
   return (
-    <View style={{ marginBottom: 10 }}>
-      <Text style={styles.sectionTitle}>Separacao de salmao por cliente</Text>
-      <View style={styles.tableHeader}>
-        <Text style={styles.colCustomer}>Cliente</Text>
-        <Text style={styles.colSalmonProduct}>Produto</Text>
-        <Text style={styles.colQty}>Qtd.</Text>
-      </View>
-      {rows.map((row) => (
-        <View key={`${row.customerName}-${row.code}-${row.type}`} style={styles.row}>
-          <Text style={styles.colCustomer}>{row.customerName}</Text>
-          <Text style={styles.colSalmonProduct}>{row.description}</Text>
-          <Text style={styles.colQty}>{formatQuantityWithUnit(row.quantity, row.type)}</Text>
+    <>
+      {Array.from(rowsByCompany.entries()).map(([companyName, companyRows]) => (
+        <View key={companyName} style={{ marginBottom: 10 }}>
+          <Text style={styles.sectionTitle}>{`Separacao de salmao por cliente - ${companyName}`}</Text>
+          <View style={styles.tableHeader}>
+            <Text style={styles.colCustomer}>Cliente / CNPJ ou CPF</Text>
+            <Text style={styles.colSalmonProduct}>Produto</Text>
+            <Text style={styles.colQty}>Qtd.</Text>
+          </View>
+          {companyRows.map((row) => (
+            <View key={`${row.companyId}-${row.customerDocument}-${row.code}-${row.type}`} style={styles.row}>
+              <Text style={styles.colCustomer}>{`${row.customerName}${row.customerDocument ? `\n${row.customerDocument}` : ''}`}</Text>
+              <Text style={styles.colSalmonProduct}>{row.description}</Text>
+              <Text style={styles.colQty}>{formatQuantityWithUnit(row.quantity, row.type)}</Text>
+            </View>
+          ))}
         </View>
       ))}
-    </View>
+    </>
   );
 };
 

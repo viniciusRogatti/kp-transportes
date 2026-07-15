@@ -2,6 +2,7 @@ import { IDanfe, ITripNote } from '../types/types';
 
 export type TripProductRow = {
   company_id?: number | null;
+  company_name?: string;
   code?: string;
   description?: string;
   type?: string;
@@ -26,6 +27,7 @@ export function groupTripProductsByCodeAndUnit(products: TripProductRow[] = []) 
 
     grouped.set(key, {
       company_id: companyId || null,
+      company_name: String(product?.company_name || '').trim(),
       code,
       description: String(product?.description || '').trim(),
       type: unit || '',
@@ -38,6 +40,7 @@ export function groupTripProductsByCodeAndUnit(products: TripProductRow[] = []) 
 
 function normalizeTripProductRow(product: {
   company_id?: number | null;
+  company_name?: string;
   Product?: {
     code?: string;
     description?: string;
@@ -50,6 +53,7 @@ function normalizeTripProductRow(product: {
 }): TripProductRow {
   return {
     company_id: Number(product?.company_id || 0) || null,
+    company_name: String(product?.company_name || '').trim(),
     code: String(product?.Product?.code || product?.code || '').trim(),
     description: String(product?.Product?.description || product?.description || '').trim(),
     type: String(product?.type || product?.Product?.type || '').trim().toUpperCase(),

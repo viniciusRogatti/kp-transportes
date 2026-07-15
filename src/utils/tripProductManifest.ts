@@ -2,7 +2,10 @@ import { IDanfe, ITripNote } from '../types/types';
 import { groupTripProductsByCodeAndUnit, TripProductRow } from './tripProducts';
 
 export type SalmonSeparationRow = {
+  companyId: number | null;
+  companyName: string;
   customerName: string;
+  customerDocument: string;
   code: string;
   description: string;
   type: string;
@@ -54,9 +57,12 @@ export function buildTripProductManifest(
     const invoiceNumber = String(note.invoice_number || '').trim();
     const danfe = danfeByRouteKey.get(routeKey(note.company_id, invoiceNumber));
     const companyCode = normalizeSearchText(danfe?.company?.code);
+    const companyId = Number(note.company_id || danfe?.company_id || 0) || null;
+    const companyName = String(danfe?.company?.name || danfe?.company?.code || 'Empresa nao identificada').trim();
     const customerName = String(
       danfe?.Customer?.name_or_legal_entity || note.customer_name || 'Cliente nao identificado',
     ).trim();
+    const customerDocument = String(danfe?.Customer?.cnpj_or_cpf || danfe?.customer_id || note.customer_id || '').trim();
 
     if (companyCode === 'PRONTO') {
       prontoBoxes.push({
@@ -81,7 +87,8 @@ export function buildTripProductManifest(
 
       if (!isVariableWeightSalmon(description, type)) {
         standardProducts.push({
-          company_id: Number(note.company_id || danfe?.company_id || 0) || null,
+          company_id: companyId,
+          company_name: companyName,
           code,
           description,
           type,
@@ -90,8 +97,8 @@ export function buildTripProductManifest(
         return;
       }
 
-      const customerKey = normalizeSearchText(danfe?.customer_id || note.customer_id || customerName);
-      const groupingKey = `${customerKey}::${code}::${type}`;
+      const customerKey = normalizeSearchText(customerDocument || customerName);
+      const groupingKey = `${companyId || 0}::${customerKey}::${code}::${type}`;
       const existing = salmonByCustomerAndProduct.get(groupingKey);
       if (existing) {
         existing.quantity += quantity;
@@ -102,7 +109,10 @@ export function buildTripProductManifest(
       }
 
       salmonByCustomerAndProduct.set(groupingKey, {
+        companyId,
+        companyName,
         customerName,
+        customerDocument,
         code,
         description,
         type,
@@ -115,7 +125,10 @@ export function buildTripProductManifest(
   return {
     products: groupTripProductsByCodeAndUnit(standardProducts),
     salmonSeparations: Array.from(salmonByCustomerAndProduct.values())
-      .sort((left, right) => left.customerName.localeCompare(right.customerName, 'pt-BR')),
+      .sort((left, right) => (
+        left.companyName.localeCompare(right.companyName, 'pt-BR')
+        || left.customerName.localeCompare(right.customerName, 'pt-BR')
+      )),
     prontoBoxes: prontoBoxes.sort((left, right) => left.invoiceNumber.localeCompare(right.invoiceNumber, 'pt-BR', { numeric: true })),
   };
 }

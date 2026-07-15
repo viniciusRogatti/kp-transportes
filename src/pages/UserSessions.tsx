@@ -254,7 +254,9 @@ function UserSessions() {
 
       if (ready) {
         connectionWindow?.close();
-        setBotActionMessage('Bot reiniciado e conectado na VPS. Nenhuma leitura de QR foi necessária.');
+        setBotActionMessage(data?.restarted === false
+          ? 'Bot conectado e saudável. Nenhuma correção foi necessária.'
+          : 'Bot recuperado, reiniciado e conectado na VPS.');
         return;
       }
 
@@ -294,12 +296,13 @@ function UserSessions() {
       const { data } = await axios.post(`${API_URL}/users/sessions/whatsapp-bot/recover-pending`);
       const summary = data?.summary;
       setBotActionMessage(summary
-        ? `Recuperação concluída: ${summary.photos || 0} foto(s), ${summary.delivered || 0} NF(s) baixada(s), ${summary.review || 0} para revisão.`
+        ? `Recuperação concluída: ${summary.photos || 0} foto(s), ${summary.delivered || 0} NF(s) baixada(s), ${summary.alreadyDelivered || 0} já entregue(s), ${summary.review || 0} notificação(ões), ${summary.failed || 0} falha(s).`
         : 'Recuperação concluída.');
     } catch (error: any) {
       console.error(error);
       const message = error?.response?.data?.message || 'Não foi possível recuperar as mensagens pendentes.';
-      setBotActionMessage(message);
+      const details = error?.response?.data?.details ? ` Detalhes: ${String(error.response.data.details)}` : '';
+      setBotActionMessage(`${message}${details}`);
     } finally {
       setBotRecovering(false);
     }

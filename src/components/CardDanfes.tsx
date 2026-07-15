@@ -200,6 +200,7 @@ function CardDanfes({
         {
           replacementInvoiceNumber,
           replacementReason: String(replacementReasonInput || '').trim() || 'Refaturada',
+          companyId: replacementModalDanfe.company_id || null,
         },
       );
 
@@ -208,7 +209,9 @@ function CardDanfes({
 
       if (replacementInvoiceNumber) {
         try {
-          const replacementResponse = await axios.get<IDanfe>(`${API_URL}/danfes/nf/${encodeURIComponent(replacementInvoiceNumber)}`);
+          const replacementResponse = await axios.get<IDanfe>(`${API_URL}/danfes/nf/${encodeURIComponent(replacementInvoiceNumber)}`, {
+            params: replacementModalDanfe.company_id ? { companyId: replacementModalDanfe.company_id } : undefined,
+          });
           if (replacementResponse.data) {
             onDanfeUpdated?.(sanitizeDanfeTextFields(replacementResponse.data));
           }

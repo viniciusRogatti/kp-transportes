@@ -45,6 +45,7 @@ import {
 } from './deliveryMonitoring/stopStatusActions';
 
 type DeliveryRow = {
+  company_id?: number | null;
   invoice_number: string;
   company?: {
     code: string;
@@ -113,6 +114,7 @@ type DriverSummary = {
   alerts?: MonitoringAlert[];
   stops?: Array<{
     note_id: number;
+    company_id?: number | null;
     invoice_number: string;
     customer_name?: string | null;
     sequence: number | null;
@@ -210,6 +212,7 @@ type CancelledReplacementDraft = {
   currentStatus: string;
   driverId: number;
   driverName: string | null;
+  companyId: number | null;
   invoiceNumber: string | null;
 };
 
@@ -1126,6 +1129,7 @@ function DeliveryMonitoring() {
     nextStatus,
     driverId,
     driverName,
+    companyId,
     invoiceNumber,
     replacementInvoice,
     replacementReasonValue,
@@ -1136,6 +1140,7 @@ function DeliveryMonitoring() {
     nextStatus: ManualStopStatus;
     driverId: number;
     driverName: string | null;
+    companyId: number | null;
     invoiceNumber: string | null;
     replacementInvoice?: string | null;
     replacementReasonValue?: string | null;
@@ -1144,6 +1149,7 @@ function DeliveryMonitoring() {
       origin: 'delivery_monitoring',
       trip_id: tripId,
       invoice_number: invoiceNumber,
+      company_id: companyId,
       sequence,
     };
 
@@ -1153,7 +1159,7 @@ function DeliveryMonitoring() {
       requestMetadata.replacement_reason = String(replacementReasonValue || '').trim() || 'Refaturada';
     }
 
-    await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
+    const { data: statusResult } = await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
       status: nextStatus,
       driver_id: driverId,
       driver_name: driverName,
@@ -1161,8 +1167,11 @@ function DeliveryMonitoring() {
       metadata: requestMetadata,
     });
 
+    const resolvedInvoiceNumber = String(invoiceNumber || statusResult?.stop?.invoice_number || '').trim();
+    const resolvedCompanyId = Number(companyId || statusResult?.stop?.company_id || 0) || null;
+
     if (nextStatus === 'cancelled') {
-      if (!invoiceNumber) {
+      if (!resolvedInvoiceNumber) {
         throw new Error('Nao foi possivel identificar a NF cancelada para vincular o refaturamento.');
       }
 
@@ -1170,9 +1179,10 @@ function DeliveryMonitoring() {
         throw new Error('Informe a NF substituta para concluir o cancelamento por refaturamento.');
       }
 
-      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(invoiceNumber)}/replacement`, {
+      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(resolvedInvoiceNumber)}/replacement`, {
         replacementInvoiceNumber: normalizedReplacementInvoice,
         replacementReason: String(replacementReasonValue || '').trim() || 'Refaturada',
+        companyId: resolvedCompanyId,
       });
     }
 
@@ -1182,8 +1192,8 @@ function DeliveryMonitoring() {
       sequence,
       tone: 'success',
       message: nextStatus === 'cancelled'
-        ? `${invoiceNumber ? `NF ${invoiceNumber}` : 'Parada'} cancelada e vinculada à NF ${normalizedReplacementInvoice}.`
-        : `${invoiceNumber ? `NF ${invoiceNumber}` : 'Parada'} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
+        ? `NF ${resolvedInvoiceNumber} cancelada e vinculada à NF ${normalizedReplacementInvoice}.`
+        : `${resolvedInvoiceNumber ? `NF ${resolvedInvoiceNumber}` : 'Parada'} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
     });
   }, [fetchOverview]);
 
@@ -1195,6 +1205,7 @@ function DeliveryMonitoring() {
     nextStatus,
     driverId,
     driverName,
+    companyId,
     invoiceNumber,
   }: {
     tripId: number;
@@ -1204,6 +1215,7 @@ function DeliveryMonitoring() {
     nextStatus: ManualStopStatus;
     driverId: number | null;
     driverName: string | null;
+    companyId: number | null;
     invoiceNumber: string | null;
   }) => {
     if (!stopId) {
@@ -1244,6 +1256,7 @@ function DeliveryMonitoring() {
         currentStatus,
         driverId,
         driverName,
+        companyId,
         invoiceNumber,
       });
       setReplacementInvoiceNumber('');
@@ -1270,6 +1283,7 @@ function DeliveryMonitoring() {
         nextStatus,
         driverId,
         driverName,
+        companyId,
         invoiceNumber,
       });
     } catch (error) {
@@ -1595,6 +1609,7 @@ function DeliveryMonitoring() {
                 selectedStopMeta?.status || selectedStopDelivery?.stop_status || selectedStopDelivery?.danfe_status,
               ) || 'pending';
               const selectedStopInvoiceNumber = selectedStopDelivery?.invoice_number || selectedStopMeta?.invoice_number || null;
+              const selectedStopCompanyId = Number(selectedStopDelivery?.company_id || selectedStopMeta?.company_id || 0) || null;
               const selectedStopCustomerName = selectedStopDelivery?.customer_name || selectedStopMeta?.customer_name || null;
               const selectedStopAllowsManualUpdate = MANUAL_STOP_STATUS_ACTIONS.some((action) => (
                 canManuallyUpdateStopStatus(selectedStopStatus, action.status)
@@ -1746,6 +1761,7 @@ function DeliveryMonitoring() {
                                 nextStatus: action.status,
                                 driverId: numericDriverId || null,
                                 driverName: driver.driver_name || null,
+                                companyId: selectedStopCompanyId,
                                 invoiceNumber: selectedStopInvoiceNumber,
                               })}
                               disabled={actionDisabled}

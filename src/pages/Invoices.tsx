@@ -86,7 +86,9 @@ function Invoices() {
     if (!normalizedNf) return;
 
     try {
-      const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`);
+      const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`, {
+        params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
+      });
 
       if (data) {
         const sanitizedDanfe = sanitizeDanfeTextFields(data);
@@ -115,7 +117,9 @@ function Invoices() {
 
     const fetchQueryNf = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/danfes/nf/${queryNf}`);
+        const { data } = await axios.get(`${API_URL}/danfes/nf/${queryNf}`, {
+          params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
+        });
         if (!data) return;
         const sanitizedDanfe = sanitizeDanfeTextFields(data);
         setDataDanfes([sanitizedDanfe]);

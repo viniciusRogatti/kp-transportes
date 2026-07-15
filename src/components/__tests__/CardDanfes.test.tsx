@@ -139,10 +139,8 @@ describe('CardDanfes', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 777111' }));
     });
 
-    expect(screen.getByText('NF substituta:')).toBeInTheDocument();
-    expect(screen.getByText('777222')).toBeInTheDocument();
     expect(screen.getByText('Motivo/observacao:')).toBeInTheDocument();
-    expect(screen.getByText('Refaturada')).toBeInTheDocument();
+    expect(screen.getByText('Refaturada — NF nova: 777222')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Voltar para frente do card da NF 777111' }));

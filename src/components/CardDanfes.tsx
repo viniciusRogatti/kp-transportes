@@ -510,10 +510,10 @@ function CardDanfes({
                           <p><strong>CT-e:</strong> nenhum CT-e vinculado ainda.</p>
                         )}
                         {replacementInvoiceNumber ? (
-                          <>
-                            <p><strong>Motivo/observacao:</strong> {normalizeTextValue(danfe.replacement_reason) || 'Refaturada'}</p>
-                            <p><strong>NF substituta:</strong> {replacementInvoiceNumber}</p>
-                          </>
+                          <p>
+                            <strong>Motivo/observacao:</strong>{' '}
+                            {`${normalizeTextValue(danfe.replacement_reason) || 'Refaturada'} — NF nova: ${replacementInvoiceNumber}`}
+                          </p>
                         ) : null}
                         {replacedInvoiceNumber ? (
                           <p><strong>Substitui a NF cancelada:</strong> {replacedInvoiceNumber}</p>

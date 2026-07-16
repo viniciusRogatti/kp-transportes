@@ -332,6 +332,20 @@ const formatQuantityWithUnit = (value: number | string | null | undefined, unit?
   return normalizedUnit ? `${formattedValue} ${normalizedUnit}` : formattedValue;
 };
 
+const formatCustomerDocument = (value: string) => {
+  const originalValue = String(value || '').trim();
+  const digits = originalValue.replace(/\D/g, '');
+
+  if (digits.length === 14) {
+    return `CNPJ: ${digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}`;
+  }
+  if (digits.length === 11) {
+    return `CPF: ${digits.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}`;
+  }
+
+  return originalValue ? `Documento: ${originalValue}` : '';
+};
+
 const resolveTripCities = (danfes: IDanfe[] = []) => {
   const uniqueCities = new Map<string, string>();
 
@@ -518,7 +532,7 @@ const renderSalmonSeparations = (rows: SalmonSeparationRow[] = []) => {
           </View>
           {companyRows.map((row) => (
             <View key={`${row.companyId}-${row.customerDocument}-${row.code}-${row.type}`} style={styles.row}>
-              <Text style={styles.colCustomer}>{`${row.customerName}${row.customerDocument ? `\n${row.customerDocument}` : ''}`}</Text>
+              <Text style={styles.colCustomer}>{`${row.customerName}${row.customerDocument ? `\n${formatCustomerDocument(row.customerDocument)}` : ''}`}</Text>
               <Text style={styles.colSalmonProduct}>{row.description}</Text>
               <Text style={styles.colQty}>{formatQuantityWithUnit(row.quantity, row.type)}</Text>
             </View>

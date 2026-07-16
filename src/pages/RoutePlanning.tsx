@@ -52,6 +52,15 @@ import {
 
 type PlanningTab = 'routing' | 'trips';
 type SwapMode = 'driver' | 'vehicle' | 'both';
+type VehicleSuggestionResponse = {
+  suggestion: null | {
+    car: ICar;
+    usageCount: number;
+    sampleSize: number;
+    lastUsedAt: string | null;
+    basis: 'most_used_recently';
+  };
+};
 type SalmonPrintScope = 'all' | 'selected';
 type RouteLookupDanfe = IDanfe & { status?: string | null };
 type RoutingTripNote = ITripNote & { customer_id?: string | null };
@@ -325,6 +334,8 @@ function RoutePlanning() {
   const [tripToUpdate, setTripToUpdate] = useState<ITrip | null>(null);
   const [isSecondRunMode, setIsSecondRunMode] = useState<boolean>(false);
   const [assignmentWarning, setAssignmentWarning] = useState<string>('');
+  const [vehicleSuggestionMessage, setVehicleSuggestionMessage] = useState<string>('');
+  const [isVehicleSuggestionLoading, setIsVehicleSuggestionLoading] = useState(false);
   const [detailsTrip, setDetailsTrip] = useState<ITrip | null>(null);
   const [editTrip, setEditTrip] = useState<ITrip | null>(null);
   const [editNotes, setEditNotes] = useState<RoutingTripNote[]>([]);
@@ -373,6 +384,7 @@ function RoutePlanning() {
   const addedNotesRef = useRef<RoutingTripNote[]>([]);
   const pendingNoteLookupsRef = useRef<Set<string>>(new Set());
   const pendingInvoiceNumbersRef = useRef<Set<string>>(new Set());
+  const vehicleSuggestionRequestRef = useRef(0);
 
   const todayApiDate = useMemo(() => toApiDate(new Date()), []);
   const authConfig = useMemo(() => {
@@ -1055,8 +1067,10 @@ function RoutePlanning() {
 
   const applyDriverSelection = (driverId: string) => {
     setSelectedDriver(driverId);
+    setVehicleSuggestionMessage('');
 
     if (driverId === 'null') {
+      vehicleSuggestionRequestRef.current += 1;
       loadAssignmentFromTrip(null);
       return;
     }
@@ -1075,9 +1089,50 @@ function RoutePlanning() {
     }
 
     previousDriverRef.current = driverId;
+
+    if (!tripToUpdate && selectedCar === 'null') {
+      const requestId = vehicleSuggestionRequestRef.current + 1;
+      vehicleSuggestionRequestRef.current = requestId;
+      setIsVehicleSuggestionLoading(true);
+      void axios.get<VehicleSuggestionResponse>(`${API_URL}/trips/suggestions/vehicle/${driverId}`)
+        .then(({ data }) => {
+          if (vehicleSuggestionRequestRef.current !== requestId) return;
+          const suggestion = data?.suggestion;
+          if (!suggestion?.car?.id) return;
+
+          const suggestedCarId = String(suggestion.car.id);
+          const occupiedTrip = carOccupancyMap.get(suggestedCarId);
+          const mayReuseOnSecondRun = isSecondRunMode
+            && occupiedTrip
+            && String(occupiedTrip.driver_id) === String(driverId);
+          if (occupiedTrip && !mayReuseOnSecondRun) {
+            setVehicleSuggestionMessage(
+              `Veículo habitual ${suggestion.car.license_plate} está ocupado na rota ${occupiedTrip.id}. Escolha outra placa.`,
+            );
+            return;
+          }
+
+          const matchingCar = cars.find((car) => String(car.id) === suggestedCarId) || suggestion.car;
+          setSelectedCar(suggestedCarId);
+          previousCarRef.current = suggestedCarId;
+          setCarInput(`${matchingCar.model} - ${matchingCar.license_plate}`);
+          setVehicleSuggestionMessage(
+            `Veículo habitual sugerido pelo histórico (${suggestion.usageCount} de ${suggestion.sampleSize} rota(s) recentes).`,
+          );
+        })
+        .catch(() => {
+          if (vehicleSuggestionRequestRef.current === requestId) setVehicleSuggestionMessage('');
+        })
+        .finally(() => {
+          if (vehicleSuggestionRequestRef.current === requestId) setIsVehicleSuggestionLoading(false);
+        });
+    }
   };
 
   const applyCarSelection = (carId: string) => {
+    vehicleSuggestionRequestRef.current += 1;
+    setIsVehicleSuggestionLoading(false);
+    setVehicleSuggestionMessage('');
     setSelectedCar(carId);
 
     if (carId === 'null') return;
@@ -2536,6 +2591,11 @@ function RoutePlanning() {
                                 <option key={option.id} value={option.value} label={option.label} />
                               ))}
                             </datalist>
+                            {isVehicleSuggestionLoading ? (
+                              <span className="text-[11px] text-muted">Buscando veículo habitual...</span>
+                            ) : vehicleSuggestionMessage ? (
+                              <span className="text-[11px] text-muted">{vehicleSuggestionMessage}</span>
+                            ) : null}
                           </FieldGroup>
                         </BoxDriverVehicle>
                       </FormColumn>
@@ -2559,6 +2619,7 @@ function RoutePlanning() {
                   <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2/60 px-2 py-1.5 text-xs">
                     <span className="text-muted">
                       <strong className="text-text">Motorista:</strong> {selectedDriverName || '-'} | <strong className="text-text">Veículo:</strong> {selectedVehicleLabel || '-'}
+                      {vehicleSuggestionMessage ? ` | ${vehicleSuggestionMessage}` : ''}
                     </span>
                     <button
                       type="button"

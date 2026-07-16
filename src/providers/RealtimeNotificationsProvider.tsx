@@ -169,6 +169,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
   const socketRef = useRef<Socket | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const pollStarterTimeoutRef = useRef<number | null>(null);
+  const resolutionRefreshTimeoutRef = useRef<number | null>(null);
   const notificationsRef = useRef<RealtimeNotification[]>([]);
   const tokenRef = useRef<string | null>(token);
   const lastReceivedAtRef = useRef<string | null>(lastReceivedAt);
@@ -194,6 +195,13 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     if (pollIntervalRef.current !== null) {
       window.clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
+    }
+  }, []);
+
+  const stopResolutionRefresh = useCallback(() => {
+    if (resolutionRefreshTimeoutRef.current !== null) {
+      window.clearTimeout(resolutionRefreshTimeoutRef.current);
+      resolutionRefreshTimeoutRef.current = null;
     }
   }, []);
 
@@ -382,6 +390,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
   useEffect(() => {
     if (!token) {
       stopFallbackPolling();
+      stopResolutionRefresh();
       teardownSocket();
       setNotifications([]);
       setUnreadCount(0);
@@ -436,9 +445,17 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
         if (!normalized) return;
 
         if (normalized.status === 'resolved') {
+          const existing = notificationsRef.current.find((row) => row.id === normalized.id);
           setNotifications((currentRows) => currentRows.filter((row) => row.id !== normalized.id));
+          if (existing && !existing.read) {
+            setUnreadCount((current) => Math.max(0, current - 1));
+          }
           updateLastReceivedAt(normalized.updatedAt);
-          void loadNotifications({ replace: true });
+          stopResolutionRefresh();
+          resolutionRefreshTimeoutRef.current = window.setTimeout(() => {
+            resolutionRefreshTimeoutRef.current = null;
+            void loadNotifications({ replace: true });
+          }, 500);
           return;
         }
 
@@ -467,9 +484,10 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     return () => {
       canceled = true;
       stopFallbackPolling();
+      stopResolutionRefresh();
       teardownSocket();
     };
-  }, [token, loadNotifications, startFallbackPolling, stopFallbackPolling, teardownSocket, updateLastReceivedAt]);
+  }, [token, loadNotifications, startFallbackPolling, stopFallbackPolling, stopResolutionRefresh, teardownSocket, updateLastReceivedAt]);
 
   const contextValue = useMemo<RealtimeNotificationsContextValue>(() => ({
     notifications,

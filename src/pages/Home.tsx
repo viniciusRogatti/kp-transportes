@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { CalendarDays, CheckCircle2, History, Info, MessageSquare, Pencil, Printer, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, History, Info, MessageSquare, Pencil, Printer, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 import Header from '../components/Header';
@@ -27,12 +28,13 @@ import {
   OccurrenceCardFooter,
   OccurrenceItemContent,
 } from '../style/returnsOccurrences';
-import { ICollectionRequest, IDanfe, IOccurrence } from '../types/types';
+import { ICollectionRequest, IDanfe, IOccurrence, IReceiptBacklogRow } from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR } from '../utils/dateDisplay';
 import { getSemanticToneClassName } from '../utils/statusStyles';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeProduct, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { listReceiptBacklog } from '../services/receiptsService';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -361,9 +363,11 @@ const isScheduledCollectionRequest = (request: ICollectionRequest) => resolveCol
 
 function Home() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
   const [pendingCollectionRequests, setPendingCollectionRequests] = useState<ICollectionRequest[]>([]);
+  const [pendingReturnReminders, setPendingReturnReminders] = useState<IReceiptBacklogRow[]>([]);
   const [userPermission, setUserPermission] = useState('');
 
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
@@ -421,6 +425,7 @@ function Home() {
   const isAdminUser = userPermission === 'admin';
   const canManageOccurrenceStatus = userPermission !== 'control_tower';
   const canManageCollectionWorkflowStatus = TRANSPORTADORA_COLLECTION_PERMISSIONS.includes(userPermission);
+  const highlightedReturnInvoice = String(searchParams.get('nf') || '').trim();
 
   const occurrenceProducts = useMemo(() => occurrenceDanfe?.DanfeProducts || [], [occurrenceDanfe]);
   const selectedOccurrenceProduct = useMemo(() => (
@@ -595,6 +600,12 @@ function Home() {
   }, []);
 
   useEffect(() => {
+    if (!highlightedReturnInvoice || !pendingReturnReminders.length) return;
+    const element = document.getElementById(`return-reminder-${highlightedReturnInvoice}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightedReturnInvoice, pendingReturnReminders]);
+
+  useEffect(() => {
     if (!occurrenceProductCode || !selectedOccurrenceProduct || isOccurrenceTotal) {
       setOccurrenceProductType('');
       setOccurrenceQuantityInput('1');
@@ -730,10 +741,21 @@ function Home() {
     }
   }
 
+  async function loadPendingReturnReminders() {
+    try {
+      const data = await listReceiptBacklog({ queueType: 'returned', limit: 180 });
+      setPendingReturnReminders(Array.isArray(data?.rows) ? data.rows : []);
+    } catch (error) {
+      console.error('Erro ao carregar lembretes de devolucao:', error);
+      setPendingReturnReminders([]);
+    }
+  }
+
   async function loadHomePendencies() {
     await Promise.all([
       loadPendingOccurrences(),
       loadPendingCollectionRequests(),
+      loadPendingReturnReminders(),
     ]);
   }
 
@@ -1419,14 +1441,78 @@ function Home() {
       <HomeContent>
         <Card>
           <CardHeaderRow>
-            <h2>Ocorrencias Pendentes</h2>
+            <h2>Pendências operacionais</h2>
             <button className="secondary" onClick={loadHomePendencies} type="button">Atualizar lista</button>
           </CardHeaderRow>
 
-          {!pendingCollectionRequests.length && !pendingOccurrences.length ? (
+          {!pendingCollectionRequests.length && !pendingOccurrences.length && !pendingReturnReminders.length ? (
             <InlineText style={{ marginTop: '12px' }}>Nenhuma pendência no momento.</InlineText>
           ) : (
             <>
+              {!!pendingReturnReminders.length && (
+                <>
+                  <InfoText style={{ marginTop: '12px' }}>Lembretes de devoluções aguardando envio em lote</InfoText>
+                  <List className="mt-2">
+                    {pendingReturnReminders.map((reminder) => {
+                      const ageDays = Number(reminder.age_days || 0);
+                      const isShortShelfLifeUrgent = Boolean(reminder.short_shelf_life) && ageDays >= 1;
+                      const isStandardOverdue = !reminder.short_shelf_life && ageDays >= 3;
+                      const isHighlighted = reminder.invoice_number === highlightedReturnInvoice;
+                      const cardToneClass = isShortShelfLifeUrgent
+                        ? '!border-[color:var(--semantic-danger-border)] !bg-[color:var(--semantic-danger-bg)] !text-[color:var(--semantic-danger-text)]'
+                        : isStandardOverdue
+                          ? '!border-[color:var(--semantic-warning-border)] !bg-[color:var(--semantic-warning-bg)] !text-[color:var(--semantic-warning-text)]'
+                          : '!border-[color:var(--semantic-info-border)] !bg-[color:var(--semantic-info-bg)] !text-[color:var(--semantic-info-text)]';
+
+                      return (
+                        <li
+                          id={`return-reminder-${reminder.invoice_number}`}
+                          key={`home-return-reminder-${reminder.invoice_number}`}
+                          className={`${cardToneClass} ${isHighlighted ? 'ring-2 ring-accent ring-offset-2 ring-offset-surface' : ''}`}
+                        >
+                          <OccurrenceItemContent className="gap-1.5">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <strong>DEVOLUÇÃO AGUARDANDO LOTE</strong>
+                              {isShortShelfLifeUrgent ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border semantic-solid-danger px-2 py-0.5 text-[11px] font-semibold">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Validade curta — prioridade
+                                </span>
+                              ) : null}
+                              <span className="rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold">
+                                {ageDays === 0 ? 'Marcada hoje' : `${ageDays} dia(s) aguardando`}
+                              </span>
+                            </span>
+                            <span>
+                              <strong>NF: {reminder.invoice_number}</strong>
+                              {` | CLIENTE: ${reminder.customer_name || '-'} | CIDADE: ${reminder.city || '-'}`}
+                            </span>
+                            {reminder.short_shelf_life_products?.length ? (
+                              <span><strong>Produto de validade curta:</strong> {reminder.short_shelf_life_products.join(', ')}</span>
+                            ) : null}
+                            <span className="text-xs">
+                              A NF foi marcada como devolução no monitoramento e continuará aqui até o lote ser enviado.
+                            </span>
+                            <OccurrenceCardFooter>
+                              <OccurrenceActionsRow>
+                                <OccurrenceActionsLeft>
+                                  <button
+                                    className="primary"
+                                    type="button"
+                                    onClick={() => navigate(`/returns-occurrences?tab=returns&nf=${encodeURIComponent(reminder.invoice_number)}`)}
+                                  >
+                                    Tratar devolução
+                                  </button>
+                                </OccurrenceActionsLeft>
+                              </OccurrenceActionsRow>
+                            </OccurrenceCardFooter>
+                          </OccurrenceItemContent>
+                        </li>
+                      );
+                    })}
+                  </List>
+                </>
+              )}
+
               {!!pendingCollectionRequests.length && (
                 <>
                   <InfoText style={{ marginTop: '12px' }}>

@@ -144,7 +144,7 @@ function Header() {
   const scopeDisplayName = permission === 'control_tower'
     ? companyDisplayName
     : 'Multiempresa';
-  const latestNotifications = notifications.slice(0, 10);
+  const latestNotifications = notifications;
   const unreadNotificationClass = isLightTheme
     ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
     : 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70';

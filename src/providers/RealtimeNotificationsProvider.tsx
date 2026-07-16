@@ -216,7 +216,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     const currentToken = tokenRef.current;
     if (!currentToken) return;
 
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { limit: '120' };
     if (after && toTimestamp(after) > 0) {
       params.after = after;
     }

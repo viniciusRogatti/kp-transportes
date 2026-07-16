@@ -415,6 +415,8 @@ function ReturnsOccurrences() {
   const [returnDate, setReturnDate] = useState(getTodayDate());
 
   const [batchLookbackDays, setBatchLookbackDays] = useState<ReturnBatchLookbackValue>('7');
+  const [batchStartDate, setBatchStartDate] = useState('');
+  const [batchEndDate, setBatchEndDate] = useState('');
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
@@ -901,7 +903,14 @@ function ReturnsOccurrences() {
       }
 
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      await Promise.all([loadDrivers(), loadCars(), loadProducts(), loadOccurrences(), loadReturnBatches()]);
+      const notificationInvoiceNumber = String(searchParams.get('nf') || '').trim();
+      await Promise.all([
+        loadDrivers(),
+        loadCars(),
+        loadProducts(),
+        loadOccurrences(),
+        notificationInvoiceNumber ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber) : loadReturnBatches(),
+      ]);
     };
 
     validateAndLoad();
@@ -968,6 +977,48 @@ function ReturnsOccurrences() {
       }
     } catch (error) {
       console.error('Erro ao carregar lotes de devolucao:', error);
+    }
+  }
+
+  async function loadReturnBatchesByInvoiceNumber(invoiceNumber: string) {
+    try {
+      const normalizedInvoiceNumber = String(invoiceNumber || '').trim();
+      if (!normalizedInvoiceNumber) return;
+
+      const { data } = await axios.get(`${API_URL}/returns/batches/search`, {
+        params: { invoice_number: normalizedInvoiceNumber, workflow_status: 'all' },
+      });
+      const batches = Array.isArray(data) ? data : [];
+      setReturnBatches(batches);
+
+      const requestedBatchCode = String(searchParams.get('batch') || '').trim();
+      const selectedCode = batches.find((batch: IReturnBatch) => batch.batch_code === requestedBatchCode)?.batch_code
+        || batches[0]?.batch_code
+        || '';
+      setSelectedBatchCode(selectedCode);
+    } catch (error) {
+      console.error('Erro ao localizar lote de devolucao pela NF:', error);
+    }
+  }
+
+  async function handleSearchBatchesByPeriod() {
+    if (!batchStartDate || !batchEndDate) {
+      alert('Informe a data inicial e a data final para pesquisar os lotes.');
+      return;
+    }
+    if (batchStartDate > batchEndDate) {
+      alert('A data inicial deve ser anterior ou igual à data final.');
+      return;
+    }
+
+    try {
+      const { data } = await axios.get(`${API_URL}/returns/batches/search`, {
+        params: { startDate: batchStartDate, endDate: batchEndDate },
+      });
+      setReturnBatches(Array.isArray(data) ? data : []);
+      setSelectedBatchCode('');
+    } catch (error) {
+      console.error('Erro ao pesquisar lotes de devolucao por periodo:', error);
     }
   }
 
@@ -2218,7 +2269,11 @@ function ReturnsOccurrences() {
                 <div className="min-w-0 min-[860px]:w-[190px]">
                   <select
                     value={batchLookbackDays}
-                    onChange={(event) => setBatchLookbackDays(event.target.value as ReturnBatchLookbackValue)}
+                    onChange={(event) => {
+                      const lookbackDays = event.target.value as ReturnBatchLookbackValue;
+                      setBatchLookbackDays(lookbackDays);
+                      void loadReturnBatches(lookbackDays);
+                    }}
                     className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
                     aria-label="Periodo de devolucoes"
                   >
@@ -2235,6 +2290,27 @@ function ReturnsOccurrences() {
                   className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.85rem] font-bold text-[#1f1300] transition hover:brightness-105"
                 >
                   Trazer ultimas devolucoes
+                </button>
+                <input
+                  type="date"
+                  value={batchStartDate}
+                  onChange={(event) => setBatchStartDate(event.target.value)}
+                  aria-label="Data inicial dos lotes de devolucao"
+                  className="h-10 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                />
+                <input
+                  type="date"
+                  value={batchEndDate}
+                  onChange={(event) => setBatchEndDate(event.target.value)}
+                  aria-label="Data final dos lotes de devolucao"
+                  className="h-10 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                />
+                <button
+                  type="button"
+                  onClick={handleSearchBatchesByPeriod}
+                  className="h-10 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
+                >
+                  Buscar período
                 </button>
               </div>
             )}

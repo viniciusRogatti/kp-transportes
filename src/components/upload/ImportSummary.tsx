@@ -46,12 +46,13 @@ function ImportSummary({
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Selecionados" value={summary.selected} />
         <SummaryCard label="Processados" value={summary.processed} />
-        <SummaryCard label="Sucesso" value={summary.success} />
+        <SummaryCard label="Sem erro" value={summary.success} />
         <SummaryCard label="Falhas" value={summary.failed} />
         <SummaryCard label="Produtos novos" value={summary.newProducts} />
         <SummaryCard label="Produtos atualizados" value={summary.updatedProducts} />
         <SummaryCard label="Notas criadas" value={summary.createdInvoices} />
         <SummaryCard label="Notas atualizadas" value={summary.updatedInvoices} />
+        <SummaryCard label="Já existentes" value={summary.ignoredInvoices} />
       </div>
     </div>
   );

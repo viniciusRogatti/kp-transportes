@@ -10,15 +10,13 @@ import UploadQueueList, { UploadQueueItem } from '../components/upload/UploadQue
 import ImportSummary from '../components/upload/ImportSummary';
 import ImportErrorsPanel from '../components/upload/ImportErrorsPanel';
 import NewProductsPanel from '../components/upload/NewProductsPanel';
+import ImportResultModal from '../components/upload/ImportResultModal';
 import { IImportResult, IImportSummary, IUploadImportReportResponse } from '../types/upload';
-import { showAlert } from '../utils/dialog';
 import {
-  buildDuplicateInvoiceAlertMessage,
-  buildImportFailureAlertMessage,
-  getDuplicateInvoiceResults,
   getImportErrorQueueMessage,
   hasDuplicateInvoiceWarning,
 } from '../utils/importErrorPresentation';
+import { calculateImportSummary } from '../utils/uploadReport';
 
 const ACCEPTED_MIME_TYPES = new Set(['text/xml', 'application/xml']);
 const BATCH_SIZE = 40;
@@ -77,6 +75,7 @@ const createEmptySummary = (selected = 0): IImportSummary => ({
   updatedProducts: 0,
   createdInvoices: 0,
   updatedInvoices: 0,
+  ignoredInvoices: 0,
   importedInvoices: 0,
 });
 
@@ -115,31 +114,6 @@ const uniqueProducts = (products: IUploadImportReportResponse['newProducts']) =>
 
 const resultKey = (result: IImportResult) => result.fileKey || result.fileName;
 
-const recomputeSummary = (
-  selected: number,
-  results: IImportResult[],
-  newProducts: IUploadImportReportResponse['newProducts'],
-  updatedProducts: IUploadImportReportResponse['updatedProducts'],
-): IImportSummary => {
-  const success = results.filter((item) => item.status === 'success');
-  const failed = results.filter((item) => item.status === 'error');
-
-  const createdInvoices = success.reduce((acc, item) => acc + Number(item.meta?.createdInvoices || 0), 0);
-  const updatedInvoices = success.reduce((acc, item) => acc + Number(item.meta?.updatedInvoices || 0), 0);
-
-  return {
-    selected,
-    processed: success.length + failed.length,
-    success: success.length,
-    failed: failed.length,
-    newProducts: newProducts.length,
-    updatedProducts: updatedProducts.length,
-    createdInvoices,
-    updatedInvoices,
-    importedInvoices: createdInvoices + updatedInvoices,
-  };
-};
-
 const mergeReports = (
   base: IUploadImportReportResponse,
   incoming: IUploadImportReportResponse,
@@ -154,7 +128,7 @@ const mergeReports = (
   const mergedUpdatedProducts = uniqueProducts([...base.updatedProducts, ...incoming.updatedProducts]);
 
   return {
-    summary: recomputeSummary(selectedCount, mergedResults, mergedNewProducts, mergedUpdatedProducts),
+    summary: calculateImportSummary(selectedCount, mergedResults, mergedNewProducts, mergedUpdatedProducts),
     results: mergedResults,
     newProducts: mergedNewProducts,
     updatedProducts: mergedUpdatedProducts,
@@ -171,7 +145,7 @@ const normalizeResponse = (
   const updatedProducts = Array.isArray(safePayload.updatedProducts) ? safePayload.updatedProducts : [];
 
   return {
-    summary: recomputeSummary(selectedCount, results, newProducts, updatedProducts),
+    summary: calculateImportSummary(selectedCount, results, newProducts, updatedProducts),
     results,
     newProducts,
     updatedProducts,
@@ -195,6 +169,7 @@ function FileUploadPage() {
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [companiesError, setCompaniesError] = useState('');
   const [isIssuerModalOpen, setIsIssuerModalOpen] = useState(false);
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false);
   const [registeredIssuerDocuments, setRegisteredIssuerDocuments] = useState<string[]>([]);
   const [selectedIssuerDocument, setSelectedIssuerDocument] = useState('');
   const [selectedAliasCompanyId, setSelectedAliasCompanyId] = useState('');
@@ -337,6 +312,7 @@ function FileUploadPage() {
     setReport(null);
     setActiveTab('summary');
     setIsIssuerModalOpen(false);
+    setIsResultModalOpen(false);
     setRegisteredIssuerDocuments([]);
     setSelectedIssuerDocument('');
     setSelectedAliasCompanyId('');
@@ -349,6 +325,7 @@ function FileUploadPage() {
     setQueue((previous) => previous.filter((item) => item.id !== id));
     setReport(null);
     setIsIssuerModalOpen(false);
+    setIsResultModalOpen(false);
   }
 
   function clearSelection() {
@@ -359,6 +336,7 @@ function FileUploadPage() {
     setActiveTab('summary');
     setIsQueueOpen(false);
     setIsIssuerModalOpen(false);
+    setIsResultModalOpen(false);
     setRegisteredIssuerDocuments([]);
     setSelectedIssuerDocument('');
     setSelectedAliasCompanyId('');
@@ -473,7 +451,6 @@ function FileUploadPage() {
     if (!target.length) return;
 
     const queueSelectedCount = queue.length;
-    const targetIds = new Set(target.map((item) => item.id));
     const startedAt = Date.now();
     let processed = 0;
     let workingReport = preserveExistingReport && report
@@ -483,6 +460,7 @@ function FileUploadPage() {
     setIsUploading(true);
     setActiveTab('summary');
     setIsIssuerModalOpen(false);
+    setIsResultModalOpen(false);
     setRegisteredIssuerDocuments([]);
     setSelectedIssuerDocument('');
     setAliasSaveError('');
@@ -517,29 +495,9 @@ function FileUploadPage() {
         updateProgressCounters(processed, target.length, startedAt);
       }
 
-      const targetResults = workingReport.results.filter((item) => (
-        item.fileKey
-          ? targetIds.has(item.fileKey)
-          : target.some((queueItem) => queueItem.file.name === item.fileName)
-      ));
-      const duplicateInvoiceResults = getDuplicateInvoiceResults(targetResults);
-      const failedTargetResults = targetResults.filter((item) => item.status === 'error');
-
-      if (duplicateInvoiceResults.length) {
-        setActiveTab('success');
-        await showAlert(buildDuplicateInvoiceAlertMessage(duplicateInvoiceResults), {
-          title: 'Notas já cadastradas',
-          okLabel: 'Ver avisos',
-        });
-      }
-
-      if (failedTargetResults.length) {
-        setActiveTab('errors');
-        await showAlert(buildImportFailureAlertMessage(failedTargetResults), {
-          title: 'Erros na importação',
-          okLabel: 'Ver erros',
-        });
-      }
+      setReport(workingReport);
+      setActiveTab(workingReport.summary.failed > 0 ? 'errors' : 'summary');
+      setIsResultModalOpen(true);
     } finally {
       setIsUploading(false);
     }
@@ -596,6 +554,8 @@ function FileUploadPage() {
       setAliasSaveSuccess(data.message || 'CNPJ alternativo cadastrado com sucesso.');
       setAliasSaveError('');
       setSelectedAliasCompanyId('');
+      setIsIssuerModalOpen(false);
+      setIsResultModalOpen(true);
     } catch (error) {
       const message = axios.isAxiosError<{ message?: string }>(error)
         ? String(error.response?.data?.message || '').trim()
@@ -617,7 +577,6 @@ function FileUploadPage() {
       return;
     }
 
-    setIsIssuerModalOpen(true);
     setSelectedIssuerDocument((current) => {
       if (current && pendingUnregisteredIssuerCandidates.some((item) => item.issuerDocument === current)) {
         return current;
@@ -998,6 +957,26 @@ function FileUploadPage() {
           </div>
         </div>
       ) : null}
+
+      <ImportResultModal
+        isOpen={isResultModalOpen}
+        report={report}
+        unregisteredCompanyCount={pendingUnregisteredIssuerCandidates.length}
+        onClose={() => setIsResultModalOpen(false)}
+        onRetryErrors={() => {
+          setIsResultModalOpen(false);
+          void handleRetryFailed();
+        }}
+        onDownload={downloadReport}
+        onOpenCnpjRegistration={() => {
+          setIsResultModalOpen(false);
+          setIsIssuerModalOpen(true);
+        }}
+        onShowFullReport={() => {
+          setActiveTab(summary.failed > 0 ? 'errors' : 'summary');
+          setIsResultModalOpen(false);
+        }}
+      />
     </div>
   );
 }

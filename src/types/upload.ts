@@ -1,6 +1,19 @@
 export type ImportErrorCode =
   | 'INVALID_FILE_TYPE'
   | 'XML_PARSE_ERROR'
+  | 'XML_STRUCTURE_INVALID'
+  | 'XML_INVOICE_NUMBER_MISSING'
+  | 'XML_ISSUER_DOCUMENT_MISSING'
+  | 'XML_CUSTOMER_SECTION_MISSING'
+  | 'XML_CUSTOMER_DOCUMENT_MISSING'
+  | 'XML_CUSTOMER_NAME_MISSING'
+  | 'XML_PRODUCTS_MISSING'
+  | 'XML_PRODUCT_CODE_MISSING'
+  | 'XML_PRODUCT_DESCRIPTION_MISSING'
+  | 'XML_PRODUCT_QUANTITY_INVALID'
+  | 'XML_ACCESS_KEY_MISSING'
+  | 'XML_ISSUE_DATE_MISSING'
+  | 'XML_ISSUE_DATE_INVALID'
   | 'MISSING_REQUIRED_FIELD'
   | 'DUPLICATE_INVOICE'
   | 'DB_CONSTRAINT_ERROR'
@@ -30,6 +43,7 @@ export interface IImportResultMeta {
   updatedProducts: number;
   createdInvoices: number;
   updatedInvoices: number;
+  ignoredInvoices: number;
 }
 
 export interface IImportResult {
@@ -58,6 +72,7 @@ export interface IImportSummary {
   updatedProducts: number;
   createdInvoices: number;
   updatedInvoices: number;
+  ignoredInvoices: number;
   importedInvoices: number;
 }
 

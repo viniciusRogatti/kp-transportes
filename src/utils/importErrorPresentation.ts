@@ -9,11 +9,24 @@ interface ImportErrorPresentation {
 const ERROR_TITLES: Record<string, string> = {
   INVALID_FILE_TYPE: 'Arquivo fora do padrão',
   XML_PARSE_ERROR: 'Não foi possível ler o XML',
+  XML_STRUCTURE_INVALID: 'Arquivo não é uma NF-e processada',
+  XML_INVOICE_NUMBER_MISSING: 'Número da nota ausente',
+  XML_ISSUER_DOCUMENT_MISSING: 'CNPJ do emitente ausente',
+  XML_CUSTOMER_SECTION_MISSING: 'Dados do cliente ausentes',
+  XML_CUSTOMER_DOCUMENT_MISSING: 'CPF/CNPJ do cliente ausente',
+  XML_CUSTOMER_NAME_MISSING: 'Nome do cliente ausente',
+  XML_PRODUCTS_MISSING: 'Produtos da nota ausentes',
+  XML_PRODUCT_CODE_MISSING: 'Produto sem código',
+  XML_PRODUCT_DESCRIPTION_MISSING: 'Produto sem descrição',
+  XML_PRODUCT_QUANTITY_INVALID: 'Quantidade de produto inválida',
+  XML_ACCESS_KEY_MISSING: 'Chave de acesso da NF-e ausente',
+  XML_ISSUE_DATE_MISSING: 'Data de emissão ausente',
+  XML_ISSUE_DATE_INVALID: 'Data de emissão inválida',
   MISSING_REQUIRED_FIELD: 'Faltam informações na nota',
   DUPLICATE_INVOICE: 'Nota já cadastrada',
   XML_COMPANY_MISMATCH: 'XML de outra empresa',
   COMPANY_NOT_CONFIGURED: 'Cadastro da empresa incompleto',
-  XML_COMPANY_UNREGISTERED: 'Empresa do XML ainda não cadastrada',
+  XML_COMPANY_UNREGISTERED: 'CNPJ do emitente não cadastrado',
   DB_CONSTRAINT_ERROR: 'Conflito com dados já cadastrados',
   UNKNOWN_ERROR: 'Falha ao importar o arquivo',
 };
@@ -48,19 +61,23 @@ export function getImportErrorDescription(error?: IImportErrorDetail | null) {
     return 'O arquivo parece incompleto, corrompido ou fora do padrão esperado.';
   }
 
-  if (message.includes('número da nota fiscal não informado')) {
+  if (code === 'XML_STRUCTURE_INVALID') {
+    return 'O arquivo é um XML, mas não contém a estrutura de uma NF-e processada (nfeProc/NFe/infNFe).';
+  }
+
+  if (code === 'XML_INVOICE_NUMBER_MISSING' || message.includes('número da nota fiscal não informado')) {
     return 'O XML veio sem o número da nota.';
   }
 
-  if (message.includes('data/hora da nf-e não informada')) {
+  if (code === 'XML_ISSUE_DATE_MISSING' || message.includes('data/hora da nf-e não informada')) {
     return 'O XML veio sem a data de emissão ou saída da nota.';
   }
 
-  if (message.includes('data de emissão inválida')) {
+  if (code === 'XML_ISSUE_DATE_INVALID' || message.includes('data de emissão inválida')) {
     return 'A data da nota está preenchida de forma inválida no XML.';
   }
 
-  if (message.includes('documento do emitente não informado')) {
+  if (code === 'XML_ISSUER_DOCUMENT_MISSING' || message.includes('documento do emitente não informado')) {
     return 'O XML veio sem o documento da empresa emissora.';
   }
 
@@ -73,27 +90,39 @@ export function getImportErrorDescription(error?: IImportErrorDetail | null) {
   }
 
   if (code === 'XML_COMPANY_UNREGISTERED' || message.includes('emitente do xml ainda nao esta cadastrado')) {
-    return 'O emitente deste XML ainda não foi cadastrado como empresa no sistema.';
+    return 'O CNPJ do emitente deste XML ainda não está autorizado para nenhuma empresa no sistema.';
   }
 
-  if (message.includes('destinatário não informado')) {
+  if (code === 'XML_CUSTOMER_SECTION_MISSING' || message.includes('destinatário não informado')) {
     return 'O XML veio sem os dados do cliente.';
   }
 
-  if (message.includes('documento do cliente não informado')) {
+  if (code === 'XML_CUSTOMER_DOCUMENT_MISSING' || message.includes('documento do cliente não informado')) {
     return 'O XML veio sem o CPF ou CNPJ do cliente.';
   }
 
-  if (message.includes('nome do cliente não informado')) {
+  if (code === 'XML_CUSTOMER_NAME_MISSING' || message.includes('nome do cliente não informado')) {
     return 'O XML veio sem o nome do cliente.';
   }
 
-  if (message.includes('nenhum produto encontrado')) {
+  if (code === 'XML_PRODUCTS_MISSING' || message.includes('nenhum produto encontrado')) {
     return 'O XML veio sem os produtos da nota.';
   }
 
-  if (message.includes('código de barras da nf-e não informado')) {
-    return 'O XML veio sem um identificador principal da nota.';
+  if (code === 'XML_PRODUCT_CODE_MISSING') {
+    return 'Um dos produtos do XML está sem o código obrigatório (cProd).';
+  }
+
+  if (code === 'XML_PRODUCT_DESCRIPTION_MISSING') {
+    return 'Um dos produtos do XML está sem a descrição obrigatória (xProd).';
+  }
+
+  if (code === 'XML_PRODUCT_QUANTITY_INVALID') {
+    return 'Um dos produtos do XML está sem quantidade válida (qCom).';
+  }
+
+  if (code === 'XML_ACCESS_KEY_MISSING' || message.includes('código de barras da nf-e não informado')) {
+    return 'O XML veio sem a chave de acesso da NF-e no campo infNFe.Id.';
   }
 
   if (message.includes('código de barras já vinculado')) {
@@ -123,6 +152,21 @@ export function getImportErrorHint(error?: IImportErrorDetail | null) {
       return 'Escolha um arquivo XML e tente novamente.';
     case 'XML_PARSE_ERROR':
       return 'Confira se o XML foi gerado corretamente e tente reenviar só esse arquivo.';
+    case 'XML_STRUCTURE_INVALID':
+      return 'Baixe o XML processado/autorizado da NF-e no sistema emissor e tente novamente.';
+    case 'XML_INVOICE_NUMBER_MISSING':
+    case 'XML_ISSUER_DOCUMENT_MISSING':
+    case 'XML_CUSTOMER_SECTION_MISSING':
+    case 'XML_CUSTOMER_DOCUMENT_MISSING':
+    case 'XML_CUSTOMER_NAME_MISSING':
+    case 'XML_PRODUCTS_MISSING':
+    case 'XML_PRODUCT_CODE_MISSING':
+    case 'XML_PRODUCT_DESCRIPTION_MISSING':
+    case 'XML_PRODUCT_QUANTITY_INVALID':
+    case 'XML_ACCESS_KEY_MISSING':
+    case 'XML_ISSUE_DATE_MISSING':
+    case 'XML_ISSUE_DATE_INVALID':
+      return 'Corrija essa informação no sistema emissor, gere o XML novamente e reenvie o arquivo.';
     case 'MISSING_REQUIRED_FIELD':
       return 'Revise os dados da nota no arquivo original e gere o XML novamente.';
     case 'DUPLICATE_INVOICE':
@@ -132,7 +176,7 @@ export function getImportErrorHint(error?: IImportErrorDetail | null) {
     case 'COMPANY_NOT_CONFIGURED':
       return 'Peça para ajustar o cadastro da empresa antes de tentar novamente.';
     case 'XML_COMPANY_UNREGISTERED':
-      return 'Cadastre a empresa do emitente e depois tente importar novamente.';
+      return 'Se este CNPJ pertence a uma empresa autorizada, cadastre-o e reenvie apenas este arquivo.';
     case 'DB_CONSTRAINT_ERROR':
       return 'Se continuar falhando, envie os detalhes para o suporte.';
     default:
@@ -152,28 +196,6 @@ export function getImportErrorQueueMessage(error?: IImportErrorDetail | null) {
   return getImportErrorDescription(error);
 }
 
-export function buildImportFailureAlertMessage(results: IImportResult[]) {
-  const failures = results.filter((item) => item.status === 'error');
-  if (!failures.length) return '';
-
-  const visibleLines = failures.slice(0, 3).map((item) => (
-    `- ${item.fileName}: ${getImportErrorDescription(item.error)}`
-  ));
-  const remaining = failures.length - visibleLines.length;
-
-  return [
-    failures.length === 1
-      ? '1 XML teve erro e não pôde ser importado.'
-      : `${failures.length} XMLs tiveram erro e não puderam ser importados.`,
-    '',
-    ...visibleLines,
-    remaining > 0 ? `- E mais ${remaining} arquivo(s) com erro.` : '',
-    '',
-    'Você pode abrir a aba "Erros" para ver o motivo de cada arquivo.',
-    'Se quiser tentar novamente, use o botão "Reenviar apenas com erro".',
-  ].filter(Boolean).join('\n');
-}
-
 export function getDuplicateInvoiceResults(results: IImportResult[]) {
   return results.filter((item) => (
     Array.isArray(item.warnings)
@@ -183,27 +205,4 @@ export function getDuplicateInvoiceResults(results: IImportResult[]) {
 
 export function hasDuplicateInvoiceWarning(result: IImportResult) {
   return getDuplicateInvoiceResults([result]).length > 0;
-}
-
-export function buildDuplicateInvoiceAlertMessage(results: IImportResult[]) {
-  const duplicates = getDuplicateInvoiceResults(results);
-  if (!duplicates.length) return '';
-
-  const visibleLines = duplicates.slice(0, 3).map((item) => {
-    const invoiceNumber = String(item.meta?.invoiceNumber || '').trim();
-    return `- ${item.fileName}${invoiceNumber ? ` (NF ${invoiceNumber})` : ''}: já estava no banco e não foi importado novamente.`;
-  });
-  const remaining = duplicates.length - visibleLines.length;
-
-  return [
-    duplicates.length === 1
-      ? '1 XML corresponde a uma nota que já estava cadastrada.'
-      : `${duplicates.length} XMLs correspondem a notas que já estavam cadastradas.`,
-    '',
-    ...visibleLines,
-    remaining > 0 ? `- E mais ${remaining} arquivo(s) já cadastrados.` : '',
-    '',
-    'Esses arquivos foram reconhecidos, mas não precisaram ser importados de novo.',
-    'Confira os avisos na aba "Sucessos" para ver quais notas já existiam.',
-  ].filter(Boolean).join('\n');
 }

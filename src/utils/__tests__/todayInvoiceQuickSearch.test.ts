@@ -12,16 +12,15 @@ const danfe = {
 } as any;
 
 describe('buildTodayInvoiceProductMatches', () => {
-  it('retorna apenas o produto procurado com motorista e placa', () => {
+  it('retorna apenas o produto procurado com motorista', () => {
     const rows = buildTodayInvoiceProductMatches([danfe], 'file de tilapia', {
-      123: { driverName: 'Jonas', vehiclePlate: 'ABC1D23', tripId: 8 },
+      123: { driverName: 'Jonas', tripId: 8 },
     });
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       productCode: '4577',
       driverName: 'Jonas',
-      vehiclePlate: 'ABC1D23',
       quantity: 3,
     });
   });

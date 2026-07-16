@@ -2,7 +2,6 @@ import { IDanfe } from '../types/types';
 
 export type TodayInvoiceAssignment = {
   driverName: string;
-  vehiclePlate: string;
   tripId: number | null;
 };
 
@@ -14,7 +13,6 @@ export type TodayInvoiceProductMatch = {
   city: string;
   status: string;
   driverName: string;
-  vehiclePlate: string;
   tripId: number | null;
   productCode: string;
   productDescription: string;
@@ -52,7 +50,6 @@ export function buildTodayInvoiceProductMatches(
         city: String(danfe.Customer?.city || '').trim() || '-',
         status: String(danfe.status || '').trim(),
         driverName: assignment?.driverName || 'Sem motorista',
-        vehiclePlate: assignment?.vehiclePlate || '-',
         tripId: assignment?.tripId || null,
         productCode: String(item.Product?.code || '').trim(),
         productDescription: String(item.Product?.description || '').trim() || '-',

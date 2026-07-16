@@ -81,14 +81,12 @@ function TodayInvoices() {
       if (Array.isArray(data)) {
         data.forEach((trip: any) => {
           const driverName = trip?.Driver?.name || '';
-          const vehiclePlate = trip?.Car?.license_plate || '';
           (trip?.TripNotes || []).forEach((note: any) => {
             if (note?.invoice_number && driverName) {
               const invoiceNumber = String(note.invoice_number);
               map[invoiceNumber] = driverName;
               assignmentMap[invoiceNumber] = {
                 driverName,
-                vehiclePlate,
                 tripId: Number(trip?.id) || null,
               };
             }
@@ -314,7 +312,6 @@ function TodayInvoices() {
         ...previous,
         [invoiceNumber]: {
           driverName: targetTrip.Driver?.name || '',
-          vehiclePlate: targetTrip.Car?.license_plate || '',
           tripId: Number(targetTrip.id) || null,
         },
       }));
@@ -499,7 +496,6 @@ function TodayInvoices() {
                       <div className="rounded-md border border-border bg-surface-2 p-2">
                         <span className="block text-muted">Carga</span>
                         <strong className="block text-text">{row.driverName}</strong>
-                        <span className="block text-text">Placa {row.vehiclePlate}</span>
                         <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getSemanticToneClassName(row.driverName === 'Sem motorista' ? 'warning' : 'success')}`}>
                           {getOperationalStatusLabel(row.status)}
                         </span>

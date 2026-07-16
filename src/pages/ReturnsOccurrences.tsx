@@ -984,10 +984,10 @@ function ReturnsOccurrences() {
         loadCars(),
         loadProducts(),
         loadOccurrences(),
-        notificationInvoiceNumber
-          ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber)
-          : requestedBatchCode
-            ? loadReturnBatchesByBatchCode(requestedBatchCode)
+        requestedBatchCode
+          ? loadReturnBatchesByBatchCode(requestedBatchCode)
+          : notificationInvoiceNumber
+            ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber)
             : loadReturnBatches(),
       ]);
     };
@@ -2615,8 +2615,9 @@ function ReturnsOccurrences() {
                       </div>
                     </Grid>
                   )}
-                  <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
-                  <div className="space-y-2">
+                  <div className={selectedBatch && !isSelectedBatchEditableByTransportadora ? 'hidden' : 'contents'}>
+                    <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
+                    <div className="space-y-2">
                     <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
                       <div className="min-w-0 md:w-[220px] md:shrink-0">
                         {returnType === 'sobra' ? (
@@ -2674,9 +2675,9 @@ function ReturnsOccurrences() {
                         </label>
                       </ReturnSearchRow>
                     </div>
-                  </div>
+                    </div>
 
-                  {(returnDanfe || returnType === 'sobra') && (
+                    {(returnDanfe || returnType === 'sobra') && (
                     <>
                       {returnDanfe && returnType !== 'sobra' && (
                         <InfoText style={{ marginTop: '12px' }}>
@@ -2977,11 +2978,14 @@ function ReturnsOccurrences() {
                         </button>
                       </Actions>
                     </>
-                  )}
+                    )}
+                  </div>
 
                   <ListHeaderRow>
-                    <h2 style={{ marginTop: '18px' }}>Lista de NFs</h2>
-                    {selectedBatch && (
+                    <h2 style={{ marginTop: '18px' }}>
+                      {selectedBatch ? `Notas fiscais do lote ${selectedBatch.batch_code}` : 'Lista de NFs'}
+                    </h2>
+                    {selectedBatch && isSelectedBatchEditableByTransportadora && (
                       <SaveBatchButton
                         onClick={handleSaveBatch}
                         disabled={!selectedBatchHasUnsavedChanges || !isSelectedBatchEditableByTransportadora}
@@ -3005,16 +3009,17 @@ function ReturnsOccurrences() {
                               {note.return_type === 'sobra' && note.is_inversion ? ' | Inversao' : ''}
                               {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
                             </span>
-                            <Actions>
-                              <button
-                                className="danger"
-                                onClick={() => handleRemoveNoteFromBatch(note.id)}
-                                disabled={!isSelectedBatchEditableByTransportadora}
-                                type="button"
-                              >
-                                Remover NF
-                              </button>
-                            </Actions>
+                            {isSelectedBatchEditableByTransportadora && (
+                              <Actions>
+                                <button
+                                  className="danger"
+                                  onClick={() => handleRemoveNoteFromBatch(note.id)}
+                                  type="button"
+                                >
+                                  Remover NF
+                                </button>
+                              </Actions>
+                            )}
                           </li>
                         ))}
                       </List>

@@ -57,9 +57,9 @@ function mockInitialGets() {
   });
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <ReturnsOccurrences />
     </MemoryRouter>,
   );
@@ -122,6 +122,47 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       );
     });
     expect(await screen.findByText('Nenhum lote encontrado com o ID RET-20260716-123456.')).toBeInTheDocument();
+  });
+
+  it('prioriza o ID do lote no link e exibe lote enviado sem controles de edicao', async () => {
+    const batch = {
+      batch_code: 'RET-20260706-1783336645087-21531',
+      batch_status: 'closed',
+      workflow_status: 'awaiting_control_tower',
+      driver_id: 1,
+      vehicle_plate: 'NDQ3B16',
+      return_date: '2026-07-06',
+      sent_to_control_tower_at: '2026-07-06T15:00:00.000Z',
+      received_by_control_tower_at: null,
+      Driver: { id: 1, name: 'Edson marcos' },
+      notes: [{
+        id: 10,
+        invoice_number: '1798677',
+        return_type: 'total',
+        items: [{ product_id: 'RV004577', product_description: 'ARROZ', product_type: 'FD', quantity: 1 }],
+      }],
+      aggregated_items: [],
+    };
+    mockedAxios.get.mockImplementation((url: string, config?: any) => {
+      if (url.includes('/drivers')) return Promise.resolve({ data: [{ id: '1', name: 'Edson marcos' }] });
+      if (url.includes('/cars')) return Promise.resolve({ data: [{ id: '1', model: 'Truck', license_plate: 'NDQ3B16' }] });
+      if (url.includes('/products') || url.includes('/occurrences/search')) return Promise.resolve({ data: [] });
+      if (url.includes('/returns/batches/search')) {
+        expect(config?.params).toEqual({
+          batch_code: 'RET-20260706-1783336645087-21531',
+          workflow_status: 'all',
+        });
+        return Promise.resolve({ data: [batch] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage(['/returns-occurrences?tab=returns&nf=1798677&batch=RET-20260706-1783336645087-21531']);
+
+    expect(await screen.findByText('Lote RET-20260706-1783336645087-21531 (somente leitura)')).toBeInTheDocument();
+    expect(screen.getByText('Notas fiscais do lote RET-20260706-1783336645087-21531')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salvar lote' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remover NF' })).not.toBeInTheDocument();
   });
 
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {

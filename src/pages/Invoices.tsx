@@ -508,8 +508,8 @@ function Invoices() {
           danfes={danfes}
           invoiceContextByNf={invoiceContextByNf}
           onDanfeUpdated={handleDanfeUpdated}
-          onOpenReturnBatch={(batchCode, invoiceNumber) => navigate(
-            `/returns-occurrences?tab=returns&nf=${encodeURIComponent(invoiceNumber)}&batch=${encodeURIComponent(batchCode)}`,
+          onOpenReturnBatch={(batchCode) => navigate(
+            `/returns-occurrences?tab=returns&batch=${encodeURIComponent(batchCode)}`,
           )}
           showLegend={false}
         />

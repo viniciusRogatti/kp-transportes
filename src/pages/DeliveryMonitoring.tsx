@@ -576,15 +576,27 @@ const getStopStatusUpdateErrorMessage = (error: unknown) => {
     || 'Nao foi possivel atualizar o status desta parada.';
 };
 
+const getMonitoringQuery = () => {
+  if (typeof window === 'undefined') return { date: null, invoiceNumber: null };
+  const params = new URLSearchParams(window.location.search);
+  const requestedDate = String(params.get('date') || '').trim();
+  const invoiceNumber = String(params.get('nf') || '').trim();
+  return {
+    date: /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : null,
+    invoiceNumber: invoiceNumber || null,
+  };
+};
+
 function DeliveryMonitoring() {
   const navigate = useNavigate();
   const datePickerRef = useRef<DatePicker | null>(null);
-  const [date, setDate] = useState<string>(getTodayMonitoringDate());
+  const initialQueryRef = useRef(getMonitoringQuery());
+  const [date, setDate] = useState<string>(initialQueryRef.current.date || getTodayMonitoringDate());
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilterOption>(DEFAULT_COMPANY_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
-  const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(null);
+  const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(initialQueryRef.current.invoiceNumber);
   const [selectedDriverStop, setSelectedDriverStop] = useState<SelectedDriverStop | null>(null);
   const [showRoutes, setShowRoutes] = useState<boolean>(true);
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
@@ -859,9 +871,10 @@ function DeliveryMonitoring() {
 
   useEffect(() => {
     if (!selectedDeliveryInvoice) return;
+    if (!overview) return;
     if (selectedDelivery) return;
     setSelectedDeliveryInvoice(null);
-  }, [selectedDeliveryInvoice, selectedDelivery]);
+  }, [overview, selectedDeliveryInvoice, selectedDelivery]);
 
   const filteredDeliveries = useMemo(() => {
     return companyFilteredDeliveries.filter((row) => {

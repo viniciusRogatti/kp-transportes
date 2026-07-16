@@ -38,8 +38,10 @@ function Invoices() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
   const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<{
-    tone: 'danger' | 'info';
+    tone: 'danger' | 'info' | 'warning';
     message: string;
+    actionUrl?: string;
+    actionLabel?: string;
   } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -86,6 +88,28 @@ function Invoices() {
     setSearchNf(value)
   };
 
+  async function findMissingInvoiceReference(invoiceNumber: string) {
+    const { data } = await axios.get(
+      `${API_URL}/danfes/nf/${encodeURIComponent(invoiceNumber)}/references`,
+      { params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined },
+    );
+    const references = Array.isArray(data?.references) ? data.references : [];
+    if (!references.length) return null;
+
+    const reference = references[0];
+    const companyCode = String(reference.company?.code || '').trim().toLowerCase();
+    const companyName = COMPANY_LABELS[companyCode] || reference.company?.name || 'empresa não identificada';
+    const batchCode = String(reference.batch_code || '').trim();
+    return {
+      tone: 'warning' as const,
+      message: `A NF ${reference.invoice_number || invoiceNumber} não está no cadastro principal, mas existe no lote ${batchCode || 'identificado'} da ${companyName}. Reimporte o XML da NF para restaurar os dados sem perder o vínculo da devolução.`,
+      actionUrl: batchCode
+        ? `/returns-occurrences?tab=returns&nf=${encodeURIComponent(reference.invoice_number || invoiceNumber)}&batch=${encodeURIComponent(batchCode)}`
+        : `/returns-occurrences?tab=returns&nf=${encodeURIComponent(reference.invoice_number || invoiceNumber)}`,
+      actionLabel: 'Abrir lote de devolução',
+    };
+  }
+
   async function getDanfeByNf () {
     const normalizedNf = searchNf.trim().replace(/^(?:nf[\s.#-]*)/i, '');
     if (!normalizedNf) return;
@@ -125,7 +149,8 @@ function Invoices() {
         });
         setSearchNf('');
       } else {
-        setInvoiceSearchFeedback({
+        const orphanFeedback = await findMissingInvoiceReference(normalizedNf);
+        setInvoiceSearchFeedback(orphanFeedback || {
           tone: 'danger',
           message: `A NF ${normalizedNf} não foi encontrada. Verifique se o XML foi importado ou se o número foi digitado corretamente.`,
         });
@@ -157,7 +182,8 @@ function Invoices() {
           params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
         });
         if (!data) {
-          setInvoiceSearchFeedback({
+          const orphanFeedback = await findMissingInvoiceReference(queryNf);
+          setInvoiceSearchFeedback(orphanFeedback || {
             tone: 'danger',
             message: `A NF ${queryNf} não foi encontrada. Verifique se o XML foi importado.`,
           });
@@ -341,9 +367,20 @@ function Invoices() {
               role="status"
               className={`mt-2 rounded-md border px-3 py-2 text-sm ${invoiceSearchFeedback.tone === 'danger'
                 ? 'semantic-panel-danger'
-                : 'semantic-panel-info'}`}
+                : invoiceSearchFeedback.tone === 'warning'
+                  ? 'semantic-panel-warning'
+                  : 'semantic-panel-info'}`}
             >
-              {invoiceSearchFeedback.message}
+              <span>{invoiceSearchFeedback.message}</span>
+              {invoiceSearchFeedback.actionUrl ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(invoiceSearchFeedback.actionUrl as string)}
+                  className="ml-2 rounded-md border border-current/30 bg-card/70 px-2 py-1 text-xs font-semibold"
+                >
+                  {invoiceSearchFeedback.actionLabel || 'Abrir referência'}
+                </button>
+              ) : null}
             </div>
           ) : null}
           <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-[minmax(0,1fr)_auto]">

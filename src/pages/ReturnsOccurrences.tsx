@@ -146,6 +146,36 @@ type OccurrenceDraftItem = {
   product_type: string | null;
   quantity: number;
 };
+type SavedOccurrenceDraft = {
+  invoiceNumber: string;
+  reason: OccurrenceReasonValue;
+  productCode: string;
+  productType: string;
+  quantityInput: string;
+  items: OccurrenceDraftItem[];
+  savedAt: string;
+};
+const OCCURRENCE_DRAFT_STORAGE_KEY = 'kp_returns_occurrence_draft_v1';
+
+const readSavedOccurrenceDraft = (): SavedOccurrenceDraft | null => {
+  try {
+    const raw = localStorage.getItem(OCCURRENCE_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedOccurrenceDraft>;
+    if (!String(parsed.invoiceNumber || '').trim()) return null;
+    return {
+      invoiceNumber: String(parsed.invoiceNumber || '').replace(/\D/g, '').slice(0, 9),
+      reason: (parsed.reason || 'faltou_no_carregamento') as OccurrenceReasonValue,
+      productCode: String(parsed.productCode || OCCURRENCE_TOTAL_OPTION),
+      productType: String(parsed.productType || ''),
+      quantityInput: String(parsed.quantityInput || '1'),
+      items: Array.isArray(parsed.items) ? parsed.items : [],
+      savedAt: String(parsed.savedAt || new Date().toISOString()),
+    };
+  } catch {
+    return null;
+  }
+};
 type OccurrenceCardItemSummary = {
   label: string;
   quantityWithType: string;
@@ -435,6 +465,8 @@ function ReturnsOccurrences() {
   const [resolutionType, setResolutionType] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
   const [isOccurrenceBuilderOpen, setIsOccurrenceBuilderOpen] = useState(false);
+  const [hasSavedOccurrenceDraft, setHasSavedOccurrenceDraft] = useState(() => Boolean(readSavedOccurrenceDraft()));
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
   const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<OccurrenceWorkflowFilter>('pending_transportadora');
   const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
@@ -495,6 +527,46 @@ function ReturnsOccurrences() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOccurrenceBuilderOpen || editingOccurrenceId) return;
+    if (!occurrenceNf.trim()) return;
+    const draft: SavedOccurrenceDraft = {
+      invoiceNumber: occurrenceNf,
+      reason: occurrenceReason,
+      productCode: occurrenceProductCode,
+      productType: occurrenceProductType,
+      quantityInput: occurrenceQuantityInput,
+      items: occurrenceItems,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(OCCURRENCE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      setHasSavedOccurrenceDraft(true);
+    } catch {
+      // O formulario continua utilizavel mesmo se o navegador bloquear armazenamento local.
+    }
+  }, [
+    editingOccurrenceId,
+    isOccurrenceBuilderOpen,
+    occurrenceItems,
+    occurrenceNf,
+    occurrenceProductCode,
+    occurrenceProductType,
+    occurrenceQuantityInput,
+    occurrenceReason,
+  ]);
 
   useEffect(() => {
     if (!selectedBatch) {
@@ -1923,14 +1995,34 @@ function ReturnsOccurrences() {
     setOccurrenceNf('');
   }
 
-  function openCreateOccurrenceBuilder() {
+  async function openCreateOccurrenceBuilder() {
+    const draft = readSavedOccurrenceDraft();
     resetOccurrenceBuilder();
     setIsOccurrenceBuilderOpen(true);
+    if (!draft) return;
+
+    setOccurrenceNf(draft.invoiceNumber);
+    setOccurrenceReason(draft.reason);
+    setOccurrenceItems(draft.items);
+    try {
+      const danfe = await findDanfeByNf(draft.invoiceNumber);
+      if (danfe) setOccurrenceDanfe(danfe);
+    } catch {
+      // A NF pode ser buscada novamente pelo usuario quando a conexao voltar.
+    }
+    setOccurrenceProductCode(draft.productCode);
+    setOccurrenceProductType(draft.productType);
+    setOccurrenceQuantityInput(draft.quantityInput);
   }
 
   function closeOccurrenceBuilder() {
     setIsOccurrenceBuilderOpen(false);
     resetOccurrenceBuilder();
+  }
+
+  function clearSavedOccurrenceDraft() {
+    localStorage.removeItem(OCCURRENCE_DRAFT_STORAGE_KEY);
+    setHasSavedOccurrenceDraft(false);
   }
 
   function addOccurrenceItem() {
@@ -2019,6 +2111,10 @@ function ReturnsOccurrences() {
   }
 
   async function handleCreateOrEditOccurrence() {
+    if (!isOnline) {
+      alert('Sem conexao no momento. O rascunho foi mantido neste aparelho; envie quando a internet voltar.');
+      return;
+    }
     if (!occurrenceDanfe) {
       alert('Busque uma NF para ocorrencia.');
       return;
@@ -2049,6 +2145,7 @@ function ReturnsOccurrences() {
       }
 
       alert(editingOccurrenceId ? 'Ocorrencia atualizada com sucesso.' : 'Ocorrencia registrada com sucesso.');
+      if (!editingOccurrenceId) clearSavedOccurrenceDraft();
       closeOccurrenceBuilder();
       await loadOccurrences();
     } catch (error) {
@@ -3007,6 +3104,15 @@ function ReturnsOccurrences() {
                       </button>
                     )}
                   </CardHeaderRow>
+                  {hasSavedOccurrenceDraft && canManageOccurrenceStatus ? (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border semantic-panel-info px-3 py-2 text-sm">
+                      <span>Existe um rascunho de ocorrência salvo neste aparelho.</span>
+                      <div className="flex gap-2">
+                        <button type="button" className="primary" onClick={openCreateOccurrenceBuilder}>Continuar</button>
+                        <button type="button" className="secondary" onClick={clearSavedOccurrenceDraft}>Descartar</button>
+                      </div>
+                    </div>
+                  ) : null}
                   <Grid className="mt-[5px] grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <InlineText>Status</InlineText>
@@ -3176,6 +3282,11 @@ function ReturnsOccurrences() {
                     <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <h3 className="text-center">{editingOccurrenceId ? `Editar ocorrencia #${editingOccurrenceId}` : 'Registrar Ocorrencia'}</h3>
+                  {!isOnline ? (
+                    <div className="mt-3 rounded-md border semantic-panel-warning px-3 py-2 text-sm">
+                      Sem conexão. Continue preenchendo: o rascunho fica salvo neste aparelho, mas o envio deve ser feito quando a internet voltar.
+                    </div>
+                  ) : null}
                   <Grid className="grid-cols-1">
                     <div className="min-w-0">
                       <SearchInput
@@ -3326,7 +3437,7 @@ function ReturnsOccurrences() {
 
                   <Actions style={{ marginTop: '12px' }}>
                     {occurrenceDanfe && (
-                      <button className="primary" onClick={handleCreateOrEditOccurrence} type="button">
+                      <button className="primary" onClick={handleCreateOrEditOccurrence} type="button" disabled={!isOnline}>
                         {editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
                       </button>
                     )}

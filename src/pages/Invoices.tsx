@@ -36,6 +36,11 @@ function Invoices() {
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
   const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
+  const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<{
+    tone: 'danger' | 'info';
+    message: string;
+  } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deferredFilters = useDeferredValue(filters);
@@ -82,16 +87,33 @@ function Invoices() {
   };
 
   async function getDanfeByNf () {
-    const normalizedNf = searchNf.trim();
+    const normalizedNf = searchNf.trim().replace(/^(?:nf[\s.#-]*)/i, '');
     if (!normalizedNf) return;
 
+    setIsSearchingInvoice(true);
+    setInvoiceSearchFeedback(null);
     try {
-      const { data } = await axios.get(`${API_URL}/danfes/nf/${normalizedNf}`, {
+      let { data } = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(normalizedNf)}`, {
         params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
       });
+      let foundOutsideSelectedCompany = false;
+
+      if (!data && activeCompanyTab !== 'all') {
+        const fallbackResponse = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(normalizedNf)}`);
+        data = fallbackResponse.data;
+        foundOutsideSelectedCompany = Boolean(data);
+      }
 
       if (data) {
         const sanitizedDanfe = sanitizeDanfeTextFields(data);
+        if (foundOutsideSelectedCompany) {
+          const resolvedCompanyCode = resolveDanfeCompanyCode(sanitizedDanfe);
+          setActiveCompanyTab(COMPANY_LABELS[resolvedCompanyCode] ? resolvedCompanyCode : 'all');
+          setInvoiceSearchFeedback({
+            tone: 'info',
+            message: `A NF ${sanitizedDanfe.invoice_number} estava em outra empresa e foi localizada em ${COMPANY_LABELS[resolvedCompanyCode] || sanitizedDanfe.company?.name || 'Todas'}.`,
+          });
+        }
         await loadInvoiceContext([sanitizedDanfe], {
           force: true,
           includeTripDriver: true,
@@ -101,12 +123,25 @@ function Invoices() {
           const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
           return [sanitizedDanfe, ...nextRows];
         });
+        setSearchNf('');
+      } else {
+        setInvoiceSearchFeedback({
+          tone: 'danger',
+          message: `A NF ${normalizedNf} não foi encontrada. Verifique se o XML foi importado ou se o número foi digitado corretamente.`,
+        });
       }
     } catch (error) {
       console.error('Algo deu errado ao tentar buscar essa nf', error);
+      const apiMessage = axios.isAxiosError(error)
+        ? String(error.response?.data?.error || error.response?.data?.message || '').trim()
+        : '';
+      setInvoiceSearchFeedback({
+        tone: 'danger',
+        message: apiMessage || `Não foi possível consultar a NF ${normalizedNf} agora. Tente novamente.`,
+      });
+    } finally {
+      setIsSearchingInvoice(false);
     }
-
-    setSearchNf('');
   };
 
   useEffect(() => {
@@ -114,18 +149,29 @@ function Invoices() {
     if (!queryNf) return;
 
     setSearchNf(queryNf);
+    setInvoiceSearchFeedback(null);
 
     const fetchQueryNf = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/danfes/nf/${queryNf}`, {
+        const { data } = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(queryNf)}`, {
           params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
         });
-        if (!data) return;
+        if (!data) {
+          setInvoiceSearchFeedback({
+            tone: 'danger',
+            message: `A NF ${queryNf} não foi encontrada. Verifique se o XML foi importado.`,
+          });
+          return;
+        }
         const sanitizedDanfe = sanitizeDanfeTextFields(data);
         setDataDanfes([sanitizedDanfe]);
         await loadInvoiceContext([sanitizedDanfe], { force: true, includeTripDriver: true });
       } catch (error) {
         console.error('Algo deu errado ao tentar buscar essa nf', error);
+        setInvoiceSearchFeedback({
+          tone: 'danger',
+          message: `Não foi possível consultar a NF ${queryNf} agora.`,
+        });
       }
     };
 
@@ -287,8 +333,19 @@ function Invoices() {
               onSearch={getDanfeByNf}
               placeholder="Digite a nf"
               searchLabel="Pesquisar NF"
+              disabled={isSearchingInvoice}
             />
           </SearchRow>
+          {invoiceSearchFeedback ? (
+            <div
+              role="status"
+              className={`mt-2 rounded-md border px-3 py-2 text-sm ${invoiceSearchFeedback.tone === 'danger'
+                ? 'semantic-panel-danger'
+                : 'semantic-panel-info'}`}
+            >
+              {invoiceSearchFeedback.message}
+            </div>
+          ) : null}
           <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-[minmax(0,1fr)_auto]">
             <DateGroup>
               <DatePicker

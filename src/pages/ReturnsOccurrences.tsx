@@ -452,6 +452,7 @@ function ReturnsOccurrences() {
   const [batchSearchFeedback, setBatchSearchFeedback] = useState('');
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
   const [selectedBatchDriverId, setSelectedBatchDriverId] = useState('');
   const [selectedBatchCarId, setSelectedBatchCarId] = useState('');
@@ -505,6 +506,7 @@ function ReturnsOccurrences() {
   const isSelectedBatchAwaitingControlTower = selectedBatchWorkflowStatus === 'awaiting_control_tower';
 
   function setTab(nextTab: 'returns' | 'occurrences') {
+    setReturnModalOpen(false);
     setActiveTab(nextTab);
     localStorage.setItem('returns_occurrences_last_tab', nextTab);
     const next = new URLSearchParams(searchParams);
@@ -541,6 +543,15 @@ function ReturnsOccurrences() {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (!returnModalOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [returnModalOpen]);
 
   useEffect(() => {
     if (!isOccurrenceBuilderOpen || editingOccurrenceId) return;
@@ -1077,6 +1088,7 @@ function ReturnsOccurrences() {
         || batches[0]?.batch_code
         || '';
       setSelectedBatchCode(selectedCode);
+      setReturnModalOpen(Boolean(selectedCode));
     } catch (error) {
       console.error('Erro ao localizar lote de devolucao pela NF:', error);
     }
@@ -1093,6 +1105,7 @@ function ReturnsOccurrences() {
       const batches = Array.isArray(data) ? data : [];
       setReturnBatches(batches);
       setSelectedBatchCode(batches[0]?.batch_code || '');
+      setReturnModalOpen(batches.length > 0);
       setBatchCodeFilter(normalizedBatchCode);
       setBatchSearchFeedback(batches.length
         ? `Lote ${batches[0].batch_code} localizado.`
@@ -1786,6 +1799,37 @@ function ReturnsOccurrences() {
     setReturnDate(getTodayDate());
   }
 
+  function handleOpenNewReturnModal() {
+    handleCreateNewBatch();
+    setReturnModalOpen(true);
+  }
+
+  function handleOpenReturnBatchModal(batchCode: string) {
+    setSelectedBatchCode(batchCode);
+    setReturnModalOpen(true);
+  }
+
+  async function handleCloseReturnModal() {
+    const hasUnsavedChanges = selectedBatch
+      ? selectedBatchHasUnsavedChanges
+      : draftNotes.length > 0;
+    if (hasUnsavedChanges) {
+      const confirmed = await showConfirm(
+        'Existem alteracoes que ainda nao foram salvas. Deseja fechar mesmo assim?',
+        {
+          title: 'Fechar devolucao',
+          confirmLabel: 'Fechar sem salvar',
+          cancelLabel: 'Continuar editando',
+          tone: 'danger',
+        },
+      );
+      if (!confirmed) return;
+    }
+
+    setReturnModalOpen(false);
+    setSelectedBatchCode('');
+  }
+
   async function handleConcludeBatch() {
     if (!draftNotes.length) {
       alert('Adicione ao menos uma NF na lista para concluir.');
@@ -1869,6 +1913,7 @@ function ReturnsOccurrences() {
         alert('Devolucao concluida com sucesso.');
       }
       handleCreateNewBatch();
+      setReturnModalOpen(false);
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
@@ -2422,6 +2467,21 @@ function ReturnsOccurrences() {
             {activeTab === 'returns' && (
               <SingleColumn>
                 <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card/55 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>
+                      <p className="text-xs text-muted">Pesquise por ID, periodo ou consulte os lotes mais recentes.</p>
+                    </div>
+                    {canManageBatchTransportadora && (
+                      <button
+                        type="button"
+                        onClick={handleOpenNewReturnModal}
+                        className="h-10 shrink-0 rounded-md border border-accent/70 bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-5 text-sm font-bold text-[#04131e] shadow-[var(--shadow-1)] transition hover:brightness-105"
+                      >
+                        + Nova devolucao
+                      </button>
+                    )}
+                  </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(280px,1fr)_190px_auto]">
                     <div className="flex min-w-0 gap-2">
                       <input
@@ -2504,11 +2564,38 @@ function ReturnsOccurrences() {
                     {batchSearchFeedback}
                   </div>
                 ) : null}
+                {returnModalOpen && (
+                  <>
+                    <ModalOverlay onClick={() => void handleCloseReturnModal()} />
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label={selectedBatch ? `Lote de devolucao ${selectedBatch.batch_code}` : 'Nova devolucao'}
+                      className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1120px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)]"
+                    >
+                      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-3 sm:px-5">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-bold text-text sm:text-lg">
+                            {selectedBatch
+                              ? `${isSelectedBatchEditableByTransportadora ? 'Editar' : 'Consultar'} lote ${selectedBatch.batch_code}`
+                              : 'Nova devolucao'}
+                          </h2>
+                          <p className="text-xs text-muted">
+                            {selectedBatch
+                              ? RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']
+                              : 'Monte a lista de NFs e conclua para criar o lote.'}
+                          </p>
+                        </div>
+                        <IconButton
+                          icon={X}
+                          label="Fechar devolucao"
+                          onClick={() => void handleCloseReturnModal()}
+                          className="!h-10 !w-10 !min-h-10 !min-w-10 !shrink-0 !px-0 !py-0"
+                        />
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
                 {selectedBatch && (
-                  <TopActionBar>
-                    <button className="secondary" onClick={handleCreateNewBatch} type="button">
-                      Criar novo lote
-                    </button>
+                  <TopActionBar className="mb-3 flex-wrap">
                     <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
                       Abrir PDF
                     </button>
@@ -3123,6 +3210,10 @@ function ReturnsOccurrences() {
                     </>
                   )}
                 </Card>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {!!returnBatches.length && (
                   <Card>
@@ -3167,7 +3258,7 @@ function ReturnsOccurrences() {
                                 <IconButton
                                   icon={Pencil}
                                   label={canEditBatch ? 'Editar lote' : 'Abrir lote (somente leitura)'}
-                                  onClick={() => setSelectedBatchCode(batch.batch_code)}
+                                  onClick={() => handleOpenReturnBatchModal(batch.batch_code)}
                                   className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0"
                                 />
                               </BatchActionsRow>

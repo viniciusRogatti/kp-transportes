@@ -65,6 +65,11 @@ function renderPage(initialEntries: string[] = ['/']) {
   );
 }
 
+async function openNewReturnModal() {
+  fireEvent.click(await screen.findByRole('button', { name: '+ Nova devolucao' }));
+  return screen.findByRole('dialog', { name: 'Nova devolucao' });
+}
+
 describe('ReturnsOccurrences - sobra com inversao', () => {
   beforeEach(() => {
     mockedAxios.get.mockReset();
@@ -104,7 +109,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
   it('permite pesquisar um lote diretamente pelo ID', async () => {
     renderPage();
 
-    await screen.findByText('NF + tipo de devolucao');
+    await screen.findByText('Consultar lotes de devolucao');
     fireEvent.change(screen.getByLabelText('ID do lote de devolucao'), {
       target: { value: 'RET-20260716-123456' },
     });
@@ -184,7 +189,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {
     renderPage();
-
+    await openNewReturnModal();
     await screen.findByText('NF + tipo de devolucao');
 
     fireEvent.click(screen.getByLabelText('Sobra'));
@@ -209,7 +214,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
   it('com toggle OFF envia sobra sem campo inversion no payload', async () => {
     renderPage();
-
+    await openNewReturnModal();
     await screen.findByText('NF + tipo de devolucao');
 
     fireEvent.click(screen.getByLabelText('Sobra'));
@@ -293,7 +298,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     });
 
     renderPage();
-
+    await openNewReturnModal();
     await screen.findByText('NF + tipo de devolucao');
 
     fireEvent.click(screen.getByLabelText('Parcial'));

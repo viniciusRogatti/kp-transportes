@@ -44,6 +44,7 @@ type RealtimeNotificationsContextValue = {
   lastAlertUpdateAt: string | null;
   refreshNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
   resolveNotification: (notificationId: string) => Promise<boolean>;
 };
 
@@ -65,6 +66,7 @@ const RealtimeNotificationsContext = createContext<RealtimeNotificationsContextV
   lastAlertUpdateAt: null,
   refreshNotifications: async () => {},
   markAsRead: async () => {},
+  markAllAsRead: async () => {},
   resolveNotification: async () => false,
 });
 
@@ -334,6 +336,28 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     }
   }, [loadNotifications]);
 
+  const markAllAsRead = useCallback(async () => {
+    const currentToken = tokenRef.current;
+    if (!currentToken) return;
+
+    setNotifications((currentRows) => currentRows.map((row) => ({ ...row, read: true })));
+    setUnreadCount(0);
+
+    try {
+      await axios.patch(
+        `${API_URL}/api/notifications/read-all`,
+        {},
+        { headers: { Authorization: `Bearer ${currentToken}` } },
+      );
+      await loadNotifications({ replace: true });
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[realtime-notifications] falha ao marcar todas como lidas', error);
+      }
+      await loadNotifications({ replace: true });
+    }
+  }, [loadNotifications]);
+
   const resolveNotification = useCallback(async (notificationId: string) => {
     const normalizedId = String(notificationId || '').trim();
     const currentToken = tokenRef.current;
@@ -455,8 +479,9 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     lastAlertUpdateAt,
     refreshNotifications,
     markAsRead,
+    markAllAsRead,
     resolveNotification,
-  }), [notifications, unreadCount, connected, lastReceivedAt, lastAlertUpdateAt, refreshNotifications, markAsRead, resolveNotification]);
+  }), [notifications, unreadCount, connected, lastReceivedAt, lastAlertUpdateAt, refreshNotifications, markAsRead, markAllAsRead, resolveNotification]);
 
   return (
     <RealtimeNotificationsContext.Provider value={contextValue}>

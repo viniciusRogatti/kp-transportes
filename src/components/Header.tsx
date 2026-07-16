@@ -53,6 +53,8 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   WHATSAPP_INVOICE_NOT_FOUND: 'NF inexistente',
   OCCURRENCE_OVERDUE: 'Ocorrência atrasada',
   INVOICE_PENDING_OVERDUE: 'NF pendente',
+  ASSIGNED_DELIVERY_OVERDUE: 'NF atribuída sem andamento',
+  PREVIOUS_OPERATION_RECEIPTS_MISSING: 'Canhotos da operação anterior',
   INVOICE_REDELIVERY_OVERDUE: 'Reentrega pendente',
   RETAINED_RECEIPT_OVERDUE: 'Canhoto retido',
   RETURN_PENDING_OVERDUE: 'Devolução pendente',
@@ -123,6 +125,7 @@ function Header() {
     unreadCount,
     connected,
     markAsRead,
+    markAllAsRead,
     resolveNotification,
   } = useRealtimeNotifications();
 
@@ -144,7 +147,9 @@ function Header() {
   const scopeDisplayName = permission === 'control_tower'
     ? companyDisplayName
     : 'Multiempresa';
-  const latestNotifications = notifications;
+  // O sino representa novidades. Pendencias ja visualizadas continuam no painel
+  // operacional e na Central de Alertas, mas nao poluem novamente este menu.
+  const latestNotifications = notifications.filter((notification) => !notification.read);
   const unreadNotificationClass = isLightTheme
     ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
     : 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70';
@@ -389,9 +394,32 @@ function Header() {
                 : 'Sem notificações não lidas.'}
             </p>
 
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {unreadCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={markAllAsRead}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-semibold text-text"
+                >
+                  <CircleCheck className="h-3.5 w-3.5" />
+                  Marcar todas como visualizadas
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNotificationOpen(false);
+                  navigate('/alerts');
+                }}
+                className="rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-semibold text-text"
+              >
+                Ver histórico e filtros
+              </button>
+            </div>
+
             {!latestNotifications.length ? (
               <p className="mt-3 rounded-md border border-border bg-surface-2/70 px-2 py-2 text-xs text-muted">
-                Nenhuma notificação disponível.
+                Nenhuma notificação nova. As pendências visualizadas continuam disponíveis no painel e no histórico.
               </p>
             ) : (
               <ul className="mt-3 max-h-[340px] space-y-1 overflow-auto pr-1">
@@ -419,9 +447,11 @@ function Header() {
                           </div>
                           <p className="mt-1 text-xs font-semibold text-text">{notification.title}</p>
                           <p className="mt-0.5 text-xs text-muted">{notification.message}</p>
-                          {notification.actionUrl && (notification.type !== 'BOT_UNAVAILABLE' || permission === 'master') ? (
-                            <p className="mt-1 text-[11px] font-semibold text-sky-500">Clique para abrir</p>
-                          ) : null}
+                          <p className="mt-1 text-[11px] font-semibold text-sky-500">
+                            {notification.actionUrl && (notification.type !== 'BOT_UNAVAILABLE' || permission === 'master')
+                              ? 'Clique para abrir e marcar como visualizada'
+                              : 'Clique para marcar como visualizada'}
+                          </p>
                         </button>
                         {notification.canResolve ? (
                           <div className="border-t border-border px-2 py-1.5">

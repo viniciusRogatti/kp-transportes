@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import DeliveryMonitoring from '../DeliveryMonitoring';
 
+let mockLocationSearch = '';
+
 jest.mock('axios', () => ({
   __esModule: true,
   default: {
@@ -12,6 +14,7 @@ jest.mock('axios', () => ({
 }));
 jest.mock('react-router', () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ search: mockLocationSearch }),
 }));
 jest.mock('socket.io-client', () => ({
   io: () => ({
@@ -134,6 +137,7 @@ const diagnostics = {
 
 describe('DeliveryMonitoring', () => {
   beforeEach(() => {
+    mockLocationSearch = '';
     let currentStatus: MonitoringStatus = 'on_the_way';
 
     mockedAxios.get.mockImplementation((url) => {
@@ -237,5 +241,28 @@ describe('DeliveryMonitoring', () => {
 
     expect(window.confirm).toHaveBeenCalledWith('Confirmar canhoto retido para NF 123456?');
     expect(await screen.findByText('NF 123456 atualizada com sucesso para canhoto retido.')).toBeInTheDocument();
+  });
+
+  it('preserva no celular a data da viagem recebida pelo alerta', async () => {
+    mockLocationSearch = '?date=15-07-2026&nf=123456';
+    (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+
+    render(<DeliveryMonitoring />);
+
+    await waitFor(() => {
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/api/delivery-monitoring'),
+        { params: { date: '2026-07-15' } },
+      );
+    });
   });
 });

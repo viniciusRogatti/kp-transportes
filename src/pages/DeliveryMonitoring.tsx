@@ -8,7 +8,7 @@ import {
 import DatePicker from 'react-datepicker';
 import ptBR from 'date-fns/locale/pt-BR';
 import 'react-datepicker/dist/react-datepicker.css';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { io, Socket } from 'socket.io-client';
 import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';
 import { MapMarkerPin } from '../components/maps/MapMarkerPin';
@@ -576,21 +576,33 @@ const getStopStatusUpdateErrorMessage = (error: unknown) => {
     || 'Nao foi possivel atualizar o status desta parada.';
 };
 
-const getMonitoringQuery = () => {
+const normalizeMonitoringDateParam = (value: string) => {
+  const normalized = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(normalized)) {
+    const [day, month, year] = normalized.split('-');
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+};
+
+const getMonitoringQuery = (search?: string) => {
   if (typeof window === 'undefined') return { date: null, invoiceNumber: null };
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(search ?? window.location.search);
   const requestedDate = String(params.get('date') || '').trim();
   const invoiceNumber = String(params.get('nf') || '').trim();
   return {
-    date: /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : null,
+    date: normalizeMonitoringDateParam(requestedDate),
     invoiceNumber: invoiceNumber || null,
   };
 };
 
 function DeliveryMonitoring() {
   const navigate = useNavigate();
+  const location = useLocation();
   const datePickerRef = useRef<DatePicker | null>(null);
   const initialQueryRef = useRef(getMonitoringQuery());
+  const monitoringQuery = useMemo(() => getMonitoringQuery(location.search), [location.search]);
   const [date, setDate] = useState<string>(initialQueryRef.current.date || getTodayMonitoringDate());
   const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
   const [companyFilter, setCompanyFilter] = useState<CompanyFilterOption>(DEFAULT_COMPANY_FILTER);
@@ -617,7 +629,7 @@ function DeliveryMonitoring() {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const todayDate = getTodayMonitoringDate();
-  const effectiveDate = isMobileView ? todayDate : date;
+  const effectiveDate = isMobileView && !monitoringQuery.date ? todayDate : date;
 
   const googleMapsApiKey = useMemo(() => resolveGoogleMapsApiKey(), []);
   const mapInitialCenter = useMemo(
@@ -665,10 +677,16 @@ function DeliveryMonitoring() {
 
   useEffect(() => {
     if (!isMobileView) return;
+    if (monitoringQuery.date) return;
 
     setDate((currentDate) => (currentDate === todayDate ? currentDate : todayDate));
     setSelectedDeliveryInvoice(null);
-  }, [isMobileView, todayDate]);
+  }, [isMobileView, monitoringQuery.date, todayDate]);
+
+  useEffect(() => {
+    setDate(monitoringQuery.date || getTodayMonitoringDate());
+    setSelectedDeliveryInvoice(monitoringQuery.invoiceNumber);
+  }, [monitoringQuery]);
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);

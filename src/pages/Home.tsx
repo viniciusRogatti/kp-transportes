@@ -35,6 +35,8 @@ import { getSemanticToneClassName } from '../utils/statusStyles';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeProduct, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { listReceiptBacklog } from '../services/receiptsService';
+import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -169,6 +171,23 @@ const COLLECTION_STATUS_LABELS: Record<string, string> = {
   cancelada: 'Cancelada',
 };
 const TRANSPORTADORA_COLLECTION_PERMISSIONS = ['admin', 'master', 'user', 'expedicao', 'conferente'];
+const HOME_NOTIFICATION_EXCLUDED_TYPES = new Set(['RETURN_PENDING_OVERDUE', 'OCCURRENCE_OVERDUE']);
+const HOME_NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  ASSIGNED_DELIVERY_OVERDUE: 'Entrega sem evolução',
+  PREVIOUS_OPERATION_RECEIPTS_MISSING: 'Canhotos da última operação',
+  INVOICE_PENDING_OVERDUE: 'Roteirização pendente',
+  INVOICE_REDELIVERY_OVERDUE: 'Reentrega pendente',
+  RETAINED_RECEIPT_OVERDUE: 'Canhoto retido',
+  WHATSAPP_INVOICE_NOT_FOUND: 'Canhoto não identificado',
+  BOT_UNAVAILABLE: 'Integração indisponível',
+};
+const HOME_NOTIFICATION_TYPE_PRIORITY: Record<string, number> = {
+  ASSIGNED_DELIVERY_OVERDUE: 0,
+  PREVIOUS_OPERATION_RECEIPTS_MISSING: 1,
+  RETAINED_RECEIPT_OVERDUE: 2,
+  INVOICE_REDELIVERY_OVERDUE: 3,
+  INVOICE_PENDING_OVERDUE: 4,
+};
 
 type AuditHistoryEntry = {
   id: number;
@@ -364,11 +383,13 @@ const isScheduledCollectionRequest = (request: ICollectionRequest) => resolveCol
 function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { notifications, markAsRead, refreshNotifications } = useRealtimeNotifications();
 
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
   const [pendingCollectionRequests, setPendingCollectionRequests] = useState<ICollectionRequest[]>([]);
   const [pendingReturnReminders, setPendingReturnReminders] = useState<IReceiptBacklogRow[]>([]);
   const [userPermission, setUserPermission] = useState('');
+  const [showAllOperationalNotifications, setShowAllOperationalNotifications] = useState(false);
 
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
   const [resolutionType, setResolutionType] = useState('');
@@ -426,6 +447,20 @@ function Home() {
   const canManageOccurrenceStatus = userPermission !== 'control_tower';
   const canManageCollectionWorkflowStatus = TRANSPORTADORA_COLLECTION_PERMISSIONS.includes(userPermission);
   const highlightedReturnInvoice = String(searchParams.get('nf') || '').trim();
+  const operationalQueueNotifications = useMemo(() => notifications
+    .filter((notification) => !HOME_NOTIFICATION_EXCLUDED_TYPES.has(notification.type))
+    .sort((left, right) => {
+      const leftCritical = String(left.metadata?.severity || '').toLowerCase() === 'critical' ? 0 : 1;
+      const rightCritical = String(right.metadata?.severity || '').toLowerCase() === 'critical' ? 0 : 1;
+      if (leftCritical !== rightCritical) return leftCritical - rightCritical;
+      const typePriority = (HOME_NOTIFICATION_TYPE_PRIORITY[left.type] ?? 99)
+        - (HOME_NOTIFICATION_TYPE_PRIORITY[right.type] ?? 99);
+      if (typePriority !== 0) return typePriority;
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    }), [notifications]);
+  const visibleOperationalNotifications = showAllOperationalNotifications
+    ? operationalQueueNotifications
+    : operationalQueueNotifications.slice(0, 6);
 
   const occurrenceProducts = useMemo(() => occurrenceDanfe?.DanfeProducts || [], [occurrenceDanfe]);
   const selectedOccurrenceProduct = useMemo(() => (
@@ -1435,6 +1470,15 @@ function Home() {
     }
   }
 
+  async function handleOperationalNotification(notification: RealtimeNotification) {
+    await markAsRead(notification.id);
+    if (notification.actionUrl) navigate(notification.actionUrl);
+  }
+
+  async function refreshHomePanel() {
+    await Promise.all([loadHomePendencies(), refreshNotifications()]);
+  }
+
   return (
     <HomeStyle>
       <Header />
@@ -1442,13 +1486,76 @@ function Home() {
         <Card>
           <CardHeaderRow>
             <h2>Pendências operacionais</h2>
-            <button className="secondary" onClick={loadHomePendencies} type="button">Atualizar lista</button>
+            <button className="secondary" onClick={refreshHomePanel} type="button">Atualizar lista</button>
           </CardHeaderRow>
 
-          {!pendingCollectionRequests.length && !pendingOccurrences.length && !pendingReturnReminders.length ? (
+          {!operationalQueueNotifications.length && !pendingCollectionRequests.length && !pendingOccurrences.length && !pendingReturnReminders.length ? (
             <InlineText style={{ marginTop: '12px' }}>Nenhuma pendência no momento.</InlineText>
           ) : (
             <>
+              {!!operationalQueueNotifications.length && (
+                <>
+                  <InfoText style={{ marginTop: '12px' }}>
+                    Fila de atenção operacional — {operationalQueueNotifications.length} item(ns)
+                  </InfoText>
+                  <List className="mt-2">
+                    {visibleOperationalNotifications.map((notification) => {
+                      const isCritical = String(notification.metadata?.severity || '').toLowerCase() === 'critical';
+                      const canOpenAction = Boolean(notification.actionUrl)
+                        && (notification.type !== 'BOT_UNAVAILABLE' || userPermission === 'master');
+                      const toneClass = isCritical
+                        ? '!border-[color:var(--semantic-danger-border)] !bg-[color:var(--semantic-danger-bg)] !text-[color:var(--semantic-danger-text)]'
+                        : '!border-[color:var(--semantic-warning-border)] !bg-[color:var(--semantic-warning-bg)] !text-[color:var(--semantic-warning-text)]';
+                      return (
+                        <li key={`home-operational-notification-${notification.id}`} className={toneClass}>
+                          <OccurrenceItemContent className="gap-1.5">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <strong>{HOME_NOTIFICATION_TYPE_LABELS[notification.type] || 'Pendência operacional'}</strong>
+                              {isCritical ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border semantic-solid-danger px-2 py-0.5 text-[11px] font-semibold">
+                                  <AlertTriangle className="h-3.5 w-3.5" /> Urgente
+                                </span>
+                              ) : null}
+                              {!notification.read ? (
+                                <span className="rounded-full border border-current/30 px-2 py-0.5 text-[11px] font-semibold">Nova</span>
+                              ) : null}
+                            </span>
+                            <span><strong>{notification.title}</strong></span>
+                            <span className="text-xs">{notification.message}</span>
+                            {canOpenAction ? (
+                              <OccurrenceCardFooter>
+                                <OccurrenceActionsRow>
+                                  <OccurrenceActionsLeft>
+                                    <button
+                                      className={isCritical ? 'danger' : 'primary'}
+                                      type="button"
+                                      onClick={() => handleOperationalNotification(notification)}
+                                    >
+                                      Analisar agora
+                                    </button>
+                                  </OccurrenceActionsLeft>
+                                </OccurrenceActionsRow>
+                              </OccurrenceCardFooter>
+                            ) : null}
+                          </OccurrenceItemContent>
+                        </li>
+                      );
+                    })}
+                  </List>
+                  {operationalQueueNotifications.length > 6 ? (
+                    <button
+                      className="secondary mt-2"
+                      type="button"
+                      onClick={() => setShowAllOperationalNotifications((current) => !current)}
+                    >
+                      {showAllOperationalNotifications
+                        ? 'Mostrar menos'
+                        : `Ver mais ${operationalQueueNotifications.length - 6} pendência(s)`}
+                    </button>
+                  ) : null}
+                </>
+              )}
+
               {!!pendingReturnReminders.length && (
                 <>
                   <InfoText style={{ marginTop: '12px' }}>Lembretes de devoluções aguardando envio em lote</InfoText>

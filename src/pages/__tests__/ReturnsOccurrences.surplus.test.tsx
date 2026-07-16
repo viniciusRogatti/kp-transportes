@@ -101,6 +101,29 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     localStorage.clear();
   });
 
+  it('permite pesquisar um lote diretamente pelo ID', async () => {
+    renderPage();
+
+    await screen.findByText('NF + tipo de devolucao');
+    fireEvent.change(screen.getByLabelText('ID do lote de devolucao'), {
+      target: { value: 'RET-20260716-123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar lote' }));
+
+    await waitFor(() => {
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/returns/batches/search'),
+        {
+          params: {
+            batch_code: 'RET-20260716-123456',
+            workflow_status: 'all',
+          },
+        },
+      );
+    });
+    expect(await screen.findByText('Nenhum lote encontrado com o ID RET-20260716-123456.')).toBeInTheDocument();
+  });
+
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {
     renderPage();
 

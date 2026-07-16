@@ -447,6 +447,8 @@ function ReturnsOccurrences() {
   const [batchLookbackDays, setBatchLookbackDays] = useState<ReturnBatchLookbackValue>('7');
   const [batchStartDate, setBatchStartDate] = useState('');
   const [batchEndDate, setBatchEndDate] = useState('');
+  const [batchCodeFilter, setBatchCodeFilter] = useState(() => String(searchParams.get('batch') || '').trim());
+  const [batchSearchFeedback, setBatchSearchFeedback] = useState('');
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
@@ -976,12 +978,17 @@ function ReturnsOccurrences() {
 
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
       const notificationInvoiceNumber = String(searchParams.get('nf') || '').trim();
+      const requestedBatchCode = String(searchParams.get('batch') || '').trim();
       await Promise.all([
         loadDrivers(),
         loadCars(),
         loadProducts(),
         loadOccurrences(),
-        notificationInvoiceNumber ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber) : loadReturnBatches(),
+        notificationInvoiceNumber
+          ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber)
+          : requestedBatchCode
+            ? loadReturnBatchesByBatchCode(requestedBatchCode)
+            : loadReturnBatches(),
       ]);
     };
 
@@ -1031,6 +1038,7 @@ function ReturnsOccurrences() {
 
   async function loadReturnBatches(lookbackDaysOverride?: ReturnBatchLookbackValue | number) {
     try {
+      setBatchSearchFeedback('');
       const selectedLookbackRaw = lookbackDaysOverride ?? batchLookbackDays;
       const selectedLookback = Number(selectedLookbackRaw);
       const { startDate, endDate } = getBatchRangeByLookback(selectedLookback);
@@ -1073,6 +1081,43 @@ function ReturnsOccurrences() {
     }
   }
 
+  async function loadReturnBatchesByBatchCode(batchCode: string) {
+    try {
+      const normalizedBatchCode = String(batchCode || '').trim();
+      if (!normalizedBatchCode) return;
+
+      const { data } = await axios.get(`${API_URL}/returns/batches/search`, {
+        params: { batch_code: normalizedBatchCode, workflow_status: 'all' },
+      });
+      const batches = Array.isArray(data) ? data : [];
+      setReturnBatches(batches);
+      setSelectedBatchCode(batches[0]?.batch_code || '');
+      setBatchCodeFilter(normalizedBatchCode);
+      setBatchSearchFeedback(batches.length
+        ? `Lote ${batches[0].batch_code} localizado.`
+        : `Nenhum lote encontrado com o ID ${normalizedBatchCode}.`);
+    } catch (error) {
+      console.error('Erro ao localizar lote de devolucao pelo ID:', error);
+      setBatchSearchFeedback('Nao foi possivel pesquisar o lote agora.');
+    }
+  }
+
+  async function handleSearchBatchByCode() {
+    const normalizedBatchCode = batchCodeFilter.trim();
+    if (!normalizedBatchCode) {
+      setBatchSearchFeedback('Digite o ID do lote para pesquisar.');
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'returns');
+    next.set('batch', normalizedBatchCode);
+    next.delete('nf');
+    setSearchParams(next, { replace: true });
+    setActiveTab('returns');
+    await loadReturnBatchesByBatchCode(normalizedBatchCode);
+  }
+
   async function handleSearchBatchesByPeriod() {
     if (!batchStartDate || !batchEndDate) {
       alert('Informe a data inicial e a data final para pesquisar os lotes.');
@@ -1084,6 +1129,7 @@ function ReturnsOccurrences() {
     }
 
     try {
+      setBatchSearchFeedback('');
       const { data } = await axios.get(`${API_URL}/returns/batches/search`, {
         params: { startDate: batchStartDate, endDate: batchEndDate },
       });
@@ -2362,7 +2408,27 @@ function ReturnsOccurrences() {
               </button>
             </Tabs>
             {activeTab === 'returns' && (
-              <div className="ml-auto flex w-full flex-col gap-2 min-[860px]:w-auto min-[860px]:flex-row min-[860px]:items-center">
+              <div className="ml-auto flex w-full flex-col gap-2 min-[860px]:w-auto min-[860px]:flex-row min-[860px]:flex-wrap min-[860px]:items-center min-[860px]:justify-end">
+                <div className="flex min-w-0 gap-2 min-[860px]:w-[390px]">
+                  <input
+                    type="search"
+                    value={batchCodeFilter}
+                    onChange={(event) => setBatchCodeFilter(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') void handleSearchBatchByCode();
+                    }}
+                    placeholder="ID do lote (ex.: RET-...)"
+                    aria-label="ID do lote de devolucao"
+                    className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSearchBatchByCode}
+                    className="h-10 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
+                  >
+                    Buscar lote
+                  </button>
+                </div>
                 <div className="min-w-0 min-[860px]:w-[190px]">
                   <select
                     value={batchLookbackDays}
@@ -2416,6 +2482,11 @@ function ReturnsOccurrences() {
           <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             {activeTab === 'returns' && (
               <SingleColumn>
+                {batchSearchFeedback ? (
+                  <div className={`rounded-md border px-3 py-2 text-sm ${returnBatches.length ? 'semantic-panel-success' : 'semantic-panel-warning'}`}>
+                    {batchSearchFeedback}
+                  </div>
+                ) : null}
                 {selectedBatch && (
                   <TopActionBar>
                     <button className="secondary" onClick={handleCreateNewBatch} type="button">

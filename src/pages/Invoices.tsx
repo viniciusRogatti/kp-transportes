@@ -508,6 +508,9 @@ function Invoices() {
           danfes={danfes}
           invoiceContextByNf={invoiceContextByNf}
           onDanfeUpdated={handleDanfeUpdated}
+          onOpenReturnBatch={(batchCode, invoiceNumber) => navigate(
+            `/returns-occurrences?tab=returns&nf=${encodeURIComponent(invoiceNumber)}&batch=${encodeURIComponent(batchCode)}`,
+          )}
           showLegend={false}
         />
         {isPrinting ? <div className="flex justify-center py-4"><span>Gerando lista de produtos...</span></div> : null}

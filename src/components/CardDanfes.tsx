@@ -28,6 +28,7 @@ interface CardDanfesProps {
   onDanfeUpdated?: (danfe: IDanfe) => void;
   assignableTrips?: ITrip[];
   onAssignDanfeToTrip?: (danfe: IDanfe, tripId: number) => Promise<void>;
+  onOpenReturnBatch?: (batchCode: string, invoiceNumber: string) => void;
 }
 
 const RETURN_TYPE_LABELS: Record<string, string> = {
@@ -86,6 +87,7 @@ function CardDanfes({
   onDanfeUpdated,
   assignableTrips = [],
   onAssignDanfeToTrip,
+  onOpenReturnBatch,
 }: CardDanfesProps) {
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
   const [productsModalDanfe, setProductsModalDanfe] = useState<IDanfe | null>(null);
@@ -319,6 +321,7 @@ function CardDanfes({
             const returnTypeLabels = invoiceContext?.return_types?.length
               ? invoiceContext.return_types.map((type) => RETURN_TYPE_LABELS[type] || type)
               : [];
+            const returnBatches = invoiceContext?.return_batches || [];
             const displayStatus = resolveDisplayStatus(danfe.status, invoiceContext);
             const replacementInvoiceNumber = normalizeTextValue(danfe.replacement_invoice_number) || null;
             const replacedInvoiceNumber = normalizeTextValue(danfe.replaced_invoice_number) || null;
@@ -400,6 +403,23 @@ function CardDanfes({
                             >
                               {label}
                             </Badge>
+                          ))}
+                          {returnBatches.map((batch) => (
+                            <button
+                              key={`${danfe.invoice_number}-return-batch-${batch.batch_code}`}
+                              type="button"
+                              onClick={() => onOpenReturnBatch?.(batch.batch_code, invoiceNumber)}
+                              disabled={!onOpenReturnBatch}
+                              className="rounded-full disabled:cursor-default"
+                              aria-label={`Abrir lote de devolucao ${batch.batch_code}`}
+                            >
+                              <Badge
+                                tone={batch.is_sent ? 'success' : 'warning'}
+                                className="h-auto px-2 py-0.5 text-[10px] leading-tight"
+                              >
+                                {`Lote ${batch.batch_code}: ${batch.is_sent ? 'enviado/finalizado' : 'pendente de envio'}`}
+                              </Badge>
+                            </button>
                           ))}
                           {replacementInvoiceNumber ? (
                             <Badge tone="neutral" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
@@ -547,6 +567,22 @@ function CardDanfes({
                               <strong>Devolucoes:</strong>
                               {` ${returnTypeLabels.length ? returnTypeLabels.join(', ') : 'nenhuma'}`}
                             </p>
+                            {returnBatches.length ? returnBatches.map((batch) => (
+                              <p key={`${danfe.invoice_number}-return-detail-${batch.batch_code}`}>
+                                <strong>Lote da devolucao:</strong>{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenReturnBatch?.(batch.batch_code, invoiceNumber)}
+                                  disabled={!onOpenReturnBatch}
+                                  className="font-semibold text-text-accent underline decoration-dotted underline-offset-2 disabled:cursor-default disabled:no-underline"
+                                >
+                                  {batch.batch_code}
+                                </button>
+                                {` — ${batch.is_sent ? 'enviado/finalizado' : 'adicionado e pendente de envio'}`}
+                              </p>
+                            )) : (
+                              <p><strong>Lote da devolucao:</strong> nenhum</p>
+                            )}
                           </>
                         ) : (
                           <p><strong>Eventos:</strong> sem ocorrencia/devolucao registrada para esta NF.</p>

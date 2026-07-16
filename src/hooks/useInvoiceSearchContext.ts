@@ -58,6 +58,13 @@ function pickLatestTripNoteStatus(trip: ITrip | null, invoiceNumber: string) {
   return matchingNote ? String(matchingNote.status || '').trim().toLowerCase() || null : null;
 }
 
+function resolveReturnBatchWorkflowStatus(batch: IReturnBatch) {
+  if (batch.workflow_status) return batch.workflow_status;
+  if (!batch.sent_to_control_tower_at) return 'pending_transportadora' as const;
+  if (!batch.received_by_control_tower_at) return 'awaiting_control_tower' as const;
+  return 'finalized' as const;
+}
+
 function buildInvoiceContext(
   invoiceNumber: string,
   occurrences: IOccurrence[],
@@ -88,6 +95,21 @@ function buildInvoiceContext(
       VALID_RETURN_TYPES.has(String(returnType))
     ));
 
+  const matchingReturnBatches = returnBatches
+    .filter((batch) => (
+      (batch.notes || []).some((note) => normalizeInvoiceNumber(note.invoice_number) === invoiceNumber)
+    ))
+    .map((batch) => ({
+      batch_code: String(batch.batch_code || '').trim(),
+      batch_status: batch.batch_status,
+      workflow_status: resolveReturnBatchWorkflowStatus(batch),
+      sent_to_control_tower_at: batch.sent_to_control_tower_at || null,
+      received_by_control_tower_at: batch.received_by_control_tower_at || null,
+      is_sent: Boolean(batch.sent_to_control_tower_at) || batch.batch_status === 'closed',
+    }))
+    .filter((batch) => Boolean(batch.batch_code))
+    .sort((left, right) => Number(right.is_sent) - Number(left.is_sent));
+
   return {
     occurrence_count: occurrences.length,
     occurrence_pending_count: occurrences.filter((occurrence) => occurrence.status === 'pending').length,
@@ -97,6 +119,7 @@ function buildInvoiceContext(
     credit_letter_completed_count: creditLetterCompletedCount,
     return_count: returnTypes.length,
     return_types: returnTypes,
+    return_batches: matchingReturnBatches,
     trip_note_status: includeTripDriver && PRIORITY_TRIP_NOTE_STATUSES.has(String(latestTripNoteStatus || ''))
       ? latestTripNoteStatus
       : null,

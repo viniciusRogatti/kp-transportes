@@ -301,6 +301,14 @@ export interface IInvoiceSearchContext {
   credit_letter_completed_count: number;
   return_count: number;
   return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
+  return_batches: Array<{
+    batch_code: string;
+    batch_status: 'open' | 'closed';
+    workflow_status: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+    sent_to_control_tower_at?: string | null;
+    received_by_control_tower_at?: string | null;
+    is_sent: boolean;
+  }>;
   trip_note_status?: string | null;
   driver_name?: string | null;
   trip_id?: number | null;

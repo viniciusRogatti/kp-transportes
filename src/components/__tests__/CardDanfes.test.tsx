@@ -62,6 +62,7 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
     credit_letter_completed_count: 0,
     return_count: 0,
     return_types: [],
+    return_batches: [],
     driver_name: 'Joao da Silva',
     latest_occurrence: {
       id: 9,
@@ -74,6 +75,35 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
 };
 
 describe('CardDanfes', () => {
+  it('mostra o lote da devolucao, o envio finalizado e permite abrir o lote', () => {
+    const onOpenReturnBatch = jest.fn();
+    render(
+      <CardDanfes
+        danfes={[buildDanfe('123456', 'returned')]}
+        invoiceContextByNf={{
+          '123456': {
+            ...CONTEXT_FIXTURE['123456'],
+            return_count: 1,
+            return_types: ['total'],
+            return_batches: [{
+              batch_code: 'RET-20260716-123456',
+              batch_status: 'closed',
+              workflow_status: 'awaiting_control_tower',
+              sent_to_control_tower_at: '2026-07-16T18:00:00.000Z',
+              received_by_control_tower_at: null,
+              is_sent: true,
+            }],
+          },
+        }}
+        onOpenReturnBatch={onOpenReturnBatch}
+      />,
+    );
+
+    expect(screen.getByText('Lote RET-20260716-123456: enviado/finalizado')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir lote de devolucao RET-20260716-123456' }));
+    expect(onOpenReturnBatch).toHaveBeenCalledWith('RET-20260716-123456', '123456');
+  });
+
   it('exibe legenda, motorista, bordas corretas e permite filtrar pela legenda', async () => {
     render(
       <CardDanfes

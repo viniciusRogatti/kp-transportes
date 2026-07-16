@@ -1504,13 +1504,15 @@ function Home() {
                       const canOpenAction = Boolean(notification.actionUrl)
                         && (notification.type !== 'BOT_UNAVAILABLE' || userPermission === 'master');
                       const toneClass = isCritical
-                        ? '!border-[color:var(--semantic-danger-border)] !bg-[color:var(--semantic-danger-bg)] !text-[color:var(--semantic-danger-text)]'
-                        : '!border-[color:var(--semantic-warning-border)] !bg-[color:var(--semantic-warning-bg)] !text-[color:var(--semantic-warning-text)]';
+                        ? 'operational-attention-card operational-attention-card--critical'
+                        : 'operational-attention-card';
                       return (
                         <li key={`home-operational-notification-${notification.id}`} className={toneClass}>
                           <OccurrenceItemContent className="gap-1.5">
                             <span className="flex flex-wrap items-center gap-2">
-                              <strong>{HOME_NOTIFICATION_TYPE_LABELS[notification.type] || 'Pendência operacional'}</strong>
+                              <strong className="operational-attention-card__type">
+                                {HOME_NOTIFICATION_TYPE_LABELS[notification.type] || 'Pendência operacional'}
+                              </strong>
                               {isCritical ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border semantic-solid-danger px-2 py-0.5 text-[11px] font-semibold">
                                   <AlertTriangle className="h-3.5 w-3.5" /> Urgente
@@ -1521,9 +1523,9 @@ function Home() {
                               ) : null}
                             </span>
                             <span><strong>{notification.title}</strong></span>
-                            <span className="text-xs">{notification.message}</span>
+                            <span className="operational-attention-card__copy text-xs">{notification.message}</span>
                             {canOpenAction ? (
-                              <OccurrenceCardFooter>
+                              <OccurrenceCardFooter className="operational-card-footer">
                                 <OccurrenceActionsRow>
                                   <OccurrenceActionsLeft>
                                     <button

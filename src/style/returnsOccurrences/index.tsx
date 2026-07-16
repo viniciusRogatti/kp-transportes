@@ -119,7 +119,7 @@ export function OccurrenceActionsLeft({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-nowrap items-center gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e]',
+        'flex flex-nowrap items-center gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button]:transition [&_button:hover]:brightness-110 [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e] [&_button.danger]:bg-[var(--semantic-danger-solid-bg)] [&_button.danger]:text-[var(--semantic-danger-solid-text)]',
         className,
       )}
       {...props}

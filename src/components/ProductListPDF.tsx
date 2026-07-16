@@ -4,6 +4,7 @@ import { IDanfe } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
 import { RetainedReminder } from '../utils/retainedReminders';
 import { ProntoBoxRow, SalmonSeparationRow } from '../utils/tripProductManifest';
+import { OccurrenceReminder } from '../utils/occurrenceReminders';
 
 interface ProductRow {
   company_name?: string;
@@ -29,6 +30,7 @@ interface ProductListPDFProps {
   noteCount?: number | null;
   danfes?: IDanfe[];
   retainedReminders?: RetainedReminder[];
+  occurrenceReminders?: OccurrenceReminder[];
   salmonSeparations?: SalmonSeparationRow[];
   prontoBoxes?: ProntoBoxRow[];
 }
@@ -406,6 +408,7 @@ const renderHeaderSummary = ({
 const renderFirstPageExtras = ({
   danfes,
   retainedReminders,
+  occurrenceReminders,
   products,
   salmonSeparations,
   prontoBoxes,
@@ -437,6 +440,9 @@ const renderFirstPageExtras = ({
               <Text style={styles.attentionItemTitle}>
                 {`NF ${reminder.retainedInvoiceNumber} | ${reminder.retainedCustomerName}`}
               </Text>
+              <Text style={styles.attentionItemText}>
+                {`Entrega: ${reminder.deliveryDate ? formatDateBR(reminder.deliveryDate) : 'data nao localizada'} | Retido ha ${reminder.ageDays} dia(s).`}
+              </Text>
               {reminder.matchType === 'customer' ? (
                 <Text style={styles.attentionItemText}>
                   {`Voce tem entrega no cliente ${reminder.retainedCustomerName}. Lembre-se de recolher o canhoto retido da NF ${reminder.retainedInvoiceNumber} ao atender a(s) NF(s) ${reminder.routeInvoiceNumbers.join(', ')}.`}
@@ -451,6 +457,24 @@ const renderFirstPageExtras = ({
                   </Text>
                 </>
               )}
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {occurrenceReminders?.length ? (
+        <View style={styles.attentionCard}>
+          <Text style={styles.attentionTitle}>LEMBRETES: ocorrencias acionaveis nos clientes desta rota</Text>
+          {occurrenceReminders.map((reminder) => (
+            <View key={`occurrence-${reminder.occurrenceId}`} style={styles.attentionItem}>
+              <Text style={styles.attentionItemTitle}>
+                {`Cliente ${reminder.customerName} | NF ${reminder.invoiceNumber} | ${reminder.ageBusinessDays} dia(s) uteis`}
+              </Text>
+              <Text style={styles.attentionItemText}>
+                {`${reminder.reasonLabel}: ${reminder.itemSummary}`}
+              </Text>
+              <Text style={styles.attentionItemText}>
+                {`Acao sugerida: ${reminder.actionLabel} Entrega(s) atual(is): NF ${reminder.routeInvoiceNumbers.join(', ')}.`}
+              </Text>
             </View>
           ))}
         </View>

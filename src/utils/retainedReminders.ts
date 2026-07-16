@@ -7,6 +7,8 @@ export interface RetainedReminder {
   routeInvoiceNumbers: string[];
   city: string;
   addressLine?: string;
+  deliveryDate?: string | null;
+  ageDays: number;
 }
 
 interface RetainedRowSelectionOptions {
@@ -110,6 +112,8 @@ export function buildRetainedReminders(
         retainedCustomerName: normalizeText(row.customer_name) || 'Cliente nao identificado',
         routeInvoiceNumbers,
         city,
+        deliveryDate: row.trip_date || row.invoice_date || null,
+        ageDays: Math.max(0, Number(row.age_days || 0)),
       });
       return;
     }
@@ -124,6 +128,8 @@ export function buildRetainedReminders(
       routeInvoiceNumbers: [],
       city: city || normalizeText(retainedDanfe?.Customer?.city),
       addressLine: buildAddressLine(retainedDanfe?.Customer),
+      deliveryDate: row.trip_date || row.invoice_date || null,
+      ageDays: Math.max(0, Number(row.age_days || 0)),
     });
   });
 

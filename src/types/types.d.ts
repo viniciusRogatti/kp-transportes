@@ -122,6 +122,7 @@ export interface IReturnBatch {
 export interface IOccurrence {
   id: number;
   invoice_number: string;
+  customer_id?: string | null;
   customer_name?: string | null;
   city?: string | null;
   load_number?: string | null;
@@ -153,6 +154,7 @@ export interface IOccurrence {
   resolved_by_username?: string | null;
   resolved_at: string | null;
   created_at: string;
+  age_business_days?: number;
 }
 
 export interface ICar {

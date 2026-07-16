@@ -50,6 +50,8 @@ describe('buildRetainedReminders', () => {
         customer_id: 'CUST-77',
         customer_name: 'Cliente Alvo',
         city: 'Sumare',
+        trip_date: '2026-05-05',
+        age_days: 4,
         status: 'PENDING',
       },
     ];
@@ -62,6 +64,8 @@ describe('buildRetainedReminders', () => {
         retainedInvoiceNumber: '199001',
         retainedCustomerName: 'Cliente Alvo',
         routeInvoiceNumbers: ['300001'],
+        deliveryDate: '2026-05-05',
+        ageDays: 4,
       }),
     ]);
   });

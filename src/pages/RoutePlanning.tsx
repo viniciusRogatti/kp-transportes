@@ -31,12 +31,13 @@ import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from 
 import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
 import { buildTripProductManifest } from '../utils/tripProductManifest';
 import { buildSalmonLoadList } from '../utils/salmonLoadList';
+import { buildOccurrenceReminders } from '../utils/occurrenceReminders';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { listReceiptBacklog } from '../services/receiptsService';
-import { ICar, IDanfe, IDriver, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
+import { ICar, IDanfe, IDriver, IOccurrence, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
 import {
   canDanfeAppearInRoutingPool,
   evaluateRoutePlanningDecision,
@@ -343,6 +344,7 @@ function RoutePlanning() {
   const [availableDanfes, setAvailableDanfes] = useState<IDanfe[]>([]);
   const [routingPoolDanfes, setRoutingPoolDanfes] = useState<RouteLookupDanfe[]>([]);
   const [retainedContextRows, setRetainedContextRows] = useState<IReceiptBacklogRow[]>([]);
+  const [openOccurrenceContexts, setOpenOccurrenceContexts] = useState<IOccurrence[]>([]);
   const [selectedRoutingCity, setSelectedRoutingCity] = useState<string>('');
   const [isRoutingPoolLoading, setIsRoutingPoolLoading] = useState<boolean>(false);
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
@@ -1029,6 +1031,21 @@ function RoutePlanning() {
     };
 
     void loadRetainedContexts();
+  }, []);
+
+  useEffect(() => {
+    const loadOpenOccurrenceContexts = async () => {
+      try {
+        const { data } = await axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
+          params: { workflow_status: 'pending_transportadora' },
+        });
+        setOpenOccurrenceContexts(Array.isArray(data) ? data : []);
+      } catch {
+        setOpenOccurrenceContexts([]);
+      }
+    };
+
+    void loadOpenOccurrenceContexts();
   }, []);
 
   useEffect(() => {
@@ -2249,6 +2266,7 @@ function RoutePlanning() {
         return;
       }
       const retainedReminders = await resolveRetainedRemindersForTrip(trip, validDanfes);
+      const occurrenceReminders = buildOccurrenceReminders(validDanfes, openOccurrenceContexts);
       const pdfBlob = await pdf(
         <ProductListPDF
           products={manifest.products}
@@ -2256,6 +2274,7 @@ function RoutePlanning() {
           prontoBoxes={manifest.prontoBoxes}
           danfes={validDanfes}
           retainedReminders={retainedReminders}
+          occurrenceReminders={occurrenceReminders}
           driver={trip.Driver.name}
           vehiclePlate={trip.Car?.license_plate}
           tripId={trip.id}

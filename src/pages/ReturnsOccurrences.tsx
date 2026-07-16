@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
@@ -1142,6 +1143,14 @@ function ReturnsOccurrences() {
 
   async function handleLoadLatestBatches() {
     await loadReturnBatches(batchLookbackDays);
+  }
+
+  function handleOpenDatePicker(event: ReactMouseEvent<HTMLInputElement>) {
+    try {
+      event.currentTarget.showPicker?.();
+    } catch (error) {
+      // Alguns navegadores bloqueiam showPicker fora de uma interacao direta.
+    }
   }
 
   async function loadOccurrences() {
@@ -2384,7 +2393,7 @@ function ReturnsOccurrences() {
       <Header />
       <Container>
         <PageContainer className="gap-0">
-          <TabsRow className="max-[768px]:gap-2">
+          <TabsRow className="items-end gap-0">
             <Tabs className="w-auto">
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
@@ -2407,81 +2416,89 @@ function ReturnsOccurrences() {
                 Ocorrencias
               </button>
             </Tabs>
-            {activeTab === 'returns' && (
-              <div className="ml-auto flex w-full flex-col gap-2 min-[860px]:w-auto min-[860px]:flex-row min-[860px]:flex-wrap min-[860px]:items-center min-[860px]:justify-end">
-                <div className="flex min-w-0 gap-2 min-[860px]:w-[390px]">
-                  <input
-                    type="search"
-                    value={batchCodeFilter}
-                    onChange={(event) => setBatchCodeFilter(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') void handleSearchBatchByCode();
-                    }}
-                    placeholder="ID do lote (ex.: RET-...)"
-                    aria-label="ID do lote de devolucao"
-                    className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSearchBatchByCode}
-                    className="h-10 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
-                  >
-                    Buscar lote
-                  </button>
-                </div>
-                <div className="min-w-0 min-[860px]:w-[190px]">
-                  <select
-                    value={batchLookbackDays}
-                    onChange={(event) => {
-                      const lookbackDays = event.target.value as ReturnBatchLookbackValue;
-                      setBatchLookbackDays(lookbackDays);
-                      void loadReturnBatches(lookbackDays);
-                    }}
-                    className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                    aria-label="Periodo de devolucoes"
-                  >
-                    {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
-                      <option key={`return-lookback-${option.value}`} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleLoadLatestBatches}
-                  className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.85rem] font-bold text-[#1f1300] transition hover:brightness-105"
-                >
-                  Trazer ultimas devolucoes
-                </button>
-                <input
-                  type="date"
-                  value={batchStartDate}
-                  onChange={(event) => setBatchStartDate(event.target.value)}
-                  aria-label="Data inicial dos lotes de devolucao"
-                  className="h-10 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                />
-                <input
-                  type="date"
-                  value={batchEndDate}
-                  onChange={(event) => setBatchEndDate(event.target.value)}
-                  aria-label="Data final dos lotes de devolucao"
-                  className="h-10 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                />
-                <button
-                  type="button"
-                  onClick={handleSearchBatchesByPeriod}
-                  className="h-10 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
-                >
-                  Buscar período
-                </button>
-              </div>
-            )}
           </TabsRow>
 
-          <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border border-t-0 bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+          <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
             {activeTab === 'returns' && (
               <SingleColumn>
+                <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card/55 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(280px,1fr)_190px_auto]">
+                    <div className="flex min-w-0 gap-2">
+                      <input
+                        type="search"
+                        value={batchCodeFilter}
+                        onChange={(event) => setBatchCodeFilter(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') void handleSearchBatchByCode();
+                        }}
+                        placeholder="ID do lote (ex.: RET-...)"
+                        aria-label="ID do lote de devolucao"
+                        className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSearchBatchByCode}
+                        className="h-10 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
+                      >
+                        Buscar lote
+                      </button>
+                    </div>
+                    <select
+                      value={batchLookbackDays}
+                      onChange={(event) => {
+                        const lookbackDays = event.target.value as ReturnBatchLookbackValue;
+                        setBatchLookbackDays(lookbackDays);
+                        void loadReturnBatches(lookbackDays);
+                      }}
+                      className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                      aria-label="Periodo de devolucoes"
+                    >
+                      {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
+                        <option key={`return-lookback-${option.value}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleLoadLatestBatches}
+                      className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.85rem] font-bold text-[#1f1300] transition hover:brightness-105"
+                    >
+                      Trazer ultimas devolucoes
+                    </button>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+                    <label className="min-w-0 flex-1 sm:max-w-[220px]">
+                      <span className="mb-1 block text-xs font-semibold text-muted">Data inicial</span>
+                      <input
+                        type="date"
+                        value={batchStartDate}
+                        onClick={handleOpenDatePicker}
+                        onChange={(event) => setBatchStartDate(event.target.value)}
+                        aria-label="Data inicial dos lotes de devolucao"
+                        className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                      />
+                    </label>
+                    <label className="min-w-0 flex-1 sm:max-w-[220px]">
+                      <span className="mb-1 block text-xs font-semibold text-muted">Data final</span>
+                      <input
+                        type="date"
+                        value={batchEndDate}
+                        onClick={handleOpenDatePicker}
+                        onChange={(event) => setBatchEndDate(event.target.value)}
+                        aria-label="Data final dos lotes de devolucao"
+                        className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleSearchBatchesByPeriod}
+                      className="h-10 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
+                    >
+                      Buscar período
+                    </button>
+                  </div>
+                </div>
                 {batchSearchFeedback ? (
                   <div className={`rounded-md border px-3 py-2 text-sm ${returnBatches.length ? 'semantic-panel-success' : 'semantic-panel-warning'}`}>
                     {batchSearchFeedback}

@@ -124,6 +124,23 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     expect(await screen.findByText('Nenhum lote encontrado com o ID RET-20260716-123456.')).toBeInTheDocument();
   });
 
+  it('abre o calendario nativo ao clicar nos campos de periodo', async () => {
+    const showPicker = jest.fn();
+    Object.defineProperty(HTMLInputElement.prototype, 'showPicker', {
+      configurable: true,
+      value: showPicker,
+    });
+
+    try {
+      renderPage();
+      const startDateInput = await screen.findByLabelText('Data inicial dos lotes de devolucao');
+      fireEvent.click(startDateInput);
+      expect(showPicker).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLInputElement.prototype as any).showPicker;
+    }
+  });
+
   it('prioriza o ID do lote no link e exibe lote enviado sem controles de edicao', async () => {
     const batch = {
       batch_code: 'RET-20260706-1783336645087-21531',

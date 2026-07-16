@@ -23,11 +23,14 @@ import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveDanfeCompanyCode } from "../utils/companyTabs";
 import { handleAuthenticationError } from "../utils/authErrorHandler";
+import { buildTodayInvoiceProductMatches, TodayInvoiceAssignment } from "../utils/todayInvoiceQuickSearch";
+import { getOperationalStatusLabel, getSemanticToneClassName } from "../utils/statusStyles";
 
 function TodayInvoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
+  const [assignmentByInvoice, setAssignmentByInvoice] = useState<Record<string, TodayInvoiceAssignment>>({});
   const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
   const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
@@ -74,22 +77,32 @@ function TodayInvoices() {
       const today = format(new Date(), 'dd-MM-yyyy');
       const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
       const map: Record<string, string> = {};
+      const assignmentMap: Record<string, TodayInvoiceAssignment> = {};
       if (Array.isArray(data)) {
         data.forEach((trip: any) => {
           const driverName = trip?.Driver?.name || '';
+          const vehiclePlate = trip?.Car?.license_plate || '';
           (trip?.TripNotes || []).forEach((note: any) => {
             if (note?.invoice_number && driverName) {
-              map[String(note.invoice_number)] = driverName;
+              const invoiceNumber = String(note.invoice_number);
+              map[invoiceNumber] = driverName;
+              assignmentMap[invoiceNumber] = {
+                driverName,
+                vehiclePlate,
+                tripId: Number(trip?.id) || null,
+              };
             }
           });
         });
       }
       setTodayTrips(Array.isArray(data) ? data : []);
       setDriverByInvoice(map);
+      setAssignmentByInvoice(assignmentMap);
       return Array.isArray(data) ? data : [];
     } catch {
       setTodayTrips([]);
       setDriverByInvoice({});
+      setAssignmentByInvoice({});
       return [];
     }
   }
@@ -165,6 +178,10 @@ function TodayInvoices() {
   const filteredDanfes = useMemo(
     () => filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf),
     [visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf],
+  );
+  const quickProductMatches = useMemo(
+    () => buildTodayInvoiceProductMatches(visibleDanfes, deferredFilters.product, assignmentByInvoice),
+    [assignmentByInvoice, deferredFilters.product, visibleDanfes],
   );
 
   const clearFilter = useCallback((key: keyof typeof filters) => {
@@ -293,6 +310,14 @@ function TodayInvoices() {
         ...previous,
         [invoiceNumber]: targetTrip.Driver?.name || previous[invoiceNumber] || '',
       }));
+      setAssignmentByInvoice((previous) => ({
+        ...previous,
+        [invoiceNumber]: {
+          driverName: targetTrip.Driver?.name || '',
+          vehiclePlate: targetTrip.Car?.license_plate || '',
+          tripId: Number(targetTrip.id) || null,
+        },
+      }));
       setTodayTrips((previous) => previous.map((trip) => (
         Number(trip.id) === Number(tripId)
           ? {
@@ -323,6 +348,32 @@ function TodayInvoices() {
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
+        <div className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface/95 p-2 shadow-elevated backdrop-blur md:hidden">
+          <label htmlFor="mobile-product-search" className="mb-1 block text-xs font-semibold text-text">
+            Busca rápida de produto
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="mobile-product-search"
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              value={filters.product}
+              onChange={(event) => updateFilter('product', event.target.value)}
+              placeholder="Código ou descrição"
+              className="h-11 min-w-0 flex-1 rounded-md border border-accent/40 bg-surface-2 px-3 text-base text-text outline-none focus:ring-2 focus:ring-accent/60"
+            />
+            {filters.product ? (
+              <button
+                type="button"
+                onClick={() => clearFilter('product')}
+                className="h-11 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text"
+              >
+                Limpar
+              </button>
+            ) : null}
+          </div>
+        </div>
         <FilterBar>
           {activeCompanyTab === 'all' ? (
             <select value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
@@ -335,7 +386,7 @@ function TodayInvoices() {
             </select>
           ) : null}
           <input type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Filtrar por NF" />
-          <input type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />
+          <input className="max-[768px]:hidden" type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />
           <input type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Filtrar por nome do cliente" />
           <input type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Filtrar por cidade" />
           <select value={filters.driver} onChange={(event) => updateFilter('driver', event.target.value)}>
@@ -408,6 +459,62 @@ function TodayInvoices() {
           ))}
           <span className="text-muted">Lista de produtos baseada nos filtros atuais.</span>
         </div>
+        {filters.product.trim() ? (
+          <section className="mb-4 md:hidden" aria-live="polite">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-text">Produtos encontrados</h2>
+              <span className="rounded-full border border-border bg-surface px-2 py-1 text-xs text-muted">
+                {quickProductMatches.length} resultado(s)
+              </span>
+            </div>
+            {quickProductMatches.length ? (
+              <div className="space-y-2">
+                {quickProductMatches.map((row) => (
+                  <article key={row.key} className="rounded-lg border border-border bg-card p-3 shadow-soft">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-lg text-text">{row.productCode}</strong>
+                          <button
+                            type="button"
+                            onClick={() => void navigator.clipboard?.writeText(row.productCode)}
+                            className="rounded border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-muted"
+                          >
+                            Copiar código
+                          </button>
+                        </div>
+                        <p className="mt-1 text-sm text-text">{row.productDescription}</p>
+                      </div>
+                      <span className="shrink-0 rounded-md border semantic-solid-info px-2 py-1 text-base font-bold">
+                        {`${row.quantity} ${row.unit}`.trim()}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-md border border-border bg-surface-2 p-2">
+                        <span className="block text-muted">NF / Cliente</span>
+                        <strong className="block text-text">NF {row.invoiceNumber}</strong>
+                        <span className="line-clamp-2 text-text">{row.customerName}</span>
+                        <span className="block text-muted">{row.city}</span>
+                      </div>
+                      <div className="rounded-md border border-border bg-surface-2 p-2">
+                        <span className="block text-muted">Carga</span>
+                        <strong className="block text-text">{row.driverName}</strong>
+                        <span className="block text-text">Placa {row.vehiclePlate}</span>
+                        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getSemanticToneClassName(row.driverName === 'Sem motorista' ? 'warning' : 'success')}`}>
+                          {getOperationalStatusLabel(row.status)}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border semantic-panel-warning p-4 text-center text-sm">
+                Nenhuma nota de hoje contém esse código ou descrição.
+              </div>
+            )}
+          </section>
+        ) : null}
         {dataDanfes.length === 0 ? (
           <p>Nenhuma nota lançada para hoje!</p>
         ) : filteredDanfes.length === 0 ? (
@@ -426,14 +533,16 @@ function TodayInvoices() {
                       : `Exibindo apenas ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}.`
                     : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
                 </span>
-                <CardDanfes
-                  danfes={filteredDanfes}
-                  driverByInvoice={driverByInvoice}
-                  invoiceContextByNf={invoiceContextByNf}
-                  assignableTrips={assignableTrips}
-                  onAssignDanfeToTrip={handleAssignDanfeToTrip}
-                  showLegend={false}
-                />
+                <div className={filters.product.trim() ? 'hidden w-full md:block' : 'w-full'}>
+                  <CardDanfes
+                    danfes={filteredDanfes}
+                    driverByInvoice={driverByInvoice}
+                    invoiceContextByNf={invoiceContextByNf}
+                    assignableTrips={assignableTrips}
+                    onAssignDanfeToTrip={handleAssignDanfeToTrip}
+                    showLegend={false}
+                  />
+                </div>
               </>
             )}
           </ContainerDanfes>

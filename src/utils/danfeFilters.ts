@@ -26,6 +26,12 @@ export function createEmptyInvoiceListFilters(): InvoiceListFilters {
   };
 }
 
+const normalizeFilterText = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
+
 function resolveDanfeDriverName(
   danfe: IDanfe,
   driverByInvoice?: Record<string, string>,
@@ -48,7 +54,7 @@ function matchesInvoiceListFilters(
   },
 ) {
   const nfTerm = filters.nf.trim();
-  const productTerm = filters.product.trim().toLowerCase();
+  const productTerm = normalizeFilterText(filters.product);
   const customerTerm = filters.customer.trim().toLowerCase();
   const cityTerm = filters.city.trim().toLowerCase();
   const driverTerm = filters.driver.trim().toLowerCase();
@@ -57,8 +63,8 @@ function matchesInvoiceListFilters(
 
   if (productTerm) {
     const hasProduct = (danfe.DanfeProducts || []).some((product) => (
-      String(product.Product?.code || '').toLowerCase().includes(productTerm)
-      || String(product.Product?.description || '').toLowerCase().includes(productTerm)
+      normalizeFilterText(product.Product?.code).includes(productTerm)
+      || normalizeFilterText(product.Product?.description).includes(productTerm)
     ));
 
     if (!hasProduct) return false;

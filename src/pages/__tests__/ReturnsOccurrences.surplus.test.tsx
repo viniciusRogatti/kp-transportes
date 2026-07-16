@@ -146,6 +146,36 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     }
   });
 
+  it('oferece Emitida NF parcial ao resolver ocorrencia de falta', async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/drivers') || url.includes('/cars') || url.includes('/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      if (url.includes('/occurrences/search')) {
+        return Promise.resolve({ data: [{
+          id: 77,
+          invoice_number: '1798677',
+          customer_name: 'Cliente Teste',
+          city: 'Santos',
+          reason: 'faltou_no_carregamento',
+          scope: 'invoice_total',
+          items: [],
+          status: 'pending',
+          workflow_status: 'pending_transportadora',
+          description: 'Faltou no carregamento',
+          created_at: '2026-07-16T12:00:00.000Z',
+        }] });
+      }
+      if (url.includes('/returns/batches/search')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage(['/returns-occurrences?tab=occurrences']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Marcar como resolvida' }));
+
+    expect(await screen.findByRole('option', { name: 'Emitida NF parcial' })).toHaveValue('nf_parcial_emitida');
+  });
+
   it('prioriza o ID do lote no link e exibe lote enviado sem controles de edicao', async () => {
     const batch = {
       batch_code: 'RET-20260706-1783336645087-21531',

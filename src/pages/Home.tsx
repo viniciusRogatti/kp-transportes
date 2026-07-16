@@ -54,6 +54,7 @@ const QUANTITY_EPSILON = 1e-6;
 
 const RESOLUTION_LABELS: Record<string, string> = {
   enviado_posteriormente: 'Enviado posteriormente',
+  nf_parcial_emitida: 'Emitida NF parcial',
   talao_mercadoria_faltante: 'Talao de mercadoria faltante',
   motivo_corrigido: 'Motivo corrigido',
   motorista_pagou_cliente: 'Motorista pagou cliente',
@@ -65,9 +66,11 @@ const RESOLUTION_LABELS: Record<string, string> = {
 const RESOLUTION_OPTIONS_BY_REASON: Record<string, Array<{ value: string; label: string }>> = {
   faltou_no_carregamento: [
     { value: 'enviado_posteriormente', label: RESOLUTION_LABELS.enviado_posteriormente },
+    { value: 'nf_parcial_emitida', label: RESOLUTION_LABELS.nf_parcial_emitida },
     { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
   ],
   faltou_na_carga: [
+    { value: 'nf_parcial_emitida', label: RESOLUTION_LABELS.nf_parcial_emitida },
     { value: 'talao_mercadoria_faltante', label: RESOLUTION_LABELS.talao_mercadoria_faltante },
     { value: 'motivo_corrigido', label: RESOLUTION_LABELS.motivo_corrigido },
   ],

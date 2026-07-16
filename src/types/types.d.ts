@@ -148,7 +148,7 @@ export interface IOccurrence {
   status: 'pending' | 'resolved';
   workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
   credit_status?: 'not_applicable' | 'pending' | 'completed';
-  resolution_type?: 'enviado_posteriormente' | 'talao_mercadoria_faltante' | 'motivo_corrigido' | 'motorista_pagou_cliente' | 'troca_realizada' | 'cliente_aceitou_invertido' | 'legacy_outros' | null;
+  resolution_type?: 'enviado_posteriormente' | 'nf_parcial_emitida' | 'talao_mercadoria_faltante' | 'motivo_corrigido' | 'motorista_pagou_cliente' | 'troca_realizada' | 'cliente_aceitou_invertido' | 'legacy_outros' | null;
   resolution_note?: string | null;
   resolved_by_user_id?: number | null;
   resolved_by_username?: string | null;

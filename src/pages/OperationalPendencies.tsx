@@ -41,8 +41,6 @@ import { getApiErrorMessage, handleAuthenticationError } from '../utils/authErro
 type UploadPreviewReport = {
   originalSizeKb: number;
   finalSizeKb: number;
-  width: number;
-  height: number;
   usedCompression: boolean;
 };
 
@@ -72,9 +70,6 @@ type BacklogTabConfig = {
   emptyMessage: string;
   tone: SemanticTone;
 };
-
-const MIN_WIDTH = 1000;
-const MIN_AREA = 1000000;
 
 const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
   pending: {
@@ -157,31 +152,6 @@ const toLocalDateInput = (date: Date) => {
 
 const todayDateInput = () => toLocalDateInput(new Date());
 
-const readImageDimensions = (file: Blob) => new Promise<{ width: number; height: number }>((resolve, reject) => {
-  const objectUrl = URL.createObjectURL(file);
-  const image = new Image();
-
-  image.onload = () => {
-    const width = Number(image.naturalWidth || image.width || 0);
-    const height = Number(image.naturalHeight || image.height || 0);
-    URL.revokeObjectURL(objectUrl);
-
-    if (!width || !height) {
-      reject(new Error('Nao foi possivel ler as dimensoes da imagem.'));
-      return;
-    }
-
-    resolve({ width, height });
-  };
-
-  image.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
-    reject(new Error('Arquivo de imagem invalido.'));
-  };
-
-  image.src = objectUrl;
-});
-
 async function prepareFileForUpload(file: File): Promise<{ file: File; report: UploadPreviewReport }> {
   let finalFile: File = file;
   let usedCompression = false;
@@ -205,19 +175,11 @@ async function prepareFileForUpload(file: File): Promise<{ file: File; report: U
     usedCompression = false;
   }
 
-  const finalDimensions = await readImageDimensions(finalFile);
-
-  if (finalDimensions.width < MIN_WIDTH && (finalDimensions.width * finalDimensions.height) < MIN_AREA) {
-    throw new Error('A imagem esta pequena para leitura do documento. Refaça a foto com o canhoto inteiro e maior resolucao.');
-  }
-
   return {
     file: finalFile,
     report: {
       originalSizeKb: Number((file.size / 1024).toFixed(0)),
       finalSizeKb: Number((finalFile.size / 1024).toFixed(0)),
-      width: finalDimensions.width,
-      height: finalDimensions.height,
       usedCompression,
     },
   };
@@ -535,33 +497,8 @@ function OperationalPendencies() {
         const errorCode = String(payload?.error || '');
         const errorMessage = String(payload?.message || '');
 
-        if (statusCode === 422 && errorCode === 'UNREADABLE_IMAGE') {
-          setUploadError(`${errorMessage || 'Imagem ilegivel.'} Dica: boa iluminacao, sem tremor e canhoto inteiro no enquadramento.`);
-          return;
-        }
-
-        if (statusCode === 422 && errorCode === 'UNREADABLE_OR_WRONG_CROP') {
-          setUploadError('Nao foi possivel validar o canhoto: imagem ilegivel ou recorte incorreto.');
-          return;
-        }
-
-        if (statusCode === 422 && errorCode === 'MISSING_REQUIRED_FIELDS') {
-          setUploadError('Campos obrigatorios nao detectados no canhoto (DATA, ASSINATURA e NF-e).');
-          return;
-        }
-
         if (statusCode === 422 && errorCode === 'NF_NOT_FOUND') {
           setUploadError('NF nao encontrada para a empresa autenticada.');
-          return;
-        }
-
-        if (statusCode === 422 && errorCode === 'NF_MISMATCH') {
-          setUploadError('A NF detectada no canhoto e diferente da NF informada no upload.');
-          return;
-        }
-
-        if (statusCode === 422 && errorCode === 'NF_NOT_DETECTED') {
-          setUploadError('Nao foi possivel extrair o numero da NF no bloco de NF-e.');
           return;
         }
 
@@ -1144,7 +1081,7 @@ function OperationalPendencies() {
 
                 {uploadReport ? (
                   <div className="rounded-md border semantic-panel-info px-3 py-2 text-xs">
-                    {`Imagem preparada: ${uploadReport.finalSizeKb} KB, ${uploadReport.width}x${uploadReport.height}px${uploadReport.usedCompression ? ' (comprimida)' : ''}.`}
+                    {`Imagem preparada: ${uploadReport.finalSizeKb} KB${uploadReport.usedCompression ? ' (comprimida para envio)' : ''}.`}
                   </div>
                 ) : null}
 

@@ -580,13 +580,11 @@ function ControlTowerCollections() {
   const { summary, charts } = useControlTowerData(analyticsFilters, analyticsPagination, undefined, {
     includeSummary: true,
     includeCharts: true,
-    includeQueue: false,
     includeTable: false,
   });
   const { table } = useControlTowerData(flowFilters, pagination, sortingInput, {
     includeSummary: false,
     includeCharts: false,
-    includeQueue: false,
     includeTable: true,
   });
   const { addObservationMutation, prioritizePickupMutation, registerOccurrenceMutation, getSelectedFromCache } = useControlTowerMutations(flowFilters, pagination, sortingInput);

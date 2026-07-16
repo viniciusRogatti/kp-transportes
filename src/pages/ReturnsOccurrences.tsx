@@ -2351,7 +2351,7 @@ function ReturnsOccurrences() {
                     <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                       <div>
                         <InlineText>Motorista</InlineText>
-                        <select value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
+                        <select aria-label="Motorista da devolucao" value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
                           <option value="">Selecione</option>
                           {drivers.map((driver) => (
                             <option key={driver.id} value={driver.id}>{driver.name}</option>
@@ -2360,7 +2360,7 @@ function ReturnsOccurrences() {
                       </div>
                       <div>
                         <InlineText>Veiculo / Placa</InlineText>
-                        <select value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
+                        <select aria-label="Veiculo da devolucao" value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
                           <option value="">Selecione</option>
                           {cars.map((car) => (
                             <option key={car.id} value={car.id}>
@@ -2456,6 +2456,7 @@ function ReturnsOccurrences() {
                             <div>
                               <InlineText>Produto</InlineText>
                               <select
+                                aria-label="Produto da devolucao parcial"
                                 value={partialProductCode}
                                 onChange={(event) => {
                                   const nextProductCode = event.target.value;
@@ -2473,6 +2474,7 @@ function ReturnsOccurrences() {
                             <div>
                               <InlineText>Tipo</InlineText>
                               <select
+                                aria-label="Unidade da devolucao parcial"
                                 value={partialProductType}
                                 onChange={(event) => setPartialProductType(event.target.value)}
                                 disabled={!partialProductCode}
@@ -2548,7 +2550,14 @@ function ReturnsOccurrences() {
                                 type="text"
                                 list="products-codes-list"
                                 value={leftoverProductCode}
-                                onChange={(event) => setLeftoverProductCode(event.target.value.toUpperCase())}
+                                onChange={(event) => {
+                                  const nextCode = event.target.value.toUpperCase();
+                                  setLeftoverProductCode(nextCode);
+                                  const matchingProduct = products.find((product) => product.code === nextCode);
+                                  if (matchingProduct?.type) {
+                                    setLeftoverProductType(String(matchingProduct.type).toUpperCase());
+                                  }
+                                }}
                                 placeholder="Ex.: RV001496"
                               />
                               <datalist id="products-codes-list">
@@ -2571,6 +2580,7 @@ function ReturnsOccurrences() {
                             <div>
                               <InlineText>Tipo *</InlineText>
                               <select
+                                aria-label="Unidade do produto da sobra"
                                 value={leftoverProductType}
                                 onChange={(event) => setLeftoverProductType(event.target.value)}
                               >

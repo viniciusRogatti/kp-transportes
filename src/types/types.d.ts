@@ -313,82 +313,8 @@ export interface IInvoiceSearchContext {
   } | null;
 }
 
-export interface IReceiptRow {
-  id: number;
-  nf_id: string | null;
-  trip_id: number | null;
-  motorista_id: number | null;
-  r2_key: string;
-  mime_type: string;
-  size_bytes: number;
-  width: number;
-  height: number;
-  checksum_sha256?: string | null;
-  status: 'POSTED' | 'PENDING';
-  delivered_at?: string | null;
-  legibility_blur_score?: number | null;
-  date_ok?: boolean;
-  sign_ok?: boolean;
-  nfe_ok?: boolean;
-  brand_ok?: boolean;
-  nf_detected?: string | null;
-  needs_manual_review?: boolean;
-  anchor_score?: number | null;
-  anchor_rotation?: number | null;
-  created_at: string;
-  updated_at?: string | null;
-  preview_url?: string;
-  metrics?: {
-    blurScore: number;
-    meanLuminance: number;
-    minBlurScore: number;
-  };
-  driver?: {
-    id: number;
-    name: string;
-  } | null;
-  danfe?: {
-    invoice_number: string;
-    status?: string;
-    invoice_date?: string | null;
-    customer_name?: string | null;
-    city?: string | null;
-  } | null;
-}
-
-export interface IReceiptsListResponse {
-  rows: IReceiptRow[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 export interface IReceiptUploadResponse {
   receiptId: number;
-}
-
-export interface IPendingReceiptRow {
-  nf_id: string;
-  invoice_number: string;
-  customer_id?: string | null;
-  status: 'PENDING';
-  source_status?: string;
-  invoice_date?: string | null;
-  load_number?: string | null;
-  customer_name?: string | null;
-  city?: string | null;
-  trip_id?: number | null;
-  rota_id?: number | null;
-  trip_date?: string | null;
-  motorista_id?: number | null;
-  motorista_name?: string | null;
-  can_upload?: boolean;
-}
-
-export interface IPendingReceiptsListResponse {
-  rows: IPendingReceiptRow[];
-  total: number;
-  limit: number;
 }
 
 export type ReceiptBacklogQueueType = 'pending' | 'retained' | 'returned' | 'cancelled' | 'unassigned';
@@ -445,63 +371,6 @@ export interface IReceiptBacklogResponse {
   limit: number;
   cutoff_date: string;
   summary: IReceiptBacklogSummary;
-}
-
-export interface IReceiptWhatsappActivityRow {
-  id: string;
-  event_id: number | null;
-  alert_id: number | null;
-  kind: 'success' | 'review' | 'error';
-  processing_status: 'SUCCESS' | 'REVIEW' | 'ERROR';
-  classification?: string | null;
-  invoice_number?: string | null;
-  backend_action?: string | null;
-  backend_mode?: string | null;
-  title: string;
-  message: string;
-  occurred_at: string | number | null;
-  group_id?: string | null;
-  group_name?: string | null;
-  message_id?: string | null;
-  sender_name?: string | null;
-  sender_phone?: string | null;
-  driver?: {
-    id: number;
-    name: string;
-  } | null;
-  danfe?: {
-    invoice_number: string;
-    status?: string | null;
-    invoice_date?: string | null;
-    customer_name?: string | null;
-    city?: string | null;
-  } | null;
-  receipt?: {
-    id: number;
-    nf_id: string | null;
-    needs_manual_review: boolean;
-  } | null;
-  metadata?: Record<string, unknown> | null;
-}
-
-export interface IReceiptWhatsappActivitySummary {
-  total: number;
-  success: number;
-  review: number;
-  error: number;
-}
-
-export interface IReceiptWhatsappActivityListResponse {
-  rows: IReceiptWhatsappActivityRow[];
-  total: number;
-  limit: number;
-  summary: IReceiptWhatsappActivitySummary;
-}
-
-export interface IReceiptSignedUrlResponse {
-  id: number;
-  signed_url: string;
-  expires_in_seconds: number;
 }
 
 export interface IAlertRow {

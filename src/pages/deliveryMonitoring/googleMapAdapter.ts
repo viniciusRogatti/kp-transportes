@@ -87,13 +87,6 @@ const normalizeNumber = (value: unknown) => {
   return parsed;
 };
 
-const isValidCoordinatePair = (latitude: unknown, longitude: unknown) => {
-  const normalizedLatitude = normalizeNumber(latitude);
-  const normalizedLongitude = normalizeNumber(longitude);
-  if (normalizedLatitude === null || normalizedLongitude === null) return false;
-  return !(normalizedLatitude === 0 && normalizedLongitude === 0);
-};
-
 const COMPLETED_ROUTE_STATUSES = new Set(['delivered', 'completed']);
 const normalizeStatus = (value: unknown) => String(value || '').trim().toLowerCase();
 const ROUTE_SEGMENT_SAMPLES = 10;

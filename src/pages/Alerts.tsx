@@ -252,7 +252,7 @@ function AlertsPage() {
               <div className="inline-flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
                 <span>
-                  Esta página exibe somente alertas operacionais do app dos motoristas e do monitoramento. Alertas e revisões do bot de canhotos ficam na página de canhotos.
+                  Esta página concentra alertas operacionais do monitoramento e das integrações. A leitura e a análise de qualidade das fotos de canhoto são feitas pelo sistema externo responsável.
                 </span>
               </div>
             </div>

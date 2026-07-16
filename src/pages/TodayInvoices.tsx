@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useDeferredValue, useMemo, useState, useEffect } from "react";
 import CardDanfes from "../components/CardDanfes";
 import Header from "../components/Header";
 import 'react-datepicker/dist/react-datepicker.css';
@@ -167,6 +167,13 @@ function TodayInvoices() {
     [visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf],
   );
 
+  const clearFilter = useCallback((key: keyof typeof filters) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: key === 'route' ? 'Todas' : key === 'loadNumbers' ? [] : '',
+    }));
+  }, []);
+
   const activeFilters = useMemo(() => {
     const entries: Array<{ id: string; label: string; onClear: () => void }> = [];
     if (filters.nf.trim()) entries.push({ id: 'nf', label: `NF: ${filters.nf.trim()}`, onClear: () => clearFilter('nf') });
@@ -184,7 +191,7 @@ function TodayInvoices() {
       });
     }
     return entries;
-  }, [activeCompanyTab, allTabCompanyFilter, filters]);
+  }, [activeCompanyTab, allTabCompanyFilter, clearFilter, filters]);
 
   function updateFilter(key: keyof typeof filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -196,13 +203,6 @@ function TodayInvoices() {
       loadNumbers: prev.loadNumbers.includes(load)
         ? prev.loadNumbers.filter((item) => item !== load)
         : [...prev.loadNumbers, load].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })),
-    }));
-  }
-
-  function clearFilter(key: keyof typeof filters) {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: key === 'route' ? 'Todas' : key === 'loadNumbers' ? [] : '',
     }));
   }
 

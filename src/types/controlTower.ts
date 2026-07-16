@@ -116,21 +116,6 @@ export interface RegisterControlTowerOccurrenceInput {
   qualityNote?: string;
 }
 
-export interface ActionQueueItem {
-  id: string;
-  returnType: 'coleta';
-  priority: 'critical' | 'high' | 'medium';
-  pickupPriority: boolean;
-  issue: string;
-  batchId: string;
-  invoiceNumber: string;
-  customer: string;
-  city: string;
-  route: string;
-  status: BacklogStatus;
-  ageHours: number;
-}
-
 export interface ReturnsTableRow {
   id: string;
   flowOrigin: 'devolucao' | 'ocorrencia';

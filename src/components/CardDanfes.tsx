@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
@@ -146,12 +146,12 @@ function CardDanfes({
     setAssignmentError('');
   }
 
-  function closeAssignmentModal(force = false) {
+  const closeAssignmentModal = useCallback((force = false) => {
     if (isAssigningDanfe && !force) return;
     setAssignmentModalDanfe(null);
     setSelectedTripId('');
     setAssignmentError('');
-  }
+  }, [isAssigningDanfe]);
 
   async function handleAssignDanfeToTrip() {
     if (!assignmentModalDanfe || !onAssignDanfeToTrip) return;
@@ -174,13 +174,13 @@ function CardDanfes({
     }
   }
 
-  function closeReplacementModal(force = false) {
+  const closeReplacementModal = useCallback((force = false) => {
     if (isLinkingReplacement && !force) return;
     setReplacementModalDanfe(null);
     setReplacementInvoiceInput('');
     setReplacementReasonInput('Refaturada');
     setReplacementError('');
-  }
+  }, [isLinkingReplacement]);
 
   async function handleLinkReplacementInvoice() {
     if (!replacementModalDanfe) return;
@@ -254,7 +254,7 @@ function CardDanfes({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [assignmentModalDanfe, isAssigningDanfe, isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
+  }, [assignmentModalDanfe, closeAssignmentModal, closeReplacementModal, isAssigningDanfe, isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
 
   return (
     <>

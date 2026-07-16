@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   addReturnObservation,
-  getActionQueue,
   getControlTowerCharts,
   getControlTowerSummary,
   getReturnById,
@@ -16,14 +15,12 @@ import { BacklogStatus, ControlTowerFilters, PaginationInput, RegisterControlTow
 type UseControlTowerDataOptions = {
   includeSummary?: boolean;
   includeCharts?: boolean;
-  includeQueue?: boolean;
   includeTable?: boolean;
 };
 
 const DEFAULT_DATA_OPTIONS: Required<UseControlTowerDataOptions> = {
   includeSummary: true,
   includeCharts: true,
-  includeQueue: true,
   includeTable: true,
 };
 
@@ -48,13 +45,6 @@ export function useControlTowerData(
     enabled: resolvedOptions.includeCharts,
   });
 
-  const queue = useQuery({
-    queryKey: ['ct-queue', keyFilters],
-    queryFn: () => getActionQueue(filters),
-    enabled: resolvedOptions.includeQueue,
-    refetchInterval: resolvedOptions.includeQueue ? 60000 : false,
-  });
-
   const table = useQuery({
     queryKey: ['ct-returns-table', keyFilters, pagination, sorting],
     queryFn: () => getReturnsTable(filters, pagination, sorting),
@@ -63,7 +53,7 @@ export function useControlTowerData(
     refetchInterval: resolvedOptions.includeTable ? 60000 : false,
   });
 
-  return { summary, charts, queue, table };
+  return { summary, charts, table };
 }
 
 export function useControlTowerMutations(filters: ControlTowerFilters, pagination: PaginationInput, sorting?: SortingInput) {

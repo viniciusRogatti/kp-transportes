@@ -4,8 +4,7 @@ import DatePicker from 'react-datepicker';
 import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
-import { FaArrowDownLong, FaArrowUpLong } from 'react-icons/fa6';
-import { CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -606,17 +605,17 @@ function RoutePlanning() {
     };
   }, [lastScannedInvoice]);
 
-  const fetchTripsByDate = async (date: string) => {
+  const fetchTripsByDate = useCallback(async (date: string) => {
     const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
     return response.data as ITrip[];
-  };
+  }, []);
 
   const isLikelyBarcodeLookup = (lookup: string) => {
     const sanitized = String(lookup || '').replace(/\s+/g, '');
     return /^\d{44}$/.test(sanitized);
   };
 
-  const fetchTripsByRange = async (startDate?: Date | null, endDate?: Date | null) => {
+  const fetchTripsByRange = useCallback(async (startDate?: Date | null, endDate?: Date | null) => {
     const resolvedStart = startDate || endDate;
     const resolvedEnd = endDate || startDate;
 
@@ -632,7 +631,7 @@ function RoutePlanning() {
     });
 
     return Array.isArray(response.data?.trips) ? response.data.trips : [];
-  };
+  }, [fetchTripsByDate, todayApiDate]);
 
   const filterTripsLocally = useCallback((trips: ITrip[], filters: {
     startDate?: string;
@@ -839,7 +838,7 @@ function RoutePlanning() {
     } finally {
       setIsTripsLoading(false);
     }
-  }, [todayApiDate]);
+  }, [fetchTripsByDate, todayApiDate]);
 
   const refreshTripsBySelectedRange = useCallback(async () => {
     setIsTripsLoading(true);
@@ -849,7 +848,7 @@ function RoutePlanning() {
     } finally {
       setIsTripsLoading(false);
     }
-  }, [tripDateFilter, tripEndDateFilter, todayApiDate]);
+  }, [fetchTripsByRange, tripDateFilter, tripEndDateFilter]);
 
   const fetchDanfesForTripDate = useCallback(async (tripDate: string) => {
     const candidateDates = resolveRoutingInvoiceDateCandidates(tripDate);
@@ -898,7 +897,7 @@ function RoutePlanning() {
     } finally {
       setIsRoutingPoolLoading(false);
     }
-  }, [buildRoutingPoolRows, fetchDanfesForTripDate, todayApiDate]);
+  }, [buildRoutingPoolRows, fetchDanfesForTripDate, fetchTripsByDate, todayApiDate]);
 
   const jumpToLatest = () => {
     if (!notesContainerRef.current) return;
@@ -938,7 +937,7 @@ function RoutePlanning() {
     previousDriverRef.current = String(trip.driver_id);
     previousCarRef.current = String(trip.car_id);
     setShowAssignmentFields(false);
-  }, []);
+  }, [updateAddedNotes]);
 
   useEffect(() => {
     void refreshRoutingPool(tripToUpdate?.date || todayApiDate);
@@ -1629,7 +1628,7 @@ function RoutePlanning() {
     setDisplayedTrips(finalTrips);
 
     return finalTrip;
-  }, [authConfig, todayApiDate]);
+  }, [authConfig, fetchTripsByDate, todayApiDate]);
 
   const downloadTripNotesTxt = useCallback((options: {
     notes: ITripNote[];
@@ -2743,7 +2742,7 @@ function RoutePlanning() {
                                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
                                     aria-label={`Subir NF ${note.invoice_number}`}
                                   >
-                                    <FaArrowUpLong />
+                                    <ArrowUp className="h-4 w-4" />
                                   </button>
                                   <button
                                     type="button"
@@ -2752,7 +2751,7 @@ function RoutePlanning() {
                                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
                                     aria-label={`Descer NF ${note.invoice_number}`}
                                   >
-                                    <FaArrowDownLong />
+                                    <ArrowDown className="h-4 w-4" />
                                   </button>
                                   <button
                                     type="button"

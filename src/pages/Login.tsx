@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { FaEyeSlash, FaEye } from 'react-icons/fa';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   BoxInput,
   BoxLogin,
@@ -218,7 +218,7 @@ function Login() {
                 autoComplete="username"
               />
               <BoxPassword>
-                {!showPassword ? <FaEye onClick={ () => handleShowPassword() } /> : <FaEyeSlash onClick={ () => handleShowPassword() }/>}
+                {!showPassword ? <Eye onClick={handleShowPassword} /> : <EyeOff onClick={handleShowPassword} />}
                 <InputLogin
                   type={ !showPassword ? 'password' : 'text' }
                   name="password"

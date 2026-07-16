@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
 import { pdf } from '@react-pdf/renderer';
@@ -75,6 +75,9 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     mockedVerifyToken.mockReset();
     mockedVerifyToken.mockResolvedValue(true);
+    (pdf as jest.Mock).mockReturnValue({
+      toBlob: jest.fn().mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' })),
+    });
 
     mockedAxios.post.mockImplementation((url: string) => {
       if (url.includes('/returns/batches/create')) {
@@ -132,16 +135,18 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Ex.: CARGA-123'), { target: { value: 'CARGA-123' } });
     fireEvent.change(screen.getByPlaceholderText('Ex.: RV001496'), { target: { value: 'RV001496' } });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Unidade do produto da sobra' })).toHaveValue('UN'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar sobra na lista' }));
 
-    const motoristaField = screen.getByText('Motorista').closest('div');
-    const veiculoField = screen.getByText('Veiculo / Placa').closest('div');
-    expect(motoristaField).toBeTruthy();
-    expect(veiculoField).toBeTruthy();
-
-    fireEvent.change(within(motoristaField as HTMLElement).getByRole('combobox'), { target: { value: '1' } });
-    fireEvent.change(within(veiculoField as HTMLElement).getByRole('combobox'), { target: { value: '1' } });
+    await screen.findByRole('option', { name: 'Motorista Teste' });
+    await screen.findByRole('option', { name: 'Truck - ABC-1234' });
+    const driverSelect = screen.getByRole('combobox', { name: 'Motorista da devolucao' });
+    const vehicleSelect = screen.getByRole('combobox', { name: 'Veiculo da devolucao' });
+    fireEvent.change(driverSelect, { target: { value: '1' } });
+    fireEvent.change(vehicleSelect, { target: { value: '1' } });
+    expect(driverSelect).toHaveValue('1');
+    expect(vehicleSelect).toHaveValue('1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
 
@@ -216,19 +221,20 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     await screen.findByText('NF carregada: 1754803 | Cliente: Cliente Teste');
 
-    fireEvent.change(screen.getByRole('combobox', { name: '' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
       target: { value: 'PA000014' },
     });
 
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[1], { target: { value: 'UN' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Unidade da devolucao parcial' }), {
+      target: { value: 'UN' },
+    });
 
     await screen.findByText('Limite da NF para o tipo selecionado: 40 | Restante para adicionar: 40');
 
     fireEvent.change(screen.getByDisplayValue('1'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
 
-    expect(screen.getByText(/PA000014/)).toBeInTheDocument();
+    expect(screen.getByText('PA000014', { selector: 'strong' })).toBeInTheDocument();
     expect(screen.getByText(/Tipo: UN \| Qtd: 3/)).toBeInTheDocument();
     expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Quantidade excede o limite da NF'));
   });

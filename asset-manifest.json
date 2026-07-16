@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/kp-transportes/static/css/main.295f255e.css",
-    "main.js": "/kp-transportes/static/js/main.c9ffc2a0.js",
+    "main.css": "/kp-transportes/static/css/main.31926ccc.css",
+    "main.js": "/kp-transportes/static/js/main.5c7f2025.js",
     "static/js/703.dd82b14b.chunk.js": "/kp-transportes/static/js/703.dd82b14b.chunk.js",
     "static/js/356.38a3b333.chunk.js": "/kp-transportes/static/js/356.38a3b333.chunk.js",
     "static/js/471.8f32ee97.chunk.js": "/kp-transportes/static/js/471.8f32ee97.chunk.js",
     "static/js/141.48fe3e45.chunk.js": "/kp-transportes/static/js/141.48fe3e45.chunk.js",
     "static/js/991.61775562.chunk.js": "/kp-transportes/static/js/991.61775562.chunk.js",
-    "static/js/523.128fb793.chunk.js": "/kp-transportes/static/js/523.128fb793.chunk.js",
+    "static/js/523.99396627.chunk.js": "/kp-transportes/static/js/523.99396627.chunk.js",
     "static/js/291.44bc40e9.chunk.js": "/kp-transportes/static/js/291.44bc40e9.chunk.js",
-    "static/js/21.1817b34e.chunk.js": "/kp-transportes/static/js/21.1817b34e.chunk.js",
+    "static/js/21.998fb198.chunk.js": "/kp-transportes/static/js/21.998fb198.chunk.js",
     "static/js/849.6e9d5e00.chunk.js": "/kp-transportes/static/js/849.6e9d5e00.chunk.js",
     "static/js/738.0ef0582e.chunk.js": "/kp-transportes/static/js/738.0ef0582e.chunk.js",
     "static/js/59.f15c33dc.chunk.js": "/kp-transportes/static/js/59.f15c33dc.chunk.js",
@@ -32,16 +32,16 @@
     "static/js/454.783ba736.chunk.js": "/kp-transportes/static/js/454.783ba736.chunk.js",
     "static/media/volks.png": "/kp-transportes/static/media/volks.b7290d1177c78ac78b1b.png",
     "index.html": "/kp-transportes/index.html",
-    "main.295f255e.css.map": "/kp-transportes/static/css/main.295f255e.css.map",
-    "main.c9ffc2a0.js.map": "/kp-transportes/static/js/main.c9ffc2a0.js.map",
+    "main.31926ccc.css.map": "/kp-transportes/static/css/main.31926ccc.css.map",
+    "main.5c7f2025.js.map": "/kp-transportes/static/js/main.5c7f2025.js.map",
     "703.dd82b14b.chunk.js.map": "/kp-transportes/static/js/703.dd82b14b.chunk.js.map",
     "356.38a3b333.chunk.js.map": "/kp-transportes/static/js/356.38a3b333.chunk.js.map",
     "471.8f32ee97.chunk.js.map": "/kp-transportes/static/js/471.8f32ee97.chunk.js.map",
     "141.48fe3e45.chunk.js.map": "/kp-transportes/static/js/141.48fe3e45.chunk.js.map",
     "991.61775562.chunk.js.map": "/kp-transportes/static/js/991.61775562.chunk.js.map",
-    "523.128fb793.chunk.js.map": "/kp-transportes/static/js/523.128fb793.chunk.js.map",
+    "523.99396627.chunk.js.map": "/kp-transportes/static/js/523.99396627.chunk.js.map",
     "291.44bc40e9.chunk.js.map": "/kp-transportes/static/js/291.44bc40e9.chunk.js.map",
-    "21.1817b34e.chunk.js.map": "/kp-transportes/static/js/21.1817b34e.chunk.js.map",
+    "21.998fb198.chunk.js.map": "/kp-transportes/static/js/21.998fb198.chunk.js.map",
     "849.6e9d5e00.chunk.js.map": "/kp-transportes/static/js/849.6e9d5e00.chunk.js.map",
     "738.0ef0582e.chunk.js.map": "/kp-transportes/static/js/738.0ef0582e.chunk.js.map",
     "59.f15c33dc.chunk.js.map": "/kp-transportes/static/js/59.f15c33dc.chunk.js.map",
@@ -64,7 +64,7 @@
     "454.783ba736.chunk.js.map": "/kp-transportes/static/js/454.783ba736.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.295f255e.css",
-    "static/js/main.c9ffc2a0.js"
+    "static/css/main.31926ccc.css",
+    "static/js/main.5c7f2025.js"
   ]
 }

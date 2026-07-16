@@ -41,6 +41,7 @@ type RealtimeNotificationsContextValue = {
   unreadCount: number;
   connected: boolean;
   lastReceivedAt: string | null;
+  lastAlertUpdateAt: string | null;
   refreshNotifications: () => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   resolveNotification: (notificationId: string) => Promise<boolean>;
@@ -54,12 +55,14 @@ type RealtimeNotificationsProviderProps = {
 const POLL_INTERVAL_MS = 20000;
 const POLL_GRACE_PERIOD_MS = 8000;
 const SOCKET_EVENT_NAME = 'notification:new';
+const ALERT_SOCKET_EVENT_NAME = 'delivery_monitoring_alert';
 
 const RealtimeNotificationsContext = createContext<RealtimeNotificationsContextValue>({
   notifications: [],
   unreadCount: 0,
   connected: false,
   lastReceivedAt: null,
+  lastAlertUpdateAt: null,
   refreshNotifications: async () => {},
   markAsRead: async () => {},
   resolveNotification: async () => false,
@@ -159,6 +162,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
   const [unreadCount, setUnreadCount] = useState(0);
   const [connected, setConnected] = useState(false);
   const [lastReceivedAt, setLastReceivedAt] = useState<string | null>(null);
+  const [lastAlertUpdateAt, setLastAlertUpdateAt] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
@@ -358,6 +362,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
       setNotifications([]);
       setUnreadCount(0);
       setLastReceivedAt(null);
+      setLastAlertUpdateAt(null);
       return undefined;
     }
 
@@ -408,6 +413,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
 
         if (normalized.status === 'resolved') {
           setNotifications((currentRows) => currentRows.filter((row) => row.id !== normalized.id));
+          updateLastReceivedAt(normalized.updatedAt);
           void loadNotifications({ replace: true });
           return;
         }
@@ -425,6 +431,11 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
 
         updateLastReceivedAt(normalized.updatedAt);
       });
+
+      socket.on(ALERT_SOCKET_EVENT_NAME, (rawPayload: any) => {
+        const emittedAt = String(rawPayload?.emitted_at || new Date().toISOString());
+        setLastAlertUpdateAt(emittedAt);
+      });
     };
 
     setupRealtime();
@@ -441,10 +452,11 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     unreadCount,
     connected,
     lastReceivedAt,
+    lastAlertUpdateAt,
     refreshNotifications,
     markAsRead,
     resolveNotification,
-  }), [notifications, unreadCount, connected, lastReceivedAt, refreshNotifications, markAsRead, resolveNotification]);
+  }), [notifications, unreadCount, connected, lastReceivedAt, lastAlertUpdateAt, refreshNotifications, markAsRead, resolveNotification]);
 
   return (
     <RealtimeNotificationsContext.Provider value={contextValue}>

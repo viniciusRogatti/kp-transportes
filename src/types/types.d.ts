@@ -421,6 +421,52 @@ export interface IAlertsListResponse {
   limit: number;
 }
 
+export interface IAlertHistoryRow {
+  id: string;
+  record_id: number;
+  source: 'ALERT' | 'NOTIFICATION';
+  category: 'ALERTA_TECNICO' | 'PENDENCIA_OPERACIONAL';
+  code: string;
+  title: string;
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  status: 'OPEN' | 'RESOLVED';
+  entity: {
+    kind: string | null;
+    id: string | null;
+    label: string | null;
+  };
+  metadata: Record<string, unknown>;
+  action_url: string | null;
+  resolution_mode: 'manual' | 'automatic';
+  can_resolve: boolean;
+  read: boolean | null;
+  resolved_at: string | null;
+  resolved_reason: string | null;
+  resolved_by_user: {
+    id: number;
+    name: string;
+    username: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IAlertHistoryResponse {
+  rows: IAlertHistoryRow[];
+  total: number;
+  available: number;
+  limit: number;
+  summary: {
+    total: number;
+    open: number;
+    resolved: number;
+    info: number;
+    warning: number;
+    critical: number;
+  };
+}
+
 export interface IDanfeTrip {
   customerName: string;
   nf: string;

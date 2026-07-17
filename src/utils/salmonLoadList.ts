@@ -35,7 +35,9 @@ const routeKey = (companyId: unknown, invoiceNumber: unknown) => (
 export const calculateSalmonBoxes = (weightKg: number) => {
   const normalizedWeight = Number(weightKg || 0);
   if (!Number.isFinite(normalizedWeight) || normalizedWeight <= 0) return 0;
-  return Math.max(1, Math.floor(normalizedWeight / 30));
+  // As caixas variam de 26 a 34 kg. Para a separacao, a tolerancia adotada
+  // mantem quatro caixas ate 145 kg e passa para cinco apenas acima disso.
+  return Math.max(1, Math.floor((normalizedWeight + 4) / 30));
 };
 
 export function buildSalmonLoadList(

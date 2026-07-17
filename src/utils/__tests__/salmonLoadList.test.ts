@@ -75,8 +75,13 @@ const buildTrip = (id: number, driverId: number, driverName: string, invoices: s
 });
 
 describe('salmonLoadList', () => {
-  it('calcula caixas pela parte inteira de 30 kg e mantem no minimo uma caixa', () => {
+  it('calcula caixas com tolerancia de peso e mantem no minimo uma caixa', () => {
     expect(calculateSalmonBoxes(137)).toBe(4);
+    expect(calculateSalmonBoxes(120)).toBe(4);
+    expect(calculateSalmonBoxes(130)).toBe(4);
+    expect(calculateSalmonBoxes(145)).toBe(4);
+    expect(calculateSalmonBoxes(146)).toBe(5);
+    expect(calculateSalmonBoxes(160)).toBe(5);
     expect(calculateSalmonBoxes(29.9)).toBe(1);
     expect(calculateSalmonBoxes(0)).toBe(0);
   });

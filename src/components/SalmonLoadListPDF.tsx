@@ -173,7 +173,7 @@ function SalmonLoadListPDF({ drivers, dateLabel }: SalmonLoadListPDFProps) {
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>Lista de Separacao de Salmao</Text>
-              <Text style={styles.subtitle}>Quantidade estimada de caixas: peso de salmao dividido por 30 kg.</Text>
+              <Text style={styles.subtitle}>Estimativa por faixa de peso: ate 145 kg sao 4 caixas; acima disso, 5 caixas.</Text>
             </View>
             <Text style={styles.date}>{dateLabel}</Text>
           </View>

@@ -38,6 +38,21 @@ const buildDanfe = (invoiceNumber: string, customerName: string, document: strin
   }],
 });
 
+const salmonFilletProduct = (weight: number) => ({
+  company_id: 1,
+  product_id: 'FILE-SAL-1',
+  quantity: weight,
+  price: '1',
+  total_price: String(weight),
+  type: 'KG',
+  Product: {
+    code: 'FILE-SAL-1',
+    description: 'FILE DE SALMAO CONGELADO',
+    price: '1',
+    type: 'KG',
+  },
+});
+
 const buildTrip = (id: number, driverId: number, driverName: string, invoices: string[]): ITrip => ({
   id,
   driver_id: driverId,
@@ -105,5 +120,20 @@ describe('salmonLoadList', () => {
       { tripId: 11, runNumber: 1, boxQuantity: 2 },
     ]);
     expect(driver.totalBoxQuantity).toBe(4);
+  });
+
+  it('nao inclui file de salmao na lista destinada a separacao de salmao inteiro', () => {
+    const trips = [buildTrip(1, 7, 'Motorista A', ['100'])];
+    const danfe = buildDanfe('100', 'Cliente A', '12345678000190', 70);
+    danfe.DanfeProducts?.push(salmonFilletProduct(120));
+
+    const [driver] = buildSalmonLoadList(trips, [danfe]);
+
+    expect(driver.rows).toEqual([expect.objectContaining({
+      customerName: 'Cliente A',
+      weightKg: 70,
+      boxQuantity: 2,
+    })]);
+    expect(driver.totalBoxQuantity).toBe(2);
   });
 });

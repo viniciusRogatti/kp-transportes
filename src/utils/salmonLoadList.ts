@@ -1,5 +1,5 @@
 import { IDanfe, ITrip } from '../types/types';
-import { isVariableWeightSalmon } from './tripProductManifest';
+import { isWholeSalmon } from './tripProductManifest';
 
 export type SalmonLoadCustomerRow = {
   customerName: string;
@@ -79,7 +79,7 @@ export function buildSalmonLoadList(
       if (!danfe) return;
 
       const salmonWeight = (danfe.DanfeProducts || []).reduce((total, product) => {
-        if (!isVariableWeightSalmon(product.Product?.description, product.type || product.Product?.type)) {
+        if (!isWholeSalmon(product.Product?.description, product.type || product.Product?.type)) {
           return total;
         }
         return total + Number(product.quantity || 0);

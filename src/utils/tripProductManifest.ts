@@ -42,6 +42,16 @@ export const isVariableWeightSalmon = (description: unknown, unit: unknown) => {
     || normalizedDescription.includes('FILE DE SALMAO');
 };
 
+// A lista de carga de salmão é usada pela equipe que separa somente o peixe
+// inteiro. O filé continua sendo tratado como salmão no romaneio, mas não deve
+// entrar nessa lista específica.
+export const isWholeSalmon = (description: unknown, unit: unknown) => {
+  if (normalizeSearchText(unit) !== 'KG') return false;
+  const normalizedDescription = normalizeSearchText(description);
+  return normalizedDescription.startsWith('SALMAO ')
+    && !normalizedDescription.includes('FILE');
+};
+
 export function buildTripProductManifest(
   tripNotes: ITripNote[] = [],
   danfes: IDanfe[] = [],

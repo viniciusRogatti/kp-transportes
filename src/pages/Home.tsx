@@ -37,6 +37,7 @@ import { sanitizeDanfeProduct, sanitizeDanfeTextFields } from '../utils/textNorm
 import { listReceiptBacklog } from '../services/receiptsService';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
+import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -1504,6 +1505,12 @@ function Home() {
                   <List className="mt-2">
                     {visibleOperationalNotifications.map((notification) => {
                       const isCritical = String(notification.metadata?.severity || '').toLowerCase() === 'critical';
+                      const isMissingReceiptInvoice = notification.type === 'WHATSAPP_INVOICE_NOT_FOUND';
+                      const receiptCorrectionPending = isMissingReceiptInvoice
+                        && String(notification.metadata?.correctionStatus || '').toLowerCase() === 'pending';
+                      const receiptCorrectionFailed = isMissingReceiptInvoice
+                        && String(notification.metadata?.correctionStatus || '').toLowerCase() === 'failed';
+                      const correctedReceiptInvoice = String(notification.metadata?.correctedInvoiceNumber || '').trim();
                       const canOpenAction = Boolean(notification.actionUrl)
                         && (notification.type !== 'BOT_UNAVAILABLE' || userPermission === 'master');
                       const toneClass = isCritical
@@ -1527,17 +1534,42 @@ function Home() {
                             </span>
                             <span><strong>{notification.title}</strong></span>
                             <span className="operational-attention-card__copy text-xs">{notification.message}</span>
-                            {canOpenAction ? (
+                            {receiptCorrectionPending ? (
+                              <span className="rounded-md border semantic-panel-info px-2 py-1.5 text-xs">
+                                Recuperando a foto original para a NF {correctedReceiptInvoice || 'corrigida'}.
+                              </span>
+                            ) : null}
+                            {receiptCorrectionFailed ? (
+                              <span className="rounded-md border semantic-panel-danger px-2 py-1.5 text-xs">
+                                {String(notification.metadata?.correctionError || 'Não foi possível recuperar a foto original. Tente novamente ou envie uma nova foto.')}
+                              </span>
+                            ) : null}
+                            {canOpenAction || isMissingReceiptInvoice ? (
                               <OccurrenceCardFooter className="operational-card-footer">
                                 <OccurrenceActionsRow>
                                   <OccurrenceActionsLeft>
-                                    <button
-                                      className={isCritical ? 'danger' : 'primary'}
-                                      type="button"
-                                      onClick={() => handleOperationalNotification(notification)}
-                                    >
-                                      Analisar agora
-                                    </button>
+                                    {canOpenAction ? (
+                                      <button
+                                        className={isCritical ? 'danger' : 'primary'}
+                                        type="button"
+                                        onClick={() => handleOperationalNotification(notification)}
+                                      >
+                                        {isMissingReceiptInvoice ? 'Enviar XML' : 'Analisar agora'}
+                                      </button>
+                                    ) : null}
+                                    {isMissingReceiptInvoice ? (
+                                      <button
+                                        className="secondary"
+                                        type="button"
+                                        disabled={receiptCorrectionPending}
+                                        onClick={async () => {
+                                          await markAsRead(notification.id);
+                                          navigate(buildIncorrectReceiptUrl(notification));
+                                        }}
+                                      >
+                                        {receiptCorrectionPending ? 'Correção em processamento' : 'NF digitada incorretamente'}
+                                      </button>
+                                    ) : null}
                                   </OccurrenceActionsLeft>
                                 </OccurrenceActionsRow>
                               </OccurrenceCardFooter>

@@ -26,6 +26,7 @@ import {
 } from '../types/types';
 import { getAlertSeverityTone, getSemanticToneClassName } from '../utils/statusStyles';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 
 const EMPTY_SUMMARY: IAlertHistoryResponse['summary'] = {
   total: 0,
@@ -124,6 +125,14 @@ function AlertsPage() {
   }
 
   async function handleResolve(row: IAlertHistoryRow) {
+    if (row.source === 'NOTIFICATION' && row.code === 'WHATSAPP_INVOICE_NOT_FOUND') {
+      navigate(buildIncorrectReceiptUrl({
+        id: row.record_id,
+        entity: row.entity,
+        metadata: row.metadata,
+      }));
+      return;
+    }
     try {
       await resolveAlertHistoryRow(row.source, row.record_id);
       await refreshHistory();
@@ -256,6 +265,8 @@ function AlertsPage() {
                   const responsible = row.resolved_by_user?.name
                     || row.resolved_by_user?.username
                     || (resolved && row.resolution_mode === 'automatic' ? 'Sistema' : null);
+                  const correctionPending = row.code === 'WHATSAPP_INVOICE_NOT_FOUND'
+                    && String(row.metadata?.correctionStatus || '').toLowerCase() === 'pending';
 
                   return (
                     <li key={row.id} className={`rounded-md border p-3 ${severityClass} ${resolved ? 'opacity-75' : ''}`}>
@@ -299,9 +310,13 @@ function AlertsPage() {
                             <button
                               type="button"
                               onClick={() => handleResolve(row)}
+                              disabled={correctionPending}
                               className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-text"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Resolver
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {row.code === 'WHATSAPP_INVOICE_NOT_FOUND'
+                                ? correctionPending ? 'Correção em processamento' : 'Informar NF correta'
+                                : 'Resolver'}
                             </button>
                           ) : null}
                         </div>

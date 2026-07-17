@@ -15,6 +15,7 @@ import verifyToken from '../utils/verifyToken';
 import {
   listDriversForReceiptFilters,
   listReceiptBacklog,
+  resolveIncorrectInvoiceReceiptNotification,
   uploadReceipt,
 } from '../services/receiptsService';
 import {
@@ -253,6 +254,8 @@ const resolveBacklogOperationalTarget = (row: IReceiptBacklogRow) => {
 function OperationalPendencies() {
   const navigate = useNavigate();
   const initialSearchParams = useMemo(() => getInitialNotificationSearchParams(), []);
+  const receiptCorrectionNotificationId = String(initialSearchParams.get('receiptCorrection') || '').trim();
+  const receiptCorrectionReportedNf = String(initialSearchParams.get('reportedNf') || '').trim();
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -329,6 +332,19 @@ function OperationalPendencies() {
       URL.revokeObjectURL(selectedPreviewUrl);
     }
   }, [selectedPreviewUrl]);
+
+  useEffect(() => {
+    if (!receiptCorrectionNotificationId) return;
+    setUploadTarget(null);
+    setUploadNfId('');
+    setUploadTripId('');
+    setUploadMotoristaId('');
+    setUploadDeliveryDate(todayDateInput());
+    setSelectedFile(null);
+    setUploadReport(null);
+    setUploadError('');
+    setIsUploadModalOpen(true);
+  }, [receiptCorrectionNotificationId]);
 
   function openNativeDatePicker(input: HTMLInputElement | null) {
     if (!input) return;
@@ -486,7 +502,17 @@ function OperationalPendencies() {
 
       await uploadReceipt(formData);
 
+      if (receiptCorrectionNotificationId) {
+        await resolveIncorrectInvoiceReceiptNotification(
+          receiptCorrectionNotificationId,
+          uploadNfId.trim(),
+        );
+      }
+
       closeUploadModal();
+      if (receiptCorrectionNotificationId) {
+        navigate('/operational-pendencies?tab=pending', { replace: true });
+      }
       await loadBacklog(activeTab);
     } catch (error) {
       console.error(error);
@@ -522,6 +548,36 @@ function OperationalPendencies() {
       }
 
       setUploadError(error instanceof Error ? error.message : 'Falha ao enviar canhoto.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleReceiptCorrectionSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const correctedInvoiceNumber = uploadNfId.trim();
+    if (!correctedInvoiceNumber) {
+      setUploadError('Informe o numero correto da NF.');
+      return;
+    }
+    if (correctedInvoiceNumber === receiptCorrectionReportedNf) {
+      setUploadError('A NF correta deve ser diferente do numero digitado pelo motorista.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    try {
+      await resolveIncorrectInvoiceReceiptNotification(
+        receiptCorrectionNotificationId,
+        correctedInvoiceNumber,
+      );
+      closeUploadModal();
+      window.alert(`Correcao solicitada. O sistema vai recuperar a foto original e vincula-la a NF ${correctedInvoiceNumber}.`);
+      navigate('/home', { replace: true });
+    } catch (error) {
+      console.error(error);
+      setUploadError(getApiErrorMessage(error) || 'Nao foi possivel solicitar a correcao do canhoto.');
     } finally {
       setUploading(false);
     }
@@ -1005,21 +1061,48 @@ function OperationalPendencies() {
             <div className="w-full max-w-[720px] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)]">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h3 className="text-base font-semibold text-text">Enviar canhoto</h3>
-                  <p className="text-xs text-muted">NF {uploadTarget?.invoice_number || uploadNfId || '-'} · ajuste os campos e anexe a foto.</p>
+                  <h3 className="text-base font-semibold text-text">
+                    {receiptCorrectionNotificationId ? 'Corrigir NF digitada no canhoto' : 'Enviar canhoto'}
+                  </h3>
+                  <p className="text-xs text-muted">
+                    {receiptCorrectionNotificationId
+                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Digite a NF correta para reaproveitar a foto original.`
+                      : `NF ${uploadTarget?.invoice_number || uploadNfId || '-'} · ajuste os campos e anexe a foto.`}
+                  </p>
                 </div>
                 <button type="button" onClick={closeUploadModal} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text">
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleUploadSubmit} className="mt-3 space-y-3">
+              <form
+                onSubmit={receiptCorrectionNotificationId ? handleReceiptCorrectionSubmit : handleUploadSubmit}
+                className="mt-3 space-y-3"
+              >
+                {receiptCorrectionNotificationId ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md border semantic-panel-info px-3 py-2 text-sm">
+                      A foto original será recuperada da mensagem do WhatsApp. Não é necessário pedir ao motorista para reenviar.
+                    </div>
+                    <label className="block text-xs text-muted">
+                      NF correta
+                      <input
+                        autoFocus
+                        value={uploadNfId}
+                        onChange={(event) => setUploadNfId(event.target.value.replace(/\D/g, '').slice(0, 20))}
+                        placeholder="Ex.: 1810908"
+                        className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <>
                 <div className="grid gap-2 md:grid-cols-2">
                   <label className="text-xs text-muted">
                     NF
                     <input
                       value={uploadNfId}
-                      onChange={(event) => setUploadNfId(event.target.value)}
+                      onChange={(event) => setUploadNfId(event.target.value.replace(/\D/g, '').slice(0, 20))}
                       placeholder="Ex.: 123456789"
                       className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                     />
@@ -1084,6 +1167,8 @@ function OperationalPendencies() {
                     {`Imagem preparada: ${uploadReport.finalSizeKb} KB${uploadReport.usedCompression ? ' (comprimida para envio)' : ''}.`}
                   </div>
                 ) : null}
+                  </>
+                )}
 
                 {uploadError ? (
                   <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
@@ -1100,7 +1185,12 @@ function OperationalPendencies() {
                     disabled={uploading}
                     className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm font-semibold ${getSemanticToneClassName('info')} ${uploading ? 'cursor-not-allowed opacity-70' : 'hover:brightness-95'}`}
                   >
-                    <UploadCloud className="h-4 w-4" /> {uploading ? 'Enviando...' : 'Enviar canhoto'}
+                    <UploadCloud className="h-4 w-4" />
+                    {uploading
+                      ? 'Processando...'
+                      : receiptCorrectionNotificationId
+                        ? 'Usar foto original e corrigir NF'
+                        : 'Enviar canhoto'}
                   </button>
                 </div>
               </form>

@@ -52,6 +52,20 @@ export async function uploadReceipt(formData: FormData): Promise<IReceiptUploadR
   return data;
 }
 
+export async function resolveIncorrectInvoiceReceiptNotification(
+  notificationId: string,
+  correctedInvoiceNumber: string,
+): Promise<void> {
+  await axios.patch(
+    `${API_URL}/api/notifications/${encodeURIComponent(notificationId)}/resolve`,
+    {
+      resolutionType: 'incorrect_invoice_number',
+      correctedInvoiceNumber,
+    },
+    getAuthConfig(),
+  );
+}
+
 export async function listDriversForReceiptFilters(): Promise<IDriver[]> {
   const { data } = await axios.get<IDriver[]>(`${API_URL}/drivers`, getAuthConfig());
   return Array.isArray(data) ? data : [];

@@ -34,6 +34,7 @@ import {
   TRANSPORT_INTERNAL_PERMISSIONS,
   USER_ALLOWED_PERMISSIONS,
 } from '../utils/permissions';
+import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 
 type NavItem = {
   to: string;
@@ -236,6 +237,12 @@ function Header() {
   }
 
   async function handleResolveNotification(notification: RealtimeNotification) {
+    if (notification.type === 'WHATSAPP_INVOICE_NOT_FOUND') {
+      await markAsRead(notification.id);
+      setIsNotificationOpen(false);
+      navigate(buildIncorrectReceiptUrl(notification));
+      return;
+    }
     const confirmed = window.confirm(
       'Confirma que o problema foi resolvido? Esta notificação será removida para todos os usuários.',
     );
@@ -426,6 +433,8 @@ function Header() {
                 {latestNotifications.map((notification) => {
                   const typeLabel = NOTIFICATION_TYPE_LABELS[notification.type] || notification.type;
                   const isUnread = !notification.read;
+                  const correctionPending = notification.type === 'WHATSAPP_INVOICE_NOT_FOUND'
+                    && String(notification.metadata?.correctionStatus || '').toLowerCase() === 'pending';
                   return (
                     <li key={`notif-${notification.id}`}>
                       <div
@@ -458,10 +467,13 @@ function Header() {
                             <button
                               type="button"
                               onClick={() => handleResolveNotification(notification)}
+                              disabled={correctionPending}
                               className="inline-flex items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-500"
                             >
                               <CircleCheck className="h-3.5 w-3.5" />
-                              Marcar como resolvida
+                              {notification.type === 'WHATSAPP_INVOICE_NOT_FOUND'
+                                ? correctionPending ? 'Correção em processamento' : 'NF digitada incorretamente'
+                                : 'Marcar como resolvida'}
                             </button>
                           </div>
                         ) : null}

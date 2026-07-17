@@ -573,7 +573,7 @@ function OperationalPendencies() {
         correctedInvoiceNumber,
       );
       closeUploadModal();
-      window.alert(`Correcao solicitada. O sistema vai recuperar a foto original e vincula-la a NF ${correctedInvoiceNumber}.`);
+      window.alert(`NF ${correctedInvoiceNumber} confirmada como entregue. A pendencia foi encerrada.`);
       navigate('/home', { replace: true });
     } catch (error) {
       console.error(error);
@@ -1066,7 +1066,7 @@ function OperationalPendencies() {
                   </h3>
                   <p className="text-xs text-muted">
                     {receiptCorrectionNotificationId
-                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Digite a NF correta para reaproveitar a foto original.`
+                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Após conferir a foto, digite a NF correta para baixá-la como entregue.`
                       : `NF ${uploadTarget?.invoice_number || uploadNfId || '-'} · ajuste os campos e anexe a foto.`}
                   </p>
                 </div>
@@ -1082,7 +1082,7 @@ function OperationalPendencies() {
                 {receiptCorrectionNotificationId ? (
                   <div className="space-y-3">
                     <div className="rounded-md border semantic-panel-info px-3 py-2 text-sm">
-                      A foto original será recuperada da mensagem do WhatsApp. Não é necessário pedir ao motorista para reenviar.
+                      Após conferir a foto no WhatsApp, confirme a NF correta. Não é necessário pedir ao motorista para reenviar ou armazenar a imagem.
                     </div>
                     <label className="block text-xs text-muted">
                       NF correta
@@ -1189,7 +1189,7 @@ function OperationalPendencies() {
                     {uploading
                       ? 'Processando...'
                       : receiptCorrectionNotificationId
-                        ? 'Usar foto original e corrigir NF'
+                        ? 'Confirmar NF como entregue'
                         : 'Enviar canhoto'}
                   </button>
                 </div>

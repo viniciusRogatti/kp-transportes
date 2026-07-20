@@ -201,6 +201,15 @@ function buildTripNotePayload(note: ITripNote, order: number) {
   };
 }
 
+function isConferenceOnlyDriver(driver?: IDriver) {
+  const normalizedName = String(driver?.name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  return normalizedName === 'conferencia';
+}
+
 function hasTripAssignmentChanged(trip: ITrip | null, driverId: string, carId: string) {
   if (!trip) return false;
   return String(trip.driver_id) !== String(driverId) || String(trip.car_id) !== String(carId);
@@ -544,6 +553,10 @@ function RoutePlanning() {
     if (selectedDriver === 'null') return '';
     return drivers.find((driver) => String(driver.id) === String(selectedDriver))?.name || '';
   }, [drivers, selectedDriver]);
+
+  const isSelectedConferenceOnlyDriver = useMemo(() => (
+    isConferenceOnlyDriver(drivers.find((driver) => String(driver.id) === String(selectedDriver)))
+  ), [drivers, selectedDriver]);
 
   const selectedVehicleLabel = useMemo(() => {
     if (selectedCar === 'null') return '';
@@ -1699,6 +1712,7 @@ function RoutePlanning() {
   };
 
   const syncTripNotesInPlace = useCallback(async (trip: ITrip, nextNotes: RoutingTripNote[]) => {
+    const isConferenceOnly = Boolean(trip.is_conference_only);
     const originalNotes = sortTripNotesByOrder((trip.TripNotes || []) as RoutingTripNote[]);
     const originalByInvoice = new Map(originalNotes.map((note) => [getTripNoteKey(note), note]));
     const nextByInvoice = new Map(nextNotes.map((note) => [getTripNoteKey(note), note]));
@@ -1711,13 +1725,15 @@ function RoutePlanning() {
     });
 
     if (notesToRemove.length > 0) {
-      await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: notesToRemove.map((note) => ({
-          company_id: note.company_id,
-          invoice_number: note.invoice_number,
-          status: 'pending',
-        })),
-      }, authConfig);
+      if (!isConferenceOnly) {
+        await axios.put(`${API_URL}/danfes/update-status`, {
+          danfes: notesToRemove.map((note) => ({
+            company_id: note.company_id,
+            invoice_number: note.invoice_number,
+            status: 'pending',
+          })),
+        }, authConfig);
+      }
 
       for (const note of notesToRemove) {
         if (!note.id) continue;
@@ -1726,17 +1742,22 @@ function RoutePlanning() {
     }
 
     if (notesToAdd.length > 0) {
-      await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: notesToAdd.map((note) => ({
-          company_id: note.company_id,
-          invoice_number: note.invoice_number,
-          status: 'assigned',
-        })),
-      }, authConfig);
+      if (!isConferenceOnly) {
+        await axios.put(`${API_URL}/danfes/update-status`, {
+          danfes: notesToAdd.map((note) => ({
+            company_id: note.company_id,
+            invoice_number: note.invoice_number,
+            status: 'assigned',
+          })),
+        }, authConfig);
+      }
 
       for (const note of notesToAdd) {
         await axios.put(`${API_URL}/trips/add-note/${trip.id}`, {
-          noteData: buildTripNotePayload(note, note.order),
+          noteData: {
+            ...buildTripNotePayload(note, note.order),
+            status: isConferenceOnly ? 'pending' : resolveTripNotePayloadStatus(note.status),
+          },
         }, authConfig);
       }
     }
@@ -1969,7 +1990,7 @@ function RoutePlanning() {
         return;
       }
 
-      const validation = await axios.post(`${API_URL}/trips/validate-assignment`, {
+      const validation = isSelectedConferenceOnlyDriver ? { data: { ok: true } } : await axios.post(`${API_URL}/trips/validate-assignment`, {
         date: todayApiDate,
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
@@ -1983,13 +2004,15 @@ function RoutePlanning() {
         return;
       }
 
-      await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: sortedNotes.map((note) => ({
-          company_id: note.company_id,
-          invoice_number: note.invoice_number,
-          status: 'assigned',
-        })),
-      });
+      if (!isSelectedConferenceOnlyDriver) {
+        await axios.put(`${API_URL}/danfes/update-status`, {
+          danfes: sortedNotes.map((note) => ({
+            company_id: note.company_id,
+            invoice_number: note.invoice_number,
+            status: 'assigned',
+          })),
+        });
+      }
 
       const createResponse = await axios.post(`${API_URL}/trips/create`, {
         driver_id: Number(selectedDriver),
@@ -1999,7 +2022,10 @@ function RoutePlanning() {
         is_second_run: isSecondRunMode,
         replace_trip_id: isUpdating && tripToUpdate ? tripToUpdate.id : null,
         run_number: tripToUpdate?.run_number,
-        tripNotes: sortedNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
+        tripNotes: sortedNotes.map((note, index) => ({
+          ...buildTripNotePayload(note, index + 1),
+          status: isSelectedConferenceOnlyDriver ? 'pending' : resolveTripNotePayloadStatus(note.status),
+        })),
       }, authConfig);
 
       if (isUpdating && tripToUpdate) {
@@ -2124,6 +2150,9 @@ function RoutePlanning() {
     }
 
     const assignmentChanged = hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar);
+    const isConferenceOnly = isConferenceOnlyDriver(
+      drivers.find((driver) => String(driver.id) === String(selectedDriver)),
+    );
 
     if (editHasLockedNotes && assignmentChanged) {
       alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou use outro fluxo para trocar motorista/veiculo.');
@@ -2145,7 +2174,7 @@ function RoutePlanning() {
         return;
       }
 
-      const validation = await axios.post(`${API_URL}/trips/validate-assignment`, {
+      const validation = isConferenceOnly ? { data: { ok: true } } : await axios.post(`${API_URL}/trips/validate-assignment`, {
         date: editTrip.date,
         driver_id: Number(selectedDriver),
         car_id: Number(selectedCar),
@@ -2178,8 +2207,10 @@ function RoutePlanning() {
           status: 'assigned',
         }));
 
-      if (danfesToPending.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
-      if (danfesToAssigned.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });
+      if (!isConferenceOnly) {
+        if (danfesToPending.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
+        if (danfesToAssigned.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });
+      }
 
       const totalWeight = editNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
 
@@ -2191,7 +2222,10 @@ function RoutePlanning() {
         run_number: isSecondRunMode ? Number(editTrip.run_number || 1) + 1 : editTrip.run_number || 1,
         is_second_run: isSecondRunMode || Number(editTrip.run_number || 1) > 1,
         replace_trip_id: editTrip.id,
-        tripNotes: editNotes.map((note, index) => buildTripNotePayload(note, index + 1)),
+        tripNotes: editNotes.map((note, index) => ({
+          ...buildTripNotePayload(note, index + 1),
+          status: isConferenceOnly ? 'pending' : resolveTripNotePayloadStatus(note.status),
+        })),
       }, authConfig);
 
       await axios.delete(`${API_URL}/trips/delete/${editTrip.id}`, authConfig);

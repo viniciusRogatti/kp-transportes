@@ -61,7 +61,8 @@ export const normalizeRoutePlanningStatus = (value: unknown) => normalizeOperati
 
 export const isRouteFinalStatus = (value: unknown) => ROUTE_FINAL_STATUSES.has(normalizeRoutePlanningStatus(value));
 
-export const isRoutePlanningTripActive = (trip: Pick<ITrip, 'TripNotes'> | null | undefined) => {
+export const isRoutePlanningTripActive = (trip: Pick<ITrip, 'TripNotes' | 'is_conference_only'> | null | undefined) => {
+  if (trip?.is_conference_only) return false;
   const tripNotes = trip?.TripNotes;
   const notes = Array.isArray(tripNotes) ? tripNotes : [];
   return notes.some((note) => !isRouteFinalStatus(note.status));

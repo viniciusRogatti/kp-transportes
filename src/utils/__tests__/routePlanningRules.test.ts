@@ -102,6 +102,23 @@ describe('routePlanningRules', () => {
     expect(isRoutePlanningTripActive(trip)).toBe(false);
   });
 
+  it('ignora a rota de conferencia na disponibilidade e na atribuicao operacional', () => {
+    const conferenceTrip = buildTrip({
+      is_conference_only: true,
+      TripNotes: [{
+        id: 21,
+        invoice_number: '1722001',
+        status: 'pending',
+        order: 1,
+        city: 'Campinas',
+        gross_weight: '10',
+      }],
+    });
+
+    expect(isRoutePlanningTripActive(conferenceTrip)).toBe(false);
+    expect(findActiveAssignmentForInvoice([conferenceTrip], '1722001')).toBeNull();
+  });
+
   it('localiza a atribuicao ativa da NF e ignora rotas ja finalizadas', () => {
     const assignment = findActiveAssignmentForInvoice([
       buildTrip({

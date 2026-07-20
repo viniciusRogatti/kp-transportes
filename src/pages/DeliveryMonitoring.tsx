@@ -587,13 +587,15 @@ const normalizeMonitoringDateParam = (value: string) => {
 };
 
 const getMonitoringQuery = (search?: string) => {
-  if (typeof window === 'undefined') return { date: null, invoiceNumber: null };
+  if (typeof window === 'undefined') return { date: null, invoiceNumber: null, tripId: null };
   const params = new URLSearchParams(search ?? window.location.search);
   const requestedDate = String(params.get('date') || '').trim();
   const invoiceNumber = String(params.get('nf') || '').trim();
+  const tripId = Number(params.get('trip') || 0);
   return {
     date: normalizeMonitoringDateParam(requestedDate),
     invoiceNumber: invoiceNumber || null,
+    tripId: Number.isFinite(tripId) && tripId > 0 ? tripId : null,
   };
 };
 
@@ -687,6 +689,11 @@ function DeliveryMonitoring() {
     setDate(monitoringQuery.date || getTodayMonitoringDate());
     setSelectedDeliveryInvoice(monitoringQuery.invoiceNumber);
   }, [monitoringQuery]);
+
+  useEffect(() => {
+    if (!monitoringQuery.tripId) return;
+    setCompanyFilter('all');
+  }, [monitoringQuery.tripId]);
 
   const fetchOverview = useCallback(async () => {
     setLoading(true);
@@ -858,9 +865,12 @@ function DeliveryMonitoring() {
     setCompanyFilter(availableCompanies.some((company) => company.code === DEFAULT_COMPANY_FILTER) ? DEFAULT_COMPANY_FILTER : 'all');
   }, [availableCompanies, companyFilter]);
   const companyFilteredDeliveries = useMemo(() => {
-    if (companyFilter === 'all') return deliveries;
-    return deliveries.filter((row) => resolveCompanyCode(row.company) === companyFilter);
-  }, [companyFilter, deliveries]);
+    const companyRows = companyFilter === 'all'
+      ? deliveries
+      : deliveries.filter((row) => resolveCompanyCode(row.company) === companyFilter);
+    if (!monitoringQuery.tripId) return companyRows;
+    return companyRows.filter((row) => Number(row.trip_id || 0) === monitoringQuery.tripId);
+  }, [companyFilter, deliveries, monitoringQuery.tripId]);
   const filteredSummary = useMemo<MonitoringSummary>(() => {
     return companyFilteredDeliveries.reduce<MonitoringSummary>((acc, row) => {
       acc.total += 1;
@@ -893,6 +903,13 @@ function DeliveryMonitoring() {
     if (selectedDelivery) return;
     setSelectedDeliveryInvoice(null);
   }, [overview, selectedDeliveryInvoice, selectedDelivery]);
+
+  useEffect(() => {
+    if (!monitoringQuery.tripId) return;
+    const routeDelivery = selectedDelivery || companyFilteredDeliveries[0] || null;
+    if (!routeDelivery?.driver_id) return;
+    setSelectedDriverId(Number(routeDelivery.driver_id));
+  }, [companyFilteredDeliveries, monitoringQuery.tripId, selectedDelivery]);
 
   const filteredDeliveries = useMemo(() => {
     return companyFilteredDeliveries.filter((row) => {

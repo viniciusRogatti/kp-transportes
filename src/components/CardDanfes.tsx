@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { UserPlus } from 'lucide-react';
+import { MapPinned, UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
 import { cn } from '../lib/cn';
 import { IDanfe, IInvoiceSearchContext, ITrip } from '../types/types';
@@ -39,6 +39,7 @@ const RETURN_TYPE_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_CARD_STATUS_OVERRIDES = new Set(['retained', 'returned', 'cancelled', 'redelivery']);
+const ROUTE_TRACEABLE_STATUSES = new Set(['assigned', 'delivered', 'completed', 'redelivery']);
 
 function getOccurrenceStatusLabel(value: unknown) {
   return String(value || '').trim().toLowerCase() === 'resolved'
@@ -341,6 +342,17 @@ function CardDanfes({
               && !resolvedDriverName
               && String(danfe.status || '').trim().toLowerCase() === 'pending',
             );
+            const lastTripId = Number(invoiceContext?.trip_id || 0);
+            const canOpenLastTrip = ROUTE_TRACEABLE_STATUSES.has(displayStatus) && lastTripId > 0;
+            const openLastTrip = () => {
+              if (!canOpenLastTrip) return;
+              const params = new URLSearchParams({
+                nf: invoiceNumber,
+                trip: String(lastTripId),
+              });
+              if (invoiceContext?.trip_date) params.set('date', invoiceContext.trip_date);
+              window.location.hash = `#/delivery-monitoring?${params.toString()}`;
+            };
 
             return (
               <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
@@ -385,6 +397,18 @@ function CardDanfes({
                           <Badge tone={danfeStatusTone} className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                             {danfeStatusLabel}
                           </Badge>
+                          {canOpenLastTrip ? (
+                            <button
+                              type="button"
+                              onClick={openLastTrip}
+                              className="inline-flex items-center gap-1 rounded-full border border-sky-500/50 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-200 transition hover:bg-sky-500/20"
+                              aria-label={`Abrir última rota da NF ${invoiceNumber}`}
+                              title={`Abrir rota #${lastTripId} no monitoramento`}
+                            >
+                              <MapPinned className="h-3 w-3" />
+                              {`Última rota #${lastTripId}`}
+                            </button>
+                          ) : null}
                           {invoiceContext?.occurrence_count ? (
                             <Badge tone="warning" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                               {`Ocorrencias: ${invoiceContext.occurrence_count}`}
@@ -519,6 +543,18 @@ function CardDanfes({
                         <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                         <p><strong>Motorista:</strong> {resolvedDriverName || 'Sem motorista'}</p>
+                        {canOpenLastTrip ? (
+                          <p>
+                            <strong>Última rota:</strong>{' '}
+                            <button
+                              type="button"
+                              onClick={openLastTrip}
+                              className="font-semibold text-text-accent underline decoration-dotted underline-offset-2"
+                            >
+                              {`#${lastTripId}${invoiceContext?.trip_run_number ? ` · saída #${invoiceContext.trip_run_number}` : ''}${invoiceContext?.trip_date ? ` · ${formatDateBR(invoiceContext.trip_date)}` : ''}`}
+                            </button>
+                          </p>
+                        ) : null}
                         {currentCte ? (
                           <>
                             <p><strong>CT-e atual:</strong> {`${currentCteLabel} (${currentCteNumber})`}</p>

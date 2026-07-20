@@ -64,6 +64,9 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
     return_types: [],
     return_batches: [],
     driver_name: 'Joao da Silva',
+    trip_id: 44,
+    trip_date: '2026-03-23',
+    trip_run_number: 2,
     latest_occurrence: {
       id: 9,
       description: 'Cliente recusou mercadoria danificada',
@@ -121,6 +124,7 @@ describe('CardDanfes', () => {
     expect(screen.getByTestId('danfe-card-654321')).toHaveClass('status-border-returned');
     expect(screen.getByTestId('danfe-card-999888')).toHaveClass('status-border-on-the-way');
     expect(screen.getByText('Motorista: Joao da Silva')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir última rota da NF 123456' })).toBeInTheDocument();
     expect(screen.getByText('Ocorrencias: 1')).toBeInTheDocument();
     expect(screen.getAllByText('Cliente recusou mercadoria danificada').length).toBeGreaterThan(0);
 
@@ -140,6 +144,18 @@ describe('CardDanfes', () => {
     expect(screen.getByTestId('danfe-card-654321')).toBeInTheDocument();
     expect(screen.getByTestId('danfe-card-999888')).toBeInTheDocument();
     expect(screen.queryByText('Filtro ativo: Entregue. Exibindo 1 de 3 NF(s).')).not.toBeInTheDocument();
+  });
+
+  it('abre o monitoramento focado na última rota vinculada à NF', () => {
+    render(
+      <CardDanfes
+        danfes={[buildDanfe('123456', 'delivered')]}
+        invoiceContextByNf={CONTEXT_FIXTURE}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir última rota da NF 123456' }));
+    expect(window.location.hash).toBe('#/delivery-monitoring?nf=123456&trip=44&date=2026-03-23');
   });
 
   it('mostra o vinculo de refaturamento na NF cancelada e a referencia reversa na NF nova', async () => {

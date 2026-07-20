@@ -214,7 +214,7 @@ export const evaluateRoutePlanningDecision = ({
       outcome: 'blocked',
       reason: 'delivered',
       title: `NF ${invoiceNumber} ja entregue`,
-      message: `A NF ${invoiceNumber} ja esta com status final de entrega e nao pode voltar para uma nova rota por esta tela.`,
+      message: `Antes de roteirizar, confira a foto postada e digite abaixo a NF correta que aparece nela. A NF ${invoiceNumber} continuara bloqueada por ja constar como entregue.`,
     };
   }
 

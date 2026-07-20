@@ -360,6 +360,9 @@ function RoutePlanning() {
   const [showAssignmentFields, setShowAssignmentFields] = useState<boolean>(true);
   const [routingModalState, setRoutingModalState] = useState<RoutingModalState | null>(null);
   const [isResolvingNoteConflict, setIsResolvingNoteConflict] = useState<boolean>(false);
+  const [correctedDeliveredInvoiceLookup, setCorrectedDeliveredInvoiceLookup] = useState('');
+  const [correctedDeliveredInvoiceError, setCorrectedDeliveredInvoiceError] = useState('');
+  const [isCheckingCorrectedDeliveredInvoice, setIsCheckingCorrectedDeliveredInvoice] = useState(false);
   const [lastScannedInvoice, setLastScannedInvoice] = useState<string>('');
   const [prontoBoxPrompt, setProntoBoxPrompt] = useState<ProntoBoxPromptState | null>(null);
   const [prontoBoxInput, setProntoBoxInput] = useState('');
@@ -1315,8 +1318,10 @@ function RoutePlanning() {
   }, [focusNoteLookupInput]);
 
   const closeRoutingModal = () => {
-    if (isResolvingNoteConflict) return;
+    if (isResolvingNoteConflict || isCheckingCorrectedDeliveredInvoice) return;
     setRoutingModalState(null);
+    setCorrectedDeliveredInvoiceLookup('');
+    setCorrectedDeliveredInvoiceError('');
     focusNoteLookupInput(true);
   };
 
@@ -1420,6 +1425,76 @@ function RoutePlanning() {
     return null;
   };
 
+  const handleCorrectDeliveredInvoice = async () => {
+    if (!routingModalState || routingModalState.decision.outcome !== 'blocked' || routingModalState.decision.reason !== 'delivered') {
+      return;
+    }
+
+    const lookup = correctedDeliveredInvoiceLookup.trim();
+    if (!lookup) {
+      setCorrectedDeliveredInvoiceError('Digite a NF que aparece na foto antes de continuar.');
+      return;
+    }
+
+    setIsCheckingCorrectedDeliveredInvoice(true);
+    setCorrectedDeliveredInvoiceError('');
+
+    try {
+      const correctedDanfe = await fetchDanfeByLookup(lookup);
+      if (!correctedDanfe) {
+        setCorrectedDeliveredInvoiceError('NF não encontrada. Confira o número visível na foto.');
+        return;
+      }
+
+      if (getDanfeRouteKey(correctedDanfe) === getDanfeRouteKey(routingModalState.danfe)) {
+        const matchingSavedNote = (tripToUpdate?.TripNotes || []).find((note) => (
+          getTripNoteKey(note) === getDanfeRouteKey(routingModalState.danfe)
+        ));
+
+        if (tripToUpdate?.id && matchingSavedNote?.id) {
+          await axios.put(`${API_URL}/trips/remove-note/${tripToUpdate.id}`, {
+            noteId: matchingSavedNote.id,
+          }, authConfig);
+        }
+
+        updateAddedNotes((notes) => notes.filter((note) => (
+          getTripNoteKey(note) !== getDanfeRouteKey(routingModalState.danfe)
+        )));
+        setRoutingModalState(null);
+        setCorrectedDeliveredInvoiceLookup('');
+        setCorrectedDeliveredInvoiceError('');
+        await Promise.all([
+          refreshTrips(todayApiDate),
+          refreshRoutingPool(tripToUpdate?.date || todayApiDate),
+        ]);
+        focusNoteLookupInput(true);
+        return;
+      }
+
+      await axios.post(`${API_URL}/danfes/delivery-corrections`, {
+        reportedInvoiceNumber: routingModalState.danfe.invoice_number,
+        correctPhotoInvoiceNumber: correctedDanfe.invoice_number,
+      }, authConfig);
+
+      appendDanfeToRoute({
+        ...routingModalState.danfe,
+        status: 'redelivery',
+      });
+      setRoutingModalState(null);
+      setCorrectedDeliveredInvoiceLookup('');
+      setCorrectedDeliveredInvoiceError('');
+      await Promise.all([
+        refreshTrips(todayApiDate),
+        refreshRoutingPool(tripToUpdate?.date || todayApiDate),
+      ]);
+      focusNoteLookupInput(true);
+    } catch {
+      setCorrectedDeliveredInvoiceError('Não foi possível corrigir as baixas. Confira as NFs e tente novamente.');
+    } finally {
+      setIsCheckingCorrectedDeliveredInvoice(false);
+    }
+  };
+
   const handleAddNote = async () => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
       alertAndRefocusNoteLookup('Selecione um motorista e um veículo antes de adicionar uma nota.');
@@ -1474,6 +1549,8 @@ function RoutePlanning() {
         lookupValue: lookup,
         decision,
       });
+      setCorrectedDeliveredInvoiceLookup('');
+      setCorrectedDeliveredInvoiceError('');
     } catch {
       alertAndRefocusNoteLookup('Não foi possível buscar essa nota.', true);
     } finally {
@@ -3310,7 +3387,7 @@ function RoutePlanning() {
                   type="button"
                   className="rounded border border-border bg-surface-2 px-2 py-1 text-sm text-text disabled:opacity-50"
                   onClick={closeRoutingModal}
-                  disabled={isResolvingNoteConflict}
+                  disabled={isResolvingNoteConflict || isCheckingCorrectedDeliveredInvoice}
                 >
                   Fechar
                 </button>
@@ -3340,6 +3417,41 @@ function RoutePlanning() {
                 </div>
               ) : null}
 
+              {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'delivered' ? (
+                <div className="mt-3 rounded-md border border-amber-700/70 bg-amber-950/20 p-3">
+                  <p className="text-sm font-semibold text-amber-200">Conferência obrigatória da foto</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Digite a NF visível na foto publicada no WhatsApp. Se for esta mesma NF, ela apenas será confirmada e removida da rota. Se for outra, esta NF volta para reentrega e a NF da foto será confirmada como entregue.
+                  </p>
+                  <label className="mt-3 block text-xs font-semibold text-text" htmlFor="corrected-delivered-invoice">
+                    NF correta da foto
+                  </label>
+                  <input
+                    id="corrected-delivered-invoice"
+                    type="text"
+                    inputMode="numeric"
+                    value={correctedDeliveredInvoiceLookup}
+                    onChange={(event) => {
+                      setCorrectedDeliveredInvoiceLookup(event.target.value.replace(/\D/g, ''));
+                      setCorrectedDeliveredInvoiceError('');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        void handleCorrectDeliveredInvoice();
+                      }
+                    }}
+                    autoFocus
+                    placeholder="Digite a NF que aparece na foto"
+                    className="mt-1 h-10 w-full rounded-md border border-amber-600/60 bg-surface px-3 text-sm text-text outline-none focus:border-amber-400"
+                    disabled={isCheckingCorrectedDeliveredInvoice}
+                  />
+                  {correctedDeliveredInvoiceError ? (
+                    <p className="mt-2 text-xs text-rose-300">{correctedDeliveredInvoiceError}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'cancelled_replaced' ? (
                   <button
@@ -3362,11 +3474,22 @@ function RoutePlanning() {
                   </button>
                 ) : null}
 
+                {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'delivered' ? (
+                  <button
+                    type="button"
+                    className="rounded-md border border-amber-600 bg-amber-600 px-4 py-2 text-sm font-semibold text-[#2b1600] disabled:opacity-60"
+                    onClick={() => void handleCorrectDeliveredInvoice()}
+                    disabled={isCheckingCorrectedDeliveredInvoice}
+                  >
+                    {isCheckingCorrectedDeliveredInvoice ? 'Confirmando foto...' : 'Confirmar foto e corrigir rota'}
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text"
                   onClick={closeRoutingModal}
-                  disabled={isResolvingNoteConflict}
+                  disabled={isResolvingNoteConflict || isCheckingCorrectedDeliveredInvoice}
                 >
                   Fechar
                 </button>

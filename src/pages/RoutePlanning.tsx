@@ -302,6 +302,14 @@ function calculateTripNotesWeight(notes: ITripNote[]) {
   return notes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
 }
 
+function normalizeSearchTerm(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 function buildTripNotesTxt(notes: ITripNote[]) {
   return sortTripNotesByOrder(Array.isArray(notes) ? notes : [])
     .map((note) => String(note?.invoice_number || '').trim())
@@ -324,6 +332,8 @@ function RoutePlanning() {
   const [selectedCar, setSelectedCar] = useState<string>('null');
   const [driverInput, setDriverInput] = useState<string>('');
   const [carInput, setCarInput] = useState<string>('');
+  const [isDriverSuggestionsOpen, setIsDriverSuggestionsOpen] = useState(false);
+  const [isCarSuggestionsOpen, setIsCarSuggestionsOpen] = useState(false);
   const [noteLookup, setNoteLookup] = useState<string>('');
   const [batchNoteLookup, setBatchNoteLookup] = useState<string>('');
   const [isBatchAdding, setIsBatchAdding] = useState<boolean>(false);
@@ -496,6 +506,20 @@ function RoutePlanning() {
       };
     });
   }, [cars, carOccupancyMap]);
+
+  const filteredDriverOptions = useMemo(() => {
+    const term = normalizeSearchTerm(driverInput);
+    return driverOptions
+      .filter((option) => !term || normalizeSearchTerm(option.value).includes(term))
+      .slice(0, 8);
+  }, [driverInput, driverOptions]);
+
+  const filteredCarOptions = useMemo(() => {
+    const term = normalizeSearchTerm(carInput);
+    return carOptions
+      .filter((option) => !term || normalizeSearchTerm(option.value).includes(term))
+      .slice(0, 8);
+  }, [carInput, carOptions]);
 
   const filteredAvailableDanfes = useMemo(() => {
     const term = editSearch.trim().toLowerCase();
@@ -1186,7 +1210,7 @@ function RoutePlanning() {
     previousCarRef.current = carId;
   };
 
-  const normalizeValue = (value: string) => value.trim().toLowerCase();
+  const normalizeValue = (value: string) => normalizeSearchTerm(value);
 
   const commitDriverInput = (rawValue: string, preferFirst = false) => {
     const normalized = normalizeValue(rawValue);
@@ -2642,23 +2666,29 @@ function RoutePlanning() {
                   </div>
                 ) : null}
 
-                <div className={`overflow-hidden transition-all duration-300 ${showAssignmentFields ? 'max-h-[200px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className={`transition-all duration-300 ${showAssignmentFields ? 'max-h-[340px] overflow-visible opacity-100' : 'max-h-0 overflow-hidden opacity-0'}`}>
                   <ContainerForm className="w-full p-0">
                     <FormColumns className="grid-cols-1 gap-2">
                       <FormColumn className="gap-1">
                         <BoxDriverVehicle className="grid w-full grid-cols-1 gap-2 md:grid-cols-2">
-                          <FieldGroup>
+                          <FieldGroup className="relative">
                             <label>Motorista:</label>
                             <input
-                              list="driver-suggestions"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={isDriverSuggestionsOpen}
+                              aria-controls="driver-suggestions"
                               value={driverInput}
                               onChange={(event) => {
                                 const value = event.target.value;
                                 setDriverInput(value);
+                                setIsDriverSuggestionsOpen(true);
                                 commitDriverInput(value, false);
                               }}
+                              onFocus={() => setIsDriverSuggestionsOpen(true)}
                               onBlur={(event) => {
                                 commitDriverInput(event.target.value, true);
+                                setIsDriverSuggestionsOpen(false);
                               }}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
@@ -2677,25 +2707,50 @@ function RoutePlanning() {
                               }}
                               placeholder="Digite nome do motorista"
                             />
-                            <datalist id="driver-suggestions">
-                              {driverOptions.map((option) => (
-                                <option key={option.id} value={option.value} label={option.label} />
-                              ))}
-                            </datalist>
+                            {isDriverSuggestionsOpen ? (
+                              <div id="driver-suggestions" role="listbox" className="absolute z-30 mt-[68px] max-h-52 w-full overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                                {filteredDriverOptions.length ? filteredDriverOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selectedDriver === option.id}
+                                    className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-surface focus:bg-surface focus:outline-none"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setDriverInput(option.value);
+                                      applyDriverSelection(option.id);
+                                      setIsDriverSuggestionsOpen(false);
+                                      carInputRef.current?.focus();
+                                    }}
+                                  >
+                                    {option.label}
+                                  </button>
+                                )) : (
+                                  <p className="px-3 py-2 text-sm text-muted">Nenhum motorista encontrado.</p>
+                                )}
+                              </div>
+                            ) : null}
                           </FieldGroup>
-                          <FieldGroup>
+                          <FieldGroup className="relative">
                             <label>Veículo:</label>
                             <input
                               ref={carInputRef}
-                              list="car-suggestions"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={isCarSuggestionsOpen}
+                              aria-controls="car-suggestions"
                               value={carInput}
                               onChange={(event) => {
                                 const value = event.target.value;
                                 setCarInput(value);
+                                setIsCarSuggestionsOpen(true);
                                 commitCarInput(value, false);
                               }}
+                              onFocus={() => setIsCarSuggestionsOpen(true)}
                               onBlur={(event) => {
                                 commitCarInput(event.target.value, true);
+                                setIsCarSuggestionsOpen(false);
                               }}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
@@ -2716,11 +2771,30 @@ function RoutePlanning() {
                               }}
                               placeholder="Digite placa ou veículo"
                             />
-                            <datalist id="car-suggestions">
-                              {carOptions.map((option) => (
-                                <option key={option.id} value={option.value} label={option.label} />
-                              ))}
-                            </datalist>
+                            {isCarSuggestionsOpen ? (
+                              <div id="car-suggestions" role="listbox" className="absolute z-30 mt-[68px] max-h-52 w-full overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                                {filteredCarOptions.length ? filteredCarOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selectedCar === option.id}
+                                    className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-surface focus:bg-surface focus:outline-none"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setCarInput(option.value);
+                                      applyCarSelection(option.id);
+                                      setIsCarSuggestionsOpen(false);
+                                      noteLookupRef.current?.focus();
+                                    }}
+                                  >
+                                    {option.label}
+                                  </button>
+                                )) : (
+                                  <p className="px-3 py-2 text-sm text-muted">Nenhum veículo encontrado.</p>
+                                )}
+                              </div>
+                            ) : null}
                             {isVehicleSuggestionLoading ? (
                               <span className="text-[11px] text-muted">Buscando veículo habitual...</span>
                             ) : vehicleSuggestionMessage ? (

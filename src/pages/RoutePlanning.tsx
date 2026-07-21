@@ -416,6 +416,20 @@ function RoutePlanning() {
     return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
   }, []);
 
+  const loadAssignmentOptions = useCallback(async () => {
+    const [carsResult, driversResult] = await Promise.allSettled([
+      axios.get<ICar[]>(`${API_URL}/cars`, authConfig),
+      axios.get<IDriver[]>(`${API_URL}/drivers`, authConfig),
+    ]);
+
+    if (carsResult.status === 'fulfilled') {
+      setCars(Array.isArray(carsResult.value.data) ? carsResult.value.data : []);
+    }
+    if (driversResult.status === 'fulfilled') {
+      setDrivers(Array.isArray(driversResult.value.data) ? driversResult.value.data : []);
+    }
+  }, [authConfig]);
+
   const sortedNotes = useMemo(() => sortTripNotesByOrder(addedNotes), [addedNotes]);
   const countWeight = useMemo(() => calculateTripNotesWeight(sortedNotes), [sortedNotes]);
   const hasLockedNotesInRoutingEdit = useMemo(
@@ -1036,17 +1050,19 @@ function RoutePlanning() {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const [carsResponse, driversResponse, tripsResponse] = await Promise.all([
-          axios.get(`${API_URL}/cars`),
-          axios.get(`${API_URL}/drivers`),
-          axios.get(`${API_URL}/trips/search/date/${todayApiDate}`),
+        const [carsResult, driversResult, tripsResult] = await Promise.allSettled([
+          axios.get<ICar[]>(`${API_URL}/cars`, authConfig),
+          axios.get<IDriver[]>(`${API_URL}/drivers`, authConfig),
+          axios.get<ITrip[]>(`${API_URL}/trips/search/date/${todayApiDate}`, authConfig),
         ]);
-        setCars(carsResponse.data);
-        setDrivers(driversResponse.data);
-        setTodayTrips(tripsResponse.data);
-        setDisplayedTrips(tripsResponse.data);
-      } catch (error) {
-        console.error('Erro ao buscar dados:', error);
+
+        if (carsResult.status === 'fulfilled') setCars(Array.isArray(carsResult.value.data) ? carsResult.value.data : []);
+        if (driversResult.status === 'fulfilled') setDrivers(Array.isArray(driversResult.value.data) ? driversResult.value.data : []);
+        if (tripsResult.status === 'fulfilled') {
+          const trips = Array.isArray(tripsResult.value.data) ? tripsResult.value.data : [];
+          setTodayTrips(trips);
+          setDisplayedTrips(trips);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -1054,8 +1070,7 @@ function RoutePlanning() {
 
     fetchToken();
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authConfig, navigate, todayApiDate]);
 
   useEffect(() => {
     const loadRetainedContexts = async () => {
@@ -2685,7 +2700,10 @@ function RoutePlanning() {
                                 setIsDriverSuggestionsOpen(true);
                                 commitDriverInput(value, false);
                               }}
-                              onFocus={() => setIsDriverSuggestionsOpen(true)}
+                              onFocus={() => {
+                                setIsDriverSuggestionsOpen(true);
+                                if (!drivers.length) void loadAssignmentOptions();
+                              }}
                               onBlur={(event) => {
                                 commitDriverInput(event.target.value, true);
                                 setIsDriverSuggestionsOpen(false);
@@ -2747,7 +2765,10 @@ function RoutePlanning() {
                                 setIsCarSuggestionsOpen(true);
                                 commitCarInput(value, false);
                               }}
-                              onFocus={() => setIsCarSuggestionsOpen(true)}
+                              onFocus={() => {
+                                setIsCarSuggestionsOpen(true);
+                                if (!cars.length) void loadAssignmentOptions();
+                              }}
                               onBlur={(event) => {
                                 commitCarInput(event.target.value, true);
                                 setIsCarSuggestionsOpen(false);

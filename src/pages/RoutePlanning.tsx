@@ -1968,13 +1968,6 @@ function RoutePlanning() {
       return;
     }
 
-    const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
-
-    if (hasLockedNotesInRoutingEdit && assignmentChanged) {
-      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou finalize a troca de motorista/veiculo por outro fluxo.');
-      return;
-    }
-
     if (Number(total) <= 0) {
       alert('Nao foi possivel calcular o peso total da rota.');
       return;
@@ -2003,17 +1996,18 @@ function RoutePlanning() {
 
     const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
 
-    if (hasLockedNotesInRoutingEdit && assignmentChanged) {
-      if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
-      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou finalize a troca de motorista/veiculo por outro fluxo.');
-      return;
-    }
-
     try {
       setIsLoading(true);
 
-      if (isUpdating && tripToUpdate && assignmentChanged === false) {
-        const updatedTrip = await syncTripNotesInPlace(tripToUpdate, sortedNotes);
+      if (isUpdating && tripToUpdate) {
+        let updatedTrip = await syncTripNotesInPlace(tripToUpdate, sortedNotes);
+        if (assignmentChanged) {
+          const { data } = await axios.put<ITrip>(`${API_URL}/trips/${tripToUpdate.id}/assignment`, {
+            driver_id: Number(selectedDriver),
+            car_id: Number(selectedCar),
+          }, authConfig);
+          updatedTrip = data;
+        }
 
         if (shouldPrintProducts) {
           await printTripProducts(updatedTrip, pdfPreviewWindow);
@@ -2066,10 +2060,6 @@ function RoutePlanning() {
           status: isSelectedConferenceOnlyDriver ? 'pending' : resolveTripNotePayloadStatus(note.status),
         })),
       }, authConfig);
-
-      if (isUpdating && tripToUpdate) {
-        await axios.delete(`${API_URL}/trips/delete/${tripToUpdate.id}`, authConfig);
-      }
 
       const savedTrip = createResponse?.data as ITrip | undefined;
       if (shouldPrintProducts && savedTrip?.id) {
@@ -2189,85 +2179,16 @@ function RoutePlanning() {
     }
 
     const assignmentChanged = hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar);
-    const isConferenceOnly = isConferenceOnlyDriver(
-      drivers.find((driver) => String(driver.id) === String(selectedDriver)),
-    );
-
-    if (editHasLockedNotes && assignmentChanged) {
-      alert('Esta rota possui notas em andamento ou finalizadas. Para preservar o historico, altere apenas as notas da rota atual ou use outro fluxo para trocar motorista/veiculo.');
-      return;
-    }
-
     try {
       setIsSavingEdit(true);
 
-      if (assignmentChanged === false) {
-        const updatedTrip = await syncTripNotesInPlace(editTrip, sortTripNotesByOrder(editNotes));
-        alert('Rota atualizada com sucesso.');
-        setEditTrip(updatedTrip);
-        setEditNotes(sortTripNotesByOrder((updatedTrip.TripNotes || []) as RoutingTripNote[]));
-        await Promise.all([
-          refreshTrips(editTrip.date),
-          refreshRoutingPool(editTrip.date),
-        ]);
-        return;
+      await syncTripNotesInPlace(editTrip, sortTripNotesByOrder(editNotes));
+      if (assignmentChanged) {
+        await axios.put<ITrip>(`${API_URL}/trips/${editTrip.id}/assignment`, {
+          driver_id: Number(selectedDriver),
+          car_id: Number(selectedCar),
+        }, authConfig);
       }
-
-      const validation = isConferenceOnly ? { data: { ok: true } } : await axios.post(`${API_URL}/trips/validate-assignment`, {
-        date: editTrip.date,
-        driver_id: Number(selectedDriver),
-        car_id: Number(selectedCar),
-        replace_trip_id: editTrip.id,
-        is_second_run: Number(editTrip.run_number || 1) > 1 || isSecondRunMode,
-      }, authConfig);
-
-      const editSecondRunEnabled = isSecondRunMode || Number(editTrip.run_number || 1) > 1;
-      if (validation.data?.ok !== true) {
-        alert(buildAssignmentConflictMessage(validation.data?.conflicts, editSecondRunEnabled));
-        return;
-      }
-
-      const originalByKey = new Map((editTrip.TripNotes || []).map((note) => [getTripNoteKey(note), note]));
-      const nextByKey = new Map(editNotes.map((note) => [getTripNoteKey(note), note]));
-
-      const danfesToPending = Array.from(originalByKey.entries())
-        .filter(([key]) => nextByKey.has(key) === false)
-        .map(([, note]) => ({
-          company_id: note.company_id,
-          invoice_number: note.invoice_number,
-          status: 'pending',
-        }));
-
-      const danfesToAssigned = Array.from(nextByKey.entries())
-        .filter(([key]) => originalByKey.has(key) === false)
-        .map(([, note]) => ({
-          company_id: note.company_id,
-          invoice_number: note.invoice_number,
-          status: 'assigned',
-        }));
-
-      if (!isConferenceOnly) {
-        if (danfesToPending.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToPending });
-        if (danfesToAssigned.length > 0) await axios.put(`${API_URL}/danfes/update-status`, { danfes: danfesToAssigned });
-      }
-
-      const totalWeight = editNotes.reduce((acc, note) => acc + Number(note.gross_weight || 0), 0);
-
-      await axios.post(`${API_URL}/trips/create`, {
-        driver_id: Number(selectedDriver),
-        car_id: Number(selectedCar),
-        date: editTrip.date,
-        gross_weight: totalWeight,
-        run_number: isSecondRunMode ? Number(editTrip.run_number || 1) + 1 : editTrip.run_number || 1,
-        is_second_run: isSecondRunMode || Number(editTrip.run_number || 1) > 1,
-        replace_trip_id: editTrip.id,
-        tripNotes: editNotes.map((note, index) => ({
-          ...buildTripNotePayload(note, index + 1),
-          status: isConferenceOnly ? 'pending' : resolveTripNotePayloadStatus(note.status),
-        })),
-      }, authConfig);
-
-      await axios.delete(`${API_URL}/trips/delete/${editTrip.id}`, authConfig);
 
       alert('Rota atualizada com sucesso.');
       setEditTrip(null);
@@ -3733,7 +3654,7 @@ function RoutePlanning() {
 
               {editHasLockedNotes && hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar) ? (
                 <div className="mb-3 rounded-md border border-amber-700 bg-amber-600 px-3 py-2 text-sm text-[#1f1300]">
-                  Esta rota possui notas em andamento ou finalizadas. Ainda e possivel adicionar/remover notas, mas a troca de motorista ou veiculo continua bloqueada para preservar o historico operacional.
+                  Esta rota possui notas em andamento ou finalizadas. A troca de motorista ou veiculo atualiza a propria rota e preserva as notas e o historico operacional.
                 </div>
               ) : null}
 

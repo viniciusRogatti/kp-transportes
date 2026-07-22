@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';

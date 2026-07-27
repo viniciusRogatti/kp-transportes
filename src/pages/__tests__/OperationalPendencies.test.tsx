@@ -86,11 +86,11 @@ describe('OperationalPendencies', () => {
       limit: 200,
       cutoff_date: '2026-03-23',
       summary: {
-        pending: 1,
-        retained: 0,
-        returned: 0,
-        cancelled: 0,
+        redelivery: 1,
         unassigned: 0,
+        returned: 0,
+        retained: 0,
+        pending: 1,
         total: 1,
       },
     } as any);

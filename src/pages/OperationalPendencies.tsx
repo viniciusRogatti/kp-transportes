@@ -73,11 +73,23 @@ type BacklogTabConfig = {
 };
 
 const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
-  pending: {
-    label: 'Pendentes',
-    summaryLabel: 'Pendentes',
-    emptyMessage: 'Nenhuma entrega vinculada a motorista e sem canhoto postado para os filtros atuais.',
+  redelivery: {
+    label: 'Reentregas sem nova rota',
+    summaryLabel: 'Reentregas',
+    emptyMessage: 'Nenhuma reentrega aguardando inclusão em uma nova rota.',
+    tone: 'danger',
+  },
+  unassigned: {
+    label: 'NFs sem rota',
+    summaryLabel: 'Sem rota',
+    emptyMessage: 'Nenhuma NF aberta sem atribuição de rota.',
     tone: 'warning',
+  },
+  returned: {
+    label: 'Devoluções fora de lote',
+    summaryLabel: 'Fora de lote',
+    emptyMessage: 'Nenhuma devolução aguardando inclusão em lote.',
+    tone: 'danger',
   },
   retained: {
     label: 'Canhotos retidos',
@@ -85,32 +97,20 @@ const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
     emptyMessage: 'Nenhum canhoto retido encontrado para os filtros atuais.',
     tone: 'warning',
   },
-  returned: {
-    label: 'Devolvidas',
-    summaryLabel: 'Devolvidas',
-    emptyMessage: 'Nenhuma NF devolvida encontrada para os filtros atuais.',
-    tone: 'danger',
-  },
-  cancelled: {
-    label: 'Canceladas',
-    summaryLabel: 'Canceladas',
-    emptyMessage: 'Nenhuma NF cancelada encontrada para os filtros atuais.',
-    tone: 'neutral',
-  },
-  unassigned: {
-    label: 'Sem motorista',
-    summaryLabel: 'Sem motorista',
-    emptyMessage: 'Nenhuma NF aberta sem motorista encontrada para os filtros atuais.',
+  pending: {
+    label: 'Canhotos pendentes',
+    summaryLabel: 'Sem canhoto',
+    emptyMessage: 'Nenhuma rota de dia anterior sem canhoto postado.',
     tone: 'info',
   },
 };
 
 const EMPTY_BACKLOG_SUMMARY: IReceiptBacklogSummary = {
-  pending: 0,
-  retained: 0,
-  returned: 0,
-  cancelled: 0,
+  redelivery: 0,
   unassigned: 0,
+  returned: 0,
+  retained: 0,
+  pending: 0,
   total: 0,
 };
 
@@ -192,7 +192,7 @@ const getBacklogTabClassName = (tab: ReceiptBacklogQueueType, active: boolean) =
 
 const getAgeBadgeTone = (row: IReceiptBacklogRow): SemanticTone => {
   if ((row.age_days || 0) <= 0) return 'info';
-  if (row.queue_type === 'returned' || row.queue_type === 'cancelled') return 'neutral';
+  if (row.queue_type === 'returned') return 'neutral';
   if (row.queue_type === 'retained') return 'warning';
   return 'danger';
 };
@@ -261,7 +261,7 @@ function OperationalPendencies() {
 
   const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>(() => {
     const requestedTab = initialSearchParams.get('tab') as ReceiptBacklogQueueType | null;
-    return requestedTab && requestedTab in BACKLOG_TAB_CONFIG ? requestedTab : 'pending';
+    return requestedTab && requestedTab in BACKLOG_TAB_CONFIG ? requestedTab : 'redelivery';
   });
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [rows, setRows] = useState<IReceiptBacklogRow[]>([]);
@@ -757,7 +757,7 @@ function OperationalPendencies() {
     }
   }
 
-  const summaryCards: ReceiptBacklogQueueType[] = ['pending', 'retained', 'returned', 'cancelled', 'unassigned'];
+  const summaryCards: ReceiptBacklogQueueType[] = ['redelivery', 'unassigned', 'returned', 'retained', 'pending'];
   const activeTabConfig = BACKLOG_TAB_CONFIG[activeTab];
 
   return (
@@ -770,7 +770,7 @@ function OperationalPendencies() {
               <div>
                 <h2 className="text-lg font-semibold text-text">Pendencias Operacionais</h2>
                 <p className="text-sm text-muted">
-                  Monitore NFs sem fechamento logistico, acompanhe canhotos retidos e mantenha visivel tudo o que ainda exige acao operacional.
+                  A fila diária de ação: reentregas sem nova rota, NFs sem rota, devoluções fora de lote e canhotos que ainda precisam de baixa.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -891,13 +891,15 @@ function OperationalPendencies() {
                 <div>
                   <h3 className="text-sm font-semibold text-text">{activeTabConfig.label}</h3>
                   <p className="text-xs text-muted">
-                    {activeTab === 'pending'
-                      ? 'Entregas vinculadas a motorista e ainda sem canhoto/foto postado.'
+                    {activeTab === 'redelivery'
+                      ? 'Reentregas aguardando inclusão em uma NOVA rota. Ao atribuir a rota, a NF sai desta fila.'
+                      : activeTab === 'unassigned'
+                        ? 'NFs abertas que ainda não receberam nenhuma rota ou motorista.'
+                        : activeTab === 'returned'
+                          ? 'Devoluções ainda sem lote. Ao adicionar a NF a um lote, ela sai desta fila.'
                       : activeTab === 'retained'
                         ? 'NFs marcadas como canhoto retido para acompanhar a coleta do comprovante na proxima entrega.'
-                        : activeTab === 'unassigned'
-                          ? 'NFs abertas sem motorista vinculado, com risco alto de esquecimento.'
-                          : 'Historico operacional recente para acompanhamento e auditoria.'}
+                        : 'NFs que já passaram de um dia para outro em rota, mas continuam sem foto de canhoto.'}
                   </p>
                 </div>
                 <Badge tone={activeTabConfig.tone} className="h-auto px-2 py-1 text-[11px]">

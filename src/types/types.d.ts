@@ -328,7 +328,7 @@ export interface IReceiptUploadResponse {
   receiptId: number;
 }
 
-export type ReceiptBacklogQueueType = 'pending' | 'retained' | 'returned' | 'cancelled' | 'unassigned';
+export type ReceiptBacklogQueueType = 'redelivery' | 'unassigned' | 'returned' | 'retained' | 'pending';
 
 export interface IReceiptBacklogRouteHistoryRow {
   trip_id?: number | null;
@@ -371,11 +371,11 @@ export interface IReceiptBacklogRow {
 }
 
 export interface IReceiptBacklogSummary {
-  pending: number;
-  retained: number;
-  returned: number;
-  cancelled: number;
+  redelivery: number;
   unassigned: number;
+  returned: number;
+  retained: number;
+  pending: number;
   total: number;
 }
 

@@ -2555,8 +2555,8 @@ function RoutePlanning() {
                 <div className="hidden items-center gap-1 md:flex">
                   <button type="button" onClick={() => addDriverOrCar('driver')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><UserPlus className="h-4 w-4" />Motorista</button>
                   <button type="button" onClick={() => addDriverOrCar('car')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><CarFront className="h-4 w-4" />Veículo</button>
-                  <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2.5 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
-                  <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
+                  <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-warning px-2.5 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
+                  <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
 
                 <div className="relative md:hidden">
@@ -2567,8 +2567,8 @@ function RoutePlanning() {
                     <div className="absolute right-0 top-10 z-20 w-52 rounded-md border border-border bg-surface p-2 shadow-[var(--shadow-3)]">
                       <button type="button" onClick={() => { addDriverOrCar('driver'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><UserPlus className="h-4 w-4" />Adicionar motorista</button>
                       <button type="button" onClick={() => { addDriverOrCar('car'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><CarFront className="h-4 w-4" />Adicionar veículo</button>
-                      <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-2 text-xs font-semibold text-[#1f1300] hover:brightness-105"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
-                      <button type="button" onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-2 text-xs font-semibold text-[#04131e]"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
+                      <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-warning px-2 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
+                      <button type="button" onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-accent-strong bg-accent px-2 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
                     </div>
                   ) : null}
                 </div>
@@ -3306,7 +3306,7 @@ function RoutePlanning() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 py-2 text-sm font-semibold text-[#04131e]"
+                  className="rounded-md border border-accent-strong bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-strong"
                   onClick={() => void sendTripsToBackend({ shouldPrintProducts: true })}
                 >
                   Enviar e imprimir
@@ -3358,7 +3358,7 @@ function RoutePlanning() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 py-2 text-sm font-semibold text-[#04131e] disabled:cursor-not-allowed disabled:opacity-55"
+                  className="rounded-md border border-accent-strong bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={handleAddBatchNotes}
                   disabled={isBatchAdding}
                 >
@@ -3507,7 +3507,7 @@ function RoutePlanning() {
                 {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'cancelled_replaced' ? (
                   <button
                     type="button"
-                    className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e]"
+                    className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong"
                     onClick={handleUseReplacementInvoice}
                   >
                     Usar NF substituta
@@ -3517,7 +3517,7 @@ function RoutePlanning() {
                 {routingModalState.decision.outcome === 'assignment_conflict' ? (
                   <button
                     type="button"
-                    className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                    className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-60"
                     onClick={handleResolveAssignmentConflict}
                     disabled={isResolvingNoteConflict}
                   >
@@ -3562,7 +3562,7 @@ function RoutePlanning() {
                 <button type="button" className="rounded-md border border-sky-700 bg-sky-700 px-3 py-2 text-left text-sm font-semibold text-white transition hover:bg-sky-600" onClick={resolveConflictSwap}>
                   A) Trocar com outra rota (Swap) - Recomendado
                 </button>
-                <button type="button" className="rounded-md border border-warning/70 bg-gradient-to-r from-warning to-[#ff7a18] px-3 py-2 text-left text-sm font-semibold text-[#1f1300] hover:brightness-105" onClick={resolveConflictSecondRun}>
+                <button type="button" className="rounded-md border border-warning/70 bg-warning px-3 py-2 text-left text-sm font-semibold text-slate-950 hover:bg-warning/90" onClick={resolveConflictSecondRun}>
                   B) Definir como 2ª saída
                 </button>
                 <button type="button" className="rounded-md border border-border bg-surface-2 px-3 py-2 text-left text-sm text-text" onClick={resolveConflictCancel}>
@@ -3611,7 +3611,7 @@ function RoutePlanning() {
                 <button type="button" className="rounded border border-border bg-surface-2 px-3 py-2 text-sm text-text" onClick={() => setIsSwapModalOpen(false)}>Cancelar</button>
                 <button
                   type="button"
-                  className="rounded border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                  className="rounded border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-60"
                   disabled={!swapTargetTripId || isSwapping}
                   onClick={() => executeSwap(Number(swapTargetTripId), swapMode, swapReason)}
                 >
@@ -3702,7 +3702,7 @@ function RoutePlanning() {
 
               <div className="mt-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">Cancelar</button>
-                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-70">
+                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-70">
                   {isSavingEdit ? 'Salvando...' : 'Salvar alterações'}
                 </button>
               </div>

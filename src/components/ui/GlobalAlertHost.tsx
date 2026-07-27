@@ -111,7 +111,7 @@ function GlobalAlertHost() {
   if (!current) return null;
 
   return (
-    <div className="fixed inset-0 z-[3000] grid place-items-center bg-black/70 p-3 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[3000] grid place-items-center bg-black/75 p-3">
       <div className="w-full max-w-[460px] rounded-lg border border-border bg-surface p-4 text-text shadow-[var(--shadow-3)]">
         <h3 className="text-base font-semibold text-text">{current.title}</h3>
         <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{current.message}</p>
@@ -129,8 +129,8 @@ function GlobalAlertHost() {
                 type="button"
                 onClick={() => resolveCurrent(true)}
                 className={current.tone === 'danger'
-                  ? 'h-10 rounded-md border border-rose-600/65 bg-gradient-to-r from-rose-500 to-rose-600 px-4 text-sm font-semibold text-white'
-                  : 'h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e]'}
+                  ? 'h-10 rounded-md border border-danger bg-danger px-4 text-sm font-semibold text-white'
+                  : 'h-10 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong'}
               >
                 {current.confirmLabel}
               </button>
@@ -139,7 +139,7 @@ function GlobalAlertHost() {
             <button
               type="button"
               onClick={() => resolveCurrent()}
-              className="h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e]"
+              className="h-10 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
             >
               {current.okLabel}
             </button>

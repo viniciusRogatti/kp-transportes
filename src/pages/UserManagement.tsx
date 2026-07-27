@@ -154,7 +154,7 @@ function UserManagement() {
       <Header />
       <Container>
         <div className="w-full max-w-[1200px] space-y-4">
-          <div className="rounded-md border border-white/15 bg-surface/70 p-4">
+          <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
             <h2 className="text-[1.05rem] font-semibold text-text">Cadastro de usuários</h2>
             <p className="mt-1 text-sm text-muted">
               Disponível apenas para perfis administrativos.
@@ -167,7 +167,7 @@ function UserManagement() {
                 onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
                 placeholder="Usuário de acesso"
                 autoComplete="new-username"
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <input
                 type="text"
@@ -175,7 +175,7 @@ function UserManagement() {
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Nome"
                 autoComplete="off"
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <input
                 type="password"
@@ -183,7 +183,7 @@ function UserManagement() {
                 onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
                 placeholder="Senha do novo usuário"
                 autoComplete="new-password"
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <input
                 type="password"
@@ -191,7 +191,7 @@ function UserManagement() {
                 onChange={(event) => setForm((prev) => ({ ...prev, passwordConfirmation: event.target.value }))}
                 placeholder="Confirme a senha do novo usuário"
                 autoComplete="new-password"
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <input
                 type="password"
@@ -199,12 +199,12 @@ function UserManagement() {
                 onChange={(event) => setForm((prev) => ({ ...prev, actorPassword: event.target.value }))}
                 placeholder="Sua senha para confirmar"
                 autoComplete="off"
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               />
               <select
                 value={form.permission}
                 onChange={(event) => setForm((prev) => ({ ...prev, permission: event.target.value }))}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               >
                 {PERMISSION_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -217,7 +217,7 @@ function UserManagement() {
                 type="button"
                 onClick={createUser}
                 disabled={saving}
-                className="h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 font-semibold text-[#04131e] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                className="h-10 rounded-md border border-accent-strong bg-accent px-4 font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {saving ? 'Salvando...' : 'Criar usuário'}
               </button>
@@ -236,7 +236,7 @@ function UserManagement() {
             />
           </FilterBar>
 
-          <div className="w-full overflow-x-auto rounded-md border border-white/10">
+          <div className="w-full overflow-x-auto rounded-md border border-border shadow-soft">
             <table className="min-w-[760px]">
               <thead>
                 <tr>

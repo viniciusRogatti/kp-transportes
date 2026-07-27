@@ -20,8 +20,8 @@ module.exports = {
         info: 'var(--color-info)',
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-        display: ['"Space Grotesk"', '"Plus Jakarta Sans"', 'sans-serif'],
+        sans: ['"Inter"', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', '"Inter"', 'sans-serif'],
       },
       borderRadius: {
         sm: 'var(--radius-1)',

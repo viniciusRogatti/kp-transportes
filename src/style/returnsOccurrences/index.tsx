@@ -19,7 +19,7 @@ export function Tabs({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1',
+        'relative inline-flex items-end rounded-t-md border border-border bg-card px-1 pt-1',
         className,
       )}
       {...props}
@@ -47,7 +47,7 @@ export function Card({ className, ...props }: SectionProps) {
   return (
     <section
       className={cn(
-        'rounded-lg border border-border bg-surface/80 p-s4 shadow-[var(--shadow-2)] [&_h2]:mb-s3 [&_h2]:text-[1.05rem]',
+        'rounded-lg border border-border bg-surface p-s4 shadow-soft [&_h2]:mb-s3 [&_h2]:text-[1.05rem]',
         className,
       )}
       {...props}
@@ -63,7 +63,7 @@ export function Actions({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-wrap gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-45 [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e] [&_button.secondary]:bg-surface-2/85 [&_button.secondary]:text-text [&_button.danger]:bg-[#f05e5e] [&_button.danger]:text-white',
+        'flex flex-wrap gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button]:transition-colors [&_button:disabled]:cursor-not-allowed [&_button:disabled]:opacity-45 [&_button.primary]:border-accent-strong [&_button.primary]:bg-accent [&_button.primary]:text-white [&_button.primary:hover]:bg-accent-strong [&_button.secondary]:border-border [&_button.secondary]:bg-card [&_button.secondary]:text-text [&_button.secondary:hover]:bg-surface-2 [&_button.danger]:border-danger [&_button.danger]:bg-danger [&_button.danger]:text-white',
         className,
       )}
       {...props}
@@ -87,7 +87,7 @@ export function List({ className, ...props }: UlProps) {
   return (
     <ul
       className={cn(
-        'mt-s3 flex list-none flex-col gap-s2 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:justify-between [&>li]:gap-s3 [&>li]:rounded-sm [&>li]:border [&>li]:border-border [&>li]:bg-surface-2/70 [&>li]:px-s3 [&>li]:py-s2 max-md:[&>li]:items-start [&>li>span]:min-w-0 [&>li>span]:break-words',
+        'mt-s3 flex list-none flex-col gap-s2 [&>li]:flex [&>li]:min-w-0 [&>li]:flex-wrap [&>li]:items-center [&>li]:justify-between [&>li]:gap-s3 [&>li]:rounded-sm [&>li]:border [&>li]:border-border [&>li]:bg-surface-2 [&>li]:px-s3 [&>li]:py-s2 max-md:[&>li]:items-start [&>li>span]:min-w-0 [&>li>span]:break-words',
         className,
       )}
       {...props}
@@ -103,7 +103,7 @@ export function OccurrenceCardFooter({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'mt-1 w-full rounded-md border border-border bg-surface-2/90 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
+        'mt-1 w-full rounded-md border border-border bg-card p-2',
         className,
       )}
       {...props}
@@ -119,7 +119,7 @@ export function OccurrenceActionsLeft({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-nowrap items-center gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button]:transition [&_button:hover]:brightness-110 [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e] [&_button.danger]:bg-[var(--semantic-danger-solid-bg)] [&_button.danger]:text-[var(--semantic-danger-solid-text)]',
+        'flex flex-nowrap items-center gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button]:transition-colors [&_button.primary]:border-accent-strong [&_button.primary]:bg-accent [&_button.primary]:text-white [&_button.primary:hover]:bg-accent-strong [&_button.danger]:border-danger [&_button.danger]:bg-[var(--semantic-danger-solid-bg)] [&_button.danger]:text-[var(--semantic-danger-solid-text)]',
         className,
       )}
       {...props}
@@ -147,7 +147,7 @@ export function BatchActionsRow({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-wrap gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.primary]:bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] [&_button.primary]:text-[#04131e] [&_button.secondary]:bg-surface-2/85 [&_button.secondary]:text-text',
+        'flex flex-wrap gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.primary]:border-accent-strong [&_button.primary]:bg-accent [&_button.primary]:text-white [&_button.primary:hover]:bg-accent-strong [&_button.secondary]:border-border [&_button.secondary]:bg-card [&_button.secondary]:text-text',
         className,
       )}
       {...props}
@@ -183,7 +183,7 @@ export function SaveBatchButton({ className, ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        'cursor-pointer rounded-md border-none bg-[linear-gradient(135deg,#3ecf6d_0%,#23a455_100%)] px-4 py-[0.65rem] font-semibold text-[#062611] disabled:cursor-not-allowed disabled:opacity-45',
+        'cursor-pointer rounded-md border border-emerald-700 bg-emerald-600 px-4 py-[0.65rem] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45',
         className,
       )}
       {...props}
@@ -223,7 +223,7 @@ export function HighlightButton({ className, ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        'cursor-pointer rounded-md border-none bg-[linear-gradient(135deg,#ffba2b_0%,#ff7a18_100%)] px-4 py-[0.7rem] font-bold text-[#1f1300]',
+        'cursor-pointer rounded-md border border-warning bg-warning px-4 py-[0.7rem] font-bold text-white transition hover:brightness-110',
         className,
       )}
       {...props}
@@ -232,7 +232,7 @@ export function HighlightButton({ className, ...props }: ButtonProps) {
 }
 
 export function ModalOverlay({ className, ...props }: DivProps) {
-  return <div className={cn('fixed inset-0 z-[1400] bg-black/55 backdrop-blur-[3px]', className)} {...props} />;
+  return <div className={cn('fixed inset-0 z-[1400] bg-black/70', className)} {...props} />;
 }
 
 export function ModalCard({ className, ...props }: DivProps) {

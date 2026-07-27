@@ -26,14 +26,14 @@ function ImportSummary({
 }: ImportSummaryProps) {
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
+      <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-text">Progresso de processamento</h3>
           <span className="text-xs text-muted">{processedLabel}</span>
         </div>
-        <div className="h-3 w-full overflow-hidden rounded-full bg-surface-2/80">
+        <div className="h-3 w-full overflow-hidden rounded-sm bg-surface-2">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-accent to-accent-strong transition-all"
+            className="h-full rounded-sm bg-accent transition-all"
             style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
           />
         </div>

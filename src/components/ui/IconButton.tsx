@@ -13,8 +13,8 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 }
 
 const variantMap: Record<IconButtonVariant, string> = {
-  default: 'border-border bg-surface/85 text-text hover:bg-surface-2',
-  danger: 'border-danger/55 bg-danger/15 text-danger hover:bg-danger/25',
+  default: 'border-border bg-card text-text hover:border-muted hover:bg-surface-2',
+  danger: 'border-danger/60 bg-card text-danger hover:bg-danger hover:text-white',
 };
 
 const sizeMap: Record<IconButtonSize, string> = {
@@ -38,7 +38,7 @@ function IconButton({
       aria-label={label}
       data-icon-button="true"
       className={cn(
-        'inline-flex items-center justify-center rounded-xl border transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        'inline-flex items-center justify-center rounded-md border transition-colors active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
         sizeMap[size],
         variantMap[variant],
         className,

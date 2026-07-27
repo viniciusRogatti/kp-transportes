@@ -501,7 +501,7 @@ function UserSessions() {
       <Header />
       <Container>
         <div className="w-full max-w-[1250px] space-y-4">
-          <div className="rounded-md border border-white/15 bg-surface/70 p-4">
+          <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
             <h2 className="text-[1.05rem] font-semibold text-text">Horário de sessões dos usuários</h2>
             <p className="mt-1 text-sm text-muted">
               Visualização exclusiva para o perfil Administrador geral.
@@ -584,7 +584,7 @@ function UserSessions() {
                 type="button"
                 onClick={refreshData}
                 disabled={loading || analyticsLoading}
-                className="h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 font-semibold text-[#04131e] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                className="h-10 rounded-md border border-accent-strong bg-accent px-4 font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading || analyticsLoading ? 'Carregando...' : 'Atualizar'}
               </button>
@@ -745,7 +745,7 @@ function UserSessions() {
             </div>
           </div>
 
-          <div className="w-full overflow-x-auto rounded-md border border-white/10">
+          <div className="w-full overflow-x-auto rounded-md border border-border shadow-soft">
             <table className="min-w-[1050px]">
               <thead>
                 <tr>
@@ -783,7 +783,7 @@ function UserSessions() {
               </tbody>
             </table>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-surface/40 px-3 py-2 text-xs text-muted">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
             <span>{sessionsRangeText}</span>
             <div className="flex items-center gap-2">
               <button

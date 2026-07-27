@@ -51,7 +51,7 @@ function ProductRows({
 function NewProductsPanel({ newProducts, updatedProducts }: NewProductsPanelProps) {
   if (!newProducts.length && !updatedProducts.length) {
     return (
-      <div className="rounded-xl border border-border bg-surface/80 p-4 text-sm text-muted">
+      <div className="rounded-lg border border-border bg-surface p-4 text-sm text-muted">
         Nenhum produto novo/atualizado neste processamento.
       </div>
     );

@@ -49,15 +49,15 @@ export function BoxButton({ className, ...props }: DivProps) {
 export function ActionButton({ className, $tone, ...props }: ActionButtonProps) {
   const toneClass =
     $tone === 'primary'
-      ? 'border-transparent bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] text-[#04131e]'
+      ? 'border-accent-strong bg-accent text-white hover:bg-accent-strong'
       : $tone === 'tertiary'
-        ? 'border border-amber-700/70 bg-amber-950/25 text-amber-200'
-        : 'border-border bg-surface-2/90 text-text';
+        ? 'border border-warning bg-warning text-white hover:brightness-110'
+        : 'border-border bg-card text-text hover:bg-surface-2';
 
   return (
     <button
       className={cn(
-        'w-2/5 cursor-pointer rounded border px-[10px] py-[6px] transition hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-55 max-md:w-full',
+        'w-2/5 cursor-pointer rounded border px-[10px] py-[6px] transition-colors disabled:cursor-not-allowed disabled:opacity-55 max-md:w-full',
         toneClass,
         className,
       )}
@@ -118,7 +118,7 @@ export function CardsTripsNotes({ className, ...props }: any) {
   return (
     <motion.li
       className={cn(
-        'relative mt-s5 flex h-[200px] max-w-[320px] flex-1 basis-[240px] flex-col items-center justify-center rounded-lg border border-[rgba(12,39,60,0.2)] bg-card text-[#0b1b2a] shadow-soft [&>h2]:absolute [&>h2]:left-[30%] [&>h2]:top-5 [&>h3]:mt-s2 [&>h3]:text-[#0b1b2a] [&>h4]:max-w-[93%] [&>h4]:overflow-hidden [&>h4]:text-center [&>h4]:text-xs [&>h5]:absolute [&>h5]:left-3 [&>h5]:top-2 [&>h5]:rounded-full [&>h5]:border [&>h5]:border-black [&>h5]:px-[14px] [&>h5]:py-2 [&>h5]:text-[22px] [&>p]:absolute [&>p]:right-3 [&>p]:top-2 [&>p]:font-bold',
+        'relative mt-s5 flex h-[200px] max-w-[320px] flex-1 basis-[240px] flex-col items-center justify-center rounded-lg border border-border bg-card text-text shadow-soft [&>h2]:absolute [&>h2]:left-[30%] [&>h2]:top-5 [&>h3]:mt-s2 [&>h3]:text-text [&>h4]:max-w-[93%] [&>h4]:overflow-hidden [&>h4]:text-center [&>h4]:text-xs [&>h5]:absolute [&>h5]:left-3 [&>h5]:top-2 [&>h5]:rounded-full [&>h5]:border [&>h5]:border-border [&>h5]:px-[14px] [&>h5]:py-2 [&>h5]:text-[22px] [&>p]:absolute [&>p]:right-3 [&>p]:top-2 [&>p]:font-bold',
         className,
       )}
       {...props}
@@ -150,7 +150,7 @@ export function BoxDriverVehicle({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-10 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-accent/35 [&_select]:bg-card [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:ring-2 [&_select:focus]:ring-accent/60 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-10 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-border [&_select]:bg-card [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:border-accent [&_select:focus]:ring-2 [&_select:focus]:ring-accent/20 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         className,
       )}
       {...props}
@@ -162,7 +162,7 @@ export function BoxSelectDanfe({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         className,
       )}
       {...props}

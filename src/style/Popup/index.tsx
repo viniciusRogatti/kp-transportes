@@ -11,7 +11,7 @@ type LabelProps = DetailedHTMLProps<LabelHTMLAttributes<HTMLLabelElement>, HTMLL
 type BtnProps = DetailedHTMLProps<ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>;
 
 export function Overlay({ className, ...props }: DivProps) {
-  return <div className={cn('fixed inset-0 z-[1490] bg-black/70 backdrop-blur-[2px]', className)} {...props} />;
+  return <div className={cn('fixed inset-0 z-[1490] bg-black/75', className)} {...props} />;
 }
 
 export function PopupContainer({ className, ...props }: DivProps) {
@@ -36,7 +36,7 @@ export function InputBox({ className, ...props }: LabelProps) {
     <label
       className={cn(
         'mb-2 flex w-full flex-col gap-1.5 text-sm text-muted',
-        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-surface-2/85 [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         className,
       )}
       {...props}
@@ -52,10 +52,10 @@ export function PopupButton({ className, $tone, ...props }: BtnProps & { $tone?:
   return (
     <button
       className={cn(
-        'h-10 w-full cursor-pointer rounded-md border px-3 text-sm font-semibold transition hover:-translate-y-px',
+        'h-10 w-full cursor-pointer rounded-md border px-3 text-sm font-semibold transition-colors',
         $tone === 'danger'
           ? 'border-rose-700 bg-rose-700 text-white hover:bg-rose-600'
-          : 'border-white/15 bg-gradient-to-r from-accent to-accent-strong text-[#04131e]',
+          : 'border-accent-strong bg-accent text-white hover:bg-accent-strong',
         className,
       )}
       {...props}

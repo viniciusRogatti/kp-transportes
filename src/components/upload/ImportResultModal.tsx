@@ -92,7 +92,7 @@ function ImportResultModal({
       : 'border-emerald-500/40 bg-emerald-500/12 text-[color:var(--color-success)]';
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 px-3 py-5 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 px-3 py-5">
       <div
         role="dialog"
         aria-modal="true"
@@ -112,7 +112,7 @@ function ImportResultModal({
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-current/30 bg-surface/70"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-current/30 bg-card"
               aria-label="Fechar resultado da importação"
             >
               <X className="h-4 w-4" />
@@ -181,7 +181,7 @@ function ImportResultModal({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-border bg-card/60 p-4">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-border bg-card p-4">
           <button
             type="button"
             onClick={onDownload}
@@ -208,7 +208,7 @@ function ImportResultModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 items-center rounded-md border border-accent/40 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e]"
+            className="inline-flex h-10 items-center rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
           >
             Concluir
           </button>

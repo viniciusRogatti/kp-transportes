@@ -15,7 +15,7 @@ function ThemeToggleButton({ className, iconOnly = false }: ThemeToggleButtonPro
       type="button"
       onClick={toggleTheme}
       className={cn(
-        'inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface/80 px-3 text-sm font-semibold text-text transition hover:bg-surface-2',
+        'inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
         className,
       )}
       aria-label={isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro'}

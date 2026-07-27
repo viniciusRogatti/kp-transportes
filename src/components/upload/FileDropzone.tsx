@@ -47,7 +47,7 @@ function FileDropzone({
   }
 
   return (
-    <div className="w-full rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
+    <div className="w-full rounded-lg border border-border bg-surface p-4 shadow-soft">
       <input
         ref={inputRef}
         type="file"
@@ -80,7 +80,7 @@ function FileDropzone({
             ? 'border-accent/65 bg-accent/10'
             : hasSelection
               ? 'border-emerald-500/45 bg-emerald-500/12'
-              : 'border-border bg-surface/60',
+              : 'border-border bg-card',
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         )}
         onClick={openFilePicker}

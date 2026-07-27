@@ -6,7 +6,7 @@ type SpanProps = DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElem
 
 export function TruckLoader({ className, ...props }: DivProps) {
   return (
-    <div className={cn('mt-24 inline-flex h-[100px] w-[130px] items-center justify-center rounded-md border border-accent/40 bg-surface/70 text-4xl', className)} {...props}>
+    <div className={cn('mt-24 inline-flex h-[100px] w-[130px] items-center justify-center rounded-md border border-border bg-surface text-4xl shadow-soft', className)} {...props}>
       🚚
     </div>
   );
@@ -17,7 +17,7 @@ export function Loading({ className, ...props }: SpanProps) {
 }
 
 export function LoaderPrinting({ className, ...props }: SpanProps) {
-  return <span className={cn('mt-24 inline-flex items-center gap-2 rounded-md border border-accent/40 bg-surface/70 px-4 py-3 text-sm', className)} {...props}>🖨️ Processando...</span>;
+  return <span className={cn('mt-24 inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-3 text-sm shadow-soft', className)} {...props}>🖨️ Processando...</span>;
 }
 
 export function ProductsLoader({ className, ...props }: DivProps) {

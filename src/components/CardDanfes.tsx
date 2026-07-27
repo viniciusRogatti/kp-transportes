@@ -353,7 +353,6 @@ function CardDanfes({
               if (invoiceContext?.trip_date) params.set('date', invoiceContext.trip_date);
               window.location.hash = `#/delivery-monitoring?${params.toString()}`;
             };
-
             return (
               <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
                 <div
@@ -656,7 +655,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={closeProductsModal}
           />
-          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[680px] flex-col rounded-lg border border-border bg-card p-3 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[680px] flex-col rounded-lg border border-border bg-card p-3 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-semibold">{`NF ${productsModalDanfe.invoice_number}`}</h3>
@@ -705,7 +704,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={() => closeReplacementModal()}
           />
-          <div className="relative z-[1420] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+          <div className="relative z-[1420] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-semibold">{`NF ${replacementModalDanfe.invoice_number}`}</h3>
@@ -759,7 +758,7 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={handleLinkReplacementInvoice}
-                className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
                 disabled={isLinkingReplacement}
               >
                 {isLinkingReplacement ? 'Vinculando...' : 'Salvar vinculo'}
@@ -777,7 +776,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={() => closeAssignmentModal()}
           />
-          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">{`Atribuir NF ${assignmentModalDanfe.invoice_number}`}</h3>
@@ -820,7 +819,7 @@ function CardDanfes({
                       </div>
                       <span className={cn(
                         'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold',
-                        isSelected ? 'border-accent bg-accent text-[#04131e]' : 'border-border text-muted',
+                        isSelected ? 'border-accent bg-accent text-white' : 'border-border text-muted',
                       )}
                       >
                         {isSelected ? '✓' : ''}
@@ -849,7 +848,7 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={handleAssignDanfeToTrip}
-                className="inline-flex h-9 items-center rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-3 text-sm font-semibold text-[#04131e] transition disabled:opacity-60"
+                className="inline-flex h-9 items-center rounded-md border border-accent-strong bg-accent px-3 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
                 disabled={isAssigningDanfe}
               >
                 {isAssigningDanfe ? 'Atribuindo...' : 'Confirmar atribuição'}

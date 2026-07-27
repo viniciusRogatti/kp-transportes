@@ -169,9 +169,9 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
 
   if (provider === 'none') {
     return (
-      <div className="rounded-xl border border-border bg-surface/70 p-3 text-left">
+      <div className="rounded-lg border border-border bg-card p-3 text-left">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Verificação de segurança</p>
-        <div className="mt-2 flex min-h-[68px] items-center justify-center rounded-md border border-dashed border-border bg-surface-2/60 px-2">
+        <div className="mt-2 flex min-h-[68px] items-center justify-center rounded-md border border-dashed border-border bg-surface-2 px-2">
           <span className="text-xs text-muted">CAPTCHA pendente de configuração (Turnstile/reCAPTCHA).</span>
         </div>
       </div>
@@ -180,9 +180,9 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
 
   if (provider === 'turnstile') {
     return (
-      <div className="rounded-md border border-border bg-surface/70 p-3 text-left max-[380px]:p-2">
+      <div className="rounded-md border border-border bg-card p-3 text-left max-[380px]:p-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Verificação de segurança</p>
-        <div className="mt-2 flex min-h-[78px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-2/60 p-2">
+        <div className="mt-2 flex min-h-[78px] w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-surface-2 p-2">
           {isLoading && <span className="text-xs text-muted">Carregando verificação...</span>}
           <div className="w-full overflow-hidden rounded-md">
             <TurnstileCheckbox
@@ -199,9 +199,9 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface/70 p-3 text-left max-[380px]:p-2">
+    <div className="rounded-lg border border-border bg-card p-3 text-left max-[380px]:p-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">Verificação de segurança</p>
-      <div className="mt-2 flex min-h-[78px] w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-surface-2/60 p-2 max-[380px]:px-0 max-[380px]:py-1">
+      <div className="mt-2 flex min-h-[78px] w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-surface-2 p-2 max-[380px]:px-0 max-[380px]:py-1">
         {isLoading && <span className="text-xs text-muted">Carregando CAPTCHA...</span>}
         <div className="w-full overflow-hidden rounded-md">
           <div ref={recaptchaContainerRef} className="mx-auto w-full max-w-full" />

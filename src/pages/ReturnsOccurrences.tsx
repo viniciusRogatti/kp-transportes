@@ -476,7 +476,11 @@ function ReturnsOccurrences() {
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [occurrences, setOccurrences] = useState<IOccurrence[]>([]);
   const [occurrenceStatusFilter, setOccurrenceStatusFilter] = useState<OccurrenceWorkflowFilter>('pending_transportadora');
-  const [occurrenceNfFilter, setOccurrenceNfFilter] = useState('');
+  const [occurrenceNfFilter, setOccurrenceNfFilter] = useState(() => (
+    searchParams.get('tab') === 'occurrences'
+      ? String(searchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9)
+      : ''
+  ));
   const [occurrenceStartDate, setOccurrenceStartDate] = useState('');
   const [occurrenceEndDate, setOccurrenceEndDate] = useState('');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -2466,10 +2470,10 @@ function ReturnsOccurrences() {
             </Tabs>
           </TabsRow>
 
-          <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+          <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border bg-surface p-3 shadow-soft">
             {activeTab === 'returns' && (
               <SingleColumn>
-                <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card/55 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>
@@ -2479,7 +2483,7 @@ function ReturnsOccurrences() {
                       <button
                         type="button"
                         onClick={handleOpenNewReturnModal}
-                        className="h-10 shrink-0 rounded-md border border-accent/70 bg-[linear-gradient(135deg,var(--color-accent)_0%,var(--color-accent-strong)_100%)] px-5 text-sm font-bold text-[#04131e] shadow-[var(--shadow-1)] transition hover:brightness-105"
+                        className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
                       >
                         + Nova devolucao
                       </button>
@@ -2525,7 +2529,7 @@ function ReturnsOccurrences() {
                     <button
                       type="button"
                       onClick={handleLoadLatestBatches}
-                      className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.85rem] font-bold text-[#1f1300] transition hover:brightness-105"
+                      className="h-10 rounded-md border border-warning bg-warning px-4 text-[0.85rem] font-bold text-white transition hover:brightness-110"
                     >
                       Trazer ultimas devolucoes
                     </button>
@@ -2606,7 +2610,7 @@ function ReturnsOccurrences() {
                       <button
                         type="button"
                         onClick={() => handleConfirmBatchSubmission()}
-                        className="rounded-md border border-amber-500/70 bg-[linear-gradient(135deg,#ffd166_0%,#f7b733_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#2b1b00] transition hover:brightness-105"
+                        className="rounded-md border border-warning bg-warning px-4 py-[0.65rem] text-[0.82rem] font-bold text-white transition hover:brightness-110"
                       >
                         Confirmar envio da devolucao
                       </button>
@@ -2615,7 +2619,7 @@ function ReturnsOccurrences() {
                       <button
                         type="button"
                         onClick={handleConfirmBatchReceipt}
-                        className="rounded-md border border-emerald-500/70 bg-[linear-gradient(135deg,#9ae6b4_0%,#38a169_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#052814] transition hover:brightness-105"
+                        className="rounded-md border border-emerald-700 bg-emerald-600 px-4 py-[0.65rem] text-[0.82rem] font-bold text-white transition-colors hover:bg-emerald-700"
                       >
                         Confirmar recebimento da devolucao
                       </button>
@@ -2856,7 +2860,7 @@ function ReturnsOccurrences() {
                           </Grid>
                           <Actions style={{ marginTop: '12px' }}>
                             <button
-                              className="bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] text-[#1f1300]"
+                              className="bg-warning text-white"
                               onClick={addPartialItem}
                               disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                               type="button"
@@ -2979,7 +2983,7 @@ function ReturnsOccurrences() {
                                       type="button"
                                       onClick={handleSearchSurplusInversionNf}
                                       disabled={leftoverInversionLookupLoading || !leftoverInversionInvoiceNumber.trim()}
-                                      className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-3 text-[0.75rem] font-semibold text-[#1f1300] transition disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="h-10 rounded-md border border-warning bg-warning px-3 text-[0.75rem] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       {leftoverInversionLookupLoading ? 'Buscando...' : 'Buscar NF'}
                                     </button>
@@ -3028,7 +3032,7 @@ function ReturnsOccurrences() {
                                 <button
                                   type="button"
                                   onClick={addSurplusInversionAllocation}
-                                  className="h-10 rounded-md border border-[#ffca3a]/70 bg-[linear-gradient(135deg,#ffe082_0%,#ffca3a_45%,#ff9f1c_100%)] px-4 text-[0.8rem] font-semibold text-[#1f1300] transition disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="h-10 rounded-md border border-warning bg-warning px-4 text-[0.8rem] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                                   disabled={leftoverInversionLookupLoading}
                                 >
                                   Adicionar NF afetada
@@ -3245,7 +3249,7 @@ function ReturnsOccurrences() {
                                   <button
                                     type="button"
                                     onClick={() => handleConfirmBatchSubmission(batch)}
-                                    className="rounded-md border border-amber-500/70 bg-[linear-gradient(135deg,#ffd166_0%,#f7b733_100%)] px-4 py-[0.65rem] text-[0.82rem] font-bold text-[#2b1b00] transition hover:brightness-105"
+                                    className="rounded-md border border-warning bg-warning px-4 py-[0.65rem] text-[0.82rem] font-bold text-white transition hover:brightness-110"
                                   >
                                     Confirmar envio
                                   </button>
@@ -3285,7 +3289,7 @@ function ReturnsOccurrences() {
                       <button
                         onClick={openCreateOccurrenceBuilder}
                         type="button"
-                        className="rounded-md border border-amber-500/60 bg-[linear-gradient(135deg,#ffba2b_0%,#ff7a18_100%)] px-4 py-[0.65rem] font-bold text-[#1f1300] transition hover:brightness-105"
+                        className="rounded-md border border-warning bg-warning px-4 py-[0.65rem] font-bold text-white transition hover:brightness-110"
                       >
                         Criar ocorrencia
                       </button>

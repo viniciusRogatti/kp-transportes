@@ -59,7 +59,7 @@ function UploadQueueList({ items, disabled = false, onRemove }: UploadQueueListP
   }, [items, scrollTop]);
 
   return (
-    <div className="w-full rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
+    <div className="w-full rounded-lg border border-border bg-surface p-4 shadow-soft">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-text">Fila de envio</h3>
         <span className="text-xs text-muted">{items.length} arquivo(s)</span>

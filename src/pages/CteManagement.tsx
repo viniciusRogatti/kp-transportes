@@ -570,7 +570,7 @@ function CteManagement() {
                   type="button"
                   onClick={handleSaveConfig}
                   disabled={!isAdminManager || !isEditingConfig || savingConfig || !selectedCompanyId}
-                  className="inline-flex h-10 items-center rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex h-10 items-center rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {savingConfig ? 'Salvando...' : 'Salvar configuração'}
                 </button>
@@ -731,7 +731,7 @@ function CteManagement() {
                 type="button"
                 onClick={handleCreateDraft}
                 disabled={creatingDraft || !preview || !selectedCompanyId}
-                className="inline-flex h-10 items-center rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex h-10 items-center rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {creatingDraft ? 'Criando rascunho...' : 'Criar rascunho de CT-e'}
               </button>

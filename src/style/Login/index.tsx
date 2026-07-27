@@ -16,24 +16,14 @@ export function Container({ className, children, ...props }: SectionProps) {
   return (
     <section
       className={cn(
-        'relative flex h-[100dvh] w-full items-center justify-center overflow-hidden px-s4 py-0',
+        'relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-bg px-s4 py-s5',
         className,
       )}
-      style={{
-        background:
-          'radial-gradient(920px 460px at -10% -10%, rgba(39, 198, 179, 0.23) 0%, transparent 70%), radial-gradient(780px 360px at 105% 0%, rgba(14, 93, 174, 0.2) 0%, transparent 70%), linear-gradient(140deg, #051320 0%, #0b243a 60%, #0e2d45 100%)',
-      }}
       {...props}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(76, 122, 163, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(76, 122, 163, 0.08) 1px, transparent 1px)',
-          backgroundSize: '42px 42px',
-          maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.22), transparent 75%)',
-        }}
+        className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-accent"
       />
       {children}
     </section>
@@ -44,7 +34,7 @@ export function LoginCard({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'relative z-[1] grid h-[min(680px,92dvh)] w-[min(1080px,94vw)] grid-cols-2 overflow-hidden rounded-[26px] border border-[#7aacd63d] shadow-[0_22px_48px_rgba(0,0,0,0.35)] backdrop-blur-[8px] max-[950px]:h-auto max-[950px]:w-[min(560px,94vw)] max-[950px]:grid-cols-1',
+        'relative z-[1] grid min-h-[640px] w-[min(1080px,94vw)] grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-3)] max-[950px]:min-h-0 max-[950px]:w-[min(560px,94vw)] max-[950px]:grid-cols-1',
         className,
       )}
       {...props}
@@ -56,12 +46,12 @@ export function HeroPanel({ className, ...props }: AsideProps) {
   return (
     <aside
       className={cn(
-        'relative flex min-h-[420px] flex-col justify-end gap-s4 p-s8 max-[950px]:min-h-[300px] max-[950px]:p-s6 max-[560px]:min-h-[260px] max-[560px]:p-s5',
+        'relative flex min-h-[420px] flex-col justify-end gap-s4 border-r border-border p-s8 max-[950px]:min-h-[300px] max-[950px]:border-b max-[950px]:border-r-0 max-[950px]:p-s6 max-[560px]:min-h-[260px] max-[560px]:p-s5',
         className,
       )}
       style={{
-        backgroundImage: `url(${VolksImage})`,
-        backgroundPosition: 'right',
+        backgroundImage: `linear-gradient(180deg, rgba(7, 15, 28, 0.12) 0%, rgba(7, 15, 28, 0.92) 82%), url(${VolksImage})`,
+        backgroundPosition: 'center',
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat',
       }}
@@ -76,7 +66,7 @@ export function HeroBadge({ className, ...props }: SpanProps) {
   return (
     <span
       className={cn(
-        'relative z-[1] w-fit rounded-full border border-[#d5faff59] bg-[#04121f8f] px-[14px] py-2 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-[#dff8ff]',
+        'relative z-[1] w-fit rounded-sm border border-blue-300/40 bg-[#0f172a] px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-[0.12em] text-blue-100',
         className,
       )}
       {...props}
@@ -87,7 +77,7 @@ export function HeroBadge({ className, ...props }: SpanProps) {
 export function HeroTitle({ className, children, ...props }: H1Props) {
   return (
     <h1
-      className={cn('relative z-[1] block max-w-[420px] text-[clamp(1.5rem,1.2rem+1.1vw,2.3rem)] leading-[1.15] text-[#f5fbff] [text-shadow:0_10px_28px_rgba(0,0,0,0.35)]', className)}
+      className={cn('relative z-[1] block max-w-[440px] text-[clamp(1.6rem,1.25rem+1.2vw,2.45rem)] leading-[1.15] text-white', className)}
       {...props}
     >
       {children}
@@ -96,20 +86,16 @@ export function HeroTitle({ className, children, ...props }: H1Props) {
 }
 
 export function HeroDescription({ className, ...props }: PProps) {
-  return <p className={cn('relative z-[1] max-w-[390px] text-[0.95rem] leading-[1.5] text-[#ebf7ffe6]', className)} {...props} />;
+  return <p className={cn('relative z-[1] max-w-[420px] text-[0.95rem] leading-[1.6] text-slate-200', className)} {...props} />;
 }
 
 export function BoxLogin({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'relative flex min-h-full w-full flex-col justify-center p-s8 max-[950px]:min-h-0 max-[950px]:p-s6 max-[560px]:p-s5',
+        'relative flex min-h-full w-full flex-col justify-center bg-surface p-s8 max-[950px]:min-h-0 max-[950px]:p-s6 max-[560px]:p-s5',
         className,
       )}
-      style={{
-        background:
-          'radial-gradient(120% 140% at 0% 0%, rgba(22, 50, 74, 0.34) 0%, transparent 55%), radial-gradient(100% 120% at 100% 100%, rgba(12, 36, 56, 0.36) 0%, transparent 58%), linear-gradient(160deg, #061019 0%, #071827 55%, #0a2133 100%)',
-      }}
       {...props}
     />
   );
@@ -119,7 +105,7 @@ export function ButtonLogin({ className, ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        'h-12 w-full cursor-pointer rounded-xl border border-white/20 bg-gradient-to-br from-[#27c6b3] to-[#17a694] text-sm font-bold uppercase tracking-[0.03em] text-[#04131e] transition duration-200 hover:-translate-y-px hover:shadow-[0_12px_22px_rgba(18,198,179,0.2)] disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none',
+        'h-12 w-full cursor-pointer rounded-md border border-accent-strong bg-accent text-sm font-bold text-white shadow-soft transition-colors duration-200 hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
         className,
       )}
       {...props}
@@ -128,14 +114,14 @@ export function ButtonLogin({ className, ...props }: ButtonProps) {
 }
 
 export function BoxInput({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-full flex-col gap-s2', className)} {...props} />;
+  return <div className={cn('flex w-full flex-col gap-s2 [&_label]:mt-1 [&_label]:text-xs [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_label]:text-muted', className)} {...props} />;
 }
 
 export function InputLogin({ className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        'h-12 w-full rounded-xl border border-[#9cc5e84d] bg-[#081825cc] px-4 text-[#e8f5ff] outline-none transition placeholder:text-[#9cb5c9] focus:border-[#3ddfcdd9] focus:bg-[#0a1f30e6] focus:shadow-[0_0_0_4px_rgba(39,198,179,0.2)]',
+        'h-12 w-full rounded-md border border-border bg-card px-4 text-text outline-none transition placeholder:text-muted focus:border-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.18)]',
         className,
       )}
       {...props}
@@ -144,7 +130,7 @@ export function InputLogin({ className, ...props }: InputProps) {
 }
 
 export function BoxPassword({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex w-full [&_svg]:absolute [&_svg]:right-[14px] [&_svg]:top-1/2 [&_svg]:-translate-y-1/2 [&_svg]:cursor-pointer [&_svg]:text-[#a8c6df]', className)} {...props} />;
+  return <div className={cn('relative flex w-full [&_svg]:absolute [&_svg]:right-[14px] [&_svg]:top-1/2 [&_svg]:-translate-y-1/2 [&_svg]:cursor-pointer [&_svg]:text-muted', className)} {...props} />;
 }
 
 export function FormHeader({ className, ...props }: DivProps) {
@@ -155,7 +141,7 @@ export function BrandName({ className, ...props }: SpanProps) {
   return (
     <span
       className={cn(
-        'w-fit rounded-full border border-[#a6d5f757] bg-[#091e3180] px-3 py-[7px] text-[0.78rem] font-bold uppercase tracking-[0.1em] text-[#ddf5ff]',
+        'w-fit border-l-4 border-accent pl-3 text-[0.75rem] font-bold uppercase tracking-[0.12em] text-text-accent',
         className,
       )}
       {...props}
@@ -165,14 +151,14 @@ export function BrandName({ className, ...props }: SpanProps) {
 
 export function FormTitle({ className, children, ...props }: H2Props) {
   return (
-    <h2 className={cn('block text-[clamp(1.4rem,1.1rem+0.9vw,2rem)] leading-[1.15] text-[#f2fbff]', className)} {...props}>
+    <h2 className={cn('block text-[clamp(1.4rem,1.1rem+0.9vw,2rem)] leading-[1.15] text-text', className)} {...props}>
       {children}
     </h2>
   );
 }
 
 export function FormSubtitle({ className, ...props }: PProps) {
-  return <p className={cn('max-w-[340px] text-[0.93rem] leading-[1.45] text-[#9eb7ca]', className)} {...props} />;
+  return <p className={cn('max-w-[340px] text-[0.93rem] leading-[1.5] text-muted', className)} {...props} />;
 }
 
 export function LoginForm({ className, ...props }: DivProps) {
@@ -180,9 +166,9 @@ export function LoginForm({ className, ...props }: DivProps) {
 }
 
 export function ErrorText({ className, ...props }: SpanProps) {
-  return <span className={cn('mt-[2px] text-[0.84rem] font-semibold text-[#ff9e9e]', className)} {...props} />;
+  return <span className={cn('mt-[2px] rounded-sm border semantic-panel-danger px-3 py-2 text-[0.84rem] font-semibold', className)} {...props} />;
 }
 
 export function SupportText({ className, ...props }: SpanProps) {
-  return <span className={cn('text-center text-[0.8rem] text-[#7f9cb2]', className)} {...props} />;
+  return <span className={cn('border-t border-border pt-4 text-center text-[0.78rem] text-muted', className)} {...props} />;
 }

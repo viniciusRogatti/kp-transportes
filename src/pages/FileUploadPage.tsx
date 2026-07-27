@@ -596,7 +596,7 @@ function FileUploadPage() {
       <Header />
       <Container className="pb-s3 max-[768px]:pb-s3">
         <div className="w-full max-w-[1200px] space-y-3">
-          <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
             <h2 className="text-[1.1rem] font-semibold text-text">Importação de XML</h2>
             <p className="mt-1 text-sm text-muted">Arraste arquivos, acompanhe o processamento e consulte o relatório completo.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -650,13 +650,13 @@ function FileUploadPage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-border bg-surface/80 p-4 shadow-[var(--shadow-1)]">
+          <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleUploadAll}
                 disabled={!hasReadyItems || isUploading}
-                className="inline-flex h-10 items-center rounded-md border border-accent/40 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] disabled:cursor-not-allowed disabled:opacity-45"
+                className="inline-flex h-10 items-center rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Processar XMLs
               </button>
@@ -692,9 +692,9 @@ function FileUploadPage() {
                   <span>Processados: {processedLabel}</span>
                   <span>{Math.round(progressPercent)}%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2/80">
+                <div className="h-2 w-full overflow-hidden rounded-sm bg-surface-2">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-accent to-accent-strong transition-all"
+                    className="h-full rounded-sm bg-accent transition-all"
                     style={{ width: `${Math.max(2, Math.min(100, progressPercent))}%` }}
                   />
                 </div>
@@ -706,7 +706,7 @@ function FileUploadPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-surface/80 p-3 shadow-[var(--shadow-1)]">
+          <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
             <button
               type="button"
               onClick={() => setIsQueueOpen((previous) => !previous)}
@@ -738,7 +738,7 @@ function FileUploadPage() {
           </div>
 
           {report && (
-            <div className="rounded-xl border border-border bg-surface/80 p-3 shadow-[var(--shadow-1)]">
+            <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -936,7 +936,7 @@ function FileUploadPage() {
                     type="button"
                     onClick={handleRegisterIssuerTaxId}
                     disabled={!selectedAliasCompanyId || isSavingAlias || companiesLoading}
-                    className="inline-flex h-10 items-center rounded-md border border-accent/40 bg-gradient-to-r from-accent to-accent-strong px-4 text-sm font-semibold text-[#04131e] disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex h-10 items-center rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {isSavingAlias ? 'Cadastrando...' : 'Cadastrar CNPJ'}
                   </button>

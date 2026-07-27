@@ -63,6 +63,7 @@ function App() {
   const location = useLocation();
   const token = localStorage.getItem('token');
   const isLoginRoute = location.pathname === '/';
+  const isControlTowerRoute = location.pathname.startsWith('/control-tower');
   const realtimeToken = isLoginRoute ? null : token;
 
   useEffect(() => {
@@ -126,7 +127,7 @@ function App() {
   }, []);
 
   return (
-    <div>
+    <div className={isControlTowerRoute ? undefined : 'professional-ui'}>
       <RealtimeNotificationsProvider token={realtimeToken}>
         <GlobalAlertHost />
         <Suspense fallback={<RouteFallback />}>

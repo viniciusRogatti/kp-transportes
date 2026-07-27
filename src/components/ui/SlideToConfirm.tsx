@@ -65,10 +65,10 @@ function SlideToConfirm({
         aria-disabled={isInteractionDisabled}
         tabIndex={isInteractionDisabled ? -1 : 0}
         className={cn(
-          'relative h-10 w-full select-none touch-pan-y overflow-hidden rounded-xl border outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+          'relative h-10 w-full select-none touch-pan-y overflow-hidden rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
           isConfirmed
-            ? 'border-emerald-400/60 bg-emerald-950/35'
-            : 'border-emerald-400/50 bg-[linear-gradient(135deg,rgba(6,22,16,0.96)_0%,rgba(10,36,26,0.9)_100%)]',
+            ? 'border-emerald-600 bg-emerald-900/40'
+            : 'border-emerald-700 bg-surface-2',
           !isInteractionDisabled && 'cursor-grab active:cursor-grabbing',
           isDragging && 'ring-2 ring-accent/45',
           isInteractionDisabled && !isConfirmed && 'opacity-85',
@@ -82,9 +82,7 @@ function SlideToConfirm({
         <div
           className={cn(
             'pointer-events-none absolute inset-y-0 left-0',
-            isConfirmed
-              ? 'bg-gradient-to-r from-emerald-400/45 to-emerald-300/30'
-              : 'bg-gradient-to-r from-emerald-400/45 to-emerald-300/30',
+            'bg-emerald-600/45',
           )}
           style={{ width: `${progressPercent}%`, transition: fillTransition }}
         />
@@ -112,10 +110,10 @@ function SlideToConfirm({
 
         <div
           className={cn(
-            'absolute left-1 top-1 z-[2] grid h-8 w-8 place-items-center rounded-lg border shadow-[0_6px_14px_rgba(0,0,0,0.35)]',
+            'absolute left-1 top-1 z-[2] grid h-8 w-8 place-items-center rounded-md border shadow-soft',
             isConfirmed
-              ? 'border-emerald-300/60 bg-emerald-400/25 text-emerald-100'
-              : 'border-emerald-300/60 bg-emerald-400/20 text-emerald-100',
+              ? 'border-emerald-500 bg-emerald-700 text-white'
+              : 'border-emerald-600 bg-emerald-800 text-emerald-100',
           )}
           style={{ transform: `translateX(${thumbOffsetPx}px)`, transition: thumbTransition }}
         >

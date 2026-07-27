@@ -2035,7 +2035,7 @@ function DeliveryMonitoring() {
               aria-label="Fechar modal de refaturamento"
               onClick={closeReplacementModal}
             />
-            <div className="relative z-[1210] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[0_14px_34px_rgba(0,0,0,0.55)]">
+            <div className="relative z-[1210] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold">
@@ -2095,7 +2095,7 @@ function DeliveryMonitoring() {
                 <button
                   type="button"
                   onClick={handleConfirmCancelledReplacement}
-                  className="rounded-md border border-border bg-gradient-to-r from-accent to-accent-strong px-4 py-2 text-sm font-semibold text-[#04131e] disabled:opacity-60"
+                  className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
                   disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
                 >
                   {stopStatusUpdate?.nextStatus === 'cancelled' ? 'Salvando...' : 'Confirmar cancelamento'}

@@ -8,18 +8,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const toneMap: Record<ButtonTone, string> = {
-  primary: 'bg-gradient-to-r from-accent to-accent-strong text-white shadow-soft hover:brightness-110',
-  secondary: 'bg-surface-2/90 text-text border border-border hover:bg-surface-2',
-  danger: 'bg-danger/90 text-white border border-danger/70 hover:bg-danger',
-  outline: 'border border-border bg-surface/60 text-text hover:bg-surface-2',
-  highlight: 'bg-gradient-to-r from-warning to-[#ff7a18] text-[#1f1300] shadow-soft hover:brightness-105',
+  primary: 'border border-accent-strong bg-accent text-white shadow-soft hover:bg-accent-strong',
+  secondary: 'border border-border bg-surface-2 text-text hover:border-muted hover:bg-card',
+  danger: 'border border-danger bg-danger text-white hover:brightness-110',
+  outline: 'border border-border bg-card text-text hover:border-muted hover:bg-surface-2',
+  highlight: 'border border-warning bg-warning text-white shadow-soft hover:brightness-110',
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ className, tone = 'primary', ...props }, ref) => (
   <button
     ref={ref}
       className={cn(
-      'inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+      'inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
       toneMap[tone],
       className,
     )}

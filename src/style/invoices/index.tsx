@@ -17,8 +17,8 @@ export function Container({ className, ...props }: DivProps) {
       className={cn(
         'relative flex min-h-screen w-full flex-col items-center bg-transparent px-s5 pb-s8 pt-[calc(var(--header-height)+var(--space-5))] text-text max-[768px]:px-s4 max-[768px]:pb-s6 max-[768px]:pt-[calc(var(--header-height)+var(--space-4))]',
         '[&_table]:w-full [&_table]:max-w-[1200px] [&_table]:border-collapse [&_table]:text-[clamp(0.78rem,1.2vw,0.95rem)]',
-        '[&_th]:px-s3 [&_th]:py-s3 [&_th]:text-left [&_th]:font-semibold [&_th]:text-accent',
-        '[&_td]:border-b [&_td]:border-white/10 [&_td]:px-s3 [&_td]:py-s3',
+        '[&_th]:border-b [&_th]:border-border [&_th]:bg-surface-2 [&_th]:px-s3 [&_th]:py-s3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted',
+        '[&_td]:border-b [&_td]:border-border [&_td]:px-s3 [&_td]:py-s3',
         className,
       )}
       {...props}
@@ -31,7 +31,7 @@ export function FilterBar({ className, ...props }: DivProps) {
 }
 
 export function FilterInput({ className, ...props }: InputProps) {
-  return <input className={cn('h-10 w-full rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/60', className)} {...props} />;
+  return <input className={cn('h-10 w-full rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20', className)} {...props} />;
 }
 
 export function SearchBar({ className, ...props }: DivProps) {
@@ -39,7 +39,7 @@ export function SearchBar({ className, ...props }: DivProps) {
     <div
       className={cn(
         'mb-s5 flex w-full max-w-[1100px] flex-nowrap items-end gap-s3 max-[768px]:flex-col max-[768px]:gap-s2',
-        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-accent/35 [&_input]:bg-surface-2/85 [&_input]:px-3 [&_input]:text-text [&_input]:placeholder:text-muted [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/60',
+        '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-text [&_input]:placeholder:text-muted [&_input:focus]:border-accent [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         '[&_.react-datepicker-wrapper_input]:h-10',
         className,
       )}
@@ -49,7 +49,7 @@ export function SearchBar({ className, ...props }: DivProps) {
 }
 
 export function SearchButton({ className, ...props }: ButtonProps) {
-  return <button className={cn('h-10 rounded-md border border-white/15 bg-gradient-to-r from-accent to-accent-strong px-4 font-semibold text-[#04131e] transition hover:-translate-y-0.5', className)} {...props} />;
+  return <button className={cn('h-10 rounded-md border border-accent-strong bg-accent px-4 font-semibold text-white shadow-soft transition-colors hover:bg-accent-strong', className)} {...props} />;
 }
 
 export function SearchRow({ className, ...props }: DivProps) {

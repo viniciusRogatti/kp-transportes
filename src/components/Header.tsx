@@ -16,6 +16,7 @@ import {
   MapPinned,
   Route,
   Search,
+  Truck,
   Upload,
   User,
   UserPlus,
@@ -90,7 +91,7 @@ const navItems: NavItem[] = [
   { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/delivery-monitoring', label: 'Monitoramento', shortLabel: 'Monitor', icon: <MapPinned className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS, 'control_tower'] },
   { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/operational-pendencies', label: 'Pendencias', shortLabel: 'Pendencias', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/operational-pendencies', label: 'Central de Tratativas', shortLabel: 'Tratativas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/alerts', label: 'Alertas', shortLabel: 'Alertas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/cte-management', label: 'CT-e', shortLabel: 'CT-e', icon: <FileText className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
@@ -108,7 +109,7 @@ const routeTitles: Record<string, string> = {
   '/delivery-monitoring': 'Monitoramento de Entregas',
   '/trips': 'Roteirização',
   '/returns-occurrences': 'Devoluções e Ocorrências',
-  '/operational-pendencies': 'Pendencias Operacionais',
+  '/operational-pendencies': 'Central de Tratativas',
   '/alerts': 'Alertas',
   '/uploadFiles': 'Envio de XML',
   '/cte-management': 'Gestão de CT-e',
@@ -255,19 +256,24 @@ function Header() {
       <aside
         ref={desktopSidebarRef}
         className={cn(
-          'app-shell-sidebar fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border px-3 py-3 shadow-[var(--shadow-2)] backdrop-blur md:flex md:flex-col md:transition-[width] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]',
+          'app-shell-sidebar fixed left-0 top-0 z-[1200] hidden h-screen border-r border-border px-3 py-3 shadow-[var(--shadow-1)] md:flex md:flex-col md:transition-[width] md:duration-300 md:ease-out',
           isSidebarCollapsed ? 'w-[var(--app-sidebar-width-collapsed)]' : 'w-[var(--app-sidebar-width)]',
         )}
       >
-        <div className="mb-3 flex items-center justify-between rounded-md border border-border bg-surface/80 px-2 py-2">
-          <div className={cn('overflow-hidden transition-all duration-300 ease-out', isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100')}>
-            <p className="text-xs uppercase tracking-wide text-muted">KP Transportes</p>
-            <strong className="text-sm text-text">Operações</strong>
+        <div className="mb-3 flex items-center justify-between border-b border-border px-2 pb-3 pt-1">
+          <div className={cn('flex items-center gap-2 overflow-hidden transition-all duration-300 ease-out', isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100')}>
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-white">
+              <Truck className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">KP Transportes</p>
+              <strong className="text-sm text-text">Sistema operacional</strong>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface-2 text-text"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface-2 text-text transition-colors hover:border-muted hover:bg-card"
             title={isSidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
           >
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -282,19 +288,19 @@ function Header() {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  'group flex items-center rounded-md border py-2 text-sm transition',
+                  'group flex items-center rounded-md border py-2 text-sm transition-colors',
                   isSidebarCollapsed ? 'justify-center px-1' : 'gap-2 px-2.5',
                   isActive
-                    ? 'border-sky-500/70 bg-gradient-to-r from-[#1674d8]/85 to-[#0157a3]/85 text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
-                    : 'border-transparent text-muted hover:border-border hover:bg-surface/70 hover:text-text',
+                    ? 'border-accent bg-accent text-white shadow-soft'
+                    : 'border-transparent text-muted hover:border-border hover:bg-surface hover:text-text',
                 )}
                 title={item.label}
               >
                 <span className={cn(
                   'inline-flex items-center justify-center rounded-md border',
                   isActive
-                    ? 'border-sky-300/70 bg-gradient-to-b from-[#1c7fe0] to-[#0157a3] text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
-                    : 'border-border bg-surface-2 text-text',
+                    ? 'border-blue-300/60 bg-accent-strong text-white'
+                    : 'border-border bg-surface-2 text-muted group-hover:text-text',
                   isSidebarCollapsed ? 'h-9 w-9' : 'h-8 w-8',
                 )}>
                   {item.icon}
@@ -310,19 +316,19 @@ function Header() {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 inline-flex h-10 items-center justify-center rounded-md border border-rose-500/80 bg-gradient-to-r from-rose-700 to-rose-600 px-3 text-sm font-semibold text-rose-50 shadow-[0_10px_20px_rgba(190,24,93,0.35)] transition hover:from-rose-600 hover:to-rose-500"
+          className="mt-2 inline-flex h-10 items-center justify-center rounded-md border border-danger/70 bg-transparent px-3 text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white"
         >
           {isSidebarCollapsed ? 'Sair' : 'Sair da sessão'}
         </button>
       </aside>
 
-      <header ref={topbarRef} className="app-shell-topbar fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border px-3 backdrop-blur-xl md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-500 md:ease-[cubic-bezier(0.22,1,0.36,1)]">
+      <header ref={topbarRef} className="app-shell-topbar fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border px-3 shadow-[var(--shadow-1)] md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-300 md:ease-out">
         <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface/80 text-text md:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text md:hidden"
               aria-label="Abrir menu"
             >
               <Menu className="h-5 w-5" />
@@ -333,7 +339,7 @@ function Header() {
             </div>
           </div>
 
-          <div className="hidden w-full max-w-[360px] items-center gap-2 rounded-md border border-border bg-surface/85 px-2 md:flex">
+          <div className="hidden w-full max-w-[360px] items-center gap-2 rounded-md border border-border bg-card px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 md:flex">
             <Search className="h-4 w-4 text-muted" />
             <input
               value={quickSearch}
@@ -352,7 +358,7 @@ function Header() {
               ref={notificationButtonRef}
               type="button"
               onClick={() => setIsNotificationOpen((prev) => !prev)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface/80 text-text"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text transition-colors hover:border-muted hover:bg-surface-2"
               aria-label="Abrir notificações"
             >
               <Bell className="h-4 w-4" />
@@ -362,7 +368,7 @@ function Header() {
                 </span>
               ) : null}
             </button>
-            <div className="hidden items-center gap-2 rounded-md border border-border bg-surface/80 px-2 py-1.5 md:flex">
+            <div className="hidden items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 md:flex">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2">
                 <User className="h-4 w-4" />
               </span>
@@ -509,7 +515,7 @@ function Header() {
           <button
             type="button"
             onClick={() => setIsMobileDrawerOpen(false)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface/80 text-text"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text"
           >
             <X className="h-4 w-4" />
           </button>
@@ -525,16 +531,16 @@ function Header() {
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  'flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm',
+                  'flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition-colors',
                   isActive
-                    ? 'border-sky-500/70 bg-gradient-to-r from-[#1674d8]/85 to-[#0157a3]/85 text-white shadow-[0_8px_18px_rgba(4,87,163,0.35)]'
-                    : 'border-transparent text-muted',
+                    ? 'border-accent bg-accent text-white shadow-soft'
+                    : 'border-transparent text-muted hover:border-border hover:bg-surface hover:text-text',
                 )}
               >
                 <span className={cn(
                   'inline-flex h-8 w-8 items-center justify-center rounded-md border',
                   isActive
-                    ? 'border-sky-300/70 bg-gradient-to-b from-[#1c7fe0] to-[#0157a3] text-white'
+                    ? 'border-blue-300/60 bg-accent-strong text-white'
                     : 'border-border bg-surface-2 text-text',
                 )}>
                   {item.icon}
@@ -548,7 +554,7 @@ function Header() {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md border border-rose-500/80 bg-gradient-to-r from-rose-700 to-rose-600 text-sm font-semibold text-rose-50 shadow-[0_10px_20px_rgba(190,24,93,0.35)] transition hover:from-rose-600 hover:to-rose-500"
+          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md border border-danger/70 bg-transparent text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white"
         >
           Sair
         </button>

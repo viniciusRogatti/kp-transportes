@@ -101,7 +101,7 @@ function BottomNavMobile() {
   return (
     <nav
       aria-label="Menu principal mobile"
-      className="app-shell-bottom-nav fixed inset-x-0 bottom-0 z-[1160] hidden border-t border-border backdrop-blur-xl max-[768px]:block"
+      className="app-shell-bottom-nav fixed inset-x-0 bottom-0 z-[1160] hidden border-t border-border max-[768px]:block"
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0px)' }}
     >
       <div className={cn(
@@ -121,7 +121,7 @@ function BottomNavMobile() {
                 navigate(item.to);
               }}
               className={cn(
-                'group relative flex min-h-[44px] flex-col items-center justify-center rounded-xl px-1 pb-2 pt-1 text-[10px] font-semibold transition duration-150 active:scale-[0.98]',
+                'group relative flex min-h-[44px] flex-col items-center justify-center rounded-md px-1 pb-2 pt-1 text-[10px] font-semibold transition duration-150 active:scale-[0.98]',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/80',
                 isActive ? (isLightTheme ? 'text-sky-900' : 'text-white') : 'text-muted',
                 item.isHome ? '-mt-5 pb-1' : '',
@@ -130,27 +130,25 @@ function BottomNavMobile() {
               {item.isHome ? (
                 <span
                   className={cn(
-                    'relative inline-flex h-14 w-14 items-center justify-center rounded-2xl border transition-transform duration-150',
+                    'relative inline-flex h-14 w-14 items-center justify-center rounded-lg border transition-transform duration-150',
                     isActive
-                      ? 'border-sky-400/70 bg-gradient-to-b from-[#1674d8] to-[#0157a3] text-white shadow-[0_10px_24px_rgba(4,87,163,0.55)]'
-                      : 'border-border bg-surface-2 text-text shadow-[0_7px_16px_rgba(1,8,20,0.22)]',
+                      ? 'border-accent bg-accent text-white shadow-elevated'
+                      : 'border-border bg-surface-2 text-text shadow-soft',
                     'group-hover:-translate-y-0.5 group-active:translate-y-0',
                   )}
                 >
                   {item.icon}
-                  <span className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_0_0_1px_rgba(142,208,255,0.2)]" />
                 </span>
               ) : (
                 <span
                   className={cn(
-                    'relative inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-150',
+                    'relative inline-flex h-10 w-10 items-center justify-center rounded-md border transition-all duration-150',
                     isActive
-                      ? 'border-sky-400/70 bg-gradient-to-b from-[#1674d8] to-[#0157a3] text-white -translate-y-0.5 shadow-[0_8px_20px_rgba(4,87,163,0.45)]'
-                      : 'border-border bg-surface-2/70 text-text group-hover:-translate-y-0.5 group-hover:text-text',
+                      ? 'border-accent bg-accent text-white -translate-y-0.5 shadow-soft'
+                      : 'border-border bg-surface-2 text-text group-hover:-translate-y-0.5 group-hover:text-text',
                   )}
                 >
                   {item.icon}
-                  {isActive ? <span className="pointer-events-none absolute inset-0 rounded-xl shadow-[inset_0_0_0_1px_rgba(142,208,255,0.2)]" /> : null}
                 </span>
               )}
               <span className={cn('mt-1 leading-none', item.isHome ? 'text-[11px]' : '')}>{item.label}</span>

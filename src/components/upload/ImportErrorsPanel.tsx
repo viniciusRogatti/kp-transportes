@@ -53,7 +53,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
           const presentation = getImportErrorPresentation(item.error);
 
           return (
-            <div key={`${item.fileKey || item.fileName}-error`} className="rounded-xl border border-border bg-surface/80 p-4">
+            <div key={`${item.fileKey || item.fileName}-error`} className="rounded-lg border border-border bg-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-text">{item.fileName}</p>
@@ -86,7 +86,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
                     </p>
                   ) : null}
                   {item.error?.stack ? (
-                    <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-border bg-surface-2/90 p-2 text-[11px] text-text">
+                    <pre className="scrollbar-ui mt-2 max-h-48 overflow-auto rounded-md border border-border bg-surface-2 p-2 text-[11px] text-text">
                       {item.error.stack}
                     </pre>
                   ) : null}

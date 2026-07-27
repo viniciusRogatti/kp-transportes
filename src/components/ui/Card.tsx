@@ -5,7 +5,7 @@ function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <section
       className={cn(
-        'rounded-lg border border-border bg-surface/78 p-4 shadow-elevated backdrop-blur-[1px]',
+        'rounded-lg border border-border bg-surface p-4 shadow-soft',
         className,
       )}
       {...props}

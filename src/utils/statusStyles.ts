@@ -128,7 +128,7 @@ export const DANFE_STATUS_LEGEND: readonly DanfeLegendItem[] = [
   {
     key: 'redelivery',
     label: 'Reentrega',
-    description: 'Borda roxa',
+    description: 'Borda azul forte',
     tone: 'redelivery',
     borderClassName: OPERATIONAL_STATUS_BORDER_CLASSNAMES.redelivery,
     filterStatuses: ['redelivery'],

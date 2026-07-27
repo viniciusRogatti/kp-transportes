@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from '../data';
+import Header from '../components/Header';
+import { Container } from '../style/invoices';
 
 type ConnectionState = {
   status?: string;
@@ -77,39 +79,41 @@ function WhatsappBotConnection() {
   );
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#07131d] px-4 py-8 text-white">
-      <section className="w-full max-w-xl rounded-xl border border-white/15 bg-[#0d1c28] p-6 shadow-2xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
-          KP Transportes
+    <div>
+      <Header />
+      <Container>
+      <section className="w-full max-w-xl rounded-lg border border-border bg-surface p-6 text-text shadow-elevated">
+        <p className="border-l-4 border-accent pl-3 text-xs font-semibold uppercase tracking-[0.16em] text-text-accent">
+          Integrações
         </p>
-        <h1 className="mt-2 text-2xl font-semibold">Conexão do bot do WhatsApp</h1>
-        <p className="mt-2 text-sm text-slate-300">
+        <h1 className="mt-3 block text-2xl font-semibold">Conexão do bot do WhatsApp</h1>
+        <p className="mt-2 text-sm text-muted">
           Esta página acompanha a sessão executada na VPS. Você poderá fechá-la assim que o bot estiver pronto.
         </p>
 
         <div className={`mt-5 rounded-lg border p-4 ${isReady ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-amber-300/30 bg-amber-400/10'}`}>
-          <p className={`font-semibold ${isReady ? 'text-emerald-300' : 'text-amber-200'}`}>
+          <p className={`font-semibold ${isReady ? 'text-emerald-400' : 'text-amber-400'}`}>
             {statusLabel}
           </p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-muted">
             Serviço da VPS: {statusData?.serviceStatus || 'consultando'}
           </p>
         </div>
 
         {statusData?.connectionState?.lastMessageReceivedAt ? (
-          <p className="mt-3 text-xs text-slate-300">
+          <p className="mt-3 text-xs text-muted">
             Última mensagem recebida: {new Date(statusData.connectionState.lastMessageReceivedAt).toLocaleString('pt-BR')}
           </p>
         ) : null}
         {statusData?.connectionState?.lastIgnoredReason ? (
-          <p className="mt-1 text-xs text-amber-200">
+          <p className="mt-1 text-xs text-amber-400">
             Última mensagem ignorada: {statusData.connectionState.lastIgnoredReason}
           </p>
         ) : null}
 
         {qrValue ? (
           <div className="mt-6 flex flex-col items-center">
-            <div className="rounded-xl bg-white p-4">
+            <div className="rounded-lg border border-border bg-white p-4 shadow-soft">
               <QRCodeSVG
                 value={qrValue}
                 size={320}
@@ -119,7 +123,7 @@ function WhatsappBotConnection() {
                 fgColor="#000000"
               />
             </div>
-            <ol className="mt-5 w-full list-decimal space-y-1 pl-5 text-sm text-slate-300">
+            <ol className="mt-5 w-full list-decimal space-y-1 pl-5 text-sm text-muted">
               <li>Abra o WhatsApp no celular.</li>
               <li>Acesse Aparelhos conectados e escolha Conectar aparelho.</li>
               <li>Leia este QR Code e aguarde a confirmação automática.</li>
@@ -143,20 +147,21 @@ function WhatsappBotConnection() {
           <button
             type="button"
             onClick={loadStatus}
-            className="rounded-md border border-white/20 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-white/5"
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold text-text transition-colors hover:bg-surface-2"
           >
             Atualizar agora
           </button>
           <button
             type="button"
             onClick={() => window.close()}
-            className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-[#03131d] hover:bg-cyan-400"
+            className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
           >
             Fechar
           </button>
         </div>
       </section>
-    </main>
+      </Container>
+    </div>
   );
 }
 

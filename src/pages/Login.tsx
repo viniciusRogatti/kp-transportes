@@ -191,22 +191,23 @@ function Login() {
     <Container>
       <LoginCard>
         <HeroPanel>
-          <HeroBadge>KP TRANSPORTES</HeroBadge>
-          <HeroTitle>Logística inteligente para cargas sem parada.</HeroTitle>
+          <HeroBadge>Central operacional</HeroBadge>
+          <HeroTitle>Controle logístico do embarque à comprovação da entrega.</HeroTitle>
           <HeroDescription>
-            Controle operacional, rastreabilidade e performance em um único painel.
+            Rotas, entregas, ocorrências e documentos reunidos em uma operação rastreável.
           </HeroDescription>
         </HeroPanel>
 
         <BoxLogin>
           <FormHeader>
-            <BrandName>KP TRANSPORTES</BrandName>
-            <FormTitle>Acesse sua operação</FormTitle>
-            <FormSubtitle>Painel seguro para gestão de transporte de carga.</FormSubtitle>
+            <BrandName>KP Transportes</BrandName>
+            <FormTitle>Acesso ao sistema</FormTitle>
+            <FormSubtitle>Entre com suas credenciais para acessar o painel operacional.</FormSubtitle>
           </FormHeader>
 
           <LoginForm>
             <BoxInput>
+              <label htmlFor="username">Usuário</label>
               <InputLogin
                 type="text"
                 name="username"
@@ -214,9 +215,10 @@ function Login() {
                 value={ state.username }
                 onChange={ onInputChange }
                 onKeyDown={ onKeyDown }
-                placeholder="Usuário"
+                placeholder="Digite seu usuário"
                 autoComplete="username"
               />
+              <label htmlFor="password">Senha</label>
               <BoxPassword>
                 {!showPassword ? <Eye onClick={handleShowPassword} /> : <EyeOff onClick={handleShowPassword} />}
                 <InputLogin
@@ -226,7 +228,7 @@ function Login() {
                   value={ state.password }
                   onChange={ onInputChange }
                   onKeyDown={ onKeyDown }
-                  placeholder="Senha"
+                  placeholder="Digite sua senha"
                   autoComplete="current-password"
                 />
               </BoxPassword>
@@ -245,9 +247,9 @@ function Login() {
               onClick={ handleEnter }
               disabled={ isLoading || (captchaProvider !== 'none' && !captchaToken) }
             >
-              {isLoading ? 'Entrando...' : 'Entrar no painel'}
+              {isLoading ? 'Validando acesso...' : 'Entrar no sistema'}
             </ButtonLogin>
-            <SupportText>Suporte interno KP TRANSPORTES</SupportText>
+            <SupportText>Acesso restrito à operação KP Transportes</SupportText>
           </LoginForm>
         </BoxLogin>
       </LoginCard>

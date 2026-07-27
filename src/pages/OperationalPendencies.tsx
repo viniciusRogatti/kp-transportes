@@ -114,6 +114,22 @@ const EMPTY_BACKLOG_SUMMARY: IReceiptBacklogSummary = {
   total: 0,
 };
 
+const getBacklogInvoiceKey = (row: IReceiptBacklogRow) => {
+  const rawInvoiceNumber = String(row.nf_id || row.invoice_number || '').trim();
+  const digits = rawInvoiceNumber.replace(/\D/g, '');
+  return digits ? digits.replace(/^0+(?=\d)/, '') : rawInvoiceNumber.toUpperCase();
+};
+
+const deduplicateBacklogRows = (backlogRows: IReceiptBacklogRow[]) => {
+  const seenInvoiceKeys = new Set<string>();
+  return backlogRows.filter((row) => {
+    const invoiceKey = getBacklogInvoiceKey(row);
+    if (!invoiceKey || seenInvoiceKeys.has(invoiceKey)) return false;
+    seenInvoiceKeys.add(invoiceKey);
+    return true;
+  });
+};
+
 const getInitialNotificationSearchParams = () => {
   const hashQuery = typeof window !== 'undefined' ? String(window.location.hash || '').split('?')[1] : '';
   const query = typeof window !== 'undefined' && window.location.search
@@ -377,8 +393,19 @@ function OperationalPendencies() {
         limit: 200,
       });
 
-      setRows(Array.isArray(response?.rows) ? response.rows : []);
-      setSummary(response?.summary || EMPTY_BACKLOG_SUMMARY);
+      const responseRows = Array.isArray(response?.rows) ? response.rows : [];
+      const uniqueRows = deduplicateBacklogRows(responseRows);
+      const duplicateCount = responseRows.length - uniqueRows.length;
+      const responseSummary = response?.summary || EMPTY_BACKLOG_SUMMARY;
+
+      setRows(uniqueRows);
+      setSummary(duplicateCount > 0
+        ? {
+          ...responseSummary,
+          [tab]: uniqueRows.length,
+          total: Math.max(0, Number(responseSummary.total || 0) - duplicateCount),
+        }
+        : responseSummary);
       setCutoffDate(String(response?.cutoff_date || ''));
     } catch (error) {
       console.error(error);

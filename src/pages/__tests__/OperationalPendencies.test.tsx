@@ -112,4 +112,29 @@ describe('OperationalPendencies', () => {
     expect(screen.getByText('Corrigir status')).toBeInTheDocument();
     expect(screen.getByText('Marcar canhoto retido')).toBeInTheDocument();
   });
+
+  it('exibe apenas uma linha quando a API retorna a mesma NF retida mais de uma vez', async () => {
+    mockedListReceiptBacklog.mockResolvedValueOnce({
+      rows: [
+        {
+          queue_type: 'retained', nf_id: '01817267', invoice_number: '01817267', status: 'PENDING',
+          source_status: 'retained', latest_stop_status: 'retained', has_receipt: false, can_upload: true,
+        },
+        {
+          queue_type: 'retained', nf_id: '1817267', invoice_number: '1817267', status: 'PENDING',
+          source_status: 'retained', latest_stop_status: 'retained', has_receipt: false, can_upload: true,
+        },
+      ],
+      total: 2,
+      limit: 200,
+      cutoff_date: '2026-03-23',
+      summary: { redelivery: 0, unassigned: 0, returned: 0, retained: 2, pending: 0, total: 2 },
+    } as any);
+
+    render(<OperationalPendencies />);
+
+    expect(await screen.findByText('NF 01817267')).toBeInTheDocument();
+    expect(screen.queryByText('NF 1817267')).not.toBeInTheDocument();
+    expect(screen.getByText('1 NF(s) exibidas')).toBeInTheDocument();
+  });
 });

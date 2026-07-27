@@ -86,8 +86,8 @@ const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
     tone: 'warning',
   },
   returned: {
-    label: 'Devoluções fora de lote',
-    summaryLabel: 'Fora de lote',
+    label: 'Devoluções fora de rota',
+    summaryLabel: 'Devoluções fora de rota',
     emptyMessage: 'Nenhuma devolução aguardando inclusão em lote.',
     tone: 'danger',
   },
@@ -99,7 +99,7 @@ const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
   },
   pending: {
     label: 'Canhotos pendentes',
-    summaryLabel: 'Sem canhoto',
+    summaryLabel: 'NFs sem canhoto',
     emptyMessage: 'Nenhuma rota de dia anterior sem canhoto postado.',
     tone: 'info',
   },
@@ -770,7 +770,7 @@ function OperationalPendencies() {
               <div>
                 <h2 className="text-lg font-semibold text-text">Pendencias Operacionais</h2>
                 <p className="text-sm text-muted">
-                  A fila diária de ação: reentregas sem nova rota, NFs sem rota, devoluções fora de lote e canhotos que ainda precisam de baixa.
+                  A fila diária de ação: reentregas sem nova rota, NFs sem rota, devoluções e canhotos que ainda precisam de baixa.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -856,19 +856,6 @@ function OperationalPendencies() {
               </button>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {summaryCards.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${getBacklogTabClassName(tab, activeTab === tab)}`}
-                >
-                  {`${BACKLOG_TAB_CONFIG[tab].label.toUpperCase()} (${summary[tab] || 0})`}
-                </button>
-              ))}
-            </div>
-
             {pageError ? (
               <div className="mt-3 rounded-md border semantic-panel-danger px-3 py-2 text-sm">
                 {pageError}
@@ -879,10 +866,16 @@ function OperationalPendencies() {
           <section className="rounded-md border border-border bg-surface/70 p-3">
             <div className="grid gap-2 md:grid-cols-5">
               {summaryCards.map((tab) => (
-                <div key={`summary-${tab}`} className={`rounded-md border px-3 py-2 ${getSemanticToneClassName(BACKLOG_TAB_CONFIG[tab].tone, 'panel')}`}>
+                <button
+                  key={`summary-${tab}`}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  aria-pressed={activeTab === tab}
+                  className={`rounded-md border px-3 py-2 text-left transition hover:brightness-95 ${getBacklogTabClassName(tab, activeTab === tab)}`}
+                >
                   <p className="text-xs uppercase tracking-[0.18em]">{BACKLOG_TAB_CONFIG[tab].summaryLabel}</p>
                   <p className="mt-1 text-2xl font-semibold">{summary[tab] || 0}</p>
-                </div>
+                </button>
               ))}
             </div>
 
@@ -896,7 +889,7 @@ function OperationalPendencies() {
                       : activeTab === 'unassigned'
                         ? 'NFs abertas que ainda não receberam nenhuma rota ou motorista.'
                         : activeTab === 'returned'
-                          ? 'Devoluções ainda sem lote. Ao adicionar a NF a um lote, ela sai desta fila.'
+                          ? 'Devoluções que ainda exigem encaminhamento operacional.'
                       : activeTab === 'retained'
                         ? 'NFs marcadas como canhoto retido para acompanhar a coleta do comprovante na proxima entrega.'
                         : 'NFs que já passaram de um dia para outro em rota, mas continuam sem foto de canhoto.'}

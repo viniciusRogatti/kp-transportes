@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
-import { AlertTriangle, CalendarDays, CheckCircle2, History, Info, MessageSquare, Pencil, Printer, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  FileWarning,
+  History,
+  Info,
+  MessageSquare,
+  PackageSearch,
+  Pencil,
+  Printer,
+  Route,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
@@ -38,6 +54,12 @@ import { listReceiptBacklog } from '../services/receiptsService';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
+import {
+  getBacklogAgeDays,
+  getOccurrenceAgeDays,
+  isTreatmentOverdue,
+  TREATMENT_OVERDUE_AFTER_DAYS,
+} from '../utils/operationalTreatments';
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -387,7 +409,7 @@ const isScheduledCollectionRequest = (request: ICollectionRequest) => resolveCol
 function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { notifications, markAsRead, refreshNotifications } = useRealtimeNotifications();
+  const { notifications, markAsRead } = useRealtimeNotifications();
 
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
   const [pendingCollectionRequests, setPendingCollectionRequests] = useState<ICollectionRequest[]>([]);
@@ -502,6 +524,21 @@ function Home() {
     () => pendingOccurrences.filter((occurrence) => isSimpleOccurrenceReason(occurrence.reason)),
     [pendingOccurrences],
   );
+  const urgentOccurrences = useMemo(
+    () => pendingOccurrences.filter((occurrence) => isTreatmentOverdue(getOccurrenceAgeDays(occurrence))),
+    [pendingOccurrences],
+  );
+  const urgentBacklogRows = useMemo(
+    () => pendingReturnReminders.filter((row) => (
+      ['redelivery', 'unassigned', 'returned'].includes(row.queue_type)
+      && isTreatmentOverdue(getBacklogAgeDays(row))
+    )),
+    [pendingReturnReminders],
+  );
+  const backlogCounts = useMemo(() => pendingReturnReminders.reduce<Record<string, number>>((counts, row) => {
+    counts[row.queue_type] = (counts[row.queue_type] || 0) + 1;
+    return counts;
+  }, {}), [pendingReturnReminders]);
   const scheduledCollectionRequests = useMemo(
     () => pendingCollectionRequests.filter((request) => isScheduledCollectionRequest(request)),
     [pendingCollectionRequests],
@@ -782,7 +819,7 @@ function Home() {
 
   async function loadPendingReturnReminders() {
     try {
-      const data = await listReceiptBacklog({ queueType: 'returned', limit: 180 });
+      const data = await listReceiptBacklog({ limit: 300 });
       setPendingReturnReminders(Array.isArray(data?.rows) ? data.rows : []);
     } catch (error) {
       console.error('Erro ao carregar lembretes de devolucao:', error);
@@ -793,7 +830,6 @@ function Home() {
   async function loadHomePendencies() {
     await Promise.all([
       loadPendingOccurrences(),
-      loadPendingCollectionRequests(),
       loadPendingReturnReminders(),
     ]);
   }
@@ -1480,13 +1516,182 @@ function Home() {
   }
 
   async function refreshHomePanel() {
-    await Promise.all([loadHomePendencies(), refreshNotifications()]);
+    await loadHomePendencies();
   }
+
+  const treatmentReminderCards = [
+    {
+      key: 'occurrences',
+      label: 'Ocorrências abertas',
+      description: 'Registros aguardando análise ou resolução',
+      count: pendingOccurrences.length,
+      icon: ClipboardCheck,
+    },
+    {
+      key: 'redelivery',
+      label: 'Reentregas sem nova rota',
+      description: 'Notas que precisam entrar em uma nova saída',
+      count: backlogCounts.redelivery || 0,
+      icon: Undo2,
+    },
+    {
+      key: 'unassigned',
+      label: 'NFs sem rota',
+      description: 'Notas ainda não direcionadas para entrega',
+      count: backlogCounts.unassigned || 0,
+      icon: Route,
+    },
+    {
+      key: 'returned',
+      label: 'Devoluções fora de lote',
+      description: 'Mercadorias aguardando formação de lote',
+      count: backlogCounts.returned || 0,
+      icon: PackageSearch,
+    },
+    {
+      key: 'retained',
+      label: 'Canhotos retidos',
+      description: 'Comprovantes que ainda precisam ser recuperados',
+      count: backlogCounts.retained || 0,
+      icon: FileWarning,
+    },
+    {
+      key: 'pending',
+      label: 'NFs sem canhoto',
+      description: 'Entregas de dias anteriores sem comprovante',
+      count: backlogCounts.pending || 0,
+      icon: FileWarning,
+    },
+  ];
+  const urgentTreatmentCount = urgentOccurrences.length + urgentBacklogRows.length;
 
   return (
     <HomeStyle>
       <Header />
       <HomeContent>
+        <Card>
+          <CardHeaderRow>
+            <div>
+              <h2>Radar operacional</h2>
+              <p className="mt-1 text-sm text-muted">
+                Acompanhe o volume de tratativas e priorize somente o que passou do prazo.
+              </p>
+            </div>
+            <button className="secondary" onClick={refreshHomePanel} type="button">Atualizar radar</button>
+          </CardHeaderRow>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {treatmentReminderCards.map((reminder) => {
+              const ReminderIcon = reminder.icon;
+              return (
+                <button
+                  key={`home-treatment-reminder-${reminder.key}`}
+                  type="button"
+                  onClick={() => navigate(`/operational-pendencies?tab=${reminder.key}`)}
+                  className="group flex min-h-[104px] items-center gap-3 rounded-md border border-border bg-surface p-3 text-left transition hover:border-accent/55 hover:bg-surface-2"
+                >
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-accent/30 bg-accent/10 text-accent">
+                    <ReminderIcon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <strong className="text-sm text-text">{reminder.label}</strong>
+                      <span className="text-xl font-semibold text-text">{reminder.count}</span>
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted">{reminder.description}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-accent" />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
+            <p className="text-xs text-muted">
+              Os lembretes ficam concentrados na Central de Tratativas e ganham prioridade após {TREATMENT_OVERDUE_AFTER_DAYS} dias.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/operational-pendencies')}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"
+            >
+              Abrir Central de Tratativas <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeaderRow>
+            <div>
+              <h2>Prioridades vencidas</h2>
+              <p className="mt-1 text-sm text-muted">
+                Somente tratativas com mais de {TREATMENT_OVERDUE_AFTER_DAYS} dias aparecem nesta área.
+              </p>
+            </div>
+            <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${urgentTreatmentCount ? 'semantic-solid-danger' : 'semantic-solid-success'}`}>
+              {urgentTreatmentCount ? `${urgentTreatmentCount} urgente(s)` : 'Tudo dentro do prazo'}
+            </span>
+          </CardHeaderRow>
+
+          {!urgentTreatmentCount ? (
+            <div className="mt-4 flex items-center gap-3 rounded-md border semantic-panel-success p-4">
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">Nenhuma tratativa vencida</p>
+                <p className="text-xs">A equipe está com todas as pendências dentro da janela de acompanhamento.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-2 lg:grid-cols-2">
+              {urgentOccurrences.map((occurrence) => {
+                const ageDays = getOccurrenceAgeDays(occurrence);
+                return (
+                  <button
+                    key={`home-urgent-occurrence-${occurrence.id}`}
+                    type="button"
+                    onClick={() => navigate(`/operational-pendencies?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}
+                    className="flex items-start gap-3 rounded-md border semantic-panel-danger p-3 text-left transition hover:brightness-95"
+                  >
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <strong className="block text-sm">Ocorrência · NF {occurrence.invoice_number || '-'}</strong>
+                      <span className="mt-1 block text-xs">{occurrence.customer_name || 'Cliente não informado'} · {occurrence.city || '-'}</span>
+                      <span className="mt-1 block text-xs font-semibold">{ageDays} dias em aberto</span>
+                    </span>
+                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" />
+                  </button>
+                );
+              })}
+
+              {urgentBacklogRows.map((row) => {
+                const ageDays = getBacklogAgeDays(row);
+                const queueLabel = row.queue_type === 'redelivery'
+                  ? 'Reentrega sem nova rota'
+                  : row.queue_type === 'unassigned'
+                    ? 'NF sem rota'
+                    : 'Devolução fora de lote';
+                return (
+                  <button
+                    key={`home-urgent-backlog-${row.queue_type}-${row.invoice_number}`}
+                    type="button"
+                    onClick={() => navigate(`/operational-pendencies?tab=${row.queue_type}&nf=${encodeURIComponent(row.invoice_number)}`)}
+                    className="flex items-start gap-3 rounded-md border semantic-panel-danger p-3 text-left transition hover:brightness-95"
+                  >
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <strong className="block text-sm">{queueLabel} · NF {row.invoice_number}</strong>
+                      <span className="mt-1 block text-xs">{row.customer_name || 'Cliente não informado'} · {row.city || '-'}</span>
+                      <span className="mt-1 block text-xs font-semibold">{ageDays} dias em aberto</span>
+                    </span>
+                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {false && (
         <Card>
           <CardHeaderRow>
             <h2>Pendências operacionais</h2>
@@ -2030,6 +2235,7 @@ function Home() {
             </>
           )}
         </Card>
+        )}
       </HomeContent>
 
       {isOccurrenceEditOpen && canManageOccurrenceStatus && (

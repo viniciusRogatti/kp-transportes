@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import imageCompression from 'browser-image-compression';
 import {
+  ArrowRight,
+  ClipboardCheck,
   RefreshCcw,
   Search,
   UploadCloud,
@@ -20,6 +22,7 @@ import {
 } from '../services/receiptsService';
 import {
   IDriver,
+  IOccurrence,
   IReceiptBacklogRow,
   IReceiptBacklogRouteHistoryRow,
   IReceiptBacklogSummary,
@@ -38,6 +41,7 @@ import {
 } from './deliveryMonitoring/stopStatusActions';
 import { API_URL } from '../data';
 import { getApiErrorMessage, handleAuthenticationError } from '../utils/authErrorHandler';
+import { getOccurrenceAgeDays, isTreatmentOverdue } from '../utils/operationalTreatments';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -112,6 +116,15 @@ const EMPTY_BACKLOG_SUMMARY: IReceiptBacklogSummary = {
   retained: 0,
   pending: 0,
   total: 0,
+};
+
+const OCCURRENCE_REASON_LABELS: Record<string, string> = {
+  faltou_no_carregamento: 'Faltou no carregamento',
+  faltou_na_carga: 'Faltou na carga',
+  produto_avariado: 'Produto avariado',
+  produto_invertido: 'Produto invertido',
+  produto_sem_etiqueta_ou_data: 'Produto sem etiqueta ou data',
+  legacy_outros: 'Outros',
 };
 
 const getBacklogInvoiceKey = (row: IReceiptBacklogRow) => {
@@ -274,6 +287,7 @@ function OperationalPendencies() {
   const receiptCorrectionReportedNf = String(initialSearchParams.get('reportedNf') || '').trim();
   const startDateInputRef = useRef<HTMLInputElement | null>(null);
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
+  const occurrenceSectionRef = useRef<HTMLElement | null>(null);
 
   const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>(() => {
     const requestedTab = initialSearchParams.get('tab') as ReceiptBacklogQueueType | null;
@@ -282,6 +296,7 @@ function OperationalPendencies() {
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [rows, setRows] = useState<IReceiptBacklogRow[]>([]);
   const [summary, setSummary] = useState<IReceiptBacklogSummary>(EMPTY_BACKLOG_SUMMARY);
+  const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
   const [cutoffDate, setCutoffDate] = useState('');
   const [nfFilter, setNfFilter] = useState(() => String(initialSearchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [motoristaFilter, setMotoristaFilter] = useState('');
@@ -342,6 +357,31 @@ function OperationalPendencies() {
 
     loadDrivers();
   }, []);
+
+  async function loadPendingOccurrences() {
+    try {
+      const { data } = await axios.get<IOccurrence[]>(`${API_URL}/occurrences/pending`);
+      const uniqueById = new Map<number, IOccurrence>();
+      (Array.isArray(data) ? data : []).forEach((occurrence) => {
+        if (occurrence?.id) uniqueById.set(occurrence.id, occurrence);
+      });
+      setPendingOccurrences(Array.from(uniqueById.values()));
+    } catch (error) {
+      console.error('Erro ao carregar ocorrencias abertas:', error);
+      setPendingOccurrences([]);
+    }
+  }
+
+  useEffect(() => {
+    loadPendingOccurrences();
+  }, []);
+
+  useEffect(() => {
+    if (initialSearchParams.get('tab') !== 'occurrences') return;
+    window.setTimeout(() => {
+      occurrenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }, [initialSearchParams]);
 
   useEffect(() => () => {
     if (selectedPreviewUrl) {
@@ -425,7 +465,7 @@ function OperationalPendencies() {
   }, [activeTab]);
 
   async function handleSearch() {
-    await loadBacklog(activeTab);
+    await Promise.all([loadBacklog(activeTab), loadPendingOccurrences()]);
   }
 
   async function handleClearFilters() {
@@ -433,12 +473,15 @@ function OperationalPendencies() {
     setMotoristaFilter('');
     setStartDate('');
     setEndDate('');
-    await loadBacklog(activeTab, {
-      nf: '',
-      motoristaId: null,
-      startDate: '',
-      endDate: '',
-    });
+    await Promise.all([
+      loadBacklog(activeTab, {
+        nf: '',
+        motoristaId: null,
+        startDate: '',
+        endDate: '',
+      }),
+      loadPendingOccurrences(),
+    ]);
   }
 
   function openUploadModal(row: IReceiptBacklogRow) {
@@ -786,6 +829,9 @@ function OperationalPendencies() {
 
   const summaryCards: ReceiptBacklogQueueType[] = ['redelivery', 'unassigned', 'returned', 'retained', 'pending'];
   const activeTabConfig = BACKLOG_TAB_CONFIG[activeTab];
+  const visiblePendingOccurrences = pendingOccurrences.filter((occurrence) => (
+    !nfFilter || String(occurrence.invoice_number || '').includes(nfFilter)
+  ));
 
   return (
     <div>
@@ -795,9 +841,9 @@ function OperationalPendencies() {
           <section className="rounded-md border border-border bg-surface/70 p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-text">Pendencias Operacionais</h2>
+                <h2 className="text-lg font-semibold text-text">Central de Tratativas</h2>
                 <p className="text-sm text-muted">
-                  A fila diária de ação: reentregas sem nova rota, NFs sem rota, devoluções e canhotos que ainda precisam de baixa.
+                  Ponto único de acompanhamento das ocorrências, rotas, devoluções e canhotos que exigem ação da expedição.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -805,7 +851,7 @@ function OperationalPendencies() {
                   Base operacional desde {formatDateOnly(cutoffDate) || '-'}
                 </span>
                 <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${getSemanticToneClassName('info')}`}>
-                  {`Total em fila: ${summary.total}`}
+                  {`Total em tratativa: ${summary.total + pendingOccurrences.length}`}
                 </span>
                 <button
                   type="button"
@@ -891,7 +937,15 @@ function OperationalPendencies() {
           </section>
 
           <section className="rounded-md border border-border bg-surface/70 p-3">
-            <div className="grid gap-2 md:grid-cols-5">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+              <button
+                type="button"
+                onClick={() => occurrenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                className="rounded-md border border-accent/45 bg-accent/10 px-3 py-2 text-left text-text transition hover:bg-accent/15"
+              >
+                <p className="text-xs uppercase tracking-[0.12em]">Ocorrências abertas</p>
+                <p className="mt-1 text-2xl font-semibold">{pendingOccurrences.length}</p>
+              </button>
               {summaryCards.map((tab) => (
                 <button
                   key={`summary-${tab}`}
@@ -905,6 +959,63 @@ function OperationalPendencies() {
                 </button>
               ))}
             </div>
+
+            <section ref={occurrenceSectionRef} className="mt-3 scroll-mt-24 rounded-md border border-border bg-card p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-text">
+                    <ClipboardCheck className="h-4 w-4 text-accent" /> Ocorrências abertas
+                  </h3>
+                  <p className="text-xs text-muted">
+                    As ocorrências permanecem nesta fila até a conclusão da tratativa. Após 3 dias, também ganham destaque no início.
+                  </p>
+                </div>
+                <Badge tone={pendingOccurrences.length ? 'warning' : 'success'} className="h-auto px-2 py-1 text-[11px]">
+                  {`${visiblePendingOccurrences.length} ocorrência(s)`}
+                </Badge>
+              </div>
+
+              {!visiblePendingOccurrences.length ? (
+                <p className="mt-3 text-sm text-muted">
+                  {nfFilter ? 'Nenhuma ocorrência aberta encontrada para esta NF.' : 'Nenhuma ocorrência aberta no momento.'}
+                </p>
+              ) : (
+                <ul className="mt-3 grid gap-2 lg:grid-cols-2">
+                  {visiblePendingOccurrences.map((occurrence) => {
+                    const ageDays = getOccurrenceAgeDays(occurrence);
+                    const isOverdue = isTreatmentOverdue(ageDays);
+                    return (
+                      <li
+                        key={`central-occurrence-${occurrence.id}`}
+                        className={`rounded-md border p-3 ${isOverdue ? 'semantic-panel-danger' : 'border-border bg-surface'}`}
+                      >
+                        <div className="flex h-full flex-col gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-text">NF {occurrence.invoice_number || '-'}</p>
+                            <Badge tone={isOverdue ? 'danger' : 'warning'} className="h-auto px-2 py-0.5 text-[10px]">
+                              {ageDays === 0 ? 'Aberta hoje' : `${ageDays} dia(s) em aberto`}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted">
+                            {OCCURRENCE_REASON_LABELS[String(occurrence.reason || '')] || 'Ocorrência operacional'}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {occurrence.customer_name || 'Cliente não informado'} · {occurrence.city || '-'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/returns-occurrences?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}
+                            className="mt-auto inline-flex h-9 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"
+                          >
+                            Abrir tratativa <ArrowRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
             <div className="mt-3 rounded-md border border-border bg-card p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">

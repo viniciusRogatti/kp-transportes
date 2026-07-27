@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import axios from 'axios';
 import OperationalPendencies from '../OperationalPendencies';
 import {
   listDriversForReceiptFilters,
@@ -9,6 +10,7 @@ import verifyToken from '../../utils/verifyToken';
 jest.mock('axios', () => ({
   __esModule: true,
   default: {
+    get: jest.fn(),
     isAxiosError: jest.fn(() => false),
   },
 }));
@@ -27,11 +29,13 @@ jest.mock('../../services/receiptsService', () => ({
 const mockedVerifyToken = verifyToken as jest.MockedFunction<typeof verifyToken>;
 const mockedListDriversForReceiptFilters = listDriversForReceiptFilters as jest.MockedFunction<typeof listDriversForReceiptFilters>;
 const mockedListReceiptBacklog = listReceiptBacklog as jest.MockedFunction<typeof listReceiptBacklog>;
+const mockedAxiosGet = axios.get as jest.MockedFunction<typeof axios.get>;
 
 describe('OperationalPendencies', () => {
   beforeEach(() => {
     localStorage.setItem('token', 'token-teste');
     mockedVerifyToken.mockResolvedValue(true as never);
+    mockedAxiosGet.mockResolvedValue({ data: [] });
     mockedListDriversForReceiptFilters.mockResolvedValue([]);
     mockedListReceiptBacklog.mockResolvedValue({
       rows: [
@@ -136,5 +140,27 @@ describe('OperationalPendencies', () => {
     expect(await screen.findByText('NF 01817267')).toBeInTheDocument();
     expect(screen.queryByText('NF 1817267')).not.toBeInTheDocument();
     expect(screen.getByText('1 NF(s) exibidas')).toBeInTheDocument();
+  });
+
+  it('centraliza as ocorrencias abertas e sinaliza as vencidas', async () => {
+    mockedAxiosGet.mockResolvedValueOnce({
+      data: [{
+        id: 91,
+        invoice_number: '1819001',
+        customer_name: 'Mercado Central',
+        city: 'Campinas',
+        reason: 'produto_avariado',
+        status: 'pending',
+        created_at: '2026-03-20T10:00:00.000Z',
+        age_business_days: 4,
+      }],
+    });
+
+    render(<OperationalPendencies />);
+
+    expect(await screen.findByText('NF 1819001')).toBeInTheDocument();
+    expect(screen.getByText('Produto avariado')).toBeInTheDocument();
+    expect(screen.getByText('4 dia(s) em aberto')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /abrir tratativa/i })).toBeInTheDocument();
   });
 });

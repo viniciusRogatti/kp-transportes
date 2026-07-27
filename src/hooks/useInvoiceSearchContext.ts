@@ -58,6 +58,23 @@ function pickLatestTripNoteStatus(trip: ITrip | null, invoiceNumber: string) {
   return matchingNote ? String(matchingNote.status || '').trim().toLowerCase() || null : null;
 }
 
+function groupTripsByInvoice(trips: ITrip[], invoiceNumbers: string[]) {
+  const grouped = Object.fromEntries(invoiceNumbers.map((invoiceNumber) => [invoiceNumber, [] as ITrip[]]));
+
+  trips.forEach((trip) => {
+    const invoicesInTrip = new Set(
+      (trip.TripNotes || [])
+        .map((note) => normalizeInvoiceNumber(note.invoice_number))
+        .filter(Boolean),
+    );
+    invoicesInTrip.forEach((invoiceNumber) => {
+      if (grouped[invoiceNumber]) grouped[invoiceNumber].push(trip);
+    });
+  });
+
+  return grouped;
+}
+
 function resolveReturnBatchWorkflowStatus(batch: IReturnBatch) {
   if (batch.workflow_status) return batch.workflow_status;
   if (!batch.sent_to_control_tower_at) return 'pending_transportadora' as const;
@@ -168,8 +185,40 @@ async function fetchInvoiceContext(invoiceNumber: string, options?: { includeTri
   }
 }
 
+async function fetchTripsByInvoiceNumbers(invoiceNumbers: string[]) {
+  try {
+    const { data } = await axios.post<ITrip[]>(`${API_URL}/trips/search/notes`, {
+      invoice_numbers: invoiceNumbers,
+    });
+    return groupTripsByInvoice(Array.isArray(data) ? data : [], invoiceNumbers);
+  } catch (bulkError) {
+    console.warn('Busca de motoristas em lote indisponivel; usando consulta compativel.', bulkError);
+    const grouped = Object.fromEntries(invoiceNumbers.map((invoiceNumber) => [invoiceNumber, [] as ITrip[]]));
+
+    for (let index = 0; index < invoiceNumbers.length; index += REQUEST_BATCH_SIZE) {
+      const chunk = invoiceNumbers.slice(index, index + REQUEST_BATCH_SIZE);
+      const responses = await Promise.all(chunk.map(async (invoiceNumber) => {
+        try {
+          const { data } = await axios.get<ITrip[]>(
+            `${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`,
+          );
+          return [invoiceNumber, Array.isArray(data) ? data : []] as const;
+        } catch {
+          return [invoiceNumber, [] as ITrip[]] as const;
+        }
+      }));
+      responses.forEach(([invoiceNumber, trips]) => {
+        grouped[invoiceNumber] = trips;
+      });
+    }
+
+    return grouped;
+  }
+}
+
 export default function useInvoiceSearchContext() {
   const [invoiceContextByNf, setInvoiceContextByNf] = useState<Record<string, IInvoiceSearchContext>>({});
+  const [driverLoadingByInvoice, setDriverLoadingByInvoice] = useState<Record<string, boolean>>({});
   const invoiceContextRef = useRef<Record<string, IInvoiceSearchContext>>({});
   const fetchedAtByInvoiceRef = useRef<Record<string, number>>({});
 
@@ -195,13 +244,76 @@ export default function useInvoiceSearchContext() {
 
     if (!missingInvoiceNumbers.length) return;
 
+    let tripsByInvoice: Record<string, ITrip[]> = {};
+    if (includeTripDriver) {
+      setDriverLoadingByInvoice((previous) => {
+        const next = { ...previous };
+        missingInvoiceNumbers.forEach((invoiceNumber) => {
+          next[invoiceNumber] = true;
+        });
+        return next;
+      });
+
+      tripsByInvoice = await fetchTripsByInvoiceNumbers(missingInvoiceNumbers);
+      const driverEntries = missingInvoiceNumbers.map((invoiceNumber): [string, IInvoiceSearchContext] => (
+        [invoiceNumber, buildInvoiceContext(
+          invoiceNumber,
+          [],
+          [],
+          tripsByInvoice[invoiceNumber] || [],
+          { includeTripDriver: true },
+        )]
+      ));
+
+      setInvoiceContextByNf((previous) => {
+        const next = { ...previous };
+        driverEntries.forEach(([invoiceNumber, driverContext]) => {
+          next[invoiceNumber] = {
+            ...driverContext,
+            ...(previous[invoiceNumber] || {}),
+            driver_name: driverContext.driver_name,
+            trip_id: driverContext.trip_id,
+            trip_date: driverContext.trip_date,
+            trip_run_number: driverContext.trip_run_number,
+            trip_note_status: driverContext.trip_note_status,
+          };
+        });
+        invoiceContextRef.current = next;
+        return next;
+      });
+      setDriverLoadingByInvoice((previous) => {
+        const next = { ...previous };
+        missingInvoiceNumbers.forEach((invoiceNumber) => {
+          next[invoiceNumber] = false;
+        });
+        return next;
+      });
+    }
+
     const contextEntries: Array<[string, IInvoiceSearchContext]> = [];
     for (let index = 0; index < missingInvoiceNumbers.length; index += REQUEST_BATCH_SIZE) {
       const chunk = missingInvoiceNumbers.slice(index, index + REQUEST_BATCH_SIZE);
       const chunkEntries = await Promise.all(
-        chunk.map(async (invoiceNumber): Promise<[string, IInvoiceSearchContext]> => (
-          [invoiceNumber, await fetchInvoiceContext(invoiceNumber, { includeTripDriver })]
-        )),
+        chunk.map(async (invoiceNumber): Promise<[string, IInvoiceSearchContext]> => {
+          const detailsContext = await fetchInvoiceContext(invoiceNumber, { includeTripDriver: false });
+          if (!includeTripDriver) return [invoiceNumber, detailsContext];
+
+          const driverContext = buildInvoiceContext(
+            invoiceNumber,
+            [],
+            [],
+            tripsByInvoice[invoiceNumber] || [],
+            { includeTripDriver: true },
+          );
+          return [invoiceNumber, {
+            ...detailsContext,
+            driver_name: driverContext.driver_name,
+            trip_id: driverContext.trip_id,
+            trip_date: driverContext.trip_date,
+            trip_run_number: driverContext.trip_run_number,
+            trip_note_status: driverContext.trip_note_status,
+          }];
+        }),
       );
       contextEntries.push(...chunkEntries);
     }
@@ -228,6 +340,7 @@ export default function useInvoiceSearchContext() {
 
   return {
     invoiceContextByNf,
+    driverLoadingByInvoice,
     loadInvoiceContext,
     refreshInvoiceContext,
   };

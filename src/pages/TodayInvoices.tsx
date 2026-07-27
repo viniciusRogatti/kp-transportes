@@ -31,7 +31,12 @@ function TodayInvoices() {
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
   const [assignmentByInvoice, setAssignmentByInvoice] = useState<Record<string, TodayInvoiceAssignment>>({});
-  const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
+  const {
+    invoiceContextByNf,
+    driverLoadingByInvoice,
+    loadInvoiceContext,
+    refreshInvoiceContext,
+  } = useInvoiceSearchContext();
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
   const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
   const [allTabCompanyFilter, setAllTabCompanyFilter] = useState<string>('all');
@@ -533,6 +538,7 @@ function TodayInvoices() {
                   <CardDanfes
                     danfes={filteredDanfes}
                     driverByInvoice={driverByInvoice}
+                    driverLoadingByInvoice={driverLoadingByInvoice}
                     invoiceContextByNf={invoiceContextByNf}
                     assignableTrips={assignableTrips}
                     onAssignDanfeToTrip={handleAssignDanfeToTrip}

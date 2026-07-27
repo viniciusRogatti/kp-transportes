@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { History, MapPinned, UserPlus } from 'lucide-react';
+import { History, LoaderCircle, MapPinned, UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
 import { cn } from '../lib/cn';
 import { IDanfe, IInvoiceSearchContext, ITrip } from '../types/types';
@@ -23,6 +23,7 @@ import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from 
 interface CardDanfesProps {
   danfes: IDanfe[];
   driverByInvoice?: Record<string, string>;
+  driverLoadingByInvoice?: Record<string, boolean>;
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   showLegend?: boolean;
   onDanfeUpdated?: (danfe: IDanfe) => void;
@@ -83,6 +84,7 @@ function resolveDisplayStatus(danfeStatus: unknown, invoiceContext?: IInvoiceSea
 function CardDanfes({
   danfes,
   driverByInvoice = {},
+  driverLoadingByInvoice = {},
   invoiceContextByNf = {},
   showLegend = true,
   onDanfeUpdated,
@@ -315,6 +317,7 @@ function CardDanfes({
             const isFlipped = Boolean(flippedCards[key]);
             const invoiceNumber = String(danfe.invoice_number);
             const invoiceContext = invoiceContextByNf[invoiceNumber] || null;
+            const isDriverLoading = Boolean(driverLoadingByInvoice[invoiceNumber]);
             const resolvedDriverName = driverByInvoice[invoiceNumber] || invoiceContext?.driver_name || null;
             const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity) || '-';
             const cityName = normalizeCityLabel(danfe.Customer?.city) || '-';
@@ -332,13 +335,14 @@ function CardDanfes({
             const latestOccurrenceDescription = normalizeTextValue(latestOccurrence?.description) || 'Ocorrencia registrada para esta NF';
             const latestOccurrenceTone = latestOccurrence ? getOccurrenceTone(latestOccurrence.status) : 'warning';
             const creditLetterTone = invoiceContext?.credit_letter_pending_count ? 'warning' : 'success';
-            const driverTone = resolvedDriverName ? 'success' : 'warning';
+            const driverTone = isDriverLoading ? 'info' : resolvedDriverName ? 'success' : 'warning';
             const currentCte = danfe.current_cte || null;
             const currentCteLabel = currentCte ? getCteStatusLabel(currentCte.status) : null;
             const currentCteNumber = currentCte?.number ? `${currentCte.number}/${currentCte.series || '1'}` : `rascunho ${currentCte?.id || ''}`.trim();
             const canAssignToTrip = Boolean(
               onAssignDanfeToTrip
               && assignableTrips.length
+              && !isDriverLoading
               && !resolvedDriverName
               && String(danfe.status || '').trim().toLowerCase() === 'pending',
             );
@@ -379,7 +383,14 @@ function CardDanfes({
                         tone={driverTone}
                         className="absolute left-1/2 top-1.5 flex h-auto max-w-[72%] -translate-x-1/2 items-center gap-1 px-2 py-0.5 text-[10px] leading-tight"
                       >
-                        <span className="truncate">{resolvedDriverName ? `Motorista: ${resolvedDriverName}` : 'Sem motorista'}</span>
+                        {isDriverLoading ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : null}
+                        <span className="truncate">
+                          {isDriverLoading
+                            ? 'Carregando motorista...'
+                            : resolvedDriverName
+                              ? `Motorista: ${resolvedDriverName}`
+                              : 'Sem motorista'}
+                        </span>
                         {canAssignToTrip ? (
                           <button
                             type="button"
@@ -557,7 +568,10 @@ function CardDanfes({
                         <p><strong>Cidade:</strong> {cityName}</p>
                         <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
-                        <p><strong>Motorista:</strong> {resolvedDriverName || 'Sem motorista'}</p>
+                        <p>
+                          <strong>Motorista:</strong>{' '}
+                          {isDriverLoading ? 'Carregando motorista...' : resolvedDriverName || 'Sem motorista'}
+                        </p>
                         {canOpenLastTrip ? (
                           <p>
                             <strong>Última rota:</strong>{' '}

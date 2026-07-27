@@ -29,7 +29,12 @@ registerLocale('ptBR', ptBR);
 
 function Invoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
-  const { invoiceContextByNf, loadInvoiceContext, refreshInvoiceContext } = useInvoiceSearchContext();
+  const {
+    invoiceContextByNf,
+    driverLoadingByInvoice,
+    loadInvoiceContext,
+    refreshInvoiceContext,
+  } = useInvoiceSearchContext();
   const [searchNf, setSearchNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -506,6 +511,7 @@ function Invoices() {
         <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
         <CardDanfes
           danfes={danfes}
+          driverLoadingByInvoice={driverLoadingByInvoice}
           invoiceContextByNf={invoiceContextByNf}
           onDanfeUpdated={handleDanfeUpdated}
           onOpenReturnBatch={(batchCode) => navigate(

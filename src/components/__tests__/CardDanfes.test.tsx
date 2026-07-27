@@ -78,6 +78,18 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
 };
 
 describe('CardDanfes', () => {
+  it('informa que o motorista ainda esta sendo carregado', () => {
+    render(
+      <CardDanfes
+        danfes={[buildDanfe('123456', 'assigned')]}
+        driverLoadingByInvoice={{ '123456': true }}
+      />,
+    );
+
+    expect(screen.getAllByText('Carregando motorista...').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Sem motorista')).not.toBeInTheDocument();
+  });
+
   it('mostra o lote da devolucao, o envio finalizado e permite abrir o lote', () => {
     const onOpenReturnBatch = jest.fn();
     render(

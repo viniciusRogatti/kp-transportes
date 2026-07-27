@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { MapPinned, UserPlus } from 'lucide-react';
+import { History, MapPinned, UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
 import { cn } from '../lib/cn';
 import { IDanfe, IInvoiceSearchContext, ITrip } from '../types/types';
@@ -353,6 +353,12 @@ function CardDanfes({
               if (invoiceContext?.trip_date) params.set('date', invoiceContext.trip_date);
               window.location.hash = `#/delivery-monitoring?${params.toString()}`;
             };
+            const openInvoiceJourney = () => {
+              const params = new URLSearchParams();
+              if (danfe.company_id) params.set('companyId', String(danfe.company_id));
+              const query = params.toString();
+              window.location.hash = `#/invoices/${encodeURIComponent(invoiceNumber)}/journey${query ? `?${query}` : ''}`;
+            };
             return (
               <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
                 <div
@@ -408,6 +414,16 @@ function CardDanfes({
                               {`Última rota #${lastTripId}`}
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={openInvoiceJourney}
+                            className="inline-flex items-center gap-1 rounded-full border border-accent/45 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-text-accent transition hover:bg-accent/20"
+                            aria-label={`Ver jornada da NF ${invoiceNumber}`}
+                            title="Ver a jornada completa da NF"
+                          >
+                            <History className="h-3 w-3" />
+                            Jornada
+                          </button>
                           {invoiceContext?.occurrence_count ? (
                             <Badge tone="warning" className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                               {`Ocorrencias: ${invoiceContext.occurrence_count}`}

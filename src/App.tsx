@@ -23,6 +23,7 @@ const Products = lazy(() => import('./pages/Products'));
 const Customers = lazy(() => import('./pages/Customers'));
 const RoutePlanning = lazy(() => import('./pages/RoutePlanning'));
 const Invoices = lazy(() => import('./pages/Invoices'));
+const InvoiceJourney = lazy(() => import('./pages/InvoiceJourney'));
 const FileUploadPage = lazy(() => import('./pages/FileUploadPage'));
 const ReturnsOccurrences = lazy(() => import('./pages/ReturnsOccurrences'));
 const ControlTowerCollections = lazy(() => import('./pages/ControlTowerCollections'));
@@ -136,6 +137,8 @@ function App() {
           <Route path="/home" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><Home /></ProtectedRoute>} />
           <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><TodayInvoices /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Invoices /></ProtectedRoute>} />
+          <Route path="/invoice-journey" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><InvoiceJourney /></ProtectedRoute>} />
+          <Route path="/invoices/:invoiceNumber/journey" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><InvoiceJourney /></ProtectedRoute>} />
           <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><OperationalPendencies /></ProtectedRoute>} />
           <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><AlertsPage /></ProtectedRoute>} />
           <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><DeliveryMonitoring /></ProtectedRoute>} />

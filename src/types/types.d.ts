@@ -597,6 +597,91 @@ export interface IMapLocation {
   lng: number;
 }
 
+export type InvoiceJourneyCategory =
+  | 'import'
+  | 'routing'
+  | 'delivery'
+  | 'receipt'
+  | 'occurrence'
+  | 'return'
+  | 'alert'
+  | 'document';
+
+export interface IInvoiceJourneyActor {
+  id: number | null;
+  name: string | null;
+  source: string;
+}
+
+export interface IInvoiceJourneyEvent {
+  id: string;
+  type: string;
+  category: InvoiceJourneyCategory;
+  occurredAt: string;
+  title: string;
+  description: string | null;
+  actor: IInvoiceJourneyActor;
+  tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+  metadata: Record<string, any>;
+  sourceRecord: string | null;
+}
+
+export interface IInvoiceJourney {
+  invoice: {
+    companyId: number;
+    companyCode: string | null;
+    companyName: string | null;
+    invoiceNumber: string;
+    invoiceDate: string | null;
+    importedAt: string | null;
+    customer: {
+      id: string | null;
+      name: string | null;
+      city: string | null;
+      state: string | null;
+    };
+    loadNumber: string | null;
+    totalValue: number | null;
+    grossWeight: number | null;
+    replacementInvoiceNumber: string | null;
+    replacementReason: string | null;
+  };
+  currentState: {
+    status: string;
+    statusLabel: string;
+    tripId: number | null;
+    tripDate: string | null;
+    runNumber: number | null;
+    sequence: number | null;
+    driver: { id: number | null; name: string | null } | null;
+    vehicle: {
+      id: number | null;
+      model: string | null;
+      licensePlate: string | null;
+    } | null;
+    hasReceipt: boolean;
+    openOccurrences: number;
+    openAlerts: number;
+  };
+  summary: {
+    totalEvents: number;
+    routes: number;
+    redeliveries: number;
+    returns: number;
+    occurrences: number;
+    receipts: number;
+    alerts: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    durationHours: number | null;
+  };
+  coverage: {
+    historicalCompleteness: 'best_effort';
+    note: string;
+  };
+  events: IInvoiceJourneyEvent[];
+}
+
 export interface ICustomer {
   name_or_legal_entity: string;
   company_id?: number;

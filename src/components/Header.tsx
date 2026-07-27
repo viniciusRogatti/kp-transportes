@@ -12,6 +12,7 @@ import {
   FileArchive,
   FileText,
   Home,
+  History,
   Menu,
   MapPinned,
   Route,
@@ -86,6 +87,7 @@ const navItems: NavItem[] = [
   { to: '/home', label: 'Início', shortLabel: 'Início', icon: <Home className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
   { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
+  { to: '/invoice-journey', label: 'Jornada da NF', shortLabel: 'Jornada', icon: <History className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/products', label: 'Produtos', shortLabel: 'Produtos', icon: <ClipboardList className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
   { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
@@ -103,6 +105,7 @@ const routeTitles: Record<string, string> = {
   '/home': 'Painel Operacional',
   '/todayInvoices': 'Notas do Dia',
   '/invoices': 'Pesquisar Notas',
+  '/invoice-journey': 'Jornada da NF',
   '/products': 'Produtos',
   '/customers': 'Clientes',
   '/routePlanning': 'Roteirização',
@@ -140,7 +143,9 @@ function Header() {
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
   const notificationButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const currentTitle = routeTitles[location.pathname] || 'KP Transportes';
+  const currentTitle = location.pathname.match(/^\/invoices\/[^/]+\/journey$/)
+    ? 'Jornada da NF'
+    : routeTitles[location.pathname] || 'KP Transportes';
   const currentSection = location.pathname.startsWith('/control-tower') ? 'Torre de Controle' : 'Operação';
   const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
   const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';

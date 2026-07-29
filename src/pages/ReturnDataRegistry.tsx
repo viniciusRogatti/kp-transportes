@@ -91,6 +91,12 @@ const RETURN_TYPE_LABELS: Record<string, string> = {
   unclassified: 'Não classificado',
 };
 
+const RETURN_VALUE_SOURCE_LABELS: Record<string, string> = {
+  invoice_total: 'total da NF, pois a devolução é total',
+  weight_break_percentage: 'percentual informado sobre o item',
+  unavailable: 'a planilha não informa quantidade ou valor devolvido',
+};
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (axios.isAxiosError(error)) {
     return String(error.response?.data?.message || error.response?.data?.error || fallback);
@@ -383,7 +389,8 @@ function ReturnDataRegistry() {
     ['Aprovadas', overview.metrics.approved_occurrences],
     ['Reprovadas', overview.metrics.rejected_occurrences],
     ['Aprovação', `${overview.metrics.approval_rate}%`],
-    ['Valor dos produtos devolvidos', currencyFormatter.format(overview.metrics.involved_value)],
+    ['Valor devolvido calculável', currencyFormatter.format(overview.metrics.involved_value)],
+    ['Sem valor calculável', overview.metrics.occurrences_without_calculable_value],
     ['Clientes', overview.metrics.distinct_customers],
     ['Sem lote', overview.metrics.unlinked_occurrences],
   ] : [], [overview]);
@@ -544,9 +551,12 @@ function ReturnDataRegistry() {
                               <span><strong>Redespacho:</strong> {occurrence.redelivery_carrier_name || '-'}</span>
                               <span><strong>Emissão da NF:</strong> {occurrence.invoice_issued_at || '-'}</span>
                               <span>
-                                <strong>Valor devolvido:</strong> {currencyFormatter.format(Number(occurrence.calculated_return_value || 0))}
+                                <strong>Valor devolvido:</strong>{' '}
+                                {occurrence.calculated_return_value === null
+                                  ? 'Não calculável'
+                                  : currencyFormatter.format(occurrence.calculated_return_value)}
                                 <small className="ml-1 text-muted">
-                                  ({occurrence.return_value_source === 'items' ? 'soma dos produtos' : 'total da NF, pois os itens não têm valor'})
+                                  ({RETURN_VALUE_SOURCE_LABELS[occurrence.return_value_source]})
                                 </small>
                               </span>
                               <span><strong>Valor total da NF:</strong> {currencyFormatter.format(Number(occurrence.invoice_total_value || 0))}</span>

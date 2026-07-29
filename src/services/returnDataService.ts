@@ -16,8 +16,8 @@ export type ReturnRegistryOccurrence = {
   invoice_number: string;
   invoice_number_normalized: string;
   invoice_total_value: number | null;
-  calculated_return_value: number;
-  return_value_source: 'items' | 'invoice_total';
+  calculated_return_value: number | null;
+  return_value_source: 'invoice_total' | 'weight_break_percentage' | 'unavailable';
   invoice_issued_at: string | null;
   customer_name: string | null;
   customer_tax_id: string | null;
@@ -130,6 +130,7 @@ export type ReturnDataOverview = {
     unknown_occurrences: number;
     approval_rate: number;
     involved_value: number;
+    occurrences_without_calculable_value: number;
     distinct_customers: number;
     unlinked_occurrences: number;
   };

@@ -16,6 +16,10 @@ const MANUAL_STOP_STATUS_TRANSITIONS: Record<string, readonly ManualStopStatus[]
   arrived: ['returned', 'redelivery', 'retained', 'cancelled'],
   delivered: ['retained'],
   completed: ['retained'],
+  returned: ['redelivery', 'retained', 'cancelled'],
+  redelivery: ['returned', 'retained', 'cancelled'],
+  retained: ['returned', 'redelivery', 'cancelled'],
+  cancelled: ['returned', 'redelivery', 'retained'],
 };
 
 export const MANUAL_STOP_STATUS_ACTIONS: readonly ManualStopStatusAction[] = [

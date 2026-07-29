@@ -35,7 +35,7 @@ jest.mock('../../utils/alertReadState', () => ({
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-type MonitoringStatus = 'on_the_way' | 'returned' | 'retained';
+type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained';
 
 const buildOverview = (status: MonitoringStatus) => ({
   date: '2026-03-23',
@@ -241,6 +241,42 @@ describe('DeliveryMonitoring', () => {
 
     expect(window.confirm).toHaveBeenCalledWith('Confirmar canhoto retido para NF 123456?');
     expect(await screen.findByText('NF 123456 atualizada com sucesso para canhoto retido.')).toBeInTheDocument();
+  });
+
+  it('permite corrigir canhoto retido para reentrega direto no monitoramento', async () => {
+    let currentStatus: MonitoringStatus = 'retained';
+    mockedAxios.get.mockImplementation((url) => {
+      if (String(url).includes('/address-diagnostics')) {
+        return Promise.resolve({ data: diagnostics } as never);
+      }
+      return Promise.resolve({ data: buildOverview(currentStatus) } as never);
+    });
+    mockedAxios.post.mockImplementation(async (_url, payload) => {
+      currentStatus = String((payload as { status?: string })?.status || 'redelivery') as MonitoringStatus;
+      return { data: { accepted: true } } as never;
+    });
+
+    render(<DeliveryMonitoring />);
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Parada 1: NF 123456 • canhoto retido',
+    }));
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Marcar reentrega da NF 123456',
+    }));
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/driver-app/trip-stops/99/status'),
+        expect.objectContaining({
+          status: 'redelivery',
+          source: 'delivery_monitoring_manual_update',
+        }),
+      );
+    });
+
+    expect(window.confirm).toHaveBeenCalledWith('Confirmar reentrega para NF 123456?');
+    expect(await screen.findByText('NF 123456 atualizada com sucesso para reentrega.')).toBeInTheDocument();
   });
 
   it('preserva no celular a data da viagem recebida pelo alerta', async () => {

@@ -1828,7 +1828,7 @@ function DeliveryMonitoring() {
                           : !numericDriverId
                             ? 'Esta rota precisa de um motorista vinculado para permitir a atualizacao operacional.'
                             : selectedStopAllowsManualUpdate
-                              ? 'Selecione uma das acoes para registrar devolucao, reentrega, canhoto retido ou cancelamento direto do monitoramento.'
+                              ? 'Selecione uma acao para registrar ou corrigir o status. Alteracoes manuais podem ser corrigidas novamente e ficam no historico operacional.'
                               : 'Esta parada ja esta finalizada e nao aceita nova mudanca por esse atalho.'}
                       </p>
 

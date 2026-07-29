@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import axios from 'axios';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -155,6 +156,13 @@ function FilterFields({
   compact?: boolean;
 }) {
   const fieldClass = 'h-10 min-w-0 rounded-md border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60';
+  const openDatePicker = (event: ReactMouseEvent<HTMLInputElement>) => {
+    try {
+      event.currentTarget.showPicker?.();
+    } catch (error) {
+      // Alguns navegadores restringem showPicker fora da interação direta.
+    }
+  };
   return (
     <div className={`grid gap-2 ${compact ? 'md:grid-cols-3 xl:grid-cols-6' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
       {!compact ? (
@@ -192,8 +200,8 @@ function FilterFields({
           </select>
         </>
       ) : null}
-      <input className={fieldClass} type="date" value={filters.start_date || ''} onChange={(event) => onChange('start_date', event.target.value)} aria-label="Período inicial da base" />
-      <input className={fieldClass} type="date" value={filters.end_date || ''} onChange={(event) => onChange('end_date', event.target.value)} aria-label="Período final da base" />
+      <input className={`${fieldClass} cursor-pointer`} type="date" value={filters.start_date || ''} onClick={openDatePicker} onChange={(event) => onChange('start_date', event.target.value)} aria-label="Período inicial da base" />
+      <input className={`${fieldClass} cursor-pointer`} type="date" value={filters.end_date || ''} onClick={openDatePicker} onChange={(event) => onChange('end_date', event.target.value)} aria-label="Período final da base" />
     </div>
   );
 }
@@ -375,7 +383,7 @@ function ReturnDataRegistry() {
     ['Aprovadas', overview.metrics.approved_occurrences],
     ['Reprovadas', overview.metrics.rejected_occurrences],
     ['Aprovação', `${overview.metrics.approval_rate}%`],
-    ['Valor envolvido (por ocorrência)', currencyFormatter.format(overview.metrics.involved_value)],
+    ['Valor dos produtos devolvidos', currencyFormatter.format(overview.metrics.involved_value)],
     ['Clientes', overview.metrics.distinct_customers],
     ['Sem lote', overview.metrics.unlinked_occurrences],
   ] : [], [overview]);
@@ -535,7 +543,13 @@ function ReturnDataRegistry() {
                               <span><strong>Transportadora:</strong> {occurrence.carrier_name || '-'}</span>
                               <span><strong>Redespacho:</strong> {occurrence.redelivery_carrier_name || '-'}</span>
                               <span><strong>Emissão da NF:</strong> {occurrence.invoice_issued_at || '-'}</span>
-                              <span><strong>Valor:</strong> {currencyFormatter.format(Number(occurrence.invoice_total_value || 0))}</span>
+                              <span>
+                                <strong>Valor devolvido:</strong> {currencyFormatter.format(Number(occurrence.calculated_return_value || 0))}
+                                <small className="ml-1 text-muted">
+                                  ({occurrence.return_value_source === 'items' ? 'soma dos produtos' : 'total da NF, pois os itens não têm valor'})
+                                </small>
+                              </span>
+                              <span><strong>Valor total da NF:</strong> {currencyFormatter.format(Number(occurrence.invoice_total_value || 0))}</span>
                               <span><strong>Lote:</strong> {occurrence.linked_batch_code || 'Sem lote vinculado'}</span>
                               <span><strong>Primeira importação:</strong> {formatDateTime(occurrence.first_seen_at)}</span>
                               <span><strong>Última atualização:</strong> {formatDateTime(occurrence.last_seen_at)}</span>

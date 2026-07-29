@@ -82,6 +82,23 @@ describe('ReturnDataRegistry', () => {
     expect(screen.getByRole('button', { name: /importações/i })).toBeInTheDocument();
   });
 
+  it('abre o calendário ao clicar nos filtros de período', async () => {
+    const showPicker = jest.fn();
+    Object.defineProperty(HTMLInputElement.prototype, 'showPicker', {
+      configurable: true,
+      value: showPicker,
+    });
+
+    try {
+      render(<ReturnDataRegistry />);
+      fireEvent.click(await screen.findByLabelText('Período inicial da base'));
+      fireEvent.click(screen.getByLabelText('Período final da base'));
+      expect(showPicker).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (HTMLInputElement.prototype as any).showPicker;
+    }
+  });
+
   it('pré-visualiza o arquivo antes de permitir confirmar a importação', async () => {
     mockedAxios.post.mockResolvedValueOnce({
       data: {

@@ -16,6 +16,8 @@ export type ReturnRegistryOccurrence = {
   invoice_number: string;
   invoice_number_normalized: string;
   invoice_total_value: number | null;
+  calculated_return_value: number;
+  return_value_source: 'items' | 'invoice_total';
   invoice_issued_at: string | null;
   customer_name: string | null;
   customer_tax_id: string | null;

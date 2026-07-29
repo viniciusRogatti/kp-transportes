@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_URL } from '../data';
 import { IDanfe, IOccurrence, IReturnBatch, IInvoiceSearchContext, ITrip } from '../types/types';
 
-const VALID_RETURN_TYPES = new Set(['total', 'partial', 'sobra', 'coleta']);
+const VALID_RETURN_TYPES = new Set(['total', 'partial', 'sobra', 'coleta', 'weight_break']);
 const REQUEST_BATCH_SIZE = 8;
 const CONTEXT_STALE_MS = 30000;
 const INACTIVE_TRIP_NOTE_STATUSES = new Set(['cancelled']);
@@ -108,7 +108,7 @@ function buildInvoiceContext(
         .map((note) => note.return_type)
     )),
   ))
-    .filter((returnType): returnType is 'total' | 'partial' | 'sobra' | 'coleta' => (
+    .filter((returnType): returnType is 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break' => (
       VALID_RETURN_TYPES.has(String(returnType))
     ));
 

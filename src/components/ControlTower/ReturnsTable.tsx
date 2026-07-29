@@ -37,6 +37,7 @@ const returnTypeFilterTabs: Array<{ value: ControlTowerFilters['returnType']; la
   { value: 'partial', label: 'Parcial' },
   { value: 'coleta', label: 'Coleta' },
   { value: 'sobra', label: 'Sobra' },
+  { value: 'weight_break', label: 'Quebra de peso' },
   { value: 'faltante', label: 'Faltante' },
 ];
 
@@ -45,6 +46,7 @@ function getReturnTypeLabel(returnType: ReturnsTableRow['returnType']) {
   if (returnType === 'partial') return 'Parcial';
   if (returnType === 'coleta') return 'Coleta';
   if (returnType === 'sobra') return 'Sobra';
+  if (returnType === 'weight_break') return 'Quebra de peso';
   if (returnType === 'faltante') return 'Faltante';
   return 'Nao informado';
 }

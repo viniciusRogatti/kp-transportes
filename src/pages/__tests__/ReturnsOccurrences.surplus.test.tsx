@@ -70,11 +70,24 @@ async function openNewReturnModal() {
   return screen.findByRole('dialog', { name: 'Nova devolucao' });
 }
 
+async function fillTransportStep() {
+  await screen.findByRole('option', { name: 'Motorista Teste' });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Motorista da devolucao' }), {
+    target: { value: '1' },
+  });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Veiculo da devolucao' }), {
+    target: { value: '1' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await screen.findByText('Digite ou leia o codigo de barras da NF');
+}
+
 describe('ReturnsOccurrences - sobra com inversao', () => {
   beforeEach(() => {
     mockedAxios.get.mockReset();
     mockedAxios.post.mockReset();
     mockedAxios.put.mockReset();
+    mockedAxios.patch.mockReset();
     mockedAxios.delete.mockReset();
     (mockedAxios as any).defaults = { headers: { common: {} } };
 
@@ -90,6 +103,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       }
       return Promise.resolve({ data: {} });
     });
+    mockedAxios.patch.mockResolvedValue({ data: {} });
 
     mockInitialGets();
 
@@ -220,9 +234,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {
     renderPage();
     await openNewReturnModal();
-    await screen.findByText('NF + tipo de devolucao');
-
-    fireEvent.click(screen.getByLabelText('Sobra'));
+    await fillTransportStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar sobra sem NF' }));
 
     expect(screen.getByText('Numero da Carga *')).toBeInTheDocument();
     expect(screen.queryByText('NF relacionada *')).not.toBeInTheDocument();
@@ -245,24 +258,14 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
   it('com toggle OFF envia sobra sem campo inversion no payload', async () => {
     renderPage();
     await openNewReturnModal();
-    await screen.findByText('NF + tipo de devolucao');
-
-    fireEvent.click(screen.getByLabelText('Sobra'));
+    await fillTransportStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar sobra sem NF' }));
 
     fireEvent.change(screen.getByPlaceholderText('Ex.: CARGA-123'), { target: { value: 'CARGA-123' } });
     fireEvent.change(screen.getByPlaceholderText('Ex.: RV001496'), { target: { value: 'RV001496' } });
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Unidade do produto da sobra' })).toHaveValue('UN'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar sobra na lista' }));
-
-    await screen.findByRole('option', { name: 'Motorista Teste' });
-    await screen.findByRole('option', { name: 'Truck - ABC-1234' });
-    const driverSelect = screen.getByRole('combobox', { name: 'Motorista da devolucao' });
-    const vehicleSelect = screen.getByRole('combobox', { name: 'Veiculo da devolucao' });
-    fireEvent.change(driverSelect, { target: { value: '1' } });
-    fireEvent.change(vehicleSelect, { target: { value: '1' } });
-    expect(driverSelect).toHaveValue('1');
-    expect(vehicleSelect).toHaveValue('1');
 
     fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
 
@@ -329,13 +332,12 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     renderPage();
     await openNewReturnModal();
-    await screen.findByText('NF + tipo de devolucao');
-
-    fireEvent.click(screen.getByLabelText('Parcial'));
+    await fillTransportStep();
     fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1754803' } });
     fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
 
     await screen.findByText('NF carregada: 1754803 | Cliente: Cliente Teste');
+    fireEvent.click(screen.getByLabelText('Parcial'));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
       target: { value: 'PA000014' },
@@ -353,5 +355,62 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     expect(screen.getByText('PA000014', { selector: 'strong' })).toBeInTheDocument();
     expect(screen.getByText(/Tipo: UN \| Qtd: 3/)).toBeInTheDocument();
     expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Quantidade excede o limite da NF'));
+  });
+
+  it('registra quebra de peso separada de uma devolucao fisica', async () => {
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+
+    fireEvent.click(screen.getByLabelText('Quebra de peso'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
+      target: { value: 'RV001899' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar quebra de peso' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+
+    await waitFor(() => {
+      const createBatchCall = mockedAxios.post.mock.calls.find(([url]) => String(url).includes('/returns/batches/create'));
+      const payload = createBatchCall?.[1] as any;
+      expect(payload.notes[0].return_type).toBe('weight_break');
+      expect(payload.notes[0].items[0]).toEqual(expect.objectContaining({
+        product_id: 'RV001899',
+        is_missing: false,
+        keep_in_stock: false,
+      }));
+    });
+  });
+
+  it('marca produto faltante sem envia-lo para estoque', async () => {
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+
+    fireEvent.click(screen.getByLabelText('Parcial'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
+      target: { value: 'RV001899' },
+    });
+    fireEvent.click(screen.getByLabelText(/Produto faltante/));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+
+    await waitFor(() => {
+      const createBatchCall = mockedAxios.post.mock.calls.find(([url]) => String(url).includes('/returns/batches/create'));
+      const payload = createBatchCall?.[1] as any;
+      expect(payload.notes[0].items[0]).toEqual(expect.objectContaining({
+        is_missing: true,
+        keep_in_stock: false,
+      }));
+    });
   });
 });

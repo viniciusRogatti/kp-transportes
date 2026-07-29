@@ -66,12 +66,14 @@ export interface IInvoiceReturnItem {
   quantity: number;
   unit_price?: number | string;
   total_price?: number | string;
+  is_missing?: boolean;
+  keep_in_stock?: boolean;
 }
 
 export interface IInvoiceReturn {
   id: number;
   invoice_number: string;
-  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break';
   load_number?: string | null;
   is_inversion?: boolean;
   inversion_invoice_number?: string | null;
@@ -261,12 +263,14 @@ export interface IControlTowerReturnItem {
   quantity: number;
   unit_price?: number;
   total_price?: number;
+  is_missing?: boolean;
+  keep_in_stock?: boolean;
 }
 
 export interface IControlTowerReturn {
   id: number;
   invoice_number: string;
-  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  return_type: 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break';
   load_number?: string | null;
   is_inversion?: boolean;
   inversion_invoice_number?: string | null;
@@ -301,7 +305,7 @@ export interface IInvoiceSearchContext {
   credit_letter_pending_count: number;
   credit_letter_completed_count: number;
   return_count: number;
-  return_types: Array<'total' | 'partial' | 'sobra' | 'coleta'>;
+  return_types: Array<'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break'>;
   return_batches: Array<{
     batch_code: string;
     batch_status: 'open' | 'closed';
@@ -492,6 +496,7 @@ export interface IProduct {
   price: string,
   type: string,
   quantity?: number,
+  return_to_stock_default?: boolean,
   created_at?: string,
   updated_at?: string,
   company?: {
@@ -573,6 +578,7 @@ export interface IDanfeProduct {
     description: string;
     price: string;
     type: string;
+    return_to_stock_default?: boolean;
   };
 };
 

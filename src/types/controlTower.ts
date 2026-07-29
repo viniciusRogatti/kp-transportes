@@ -1,7 +1,7 @@
 export type PeriodPreset = 'today' | '7d' | '30d' | 'custom';
 
 export type BacklogStatus = 'PENDENTE' | 'SOLICITADA' | 'EM_ROTA' | 'COLETADA' | 'CANCELADA';
-export type ReturnSourceType = 'total' | 'partial' | 'coleta' | 'sobra';
+export type ReturnSourceType = 'total' | 'partial' | 'coleta' | 'sobra' | 'weight_break';
 export type ReturnTypeFilter = 'all' | ReturnSourceType | 'faltante';
 export type OccurrenceScope = 'invoice_total' | 'items';
 export type OccurrenceReason = 'faltou_no_carregamento' | 'faltou_na_carga' | 'produto_avariado' | 'produto_invertido' | 'produto_sem_etiqueta_ou_data' | 'legacy_outros';

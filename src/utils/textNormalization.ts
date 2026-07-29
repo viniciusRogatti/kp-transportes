@@ -78,6 +78,7 @@ export function sanitizeDanfeProduct(product: IDanfeProduct): IDanfeProduct {
       description: fallbackDescription,
       price: fallbackPrice,
       type: fallbackType,
+      return_to_stock_default: Boolean(product.Product?.return_to_stock_default),
     },
   };
 }

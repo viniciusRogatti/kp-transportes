@@ -287,6 +287,7 @@ function mapReturnTypeReason(returnType: ReturnSourceType) {
     partial: 'Devolucao parcial',
     sobra: 'Sobra',
     coleta: 'Coleta',
+    weight_break: 'Quebra de peso',
   };
 
   return labels[returnType] || 'Nao informado';
@@ -1039,7 +1040,7 @@ function variation(current: number, previous: number) {
 }
 
 function normalizeReturnType(returnType?: ReturnBatch['sourceType']): ReturnsTableRow['returnType'] {
-  if (returnType === 'total' || returnType === 'partial' || returnType === 'coleta' || returnType === 'sobra') {
+  if (returnType === 'total' || returnType === 'partial' || returnType === 'coleta' || returnType === 'sobra' || returnType === 'weight_break') {
     return returnType;
   }
 

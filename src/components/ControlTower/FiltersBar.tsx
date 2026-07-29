@@ -42,6 +42,8 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         ? 'Coleta'
         : filters.returnType === 'sobra'
           ? 'Sobra'
+          : filters.returnType === 'weight_break'
+            ? 'Quebra de peso'
           : filters.returnType === 'faltante'
             ? 'Faltante'
           : 'Todos';

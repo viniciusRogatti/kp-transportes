@@ -4,7 +4,18 @@ import axios from 'axios';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
-import { CheckCircle2, History, Pencil, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  FileSearch,
+  History,
+  PackageCheck,
+  Pencil,
+  Trash2,
+  Truck,
+  X,
+} from 'lucide-react';
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
@@ -191,9 +202,10 @@ type SurplusInversionDraft = {
 type SurplusInversionAllocationDraft = SurplusInversionDraft & {
   quantity: number;
 };
+type ReturnType = 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break';
 type ReturnDraftNote = {
   invoice_number: string;
-  return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+  return_type: ReturnType;
   items: IInvoiceReturnItem[];
   load_number?: string | null;
   is_inversion?: boolean;
@@ -335,8 +347,15 @@ const buildOccurrenceCardItemSummary = (occurrence: IOccurrence): OccurrenceCard
 
   return [];
 };
-const getReturnItemKey = (item: Pick<IInvoiceReturnItem, 'product_id' | 'product_type'>) => (
-  `${item.product_id}::${normalizeProductType(item.product_type)}`
+const getReturnItemKey = (
+  item: Pick<IInvoiceReturnItem, 'product_id' | 'product_type' | 'is_missing' | 'keep_in_stock'>,
+) => (
+  [
+    item.product_id,
+    normalizeProductType(item.product_type),
+    item.is_missing ? 'missing' : 'present',
+    item.keep_in_stock ? 'stock' : 'return',
+  ].join('::')
 );
 const groupItemsByProductAndType = (items: IInvoiceReturnItem[]) => items.reduce((acc: IInvoiceReturnItem[], item) => {
   const key = getReturnItemKey(item);
@@ -424,13 +443,17 @@ function ReturnsOccurrences() {
 
   const [returnNf, setReturnNf] = useState(() => String(searchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
-  const [returnType, setReturnType] = useState<'total' | 'partial' | 'sobra' | 'coleta'>('total');
+  const [returnType, setReturnType] = useState<ReturnType>('total');
+  const [returnWizardStep, setReturnWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);
   const [returnNfCollectionLookupLoading, setReturnNfCollectionLookupLoading] = useState(false);
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialProductType, setPartialProductType] = useState('');
   const [partialQuantityInput, setPartialQuantityInput] = useState('1');
   const [partialItems, setPartialItems] = useState<IInvoiceReturnItem[]>([]);
+  const [partialIsMissing, setPartialIsMissing] = useState(false);
+  const [partialKeepInStock, setPartialKeepInStock] = useState(false);
+  const [partialStockDefault, setPartialStockDefault] = useState(false);
   const [leftoverProductCode, setLeftoverProductCode] = useState('');
   const [leftoverQuantityInput, setLeftoverQuantityInput] = useState('1');
   const [leftoverProductType, setLeftoverProductType] = useState('');
@@ -444,6 +467,10 @@ function ReturnsOccurrences() {
   const [leftoverInversionLookupError, setLeftoverInversionLookupError] = useState('');
   const [leftoverInversionAllocations, setLeftoverInversionAllocations] = useState<SurplusInversionAllocationDraft[]>([]);
   const [draftNotes, setDraftNotes] = useState<ReturnDraftNote[]>([]);
+  const [recentlyRemovedDraft, setRecentlyRemovedDraft] = useState<{
+    note: ReturnDraftNote;
+    index: number;
+  } | null>(null);
   const [returnDriverId, setReturnDriverId] = useState('');
   const [selectedCarId, setSelectedCarId] = useState('');
   const [returnDate, setReturnDate] = useState(getTodayDate());
@@ -753,15 +780,16 @@ function ReturnsOccurrences() {
     const catalogType = productTypeByCode[String(item.product_id || '').trim().toUpperCase()];
     return { ...item, product_type: catalogType || 'UN' };
   });
-  const getReturnTypeLabel = (value: 'total' | 'partial' | 'sobra' | 'coleta') => {
+  const getReturnTypeLabel = (value: ReturnType) => {
     if (value === 'total') return 'Total';
     if (value === 'partial') return 'Parcial';
     if (value === 'coleta') return 'Coleta';
+    if (value === 'weight_break') return 'Quebra de peso';
     return 'Sobra';
   };
   const getNoteDisplayLabel = (note: {
     invoice_number: string;
-    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    return_type: ReturnType;
     items?: IInvoiceReturnItem[];
     load_number?: string | null;
   }) => {
@@ -777,7 +805,7 @@ function ReturnsOccurrences() {
     return `NF ${note.invoice_number}`;
   };
   const getNoteInversionSummary = (note: {
-    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    return_type: ReturnType;
     is_inversion?: boolean;
     inversion?: { invoice_number: string | null; missing_product_code: string | null } | null;
     inversion_invoice_number?: string | null;
@@ -800,7 +828,7 @@ function ReturnsOccurrences() {
   };
   const serializeReturnNotePayload = (note: {
     invoice_number: string;
-    return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+    return_type: ReturnType;
     load_number?: string | null;
     is_inversion?: boolean;
     inversion?: { invoice_number: string | null; missing_product_code: string | null } | null;
@@ -816,7 +844,7 @@ function ReturnsOccurrences() {
       items: note.items,
     } as {
       invoice_number: string;
-      return_type: 'total' | 'partial' | 'sobra' | 'coleta';
+      return_type: ReturnType;
       load_number: string | null;
       is_inversion: boolean;
       items: IInvoiceReturnItem[];
@@ -871,6 +899,9 @@ function ReturnsOccurrences() {
   useEffect(() => {
     if (!partialProductCode || !selectedPartialDanfeProduct) {
       setPartialProductType('');
+      setPartialIsMissing(false);
+      setPartialKeepInStock(false);
+      setPartialStockDefault(false);
       return;
     }
 
@@ -879,6 +910,10 @@ function ReturnsOccurrences() {
       || DEFAULT_RETURN_UNIT_TYPES[0];
 
     setPartialProductType(defaultType);
+    const stockDefault = Boolean(selectedPartialDanfeProduct.Product.return_to_stock_default);
+    setPartialIsMissing(false);
+    setPartialKeepInStock(stockDefault);
+    setPartialStockDefault(stockDefault);
   }, [partialProductCode, selectedPartialDanfeProduct]);
 
   useEffect(() => {
@@ -1052,6 +1087,39 @@ function ReturnsOccurrences() {
       setProducts(data);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
+    }
+  }
+
+  async function updateProductStockDefault(productCode: string, enabled: boolean) {
+    try {
+      await axios.patch(`${API_URL}/products/${encodeURIComponent(productCode)}/return-stock-default`, {
+        return_to_stock_default: enabled,
+      });
+      setProducts((previous) => previous.map((product) => (
+        product.code === productCode
+          ? { ...product, return_to_stock_default: enabled }
+          : product
+      )));
+      setReturnDanfe((previous) => {
+        if (!previous) return previous;
+        return {
+          ...previous,
+          DanfeProducts: previous.DanfeProducts.map((item) => (
+            item.Product.code === productCode
+              ? {
+                ...item,
+                Product: {
+                  ...item.Product,
+                  return_to_stock_default: enabled,
+                },
+              }
+              : item
+          )),
+        };
+      });
+    } catch (error) {
+      console.error('Erro ao salvar destino padrao do produto:', error);
+      alert('O item foi adicionado, mas nao foi possivel salvar o destino padrao para as proximas devolucoes.');
     }
   }
 
@@ -1229,11 +1297,11 @@ function ReturnsOccurrences() {
     setLeftoverInversionAllocations([]);
   }
 
-  function handleChangeReturnType(nextType: 'total' | 'partial' | 'sobra' | 'coleta') {
+  function handleChangeReturnType(nextType: ReturnType) {
     if (
       isReturnNfCollection
       && returnDanfe
-      && (nextType === 'total' || nextType === 'partial')
+      && (nextType === 'total' || nextType === 'partial' || nextType === 'weight_break')
     ) {
       alert('Esta NF possui coleta solicitada pela Mar e Rio. O tipo foi travado automaticamente como Coleta.');
       return;
@@ -1250,6 +1318,19 @@ function ReturnsOccurrences() {
       setPartialProductType('');
       setPartialQuantityInput('1');
       return;
+    }
+
+    if (nextType === 'total' && returnDanfe) {
+      setPartialItems(returnDanfe.DanfeProducts.map((item) => ({
+        product_id: item.Product.code,
+        product_description: item.Product.description,
+        product_type: normalizeProductType(item.type) || normalizeProductType(item.Product.type) || null,
+        quantity: Number(item.quantity),
+        is_missing: false,
+        keep_in_stock: Boolean(item.Product.return_to_stock_default),
+      })));
+    } else if (nextType !== 'total') {
+      setPartialItems([]);
     }
 
     setLeftoverProductCode('');
@@ -1401,7 +1482,14 @@ function ReturnsOccurrences() {
       }
 
       setReturnDanfe(data);
-      setPartialItems([]);
+      setPartialItems(data.DanfeProducts.map((item: IDanfe['DanfeProducts'][number]) => ({
+        product_id: item.Product.code,
+        product_description: item.Product.description,
+        product_type: normalizeProductType(item.type) || normalizeProductType(item.Product.type) || null,
+        quantity: Number(item.quantity),
+        is_missing: false,
+        keep_in_stock: Boolean(item.Product.return_to_stock_default),
+      })));
       setPartialProductCode('');
       setPartialProductType('');
       setPartialQuantityInput('1');
@@ -1412,10 +1500,14 @@ function ReturnsOccurrences() {
         setIsReturnNfCollection(isCollectionInvoice);
         if (isCollectionInvoice) {
           setReturnType('coleta');
+          setPartialItems([]);
         }
       } catch (collectionError) {
         console.error('Erro ao verificar coleta solicitada para NF:', collectionError);
         setIsReturnNfCollection(false);
+      }
+      if (!selectedBatch) {
+        setReturnWizardStep(3);
       }
     } catch (error) {
       console.error(error);
@@ -1493,6 +1585,8 @@ function ReturnsOccurrences() {
       const existingItem = previous.find((item) => (
         item.product_id === foundProduct.Product.code
         && normalizeProductType(item.product_type) === normalizedType
+        && Boolean(item.is_missing) === partialIsMissing
+        && Boolean(item.keep_in_stock) === (partialIsMissing ? false : partialKeepInStock)
       ));
       if (!existingItem) {
         return [
@@ -1502,6 +1596,8 @@ function ReturnsOccurrences() {
             product_description: foundProduct.Product.description,
             product_type: normalizedType,
             quantity: normalizedQuantity,
+            is_missing: partialIsMissing,
+            keep_in_stock: partialIsMissing ? false : partialKeepInStock,
           },
         ];
       }
@@ -1509,20 +1605,39 @@ function ReturnsOccurrences() {
       return previous.map((item) => (
         item.product_id === foundProduct.Product.code
           && normalizeProductType(item.product_type) === normalizedType
+          && Boolean(item.is_missing) === partialIsMissing
+          && Boolean(item.keep_in_stock) === (partialIsMissing ? false : partialKeepInStock)
           ? { ...item, quantity: Number(item.quantity) + normalizedQuantity }
           : item
       ));
     });
 
     setPartialQuantityInput(String(minAllowed));
+    if (partialStockDefault !== Boolean(foundProduct.Product.return_to_stock_default)) {
+      void updateProductStockDefault(foundProduct.Product.code, partialStockDefault);
+    }
   }
 
-  function removePartialItem(productId: string, productType?: string | null) {
-    const normalizedType = normalizeProductType(productType);
-    setPartialItems((previous) => previous.filter((item) => !(
-      item.product_id === productId
-      && normalizeProductType(item.product_type) === normalizedType
-    )));
+  function removePartialItem(indexToRemove: number) {
+    setPartialItems((previous) => previous.filter((_, index) => index !== indexToRemove));
+  }
+
+  function updateReturnItemHandling(indexToUpdate: number, field: 'is_missing' | 'keep_in_stock', enabled: boolean) {
+    setPartialItems((previous) => previous.map((item, index) => {
+      if (index !== indexToUpdate) return item;
+      if (field === 'is_missing') {
+        return {
+          ...item,
+          is_missing: enabled,
+          keep_in_stock: enabled ? false : Boolean(item.keep_in_stock),
+        };
+      }
+      return {
+        ...item,
+        keep_in_stock: enabled,
+        is_missing: enabled ? false : Boolean(item.is_missing),
+      };
+    }));
   }
 
   function getCurrentNoteItems() {
@@ -1565,12 +1680,16 @@ function ReturnsOccurrences() {
     }
 
     if (returnType === 'total') {
-      return returnDanfe.DanfeProducts.map((item) => ({
-        product_id: item.Product.code,
-        product_description: item.Product.description,
-        product_type: normalizeProductType(item.type) || normalizeProductType(item.Product.type) || null,
-        quantity: Number(item.quantity),
-      }));
+      return partialItems.length
+        ? groupItemsByProductAndType(partialItems)
+        : returnDanfe.DanfeProducts.map((item) => ({
+          product_id: item.Product.code,
+          product_description: item.Product.description,
+          product_type: normalizeProductType(item.type) || normalizeProductType(item.Product.type) || null,
+          quantity: Number(item.quantity),
+          is_missing: false,
+          keep_in_stock: Boolean(item.Product.return_to_stock_default),
+        }));
     }
 
     return groupItemsByProductAndType(partialItems);
@@ -1598,8 +1717,13 @@ function ReturnsOccurrences() {
 
     const noteItems = getCurrentNoteItems();
     if (!noteItems.length) {
-      if (effectiveReturnType === 'partial' || effectiveReturnType === 'coleta') {
-        alert(`Adicione ao menos um item na devolucao ${effectiveReturnType === 'coleta' ? 'de coleta' : 'parcial'}.`);
+      if (effectiveReturnType === 'partial' || effectiveReturnType === 'coleta' || effectiveReturnType === 'weight_break') {
+        const typeLabel = effectiveReturnType === 'coleta'
+          ? 'de coleta'
+          : effectiveReturnType === 'weight_break'
+            ? 'de quebra de peso'
+            : 'parcial';
+        alert(`Adicione ao menos um item na devolucao ${typeLabel}.`);
       }
       return;
     }
@@ -1772,8 +1896,10 @@ function ReturnsOccurrences() {
       ...previous,
       ...notesToCreate,
     ]));
+    setRecentlyRemovedDraft(null);
 
     clearNfBuilder();
+    setReturnWizardStep(4);
   }
 
   function clearNfBuilder() {
@@ -1786,6 +1912,9 @@ function ReturnsOccurrences() {
     setPartialProductCode('');
     setPartialProductType('');
     setPartialQuantityInput('1');
+    setPartialIsMissing(false);
+    setPartialKeepInStock(false);
+    setPartialStockDefault(false);
     setLeftoverProductCode('');
     setLeftoverQuantityInput('1');
     setLeftoverProductType('');
@@ -1794,16 +1923,34 @@ function ReturnsOccurrences() {
   }
 
   function removeDraftNf(invoiceNumber: string) {
+    const index = draftNotes.findIndex((note) => note.invoice_number === invoiceNumber);
+    const note = index >= 0 ? draftNotes[index] : null;
+    if (note) {
+      setRecentlyRemovedDraft({ note, index });
+    }
     setDraftNotes((previous) => previous.filter((note) => note.invoice_number !== invoiceNumber));
+  }
+
+  function undoRemoveDraftNf() {
+    if (!recentlyRemovedDraft) return;
+    const { note, index } = recentlyRemovedDraft;
+    setDraftNotes((previous) => {
+      const next = [...previous];
+      next.splice(Math.min(index, next.length), 0, note);
+      return next;
+    });
+    setRecentlyRemovedDraft(null);
   }
 
   function handleCreateNewBatch() {
     setSelectedBatchCode('');
     setDraftNotes([]);
+    setRecentlyRemovedDraft(null);
     clearNfBuilder();
     setReturnDriverId('');
     setSelectedCarId('');
     setReturnDate(getTodayDate());
+    setReturnWizardStep(1);
   }
 
   function handleOpenNewReturnModal() {
@@ -1906,6 +2053,7 @@ function ReturnsOccurrences() {
           notes={draftNotes.map((note) => ({
             invoice_number: note.invoice_number,
             return_type: note.return_type,
+            items: fillMissingTypeForPdf(note.items),
           }))}
           items={pdfItems}
         />
@@ -2369,6 +2517,7 @@ function ReturnsOccurrences() {
           notes={batch.notes.map((note) => ({
             invoice_number: note.invoice_number,
             return_type: note.return_type,
+            items: fillMissingTypeForPdf(note.items || []),
           }))}
           items={pdfItems}
         />
@@ -2529,9 +2678,9 @@ function ReturnsOccurrences() {
                     <button
                       type="button"
                       onClick={handleLoadLatestBatches}
-                      className="h-10 rounded-md border border-warning bg-warning px-4 text-[0.85rem] font-bold text-white transition hover:brightness-110"
+                      className="h-10 rounded-md border border-border bg-card px-3 text-[0.82rem] font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
                     >
-                      Trazer ultimas devolucoes
+                      Atualizar lista
                     </button>
                   </div>
                   <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
@@ -2628,6 +2777,51 @@ function ReturnsOccurrences() {
                 )}
 
                 <Card>
+                  {!selectedBatch && (
+                    <div className="mb-5 overflow-x-auto pb-1">
+                      <ol className="grid min-w-[620px] grid-cols-4 gap-2" aria-label="Etapas da nova devolucao">
+                        {([
+                          { step: 1 as const, label: 'Transporte', icon: Truck },
+                          { step: 2 as const, label: 'Nota fiscal', icon: FileSearch },
+                          { step: 3 as const, label: 'Tipo e produtos', icon: PackageCheck },
+                          { step: 4 as const, label: 'Revisao do lote', icon: CheckCircle2 },
+                        ]).map(({ step, label, icon: StepIcon }) => {
+                          const isActive = returnWizardStep === step;
+                          const isComplete = returnWizardStep > step;
+                          return (
+                            <li key={step}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (step === 1 || step < returnWizardStep || (step === 4 && draftNotes.length)) {
+                                    setReturnWizardStep(step);
+                                  }
+                                }}
+                                disabled={step > returnWizardStep && !(step === 4 && draftNotes.length)}
+                                className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
+                                  isActive
+                                    ? 'border-accent bg-accent/15 text-text-accent'
+                                    : isComplete
+                                      ? 'border-emerald-600/50 bg-emerald-500/10 text-text'
+                                      : 'border-border bg-card text-muted'
+                                } disabled:cursor-not-allowed disabled:opacity-55`}
+                              >
+                                <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
+                                  isActive ? 'bg-accent text-white' : isComplete ? 'bg-emerald-600 text-white' : 'bg-surface-2'
+                                }`}>
+                                  <StepIcon size={15} />
+                                </span>
+                                <span>
+                                  <span className="block text-[0.68rem] font-semibold uppercase tracking-wide">Etapa {step}</span>
+                                  <span className="block text-xs font-bold">{label}</span>
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  )}
                   <BoxDescription className="flex-col gap-1">
                     <h2 className="leading-tight max-[768px]:text-[0.92rem]">
                       {selectedBatch ? (
@@ -2694,18 +2888,18 @@ function ReturnsOccurrences() {
                           </>
                         )}
                       </>
-                    ) : (
-                      <>
-                        <InlineText className="max-[768px]:hidden">Busque NF ou cadastre sobra, escolha o tipo e adicione na lista.</InlineText>
-                        <InlineText className="hidden max-[768px]:block">Busque a NF, escolha o tipo e adicione na lista.</InlineText>
-                      </>
-                    )}
+                    ) : null}
 
                   </BoxDescription>
-                  {!selectedBatch && (
-                    <Grid style={{ marginTop: '12px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                  {!selectedBatch && returnWizardStep === 1 && (
+                    <div className="mt-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+                      <div className="mb-4">
+                        <h3 className="text-base font-bold text-text">Quem vai carregar esta devolucao?</h3>
+                        <p className="mt-1 text-sm text-muted">Comece informando o motorista e o veiculo que receberao os produtos.</p>
+                      </div>
+                      <Grid className="grid-cols-1 md:grid-cols-2">
                       <div>
-                        <InlineText>Motorista</InlineText>
+                        <InlineText>Motorista *</InlineText>
                         <select aria-label="Motorista da devolucao" value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
                           <option value="">Selecione</option>
                           {drivers.map((driver) => (
@@ -2714,7 +2908,7 @@ function ReturnsOccurrences() {
                         </select>
                       </div>
                       <div>
-                        <InlineText>Veiculo / Placa</InlineText>
+                        <InlineText>Veiculo / Placa *</InlineText>
                         <select aria-label="Veiculo da devolucao" value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
                           <option value="">Selecione</option>
                           {cars.map((car) => (
@@ -2724,13 +2918,77 @@ function ReturnsOccurrences() {
                           ))}
                         </select>
                       </div>
-                    </Grid>
+                      </Grid>
+                      <div className="mt-5 flex justify-end">
+                        <button
+                          type="button"
+                          disabled={!returnDriverId || !selectedCarId}
+                          onClick={() => setReturnWizardStep(2)}
+                          className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          Continuar
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <div className={selectedBatch && !isSelectedBatchEditableByTransportadora ? 'hidden' : 'contents'}>
-                    <InlineText style={{ margin: '10px 0 6px 0' }}>NF + tipo de devolucao</InlineText>
-                    <div className="space-y-2">
-                    <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3">
-                      <div className="min-w-0 md:w-[220px] md:shrink-0">
+                  <div className={
+                    selectedBatch
+                      ? (!isSelectedBatchEditableByTransportadora ? 'hidden' : 'contents')
+                      : (returnWizardStep === 2 || returnWizardStep === 3 ? 'contents' : 'hidden')
+                  }>
+                    {!selectedBatch && (
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (returnWizardStep === 3) {
+                              if (returnType === 'sobra') {
+                                clearNfBuilder();
+                              }
+                              setReturnWizardStep(2);
+                              return;
+                            }
+                            setReturnWizardStep(1);
+                          }}
+                          className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
+                        >
+                          <ArrowLeft size={16} />
+                          Voltar
+                        </button>
+                        <span className="text-xs font-semibold text-muted">
+                          {returnWizardStep === 2 ? 'Localize a nota fiscal' : 'Classifique a devolucao'}
+                        </span>
+                      </div>
+                    )}
+                    <InlineText
+                      className={!selectedBatch && returnWizardStep === 2 ? 'mt-4 text-center text-sm' : ''}
+                      style={!selectedBatch && returnWizardStep === 2 ? undefined : { margin: '10px 0 6px 0' }}
+                    >
+                      {returnWizardStep === 2 && !selectedBatch ? 'Digite ou leia o codigo de barras da NF' : 'Tipo e produtos da devolucao'}
+                    </InlineText>
+                    <div className={
+                      !selectedBatch && returnWizardStep === 2
+                        ? 'mx-auto mt-3 w-full max-w-[620px] space-y-4 rounded-xl border border-border bg-card p-5 shadow-soft sm:p-7'
+                        : 'space-y-2'
+                    }>
+                    {!selectedBatch && returnWizardStep === 2 && (
+                      <div className="flex flex-col items-center text-center">
+                        <span className="grid h-12 w-12 place-items-center rounded-full bg-accent/15 text-text-accent">
+                          <FileSearch size={24} />
+                        </span>
+                        <h3 className="mt-3 text-base font-bold text-text">Localizar nota fiscal</h3>
+                        <p className="mt-1 max-w-[440px] text-xs leading-relaxed text-muted">
+                          Use o leitor de codigo de barras ou informe o numero da NF para carregar os produtos.
+                        </p>
+                      </div>
+                    )}
+                    <div className={`flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3 ${
+                      !selectedBatch && returnWizardStep === 2 ? 'justify-center' : ''
+                    }`}>
+                      <div className={`${!selectedBatch && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
+                        !selectedBatch && returnWizardStep === 2 ? 'w-full' : 'md:w-[320px] md:shrink-0'
+                      }`}>
                         {returnType === 'sobra' ? (
                           <div className="rounded-md border border-border bg-card px-3 py-[11px] text-[0.82rem] text-muted">
                             Cadastro manual de sobra
@@ -2748,8 +3006,20 @@ function ReturnsOccurrences() {
                             className="border-border bg-card tracking-[0.03em]"
                           />
                         )}
+                        {!selectedBatch && returnWizardStep === 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleChangeReturnType('sobra');
+                              setReturnWizardStep(3);
+                            }}
+                            className="mt-3 w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
+                          >
+                            Registrar sobra sem NF
+                          </button>
+                        )}
                       </div>
-                      <ReturnSearchRow className="md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none">
+                      <ReturnSearchRow className={`${!selectedBatch && returnWizardStep !== 3 ? 'hidden' : ''} md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none`}>
                         <label>
                           <input
                             type="checkbox"
@@ -2775,6 +3045,15 @@ function ReturnsOccurrences() {
                             onChange={() => handleChangeReturnType('coleta')}
                           />
                           Coleta
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={returnType === 'weight_break'}
+                            disabled={Boolean(returnDanfe) && isReturnNfCollection}
+                            onChange={() => handleChangeReturnType('weight_break')}
+                          />
+                          Quebra de peso
                         </label>
                         <label>
                           <input
@@ -2806,8 +3085,14 @@ function ReturnsOccurrences() {
                         </InfoText>
                       )}
 
-                      {(returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
+                      {(returnType === 'partial' || returnType === 'coleta' || returnType === 'weight_break') && returnDanfe && (
                         <>
+                          {returnType === 'weight_break' && (
+                            <div className="mt-3 rounded-lg border border-amber-500/45 bg-amber-500/10 px-3 py-2 text-sm text-text">
+                              Informe os produtos e as quantidades afetadas. Estes itens aparecerao no PDF como
+                              <strong> quebra de peso, sem retorno fisico</strong>.
+                            </div>
+                          )}
                           <Grid style={{ marginTop: '12px' }}>
                             <div>
                               <InlineText>Produto</InlineText>
@@ -2858,6 +3143,50 @@ function ReturnsOccurrences() {
                               )}
                             </div>
                           </Grid>
+                          {returnType !== 'weight_break' && (
+                            <div className="mt-3 grid gap-2 rounded-lg border border-border bg-card p-3 md:grid-cols-3">
+                              <label className="flex cursor-pointer items-start gap-2 text-sm text-text">
+                                <input
+                                  type="checkbox"
+                                  checked={partialIsMissing}
+                                  onChange={(event) => {
+                                    setPartialIsMissing(event.target.checked);
+                                    if (event.target.checked) setPartialKeepInStock(false);
+                                  }}
+                                  className="mt-0.5"
+                                />
+                                <span>
+                                  <strong className="block">Produto faltante</strong>
+                                  <span className="text-xs text-muted">Nao foi recebido e nao sera separado.</span>
+                                </span>
+                              </label>
+                              <label className="flex cursor-pointer items-start gap-2 text-sm text-text">
+                                <input
+                                  type="checkbox"
+                                  checked={partialKeepInStock}
+                                  disabled={partialIsMissing}
+                                  onChange={(event) => setPartialKeepInStock(event.target.checked)}
+                                  className="mt-0.5"
+                                />
+                                <span>
+                                  <strong className="block">Ficara em estoque</strong>
+                                  <span className="text-xs text-muted">Nao retorna agora para a MAR E RIO.</span>
+                                </span>
+                              </label>
+                              <label className="flex cursor-pointer items-start gap-2 text-sm text-text">
+                                <input
+                                  type="checkbox"
+                                  checked={partialStockDefault}
+                                  onChange={(event) => setPartialStockDefault(event.target.checked)}
+                                  className="mt-0.5"
+                                />
+                                <span>
+                                  <strong className="block">Usar como padrao</strong>
+                                  <span className="text-xs text-muted">Pre-selecionar estoque nas proximas devolucoes.</span>
+                                </span>
+                              </label>
+                            </div>
+                          )}
                           <Actions style={{ marginTop: '12px' }}>
                             <button
                               className="bg-warning text-white"
@@ -2865,22 +3194,55 @@ function ReturnsOccurrences() {
                               disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                               type="button"
                             >
-                              {returnType === 'coleta' ? 'Adicionar item de coleta' : 'Adicionar item parcial'}
+                              {returnType === 'coleta'
+                                ? 'Adicionar item de coleta'
+                                : returnType === 'weight_break'
+                                  ? 'Adicionar quebra de peso'
+                                  : 'Adicionar item parcial'}
                             </button>
                           </Actions>
                         </>
                       )}
 
-                      {!!partialItems.length && (returnType === 'partial' || returnType === 'coleta') && returnDanfe && (
+                      {!!partialItems.length && returnType !== 'sobra' && returnDanfe && (
                         <List>
                           {partialItems.map((item, index) => (
                             <li key={`${getReturnItemKey(item)}-${index}`}>
-                              <span>
+                              <div className="min-w-0 flex-1">
+                              <span className="block">
                                 <strong>{item.product_id}</strong> - {item.product_description}
                                 {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
                               </span>
+                              {returnType === 'weight_break' ? (
+                                <span className="mt-1 inline-flex rounded-full bg-amber-500/15 px-2 py-1 text-xs font-bold text-amber-700">
+                                  Quebra de peso — sem produto fisico
+                                </span>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted">
+                                  <label className="inline-flex items-center gap-1.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(item.is_missing)}
+                                      onChange={(event) => updateReturnItemHandling(index, 'is_missing', event.target.checked)}
+                                    />
+                                    Produto faltante
+                                  </label>
+                                  <label className="inline-flex items-center gap-1.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(item.keep_in_stock)}
+                                      disabled={Boolean(item.is_missing)}
+                                      onChange={(event) => updateReturnItemHandling(index, 'keep_in_stock', event.target.checked)}
+                                    />
+                                    Fica em estoque
+                                  </label>
+                                </div>
+                              )}
+                              </div>
                               <Actions>
-                                <button className="danger" onClick={() => removePartialItem(item.product_id, item.product_type)} type="button">Remover</button>
+                                {returnType !== 'total' && (
+                                  <button className="danger" onClick={() => removePartialItem(index)} type="button">Remover</button>
+                                )}
                               </Actions>
                             </li>
                           ))}
@@ -3092,10 +3454,33 @@ function ReturnsOccurrences() {
                     )}
                   </div>
 
+                  <div className={!selectedBatch && returnWizardStep !== 4 ? 'hidden' : ''}>
+                  {!selectedBatch && (
+                    <div className="mt-4 rounded-lg border border-border bg-card p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">Transporte selecionado</p>
+                      <p className="mt-1 text-sm font-bold text-text">
+                        {drivers.find((driver) => String(driver.id) === String(returnDriverId))?.name || 'Motorista'}
+                        {' · '}
+                        {cars.find((car) => String(car.id) === String(selectedCarId))?.license_plate || 'Placa'}
+                      </p>
+                    </div>
+                  )}
                   <ListHeaderRow>
                     <h2 style={{ marginTop: '18px' }}>
                       {selectedBatch ? `Notas fiscais do lote ${selectedBatch.batch_code}` : 'Lista de NFs'}
                     </h2>
+                    {!selectedBatch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearNfBuilder();
+                          setReturnWizardStep(2);
+                        }}
+                        className="inline-flex min-h-10 items-center justify-center rounded-md border border-accent-strong bg-accent px-5 py-2 text-sm font-bold text-white shadow-soft transition hover:bg-accent-strong"
+                      >
+                        + Adicionar outra NF
+                      </button>
+                    )}
                     {selectedBatch && isSelectedBatchEditableByTransportadora && (
                       <SaveBatchButton
                         onClick={handleSaveBatch}
@@ -3148,6 +3533,8 @@ function ReturnsOccurrences() {
                               {` | Itens: ${note.items.length}`}
                               {note.return_type === 'sobra' && note.is_inversion ? ' | Inversao' : ''}
                               {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
+                              {note.items.some((item) => item.is_missing) ? ' | Possui faltante' : ''}
+                              {note.items.some((item) => item.keep_in_stock) ? ' | Possui item para estoque' : ''}
                             </span>
                             <Actions>
                               <button className="danger" onClick={() => removeDraftNf(note.invoice_number)} type="button">
@@ -3158,6 +3545,18 @@ function ReturnsOccurrences() {
                         ))}
                       </List>
                     )
+                  )}
+                  {!selectedBatch && recentlyRemovedDraft && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted">
+                      <span>{getNoteDisplayLabel(recentlyRemovedDraft.note)} removida da lista.</span>
+                      <button
+                        type="button"
+                        onClick={undoRemoveDraftNf}
+                        className="font-bold text-text-accent underline underline-offset-2"
+                      >
+                        Desfazer
+                      </button>
+                    </div>
                   )}
 
                   {selectedBatch && !!selectedBatchAggregatedPreview.length && (
@@ -3180,7 +3579,7 @@ function ReturnsOccurrences() {
 
                   {!selectedBatch && (
                     <>
-                      <div className="mt-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div className="mt-4 min-w-0 md:max-w-[240px]">
                         <div className="min-w-0 md:w-[240px] md:shrink-0">
                           <InlineText>Data da devolucao</InlineText>
                           <input
@@ -3190,11 +3589,6 @@ function ReturnsOccurrences() {
                             className="w-full rounded-sm border border-border bg-card px-3 py-2 text-text"
                           />
                         </div>
-                        <Actions className="md:justify-end">
-                          <button className="primary" onClick={handleConcludeBatch} disabled={draftNotes.length === 0} type="button">
-                            Concluir devolucao
-                          </button>
-                        </Actions>
                       </div>
 
                       {!!draftAggregatedItems.length && (
@@ -3208,14 +3602,29 @@ function ReturnsOccurrences() {
                                 <span>
                                   <strong>{item.product_id}</strong> - {item.product_description}
                                   {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd total: ${item.quantity}`}
+                                  {item.is_missing ? ' | FALTANTE' : ''}
+                                  {item.keep_in_stock ? ' | FICA EM ESTOQUE' : ''}
                                 </span>
                               </li>
                             ))}
                           </List>
                         </>
                       )}
+
+                      <div className="mt-6 flex justify-end border-t border-border pt-5">
+                        <button
+                          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-600 px-7 py-3 text-base font-bold text-white shadow-soft transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[280px]"
+                          onClick={handleConcludeBatch}
+                          disabled={draftNotes.length === 0}
+                          type="button"
+                        >
+                          <CheckCircle2 size={19} />
+                          Concluir devolucao
+                        </button>
+                      </div>
                     </>
                   )}
+                  </div>
                 </Card>
                       </div>
                     </div>

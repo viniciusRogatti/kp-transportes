@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  Database,
   FileSearch,
   History,
   PackageCheck,
@@ -69,6 +70,11 @@ import { formatDateBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeTextFields } from '../utils/textNormalization';
+import {
+  getReturnDataByInvoice,
+  getReturnDataOverview,
+  InvoiceReturnDataLookup,
+} from '../services/returnDataService';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
 const RETURN_BATCH_LOOKBACK_OPTIONS = [
@@ -305,6 +311,18 @@ const formatOccurrenceQtyWithType = (quantity: number, productType?: string | nu
   const normalizedType = normalizeProductType(productType);
   return `${Number(quantity || 0)}${normalizedType || ''}`;
 };
+const formatReturnDataUpdate = (value?: string | null) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+};
 const buildOccurrenceCardItemSummary = (occurrence: IOccurrence): OccurrenceCardItemSummary[] => {
   if (occurrence.items?.length) {
     return occurrence.items
@@ -446,6 +464,11 @@ function ReturnsOccurrences() {
 
   const [returnNf, setReturnNf] = useState(() => String(searchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [returnDanfe, setReturnDanfe] = useState<IDanfe | null>(null);
+  const [returnDataLookup, setReturnDataLookup] = useState<InvoiceReturnDataLookup | null>(null);
+  const [returnDataLookupLoading, setReturnDataLookupLoading] = useState(false);
+  const [returnDataLookupError, setReturnDataLookupError] = useState('');
+  const [showReturnDataDetails, setShowReturnDataDetails] = useState(false);
+  const [returnDataLastUpdate, setReturnDataLastUpdate] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<ReturnType>('total');
   const [returnWizardStep, setReturnWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);
@@ -1047,6 +1070,12 @@ function ReturnsOccurrences() {
             ? loadReturnBatchesByInvoiceNumber(notificationInvoiceNumber)
             : loadReturnBatches(),
       ]);
+      try {
+        const registryOverview = await getReturnDataOverview();
+        setReturnDataLastUpdate(registryOverview?.latest_import?.imported_at || null);
+      } catch (registryError) {
+        console.error('Erro ao consultar atualização da base de devoluções:', registryError);
+      }
     };
 
     validateAndLoad();
@@ -1498,6 +1527,7 @@ function ReturnsOccurrences() {
       setPartialQuantityInput('1');
 
       const normalizedInvoice = String(data.invoice_number || returnNf.trim()).trim();
+      void loadReturnRegistryLookup(normalizedInvoice);
       try {
         const isCollectionInvoice = await hasActionQueueCollectionForInvoice(normalizedInvoice);
         setIsReturnNfCollection(isCollectionInvoice);
@@ -1518,6 +1548,26 @@ function ReturnsOccurrences() {
       alert('Erro ao buscar NF para devolucao.');
     } finally {
       setReturnNfCollectionLookupLoading(false);
+    }
+  }
+
+  async function loadReturnRegistryLookup(invoiceNumber: string) {
+    setReturnDataLookupLoading(true);
+    setReturnDataLookupError('');
+    setReturnDataLookup(null);
+    setShowReturnDataDetails(false);
+    try {
+      const lookup = await getReturnDataByInvoice(invoiceNumber);
+      if (!lookup || !Array.isArray(lookup.occurrences)) {
+        throw new Error('Resposta inválida da base de devoluções.');
+      }
+      setReturnDataLookup(lookup);
+      setReturnDataLastUpdate(lookup.latest_base_update || returnDataLastUpdate);
+    } catch (error) {
+      if (handleAuthenticationError(error)) return;
+      setReturnDataLookupError('Não foi possível consultar esta NF na base de devoluções. O lote pode continuar normalmente.');
+    } finally {
+      setReturnDataLookupLoading(false);
     }
   }
 
@@ -1908,6 +1958,10 @@ function ReturnsOccurrences() {
   function clearNfBuilder() {
     setReturnNf('');
     setReturnDanfe(null);
+    setReturnDataLookup(null);
+    setReturnDataLookupError('');
+    setReturnDataLookupLoading(false);
+    setShowReturnDataDetails(false);
     setReturnType('total');
     setIsReturnNfCollection(false);
     setReturnNfCollectionLookupLoading(false);
@@ -2631,15 +2685,31 @@ function ReturnsOccurrences() {
                       <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>
                       <p className="text-xs text-muted">Pesquise por ID, periodo ou consulte os lotes mais recentes.</p>
                     </div>
-                    {canManageBatchTransportadora && (
-                      <button
-                        type="button"
-                        onClick={handleOpenNewReturnModal}
-                        className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
-                      >
-                        + Nova devolucao
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <div className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => navigate('/returns-occurrences/base')}
+                          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-text transition hover:bg-surface-2"
+                        >
+                          <Database size={16} /> Base de devoluções
+                        </button>
+                        <p className="mt-1 text-[10px] text-muted">
+                          {returnDataLastUpdate
+                            ? `Atualizada em ${formatReturnDataUpdate(returnDataLastUpdate)}`
+                            : 'Base ainda não importada'}
+                        </p>
+                      </div>
+                      {canManageBatchTransportadora && (
+                        <button
+                          type="button"
+                          onClick={handleOpenNewReturnModal}
+                          className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
+                        >
+                          + Nova devolucao
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(280px,1fr)_190px_auto]">
                     <div className="flex min-w-0 gap-2">
@@ -3076,6 +3146,83 @@ function ReturnsOccurrences() {
                         <InfoText style={{ marginTop: '12px' }}>
                           NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
                         </InfoText>
+                      )}
+                      {returnDanfe && returnType !== 'sobra' && returnDataLookupLoading && (
+                        <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-sm text-muted">
+                          Consultando NF na base acumulada de devoluções...
+                        </div>
+                      )}
+                      {returnDanfe && returnType !== 'sobra' && returnDataLookupError && (
+                        <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
+                          {returnDataLookupError}
+                        </div>
+                      )}
+                      {returnDanfe && returnType !== 'sobra' && returnDataLookup && (
+                        <div className={`mt-3 rounded-lg border px-3 py-3 text-sm ${
+                          returnDataLookup.consolidated_status === 'approved'
+                            ? 'semantic-panel-success'
+                            : returnDataLookup.consolidated_status === 'registered_without_approval'
+                              ? 'semantic-panel-warning'
+                              : 'border-orange-500/45 bg-orange-500/10 text-text'
+                        }`}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <strong className="flex items-center gap-2">
+                                <Database size={16} /> Base de devoluções
+                              </strong>
+                              <p className="mt-1 font-semibold">
+                                {returnDataLookup.consolidated_status === 'approved'
+                                  ? returnDataLookup.approved_count > 1
+                                    ? `${returnDataLookup.approved_count} ocorrências aprovadas`
+                                    : 'Possui ocorrência aprovada'
+                                  : returnDataLookup.consolidated_status === 'registered_without_approval'
+                                    ? 'Registrada, mas sem aprovação'
+                                    : 'NF não localizada na base acumulada'}
+                              </p>
+                              <p className="mt-1 text-xs opacity-80">
+                                {returnDataLookup.latest_base_update
+                                  ? `Base atualizada em ${formatReturnDataUpdate(returnDataLookup.latest_base_update)}`
+                                  : 'Base ainda não importada'}
+                              </p>
+                            </div>
+                            {returnDataLookup.occurrences.length ? (
+                              <button
+                                type="button"
+                                onClick={() => setShowReturnDataDetails((current) => !current)}
+                                className="rounded-md border border-current/30 bg-card/60 px-3 py-2 text-xs font-semibold"
+                              >
+                                {showReturnDataDetails ? 'Ocultar ocorrências' : 'Ver ocorrências'}
+                              </button>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 text-xs">
+                            Informação orientativa: esta situação não impede adicionar a NF nem concluir o lote.
+                          </p>
+                          {showReturnDataDetails ? (
+                            <div className="mt-3 space-y-2">
+                              {returnDataLookup.occurrences.map((registryOccurrence) => (
+                                <article key={registryOccurrence.id} className="rounded-md border border-current/20 bg-card/70 p-2 text-xs text-text">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <strong>ID {registryOccurrence.source_occurrence_id}</strong>
+                                    <span>{registryOccurrence.approval_status === 'approved' ? 'Aprovada' : registryOccurrence.approval_status === 'rejected' ? 'Reprovada' : 'Não classificada'}</span>
+                                  </div>
+                                  <p className="mt-1"><strong>Motivo:</strong> {registryOccurrence.return_reason_raw || registryOccurrence.return_reason_category}</p>
+                                  <p className="mt-1"><strong>Justificativa:</strong> {registryOccurrence.return_justification || '-'}</p>
+                                  <p className="mt-1"><strong>Aprovação:</strong> {registryOccurrence.approval_justification || '-'}</p>
+                                  <p className="mt-1"><strong>Transportadora:</strong> {registryOccurrence.carrier_name || '-'}</p>
+                                  <div className="mt-1">
+                                    <strong>Produtos:</strong>
+                                    {registryOccurrence.items.length ? registryOccurrence.items.map((item, index) => (
+                                      <span key={`${registryOccurrence.id}-${item.id || index}`} className="ml-1">
+                                        {item.product_description}{index < registryOccurrence.items.length - 1 ? ';' : ''}
+                                      </span>
+                                    )) : <span className="ml-1">não informados</span>}
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnNfCollectionLookupLoading && (
                         <InfoText style={{ marginTop: '4px' }}>

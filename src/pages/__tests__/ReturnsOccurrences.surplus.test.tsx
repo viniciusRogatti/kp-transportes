@@ -456,4 +456,69 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       }));
     });
   });
+
+  it('mostra a consulta orientativa da base sem bloquear a NF no lote', async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/drivers')) return Promise.resolve({ data: [{ id: '1', name: 'Motorista Teste' }] });
+      if (url.includes('/cars')) return Promise.resolve({ data: [{ id: '1', model: 'Truck', license_plate: 'ABC-1234' }] });
+      if (url.includes('/products') || url.includes('/occurrences/search') || url.includes('/returns/batches/search')) {
+        return Promise.resolve({ data: [] });
+      }
+      if (url.includes('/collection-requests/action-queue')) return Promise.resolve({ data: [] });
+      if (url.includes('/return-data/occurrences/overview')) {
+        return Promise.resolve({ data: { latest_import: { imported_at: '2026-07-29T14:30:00.000Z' } } });
+      }
+      if (url.includes('/return-data/occurrences/by-invoice/1694432')) {
+        return Promise.resolve({
+          data: {
+            invoice_number: '1694432',
+            invoice_number_normalized: '1694432',
+            consolidated_status: 'approved',
+            total_occurrences: 2,
+            approved_count: 2,
+            rejected_count: 0,
+            latest_base_update: '2026-07-29T14:30:00.000Z',
+            occurrences: [{
+              id: 1,
+              source_occurrence_id: 'OC-10',
+              approval_status: 'approved',
+              return_reason_raw: 'Mercadoria faltante',
+              return_reason_category: 'Mercadoria faltante',
+              return_justification: 'Faltou item',
+              approval_justification: 'Aprovado',
+              carrier_name: 'KP Transportes',
+              items: [{ product_description: 'Produto faltante', product_value: 10 }],
+            }],
+          },
+        });
+      }
+      if (url.includes('/danfes/nf/1694432')) {
+        return Promise.resolve({
+          data: {
+            invoice_number: '1694432',
+            Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+            DanfeProducts: [{
+              Product: { code: 'RV001899', description: 'Produto Faltante', type: 'UN' },
+              quantity: 1,
+              type: 'UN',
+            }],
+          },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+
+    expect(await screen.findByText('2 ocorrências aprovadas')).toBeInTheDocument();
+    expect(screen.getByText(/não impede adicionar a NF nem concluir o lote/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver ocorrências' }));
+    expect(await screen.findByText('ID OC-10')).toBeInTheDocument();
+    expect(screen.getAllByText(/Produto faltante/i).length).toBeGreaterThan(0);
+  });
 });

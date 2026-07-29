@@ -131,6 +131,10 @@ export interface IOccurrence {
   load_number?: string | null;
   representative_name?: string | null;
   invoice_total_value?: number | string | null;
+  trip_id?: number | null;
+  trip_date?: string | null;
+  motorista_id?: number | null;
+  motorista_name?: string | null;
   reason?: 'faltou_no_carregamento' | 'faltou_na_carga' | 'produto_avariado' | 'produto_invertido' | 'produto_sem_etiqueta_ou_data' | 'legacy_outros' | null;
   scope?: 'invoice_total' | 'items';
   items?: Array<{

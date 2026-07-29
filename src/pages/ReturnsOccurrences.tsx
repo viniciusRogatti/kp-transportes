@@ -19,6 +19,9 @@ import {
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
+import MissingCargoOccurrenceDetails, {
+  isMissingCargoOccurrence,
+} from '../components/occurrences/MissingCargoOccurrenceDetails';
 import IconButton from '../components/ui/IconButton';
 import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
@@ -3777,19 +3780,22 @@ function ReturnsOccurrences() {
                                 {` | CLIENTE: ${occurrence.customer_name || '-'}`}
                               </span>
                               <span>{`CIDADE: ${occurrence.city || '-'}`}</span>
-                              <span className="flex flex-col gap-1">
-                                <strong>ITENS:</strong>
-                                {occurrenceItemSummaries.length ? (
-                                  occurrenceItemSummaries.map((item, index) => (
-                                    <span key={`occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
-                                      {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="pl-2">NF total</span>
-                                )}
-                              </span>
+                              {!isMissingCargoOccurrence(occurrence) ? (
+                                <span className="flex flex-col gap-1">
+                                  <strong>ITENS:</strong>
+                                  {occurrenceItemSummaries.length ? (
+                                    occurrenceItemSummaries.map((item, index) => (
+                                      <span key={`occ-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
+                                        {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="pl-2">NF total</span>
+                                  )}
+                                </span>
+                              ) : null}
                               <span>{`MOTIVO: ${reasonLabel}`}</span>
+                              <MissingCargoOccurrenceDetails occurrence={occurrence} />
                               <span>{`STATUS: ${workflowStatusLabel}`}</span>
                               {occurrence.resolution_type && (
                                 <span>

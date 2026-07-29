@@ -163,4 +163,37 @@ describe('OperationalPendencies', () => {
     expect(screen.getByText('4 dia(s) em aberto')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /abrir tratativa/i })).toBeInTheDocument();
   });
+
+  it('exibe os dados do formulario quando a mercadoria faltou na carga', async () => {
+    mockedAxiosGet.mockResolvedValueOnce({
+      data: [{
+        id: 92,
+        invoice_number: '1819002',
+        customer_name: 'Mercado Central',
+        city: 'Campinas',
+        load_number: 'CARGA-45',
+        representative_name: 'Representante Teste',
+        motorista_name: 'Motorista da NF',
+        reason: 'faltou_na_carga',
+        status: 'pending',
+        created_at: '2026-03-20T10:00:00.000Z',
+        items: [{
+          product_id: 'PROD-1',
+          product_description: 'Produto faltante',
+          product_type: 'CX',
+          quantity: 2,
+          total_price: 125.5,
+        }],
+      }],
+    });
+
+    render(<OperationalPendencies />);
+
+    expect(await screen.findByLabelText('Dados para formulário de mercadoria faltante da NF 1819002')).toBeInTheDocument();
+    expect(screen.getByText(/Representante Teste/)).toBeInTheDocument();
+    expect(screen.getByText(/CARGA-45/)).toBeInTheDocument();
+    expect(screen.getByText(/Motorista da NF/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$ 125,50/)).toBeInTheDocument();
+    expect(screen.getByText(/PROD-1 - Produto faltante/)).toBeInTheDocument();
+  });
 });

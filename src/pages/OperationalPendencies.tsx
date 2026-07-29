@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router';
 import Badge from '../components/ui/Badge';
 import Header from '../components/Header';
+import MissingCargoOccurrenceDetails from '../components/occurrences/MissingCargoOccurrenceDetails';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import {
@@ -1002,6 +1003,7 @@ function OperationalPendencies() {
                           <p className="text-xs text-muted">
                             {occurrence.customer_name || 'Cliente não informado'} · {occurrence.city || '-'}
                           </p>
+                          <MissingCargoOccurrenceDetails occurrence={occurrence} />
                           <button
                             type="button"
                             onClick={() => navigate(`/returns-occurrences?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}

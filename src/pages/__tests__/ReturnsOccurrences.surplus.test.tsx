@@ -190,6 +190,49 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     expect(await screen.findByRole('option', { name: 'Emitida NF parcial' })).toHaveValue('nf_parcial_emitida');
   });
 
+  it('mostra na ocorrencia os dados para o formulario de mercadoria faltante', async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/drivers') || url.includes('/cars') || url.includes('/products')) {
+        return Promise.resolve({ data: [] });
+      }
+      if (url.includes('/occurrences/search')) {
+        return Promise.resolve({ data: [{
+          id: 78,
+          invoice_number: '1798678',
+          customer_name: 'Cliente Teste',
+          city: 'Santos',
+          load_number: 'CARGA-46',
+          representative_name: 'Representante da NF',
+          motorista_name: 'João da Silva',
+          reason: 'faltou_na_carga',
+          scope: 'items',
+          items: [{
+            product_id: 'RV001899',
+            product_description: 'Produto faltante',
+            product_type: 'UN',
+            quantity: 3,
+            total_price: 90,
+          }],
+          status: 'pending',
+          workflow_status: 'pending_transportadora',
+          description: 'Faltou na carga',
+          created_at: '2026-07-16T12:00:00.000Z',
+        }] });
+      }
+      if (url.includes('/returns/batches/search')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage(['/returns-occurrences?tab=occurrences']);
+
+    expect(await screen.findByLabelText('Dados para formulário de mercadoria faltante da NF 1798678')).toBeInTheDocument();
+    expect(screen.getByText(/Representante da NF/)).toBeInTheDocument();
+    expect(screen.getByText(/CARGA-46/)).toBeInTheDocument();
+    expect(screen.getByText(/João da Silva/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$ 90,00/)).toBeInTheDocument();
+    expect(screen.getByText(/RV001899 - Produto faltante/)).toBeInTheDocument();
+  });
+
   it('prioriza o ID do lote no link e exibe lote enviado sem controles de edicao', async () => {
     const batch = {
       batch_code: 'RET-20260706-1783336645087-21531',

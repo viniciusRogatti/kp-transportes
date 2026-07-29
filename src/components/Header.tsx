@@ -112,6 +112,7 @@ const routeTitles: Record<string, string> = {
   '/delivery-monitoring': 'Monitoramento de Entregas',
   '/trips': 'Roteirização',
   '/returns-occurrences': 'Devoluções e Ocorrências',
+  '/returns-occurrences/base': 'Base de Devoluções',
   '/operational-pendencies': 'Central de Tratativas',
   '/alerts': 'Alertas',
   '/uploadFiles': 'Envio de XML',

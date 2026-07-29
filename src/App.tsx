@@ -26,6 +26,7 @@ const Invoices = lazy(() => import('./pages/Invoices'));
 const InvoiceJourney = lazy(() => import('./pages/InvoiceJourney'));
 const FileUploadPage = lazy(() => import('./pages/FileUploadPage'));
 const ReturnsOccurrences = lazy(() => import('./pages/ReturnsOccurrences'));
+const ReturnDataRegistry = lazy(() => import('./pages/ReturnDataRegistry'));
 const ControlTowerCollections = lazy(() => import('./pages/ControlTowerCollections'));
 const UserManagement = lazy(() => import('./pages/UserManagement'));
 const UserSessions = lazy(() => import('./pages/UserSessions'));
@@ -149,6 +150,7 @@ function App() {
           <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><FileUploadPage /></ProtectedRoute>} />
           <Route path="/cte-management" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><CteManagement /></ProtectedRoute>} />
           <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnsOccurrences /></ProtectedRoute>} />
+          <Route path="/returns-occurrences/base" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnDataRegistry /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedPermissions={[...ADMIN_MASTER_PERMISSIONS]}><UserManagement /></ProtectedRoute>} />
           <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={['master']}><UserSessions /></ProtectedRoute>} />
           <Route path="/whatsapp-bot/connect" element={<ProtectedRoute allowedPermissions={['master']}><WhatsappBotConnection /></ProtectedRoute>} />

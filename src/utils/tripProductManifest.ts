@@ -95,6 +95,12 @@ export function buildTripProductManifest(
       const type = String(product?.type || nestedProduct?.type || '').trim().toUpperCase();
       const quantity = Number(product?.quantity || 0);
 
+      // O salmão inteiro possui uma lista própria de separação e não deve mais
+      // aparecer no romaneio de produtos. O filé permanece separado por cliente.
+      if (isWholeSalmon(description, type)) {
+        return;
+      }
+
       if (!isVariableWeightSalmon(description, type)) {
         standardProducts.push({
           company_id: companyId,

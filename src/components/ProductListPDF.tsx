@@ -658,6 +658,18 @@ const renderPageContent = ({ products, danfes, salmonSeparations, prontoBoxes }:
     );
   }
 
+  // No romaneio de produtos, uma lista vazia é um resultado válido (por
+  // exemplo, quando a viagem possui somente salmão inteiro). Não use a lista
+  // detalhada de entregas como fallback, pois ela reintroduziria esses itens.
+  if (products !== undefined) {
+    return (
+      <>
+        {renderInvoiceList(danfes)}
+        {renderProntoBoxes(prontoBoxes)}
+      </>
+    );
+  }
+
   if (danfes && danfes.length > 0) {
     return renderDeliveryList(danfes);
   }

@@ -37,7 +37,7 @@ const buildNote = (invoiceNumber: string, companyId = 1): ITripNote => ({
 });
 
 describe('tripProductManifest', () => {
-  it('separa salmao e file de salmao variaveis por cliente sem incluir itens fechados em CX', () => {
+  it('remove salmao inteiro do romaneio e mantem file variavel separado por cliente', () => {
     expect(isVariableWeightSalmon('SALMAO EVISC RESFRIADO PREMIUM 10/12', 'KG')).toBe(true);
     expect(isVariableWeightSalmon('FILE DE SALMAO C/PELE VAR CX 15KG', 'KG')).toBe(true);
     expect(isVariableWeightSalmon('BOLINHO DE SALMAO CX 6UN', 'CX')).toBe(false);
@@ -52,6 +52,15 @@ describe('tripProductManifest', () => {
           total_price: '12.5',
           type: 'KG',
           Product: { code: 'SAL-1', description: 'SALMAO EVISC RESFRIADO PREMIUM 10/12', price: '1', type: 'KG' },
+        },
+        {
+          company_id: 1,
+          product_id: 'FILE-SAL-1',
+          quantity: 7.25,
+          price: '1',
+          total_price: '7.25',
+          type: 'KG',
+          Product: { code: 'FILE-SAL-1', description: 'FILE DE SALMAO C/PELE VAR CX 15KG', price: '1', type: 'KG' },
         },
         {
           company_id: 1,
@@ -71,8 +80,8 @@ describe('tripProductManifest', () => {
         companyName: 'MAR E RIO',
         customerName: 'Cliente A',
         customerDocument: 'customer-1',
-        code: 'SAL-1',
-        quantity: 12.5,
+        code: 'FILE-SAL-1',
+        quantity: 7.25,
         type: 'KG',
       }),
     ]);

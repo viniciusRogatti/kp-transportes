@@ -71,13 +71,16 @@ async function openNewReturnModal() {
 }
 
 async function fillTransportStep() {
-  await screen.findByRole('option', { name: 'Motorista Teste' });
-  fireEvent.change(screen.getByRole('combobox', { name: 'Motorista da devolucao' }), {
-    target: { value: '1' },
-  });
-  fireEvent.change(screen.getByRole('combobox', { name: 'Veiculo da devolucao' }), {
-    target: { value: '1' },
-  });
+  const driverInput = await screen.findByRole('combobox', { name: 'Motorista da devolucao' });
+  fireEvent.focus(driverInput);
+  fireEvent.change(driverInput, { target: { value: 'Motorista' } });
+  fireEvent.click(await screen.findByRole('option', { name: 'Motorista Teste' }));
+
+  const vehicleInput = screen.getByRole('combobox', { name: 'Veiculo da devolucao' });
+  fireEvent.focus(vehicleInput);
+  fireEvent.change(vehicleInput, { target: { value: 'ABC-1234' } });
+  fireEvent.click(await screen.findByRole('option', { name: 'Truck - ABC-1234' }));
+
   fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   await screen.findByText('Digite ou leia o codigo de barras da NF');
 }
@@ -163,6 +166,38 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     } finally {
       delete (HTMLInputElement.prototype as any).showPicker;
     }
+  });
+
+  it('autocompleta motorista e preenche o veiculo habitual pelo historico', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/trips/suggestions/vehicle/1')) {
+        return Promise.resolve({
+          data: {
+            suggestion: {
+              car: { id: 1, model: 'Truck', license_plate: 'ABC-1234' },
+              usageCount: 7,
+              sampleSize: 10,
+              lastUsedAt: '2026-07-28T12:00:00.000Z',
+              basis: 'most_used_recently',
+            },
+          },
+        });
+      }
+      return defaultGet?.(url);
+    }) as typeof mockedAxios.get);
+
+    renderPage();
+    await openNewReturnModal();
+
+    const driverInput = await screen.findByRole('combobox', { name: 'Motorista da devolucao' });
+    fireEvent.focus(driverInput);
+    fireEvent.change(driverInput, { target: { value: 'motorista' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'Motorista Teste' }));
+
+    expect(await screen.findByDisplayValue('Truck - ABC-1234')).toBeInTheDocument();
+    expect(screen.getByText(/veículo habitual preenchido pelo histórico \(7 de 10 viagem\(ns\) recentes\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled();
   });
 
   it('oferece Emitida NF parcial ao resolver ocorrencia de falta', async () => {

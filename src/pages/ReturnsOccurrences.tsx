@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
@@ -82,6 +82,15 @@ const RETURN_BATCH_LOOKBACK_OPTIONS = [
   { value: '30', label: 'Ultimos 30 dias' },
 ] as const;
 type ReturnBatchLookbackValue = (typeof RETURN_BATCH_LOOKBACK_OPTIONS)[number]['value'];
+type VehicleSuggestionResponse = {
+  suggestion: null | {
+    car: ICar;
+    usageCount: number;
+    sampleSize: number;
+    lastUsedAt: string | null;
+    basis: 'most_used_recently';
+  };
+};
 
 const OCCURRENCE_REASONS = [
   { value: 'faltou_no_carregamento', label: 'Faltou no carregamento' },
@@ -95,6 +104,11 @@ const OCCURRENCE_TOTAL_OPTION = '__INVOICE_TOTAL__';
 const KG_QUANTITY_MIN = 0.01;
 const KG_QUANTITY_PRECISION = 1000;
 const QUANTITY_EPSILON = 1e-6;
+const normalizeAssignmentSearch = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase();
 
 const RESOLUTION_LABELS: Record<string, string> = {
   enviado_posteriormente: 'Enviado posteriormente',
@@ -499,6 +513,13 @@ function ReturnsOccurrences() {
   } | null>(null);
   const [returnDriverId, setReturnDriverId] = useState('');
   const [selectedCarId, setSelectedCarId] = useState('');
+  const [returnDriverInput, setReturnDriverInput] = useState('');
+  const [returnCarInput, setReturnCarInput] = useState('');
+  const [isReturnDriverSuggestionsOpen, setIsReturnDriverSuggestionsOpen] = useState(false);
+  const [isReturnCarSuggestionsOpen, setIsReturnCarSuggestionsOpen] = useState(false);
+  const [returnVehicleSuggestionMessage, setReturnVehicleSuggestionMessage] = useState('');
+  const [isReturnVehicleSuggestionLoading, setIsReturnVehicleSuggestionLoading] = useState(false);
+  const returnVehicleSuggestionRequestRef = useRef(0);
   const [returnDate, setReturnDate] = useState(getTodayDate());
 
   const [batchLookbackDays, setBatchLookbackDays] = useState<ReturnBatchLookbackValue>('7');
@@ -710,6 +731,28 @@ function ReturnsOccurrences() {
     const allItems = draftNotes.flatMap((note) => note.items);
     return groupItemsByProductAndType(allItems);
   }, [draftNotes]);
+  const returnDriverOptions = useMemo(() => drivers.map((driver) => ({
+    id: String(driver.id),
+    value: driver.name,
+    label: driver.name,
+  })), [drivers]);
+  const returnCarOptions = useMemo(() => cars.map((car) => ({
+    id: String(car.id),
+    value: `${car.model} - ${car.license_plate}`,
+    label: `${car.model} - ${car.license_plate}`,
+  })), [cars]);
+  const filteredReturnDriverOptions = useMemo(() => {
+    const term = normalizeAssignmentSearch(returnDriverInput);
+    return returnDriverOptions
+      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term))
+      .slice(0, 8);
+  }, [returnDriverInput, returnDriverOptions]);
+  const filteredReturnCarOptions = useMemo(() => {
+    const term = normalizeAssignmentSearch(returnCarInput);
+    return returnCarOptions
+      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term))
+      .slice(0, 8);
+  }, [returnCarInput, returnCarOptions]);
 
   const selectedPartialDanfeProduct = useMemo(() => (
     returnDanfe?.DanfeProducts.find((item) => item.Product.code === partialProductCode) || null
@@ -1111,6 +1154,90 @@ function ReturnsOccurrences() {
     } catch (error) {
       console.error('Erro ao carregar veiculos:', error);
     }
+  }
+
+  function selectReturnCar(carId: string) {
+    const option = returnCarOptions.find((item) => item.id === carId);
+    returnVehicleSuggestionRequestRef.current += 1;
+    setIsReturnVehicleSuggestionLoading(false);
+    setReturnVehicleSuggestionMessage('');
+    setSelectedCarId(option ? carId : '');
+    setReturnCarInput(option?.value || '');
+    setIsReturnCarSuggestionsOpen(false);
+  }
+
+  function selectReturnDriver(driverId: string) {
+    const option = returnDriverOptions.find((item) => item.id === driverId);
+    returnVehicleSuggestionRequestRef.current += 1;
+    setIsReturnVehicleSuggestionLoading(false);
+    setReturnVehicleSuggestionMessage('');
+    setReturnDriverId(option ? driverId : '');
+    setReturnDriverInput(option?.value || '');
+    setIsReturnDriverSuggestionsOpen(false);
+    setSelectedCarId('');
+    setReturnCarInput('');
+
+    if (!option) return;
+
+    const requestId = returnVehicleSuggestionRequestRef.current;
+    setIsReturnVehicleSuggestionLoading(true);
+    void axios.get<VehicleSuggestionResponse>(`${API_URL}/trips/suggestions/vehicle/${driverId}`)
+      .then(({ data }) => {
+        if (returnVehicleSuggestionRequestRef.current !== requestId) return;
+        const suggestion = data?.suggestion;
+        if (!suggestion?.car?.id) {
+          setReturnVehicleSuggestionMessage('Nenhum veículo habitual encontrado. Selecione a placa manualmente.');
+          return;
+        }
+
+        const suggestedCarId = String(suggestion.car.id);
+        const matchingCar = cars.find((car) => String(car.id) === suggestedCarId) || suggestion.car;
+        setSelectedCarId(suggestedCarId);
+        setReturnCarInput(`${matchingCar.model} - ${matchingCar.license_plate}`);
+        setReturnVehicleSuggestionMessage(
+          `Veículo habitual preenchido pelo histórico (${suggestion.usageCount} de ${suggestion.sampleSize} viagem(ns) recentes).`,
+        );
+      })
+      .catch(() => {
+        if (returnVehicleSuggestionRequestRef.current === requestId) {
+          setReturnVehicleSuggestionMessage('Não foi possível consultar o histórico. Selecione a placa manualmente.');
+        }
+      })
+      .finally(() => {
+        if (returnVehicleSuggestionRequestRef.current === requestId) {
+          setIsReturnVehicleSuggestionLoading(false);
+        }
+      });
+  }
+
+  function commitReturnDriverInput(rawValue: string, preferFirst = false) {
+    const normalized = normalizeAssignmentSearch(rawValue);
+    const exact = returnDriverOptions.find((option) => normalizeAssignmentSearch(option.value) === normalized);
+    const fallback = preferFirst
+      ? returnDriverOptions.find((option) => normalizeAssignmentSearch(option.value).includes(normalized))
+      : undefined;
+    const selected = exact || fallback;
+    if (!normalized || !selected) {
+      if (preferFirst) selectReturnDriver('');
+      return false;
+    }
+    selectReturnDriver(selected.id);
+    return true;
+  }
+
+  function commitReturnCarInput(rawValue: string, preferFirst = false) {
+    const normalized = normalizeAssignmentSearch(rawValue);
+    const exact = returnCarOptions.find((option) => normalizeAssignmentSearch(option.value) === normalized);
+    const fallback = preferFirst
+      ? returnCarOptions.find((option) => normalizeAssignmentSearch(option.value).includes(normalized))
+      : undefined;
+    const selected = exact || fallback;
+    if (!normalized || !selected) {
+      if (preferFirst) selectReturnCar('');
+      return false;
+    }
+    selectReturnCar(selected.id);
+    return true;
   }
 
   async function loadProducts() {
@@ -2003,6 +2130,13 @@ function ReturnsOccurrences() {
     clearNfBuilder();
     setReturnDriverId('');
     setSelectedCarId('');
+    setReturnDriverInput('');
+    setReturnCarInput('');
+    setIsReturnDriverSuggestionsOpen(false);
+    setIsReturnCarSuggestionsOpen(false);
+    setReturnVehicleSuggestionMessage('');
+    setIsReturnVehicleSuggestionLoading(false);
+    returnVehicleSuggestionRequestRef.current += 1;
     setReturnDate(getTodayDate());
     setReturnWizardStep(1);
   }
@@ -2968,25 +3102,118 @@ function ReturnsOccurrences() {
                         <p className="mt-1 text-sm text-muted">Comece informando o motorista e o veiculo que receberao os produtos.</p>
                       </div>
                       <Grid className="grid-cols-1 md:grid-cols-2">
-                      <div>
+                      <div className="relative">
                         <InlineText>Motorista *</InlineText>
-                        <select aria-label="Motorista da devolucao" value={returnDriverId} onChange={(event) => setReturnDriverId(event.target.value)}>
-                          <option value="">Selecione</option>
-                          {drivers.map((driver) => (
-                            <option key={driver.id} value={driver.id}>{driver.name}</option>
-                          ))}
-                        </select>
+                        <input
+                          role="combobox"
+                          aria-label="Motorista da devolucao"
+                          aria-autocomplete="list"
+                          aria-expanded={isReturnDriverSuggestionsOpen}
+                          aria-controls="return-driver-suggestions"
+                          value={returnDriverInput}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setReturnDriverInput(value);
+                            setIsReturnDriverSuggestionsOpen(true);
+                            const current = returnDriverOptions.find((option) => option.id === returnDriverId);
+                            if (current && normalizeAssignmentSearch(current.value) !== normalizeAssignmentSearch(value)) {
+                              returnVehicleSuggestionRequestRef.current += 1;
+                              setReturnDriverId('');
+                              setSelectedCarId('');
+                              setReturnCarInput('');
+                              setIsReturnVehicleSuggestionLoading(false);
+                              setReturnVehicleSuggestionMessage('');
+                            }
+                          }}
+                          onFocus={() => setIsReturnDriverSuggestionsOpen(true)}
+                          onBlur={(event) => {
+                            commitReturnDriverInput(event.target.value, true);
+                            setIsReturnDriverSuggestionsOpen(false);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              commitReturnDriverInput((event.target as HTMLInputElement).value, true);
+                            }
+                          }}
+                          placeholder="Digite o nome do motorista"
+                        />
+                        {isReturnDriverSuggestionsOpen ? (
+                          <div id="return-driver-suggestions" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                            {filteredReturnDriverOptions.length ? filteredReturnDriverOptions.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                role="option"
+                                aria-selected={returnDriverId === option.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectReturnDriver(option.id)}
+                                className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-surface focus:bg-surface focus:outline-none"
+                              >
+                                {option.label}
+                              </button>
+                            )) : (
+                              <p className="px-3 py-2 text-sm text-muted">Nenhum motorista encontrado.</p>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                      <div>
+                      <div className="relative">
                         <InlineText>Veiculo / Placa *</InlineText>
-                        <select aria-label="Veiculo da devolucao" value={selectedCarId} onChange={(event) => setSelectedCarId(event.target.value)}>
-                          <option value="">Selecione</option>
-                          {cars.map((car) => (
-                            <option key={car.id} value={car.id}>
-                              {car.model} - {car.license_plate}
-                            </option>
-                          ))}
-                        </select>
+                        <input
+                          role="combobox"
+                          aria-label="Veiculo da devolucao"
+                          aria-autocomplete="list"
+                          aria-expanded={isReturnCarSuggestionsOpen}
+                          aria-controls="return-car-suggestions"
+                          value={returnCarInput}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setReturnCarInput(value);
+                            setIsReturnCarSuggestionsOpen(true);
+                            const current = returnCarOptions.find((option) => option.id === selectedCarId);
+                            if (current && normalizeAssignmentSearch(current.value) !== normalizeAssignmentSearch(value)) {
+                              setSelectedCarId('');
+                              setReturnVehicleSuggestionMessage('');
+                            }
+                          }}
+                          onFocus={() => setIsReturnCarSuggestionsOpen(true)}
+                          onBlur={(event) => {
+                            commitReturnCarInput(event.target.value, true);
+                            setIsReturnCarSuggestionsOpen(false);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              commitReturnCarInput((event.target as HTMLInputElement).value, true);
+                            }
+                          }}
+                          placeholder="Digite a placa ou o veículo"
+                        />
+                        {isReturnCarSuggestionsOpen ? (
+                          <div id="return-car-suggestions" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                            {filteredReturnCarOptions.length ? filteredReturnCarOptions.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                role="option"
+                                aria-selected={selectedCarId === option.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectReturnCar(option.id)}
+                                className="block w-full px-3 py-2 text-left text-sm text-text hover:bg-surface focus:bg-surface focus:outline-none"
+                              >
+                                {option.label}
+                              </button>
+                            )) : (
+                              <p className="px-3 py-2 text-sm text-muted">Nenhum veículo encontrado.</p>
+                            )}
+                          </div>
+                        ) : null}
+                        {isReturnVehicleSuggestionLoading ? (
+                          <p className="mt-1 text-[11px] text-muted">Buscando veículo habitual...</p>
+                        ) : returnVehicleSuggestionMessage ? (
+                          <p className="mt-1 text-[11px] text-muted">{returnVehicleSuggestionMessage}</p>
+                        ) : null}
                       </div>
                       </Grid>
                       <div className="mt-5 flex justify-end">

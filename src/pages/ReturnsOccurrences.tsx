@@ -1527,7 +1527,7 @@ function ReturnsOccurrences() {
       setPartialQuantityInput('1');
 
       const normalizedInvoice = String(data.invoice_number || returnNf.trim()).trim();
-      void loadReturnRegistryLookup(normalizedInvoice);
+      await loadReturnRegistryLookup(normalizedInvoice);
       try {
         const isCollectionInvoice = await hasActionQueueCollectionForInvoice(normalizedInvoice);
         setIsReturnNfCollection(isCollectionInvoice);
@@ -1538,9 +1538,6 @@ function ReturnsOccurrences() {
       } catch (collectionError) {
         console.error('Erro ao verificar coleta solicitada para NF:', collectionError);
         setIsReturnNfCollection(false);
-      }
-      if (!selectedBatch) {
-        setReturnWizardStep(3);
       }
     } catch (error) {
       console.error(error);
@@ -3177,7 +3174,7 @@ function ReturnsOccurrences() {
                                     : 'Possui ocorrência aprovada'
                                   : returnDataLookup.consolidated_status === 'registered_without_approval'
                                     ? 'Registrada, mas sem aprovação'
-                                    : 'NF não localizada na base acumulada'}
+                                    : 'Atenção: NF não localizada na base de devoluções'}
                               </p>
                               <p className="mt-1 text-xs opacity-80">
                                 {returnDataLookup.latest_base_update
@@ -3196,7 +3193,9 @@ function ReturnsOccurrences() {
                             ) : null}
                           </div>
                           <p className="mt-2 text-xs">
-                            Informação orientativa: esta situação não impede adicionar a NF nem concluir o lote.
+                            {returnDataLookup.consolidated_status === 'not_found'
+                              ? 'Leia este aviso e confirme abaixo para continuar o cadastro da devolução.'
+                              : 'Informação orientativa: esta situação não impede adicionar a NF nem concluir o lote.'}
                           </p>
                           {showReturnDataDetails ? (
                             <div className="mt-3 space-y-2">
@@ -3224,6 +3223,27 @@ function ReturnsOccurrences() {
                           ) : null}
                         </div>
                       )}
+                      {!selectedBatch
+                        && returnWizardStep === 2
+                        && returnDanfe
+                        && !returnDataLookupLoading
+                        && !returnNfCollectionLookupLoading
+                        && (returnDataLookup || returnDataLookupError) && (
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setReturnWizardStep(3)}
+                            className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white transition hover:bg-accent-strong"
+                          >
+                            {returnDataLookup?.consolidated_status === 'not_found'
+                              ? 'Ciente, continuar para tipo e produtos'
+                              : 'Continuar para tipo e produtos'}
+                            <ArrowRight size={16} />
+                          </button>
+                        </div>
+                      )}
+                      {(selectedBatch || returnWizardStep === 3) && (
+                      <>
                       {returnDanfe && returnType !== 'sobra' && returnNfCollectionLookupLoading && (
                         <InfoText style={{ marginTop: '4px' }}>
                           Validando se a NF possui coleta solicitada pela Mar e Rio...
@@ -3600,6 +3620,8 @@ function ReturnsOccurrences() {
                             : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
                         </button>
                       </Actions>
+                      </>
+                      )}
                     </>
                     )}
                   </div>

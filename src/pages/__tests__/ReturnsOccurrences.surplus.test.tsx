@@ -82,6 +82,11 @@ async function fillTransportStep() {
   await screen.findByText('Digite ou leia o codigo de barras da NF');
 }
 
+async function continueAfterReturnLookup() {
+  fireEvent.click(await screen.findByRole('button', { name: /continuar para tipo e produtos/i }));
+  await screen.findByText('Tipo e produtos da devolucao');
+}
+
 describe('ReturnsOccurrences - sobra com inversao', () => {
   beforeEach(() => {
     mockedAxios.get.mockReset();
@@ -380,6 +385,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
 
     await screen.findByText('NF carregada: 1754803 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
     fireEvent.click(screen.getByLabelText('Parcial'));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
@@ -408,6 +414,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
     fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
     await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
 
     fireEvent.click(screen.getByLabelText('Quebra de peso'));
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
@@ -437,6 +444,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
     fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
     await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
 
     fireEvent.click(screen.getByLabelText('Parcial'));
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
@@ -455,6 +463,41 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
         keep_in_stock: false,
       }));
     });
+  });
+
+  it('exige confirmacao do alerta quando a NF nao existe na base de devolucoes', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/return-data/occurrences/by-invoice/1694432')) {
+        return Promise.resolve({
+          data: {
+            invoice_number: '1694432',
+            invoice_number_normalized: '1694432',
+            consolidated_status: 'not_found',
+            total_occurrences: 0,
+            approved_count: 0,
+            rejected_count: 0,
+            latest_base_update: '2026-07-29T14:30:00.000Z',
+            occurrences: [],
+          },
+        });
+      }
+      return defaultGet?.(url);
+    }) as typeof mockedAxios.get);
+
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+
+    expect(await screen.findByText('Atenção: NF não localizada na base de devoluções')).toBeInTheDocument();
+    expect(screen.getByText(/leia este aviso e confirme abaixo/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Adicionar NF na lista' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ciente, continuar para tipo e produtos' }));
+
+    expect(await screen.findByText('Tipo e produtos da devolucao')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
   });
 
   it('mostra a consulta orientativa da base sem bloquear a NF no lote', async () => {
@@ -516,6 +559,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     expect(await screen.findByText('2 ocorrências aprovadas')).toBeInTheDocument();
     expect(screen.getByText(/não impede adicionar a NF nem concluir o lote/i)).toBeInTheDocument();
+    await continueAfterReturnLookup();
     expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Ver ocorrências' }));
     expect(await screen.findByText('ID OC-10')).toBeInTheDocument();

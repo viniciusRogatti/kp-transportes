@@ -59,6 +59,9 @@ const styles = StyleSheet.create({
     left: 22,
     right: 22,
   },
+  firstPageExtras: {
+    marginBottom: 10,
+  },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -417,7 +420,7 @@ const renderFirstPageExtras = ({
   const hasProducts = Boolean(products?.length || salmonSeparations?.length || prontoBoxes?.length);
 
   return (
-    <View style={styles.headerCard}>
+    <View style={styles.firstPageExtras}>
       {hasProducts ? (
         <View style={styles.separatorRow}>
           <Text style={styles.separatorLabel}>Separado por</Text>

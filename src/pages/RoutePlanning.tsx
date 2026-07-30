@@ -2661,7 +2661,9 @@ function RoutePlanning() {
                                       setDriverInput(option.value);
                                       applyDriverSelection(option.id);
                                       setIsDriverSuggestionsOpen(false);
-                                      carInputRef.current?.focus();
+                                      window.requestAnimationFrame(() => {
+                                        carInputRef.current?.focus();
+                                      });
                                     }}
                                   >
                                     {option.label}
@@ -2728,7 +2730,9 @@ function RoutePlanning() {
                                       setCarInput(option.value);
                                       applyCarSelection(option.id);
                                       setIsCarSuggestionsOpen(false);
-                                      noteLookupRef.current?.focus();
+                                      window.requestAnimationFrame(() => {
+                                        noteLookupRef.current?.focus();
+                                      });
                                     }}
                                   >
                                     {option.label}

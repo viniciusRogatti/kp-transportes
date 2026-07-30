@@ -43,12 +43,16 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
         return Promise.resolve({ data: [
           { id: 1, name: 'João da Silva' },
           { id: 2, name: 'Maria Conferência' },
+          { id: 3, name: 'Marcus Vinicius' },
+          { id: 4, name: 'Vinicius Mota' },
         ] });
       }
       if (url.includes('/cars')) {
         return Promise.resolve({ data: [
           { id: 10, model: 'Volvo FH', license_plate: 'ABC-1234' },
           { id: 11, model: 'Scania R', license_plate: 'XYZ-9876' },
+          { id: 12, model: 'Mercedes Atego', license_plate: 'VIN-1000' },
+          { id: 13, model: 'Volkswagen Delivery', license_plate: 'VIN-2000' },
         ] });
       }
       if (url.includes('/trips/search/date/')) {
@@ -81,5 +85,28 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
     fireEvent.click(carOption);
 
     await waitFor(() => expect(carInput).toHaveValue('Volvo FH - ABC-1234'));
+  });
+
+  it('mantém a opção clicada quando há mais de um motorista ou veículo correspondente', async () => {
+    renderPage();
+
+    const driverInput = await screen.findByPlaceholderText('Digite nome do motorista');
+    fireEvent.focus(driverInput);
+    fireEvent.change(driverInput, { target: { value: 'vin' } });
+
+    const secondDriverOption = await screen.findByRole('option', { name: 'Vinicius Mota - Disponível' });
+    fireEvent.click(secondDriverOption);
+
+    await waitFor(() => expect(driverInput).toHaveValue('Vinicius Mota'));
+
+    const carInput = screen.getByPlaceholderText('Digite placa ou veículo');
+    fireEvent.change(carInput, { target: { value: 'VIN' } });
+
+    const secondCarOption = await screen.findByRole('option', {
+      name: 'Volkswagen Delivery - VIN-2000 - Disponível',
+    });
+    fireEvent.click(secondCarOption);
+
+    await waitFor(() => expect(carInput).toHaveValue('Volkswagen Delivery - VIN-2000'));
   });
 });

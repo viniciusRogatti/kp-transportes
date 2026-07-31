@@ -101,6 +101,36 @@ export type ReceiptBagListResponse = {
   rows: ReceiptBagListRow[];
 };
 
+export type HistoricalReceiptRoute = {
+  id: number;
+  date: string;
+  run_number: number;
+  driver: { id: number; name: string } | null;
+  car: { id: number; model: string; license_plate: string } | null;
+  notes_count: number;
+  completed_notes: number;
+  is_completed: boolean;
+  same_driver_as_bag: boolean;
+};
+
+export type HistoricalReceiptRoutesResponse = {
+  invoice: {
+    invoice_number: string;
+    invoice_date: string;
+    status: string;
+    customer_name: string | null;
+    city: string | null;
+    has_receipt_photo: boolean;
+  };
+  bag: {
+    id: number;
+    operation_date: string;
+    driver_id: number;
+  };
+  route_date: string | null;
+  routes: HistoricalReceiptRoute[];
+};
+
 export type ReceiptBagApiError = {
   error?: string;
   code?: string | null;
@@ -110,6 +140,10 @@ export type ReceiptBagApiError = {
     driver_name?: string | null;
     confirmed_at?: string | null;
     unresolved?: number;
+    invoice_number?: string;
+    invoice_date?: string;
+    current_status?: string;
+    trip_date?: string | null;
   } | null;
 };
 
@@ -138,6 +172,20 @@ export const getReceiptBagClosing = async (bagId: number) => {
   return data;
 };
 
+export const listHistoricalReceiptRoutes = async (
+  bagId: number,
+  invoiceNumber: string,
+  routeDate = '',
+) => {
+  const params = new URLSearchParams({ invoiceNumber });
+  if (routeDate) params.set('routeDate', routeDate);
+  const { data } = await axios.get<HistoricalReceiptRoutesResponse>(
+    `${baseUrl}/${bagId}/historical-routes?${params.toString()}`,
+    authConfig(),
+  );
+  return data;
+};
+
 export const updateReceiptBagItem = async (
   bagId: number,
   itemId: number,
@@ -155,11 +203,16 @@ export const updateReceiptBagItem = async (
 export const addExtraReceiptBagInvoice = async (
   bagId: number,
   invoiceNumber: string,
-  forceTransfer = false,
+  options: {
+    forceTransfer?: boolean;
+    historicalTripId?: number;
+    allowUnrouted?: boolean;
+    reasonNotes?: string;
+  } = {},
 ) => {
   const { data } = await axios.post<ReceiptBag>(
     `${baseUrl}/${bagId}/items/extra`,
-    { invoiceNumber, forceTransfer },
+    { invoiceNumber, ...options },
     authConfig(),
   );
   return data;

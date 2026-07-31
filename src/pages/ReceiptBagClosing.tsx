@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Clock3,
   FilePlus2,
+  Link2,
   PackageCheck,
   RefreshCcw,
   RotateCcw,
@@ -28,9 +29,11 @@ import {
   ReceiptBagListResponse,
   ReceiptBagListRow,
   ReceiptBagStatus,
+  HistoricalReceiptRoutesResponse,
   addExtraReceiptBagInvoice,
   finishReceiptBagClosing,
   getReceiptBagClosing,
+  listHistoricalReceiptRoutes,
   listReceiptBagClosings,
   markRemainingReceiptBagItemsAbsent,
   startReceiptBagClosing,
@@ -121,6 +124,11 @@ function ReceiptBagClosing() {
   const [mutating, setMutating] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [historicalRoutes, setHistoricalRoutes] = useState<HistoricalReceiptRoutesResponse | null>(null);
+  const [selectedHistoricalTripId, setSelectedHistoricalTripId] = useState<number | null>(null);
+  const [historicalRouteDate, setHistoricalRouteDate] = useState('');
+  const [historicalReasonNotes, setHistoricalReasonNotes] = useState('');
+  const [loadingHistoricalRoutes, setLoadingHistoricalRoutes] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -259,13 +267,32 @@ function ReceiptBagClosing() {
     } finally { setMutating(false); }
   }, [activeBag, loadList, mutating, visibleItems]);
 
+  const openHistoricalRouteSelection = useCallback(async (invoiceNumber: string, routeDate = '') => {
+    if (!activeBag) return;
+    setLoadingHistoricalRoutes(true);
+    setError('');
+    try {
+      const response = await listHistoricalReceiptRoutes(activeBag.id, invoiceNumber, routeDate);
+      setHistoricalRoutes(response);
+      setHistoricalRouteDate(routeDate);
+      setSelectedHistoricalTripId(response.routes[0]?.id || null);
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'Não foi possível buscar as rotas anteriores.'));
+    } finally {
+      setLoadingHistoricalRoutes(false);
+    }
+  }, [activeBag]);
+
   const addExtra = useCallback(async (forceTransfer = false) => {
     if (!activeBag || mutating || !extraInvoice.trim()) return;
     const invoice = extraInvoice.trim();
     setMutating(true);
     setError('');
     try {
-      applyBag(await addExtraReceiptBagInvoice(activeBag.id, invoice, forceTransfer), `NF ${invoice} adicionada neste malote.`);
+      applyBag(
+        await addExtraReceiptBagInvoice(activeBag.id, invoice, { forceTransfer }),
+        `NF ${invoice} adicionada neste malote.`,
+      );
       setExtraInvoice('');
       void loadList(true);
     } catch (requestError) {
@@ -280,9 +307,73 @@ function ReceiptBagClosing() {
           await addExtra(true);
           return;
         }
+      } else if (payload.code === 'INVOICE_REQUIRES_HISTORICAL_ROUTE') {
+        setMutating(false);
+        await openHistoricalRouteSelection(invoice);
+        return;
       } else setError(errorMessage(requestError, 'Não foi possível adicionar a NF.'));
     } finally { setMutating(false); }
-  }, [activeBag, extraInvoice, loadList, mutating]);
+  }, [activeBag, extraInvoice, loadList, mutating, openHistoricalRouteSelection]);
+
+  const confirmHistoricalRoute = async () => {
+    if (!activeBag || !historicalRoutes || !selectedHistoricalTripId || mutating) return;
+    const route = historicalRoutes.routes.find((candidate) => candidate.id === selectedHistoricalTripId);
+    if (!route) return;
+    if (!historicalRoutes.invoice.has_receipt_photo && !window.confirm(
+      `A NF ${historicalRoutes.invoice.invoice_number} está sem foto de canhoto.\n\n`
+      + 'Deseja vincular a entrega à rota mesmo assim?',
+    )) return;
+    if (!window.confirm(
+      `Vincular a NF ${historicalRoutes.invoice.invoice_number} retroativamente à rota #${route.id}?\n\n`
+      + `${route.driver?.name || 'Motorista'} · ${formatDate(route.date)} · ${route.car?.license_plate || 'sem placa'}\n\n`
+      + 'A NF será incluída na rota já como entregue e a alteração ficará registrada na jornada.',
+    )) return;
+    setMutating(true);
+    setError('');
+    try {
+      const bag = await addExtraReceiptBagInvoice(activeBag.id, historicalRoutes.invoice.invoice_number, {
+        historicalTripId: route.id,
+        reasonNotes: historicalReasonNotes,
+      });
+      applyBag(bag, `NF ${historicalRoutes.invoice.invoice_number} vinculada à rota #${route.id} e confirmada.`);
+      setHistoricalRoutes(null);
+      setSelectedHistoricalTripId(null);
+      setHistoricalRouteDate('');
+      setHistoricalReasonNotes('');
+      setExtraInvoice('');
+      void loadList(true);
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'Não foi possível vincular a NF à rota histórica.'));
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const confirmUnroutedExtra = async () => {
+    if (!activeBag || !historicalRoutes || mutating) return;
+    if (!window.confirm(
+      `Registrar a NF ${historicalRoutes.invoice.invoice_number} somente neste malote?\n\n`
+      + 'A NF continuará pendente e sem vínculo com uma rota.',
+    )) return;
+    setMutating(true);
+    setError('');
+    try {
+      const bag = await addExtraReceiptBagInvoice(activeBag.id, historicalRoutes.invoice.invoice_number, {
+        allowUnrouted: true,
+      });
+      applyBag(bag, `NF ${historicalRoutes.invoice.invoice_number} registrada no malote sem alterar a entrega.`);
+      setHistoricalRoutes(null);
+      setSelectedHistoricalTripId(null);
+      setHistoricalRouteDate('');
+      setHistoricalReasonNotes('');
+      setExtraInvoice('');
+      void loadList(true);
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'Não foi possível registrar a NF no malote.'));
+    } finally {
+      setMutating(false);
+    }
+  };
 
   const markRemainingAbsent = async () => {
     if (!activeBag?.counts.pending || mutating || !window.confirm(
@@ -323,6 +414,7 @@ function ReceiptBagClosing() {
     setSelectedItemId(null);
     setItemSearch('');
     setExtraInvoice('');
+    setHistoricalRoutes(null);
     setError('');
     void loadList(true);
   }, [loadList]);
@@ -332,6 +424,10 @@ function ReceiptBagClosing() {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '');
+      if (event.key === 'Escape' && !typing && historicalRoutes && !loadingHistoricalRoutes && !mutating) {
+        setHistoricalRoutes(null);
+        return;
+      }
       if (event.key === 'Escape' && !typing) return closeBag();
       if (typing || !selectedItem || mutating) return;
       if (event.key === 'Enter') { event.preventDefault(); void mutateItem(selectedItem, 'confirm'); }
@@ -346,7 +442,7 @@ function ReceiptBagClosing() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeBag, closeBag, mutateItem, mutating, selectedItem, visibleItems]);
+  }, [activeBag, closeBag, historicalRoutes, loadingHistoricalRoutes, mutateItem, mutating, selectedItem, visibleItems]);
 
   return (
     <>
@@ -421,6 +517,25 @@ function ReceiptBagClosing() {
           onFinish={() => void finish()}
         />
       ) : null}
+      {activeBag && historicalRoutes ? (
+        <HistoricalRouteDialog
+          data={historicalRoutes}
+          selectedTripId={selectedHistoricalTripId}
+          routeDate={historicalRouteDate}
+          reasonNotes={historicalReasonNotes}
+          error={error}
+          loading={loadingHistoricalRoutes || mutating}
+          onSelect={setSelectedHistoricalTripId}
+          onDateChange={(nextDate) => {
+            setHistoricalRouteDate(nextDate);
+            void openHistoricalRouteSelection(historicalRoutes.invoice.invoice_number, nextDate);
+          }}
+          onReasonNotesChange={setHistoricalReasonNotes}
+          onClose={() => setHistoricalRoutes(null)}
+          onConfirm={() => void confirmHistoricalRoute()}
+          onUnrouted={() => void confirmUnroutedExtra()}
+        />
+      ) : null}
     </>
   );
 }
@@ -448,6 +563,133 @@ function SearchBox({ value, onChange, placeholder, autoFocus = false }: {
 }
 function EmptyState({ text }: { text: string }) {
   return <div className="grid min-h-60 place-items-center px-6 text-center text-sm font-semibold text-muted">{text}</div>;
+}
+
+function HistoricalRouteDialog({
+  data, selectedTripId, routeDate, reasonNotes, error, loading, onSelect, onDateChange,
+  onReasonNotesChange, onClose, onConfirm, onUnrouted,
+}: {
+  data: HistoricalReceiptRoutesResponse;
+  selectedTripId: number | null;
+  routeDate: string;
+  reasonNotes: string;
+  error: string;
+  loading: boolean;
+  onSelect: (tripId: number) => void;
+  onDateChange: (date: string) => void;
+  onReasonNotesChange: (notes: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+  onUnrouted: () => void;
+}) {
+  const selectedRoute = data.routes.find((route) => route.id === selectedTripId);
+  return (
+    <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6">
+      <section role="dialog" aria-modal="true" aria-labelledby="historical-route-title" className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border bg-surface text-text shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-border bg-card p-5 sm:p-6">
+          <div className="flex min-w-0 gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-200">
+              <Link2 className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-600">Entrega sem roteirização</p>
+              <h2 id="historical-route-title" className="mt-1 text-xl font-black sm:text-2xl">Vincular a NF {data.invoice.invoice_number} à rota real</h2>
+              <p className="mt-1 text-sm text-muted">Escolha a viagem em que os produtos foram carregados e entregues, mesmo que a NF tenha sido emitida depois.</p>
+            </div>
+          </div>
+          <button type="button" disabled={loading} onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border hover:bg-muted/40 disabled:opacity-40" aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+          {error ? <ErrorBanner message={error} /> : null}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-bold uppercase text-muted">Cliente</p>
+              <p className="mt-1 font-black">{data.invoice.customer_name || 'Não identificado'}</p>
+              <p className="mt-1 text-xs text-muted">{data.invoice.city || 'Cidade não informada'}</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <p className="text-xs font-bold uppercase text-muted">Emissão da NF</p>
+              <p className="mt-1 font-black">{formatDate(data.invoice.invoice_date)}</p>
+              <p className="mt-1 text-xs text-muted">Status atual: {data.invoice.status}</p>
+            </div>
+            <div className={`rounded-2xl border p-4 ${data.invoice.has_receipt_photo
+              ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'
+              : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'}`}>
+              <p className="text-xs font-bold uppercase text-muted">Evidência do canhoto</p>
+              <p className="mt-1 font-black">{data.invoice.has_receipt_photo ? 'Foto localizada' : 'Sem foto localizada'}</p>
+              <p className="mt-1 text-xs text-muted">{data.invoice.has_receipt_photo ? 'A publicação será preservada no histórico.' : 'A confirmação exigirá uma validação adicional.'}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/35 dark:text-sky-100">
+            <strong>O que será registrado:</strong> a NF entrará na rota escolhida como entregue, sem reabrir a viagem. A data, o motorista, o veículo, o motivo e o usuário responsável ficarão na jornada e na auditoria.
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="font-black">Em qual rota a carga realmente saiu?</h3>
+              <p className="mt-1 text-xs text-muted">As rotas do mesmo motorista aparecem primeiro. Use a data para localizar uma viagem mais antiga.</p>
+            </div>
+            <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
+              <CalendarDays className="h-4 w-4 text-muted" />
+              <span className="text-xs text-muted">Data da saída</span>
+              <input type="date" value={routeDate} max={data.bag.operation_date} disabled={loading} onChange={(event) => onDateChange(event.target.value)} className="bg-transparent outline-none disabled:opacity-50" />
+              {routeDate ? <button type="button" disabled={loading} onClick={() => onDateChange('')} className="text-muted hover:text-text" aria-label="Limpar data"><X className="h-4 w-4" /></button> : null}
+            </label>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {data.routes.map((route) => {
+              const selected = route.id === selectedTripId;
+              return (
+                <button key={route.id} type="button" disabled={loading} onClick={() => onSelect(route.id)}
+                  className={`rounded-2xl border p-4 text-left transition disabled:opacity-50 ${selected
+                    ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-500/25 dark:bg-violet-950/35'
+                    : 'border-border bg-card hover:border-violet-300 hover:bg-muted/20'}`}>
+                  <span className="flex items-start justify-between gap-3">
+                    <span><span className="block text-lg font-black">Rota #{route.id}</span><span className="mt-0.5 block text-xs text-muted">{formatDate(route.date)} · saída #{route.run_number}</span></span>
+                    <span className={`mt-1 grid h-5 w-5 place-items-center rounded-full border ${selected ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-400'}`}>{selected ? <Check className="h-3.5 w-3.5" /> : null}</span>
+                  </span>
+                  <span className="mt-4 block font-bold">{route.driver?.name || 'Motorista não identificado'}</span>
+                  <span className="mt-1 block text-xs text-muted">{route.car?.license_plate || 'Sem placa'} · {route.car?.model || 'Veículo não informado'}</span>
+                  <span className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-border bg-surface px-2 py-1 text-[11px] font-bold">{route.notes_count} NFs · {route.completed_notes} concluídas</span>
+                    {route.is_completed ? <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Rota finalizada</span> : null}
+                    {route.same_driver_as_bag ? <span className="rounded-full border border-sky-300 bg-sky-100 px-2 py-1 text-[11px] font-bold text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">Mesmo motorista do malote</span> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {!data.routes.length && !loading ? (
+            <div className="mt-3 rounded-2xl border border-dashed border-border p-8 text-center">
+              <p className="font-black">Nenhuma rota encontrada.</p>
+              <p className="mt-1 text-sm text-muted">Informe a data exata da saída ou registre apenas a presença física no malote.</p>
+            </div>
+          ) : null}
+          {loading ? <div className="mt-3 rounded-2xl border border-border bg-card p-6 text-center text-sm font-bold text-muted">Buscando rotas...</div> : null}
+
+          <label className="mt-5 block">
+            <span className="text-sm font-black">Observação para auditoria <span className="font-normal text-muted">(opcional)</span></span>
+            <textarea value={reasonNotes} disabled={loading} onChange={(event) => onReasonNotesChange(event.target.value)} maxLength={500} rows={3} placeholder="Ex.: produtos entregues sem a NF por falha no faturamento; documento emitido no dia seguinte." className="mt-2 w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
+          </label>
+        </div>
+
+        <footer className="flex flex-col-reverse gap-2 border-t border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <button type="button" disabled={loading} onClick={onUnrouted} className="rounded-xl border border-border px-4 py-3 text-sm font-bold hover:bg-muted/40 disabled:opacity-40">Somente registrar no malote</button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button type="button" disabled={loading} onClick={onClose} className="rounded-xl border border-border px-4 py-3 text-sm font-bold hover:bg-muted/40 disabled:opacity-40">Cancelar</button>
+            <button type="button" disabled={loading || !selectedRoute} onClick={onConfirm} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-black text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40">
+              <Link2 className="h-4 w-4" />{selectedRoute ? `Vincular à rota #${selectedRoute.id}` : 'Selecione uma rota'}
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
 function BagTable({ rows, mutating, onOpen }: {

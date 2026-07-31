@@ -51,6 +51,8 @@ export type ReceiptBagItem = {
   suggestion_source: string;
   suggestion_sender_name: string | null;
   suggestion_sender_phone: string | null;
+  has_receipt_photo: boolean;
+  receipt_photo_posted_at: string | null;
   confirmed_at: string | null;
   absent_at: string | null;
   confirmed_elsewhere: boolean;

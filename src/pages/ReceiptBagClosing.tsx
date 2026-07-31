@@ -218,6 +218,15 @@ function ReceiptBagClosing() {
       setError('Uma NF apenas sugerida para este malote não pode ser marcada como ausente aqui.');
       return;
     }
+    if (
+      action === 'confirm'
+      && !forceTransfer
+      && !item.has_receipt_photo
+      && !window.confirm(
+        `A NF ${item.invoice_number} ainda está sem foto de canhoto.\n\n`
+        + 'O documento físico está realmente neste malote?',
+      )
+    ) return;
     if (action === 'returned' && !window.confirm(
       `Registrar a NF ${item.invoice_number} como devolução?\n\nIsso removerá a necessidade do canhoto e atualizará a jornada da NF.`,
     )) return;
@@ -572,7 +581,7 @@ function ItemRow({ item, selected, onSelect, onConfirm }: {
     <button type="button" onClick={onSelect} onDoubleClick={onConfirm} className={`flex w-full flex-col gap-3 rounded-xl border p-3 text-left transition sm:flex-row sm:items-center ${selected ? 'ring-2 ring-sky-500 ring-offset-1 ring-offset-surface' : ''} ${config.row}`}>
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface text-sm font-black text-muted">{item.route_order || '•'}</span>
       <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2"><strong className="text-base">NF {item.invoice_number}</strong><span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${config.badge}`}>{config.label}</span>{item.is_suggested_extra ? <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[11px] font-black text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200">Extra</span> : null}</span>
+        <span className="flex flex-wrap items-center gap-2"><strong className="text-base">NF {item.invoice_number}</strong><span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${config.badge}`}>{config.label}</span>{!item.has_receipt_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">Sem foto</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[11px] font-black text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200">Extra</span> : null}</span>
         <span className="mt-1 block truncate text-xs text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
         {suggestionDiffers ? <span className="mt-1 block text-xs font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</span>
           : item.suggestion_source === 'whatsapp_phone' ? <span className="mt-1 block text-xs font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</span> : null}

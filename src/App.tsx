@@ -35,6 +35,7 @@ const AlertsPage = lazy(() => import('./pages/Alerts'));
 const DeliveryMonitoring = lazy(() => import('./pages/DeliveryMonitoring'));
 const OperationalPendencies = lazy(() => import('./pages/OperationalPendencies'));
 const CteManagement = lazy(() => import('./pages/CteManagement'));
+const ReceiptBagClosing = lazy(() => import('./pages/ReceiptBagClosing'));
 
 function RouteFallback() {
   return (
@@ -143,6 +144,7 @@ function App() {
           <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><OperationalPendencies /></ProtectedRoute>} />
           <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><AlertsPage /></ProtectedRoute>} />
           <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><DeliveryMonitoring /></ProtectedRoute>} />
+          <Route path="/receipt-bag-closing" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><ReceiptBagClosing /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Products /></ProtectedRoute>} />
           <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
           <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Customers /></ProtectedRoute>} />

@@ -14,7 +14,9 @@ import {
   Download,
   FileSearch,
   History,
+  Pencil,
   RefreshCcw,
+  Save,
   Upload,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -34,7 +36,9 @@ import {
   ReturnDataImport,
   ReturnDataImportPreview,
   ReturnDataOverview,
+  ReturnDataType,
   ReturnRegistryOccurrence,
+  updateReturnRegistryOccurrenceType,
 } from '../services/returnDataService';
 
 type RegistryTab = 'overview' | 'occurrences' | 'imports';
@@ -216,6 +220,7 @@ function ReturnDataRegistry() {
   const navigate = useNavigate();
   const permission = String(localStorage.getItem('user_permission') || '').toLowerCase();
   const canImport = ['admin', 'master', 'expedicao'].includes(permission);
+  const canEdit = ['admin', 'master', 'expedicao'].includes(permission);
   const canExport = ['admin', 'master', 'expedicao', 'control_tower'].includes(permission);
   const [activeTab, setActiveTab] = useState<RegistryTab>('overview');
   const [filters, setFilters] = useState<ReturnDataFilters>({ ...EMPTY_FILTERS });
@@ -233,6 +238,9 @@ function ReturnDataRegistry() {
   const [importPreview, setImportPreview] = useState<ReturnDataImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const [importFeedback, setImportFeedback] = useState('');
+  const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
+  const [editingReturnType, setEditingReturnType] = useState<ReturnDataType>('unclassified');
+  const [savingReturnType, setSavingReturnType] = useState(false);
 
   const updateFilter = (field: keyof ReturnDataFilters, value: string) => {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -324,6 +332,35 @@ function ReturnDataRegistry() {
       setHistoryByOccurrence((current) => ({ ...current, [occurrenceId]: data.changes || [] }));
     } catch (error) {
       setErrorMessage(getErrorMessage(error, 'Não foi possível carregar o histórico.'));
+    }
+  };
+
+  const startEditingReturnType = (occurrence: ReturnRegistryOccurrence) => {
+    setEditingOccurrenceId(occurrence.id);
+    setEditingReturnType(occurrence.effective_return_type || occurrence.inferred_return_type);
+    setErrorMessage('');
+  };
+
+  const saveReturnType = async (occurrence: ReturnRegistryOccurrence) => {
+    if (savingReturnType) return;
+    setSavingReturnType(true);
+    setErrorMessage('');
+    try {
+      const updated = await updateReturnRegistryOccurrenceType(occurrence.id, editingReturnType);
+      setOccurrences((current) => current.map((row) => row.id === updated.id
+        ? { ...row, ...updated, internal_return_type: row.internal_return_type }
+        : row));
+      setHistoryByOccurrence((current) => {
+        const next = { ...current };
+        delete next[occurrence.id];
+        return next;
+      });
+      setEditingOccurrenceId(null);
+      await loadOverview(filters);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, 'Não foi possível corrigir o tipo da devolução.'));
+    } finally {
+      setSavingReturnType(false);
     }
   };
 
@@ -536,7 +573,7 @@ function ReturnDataRegistry() {
                           <strong className="text-sm text-text">ID {occurrence.source_occurrence_id}</strong>
                           <span className="text-sm font-semibold text-text">NF {occurrence.invoice_number}</span>
                           <span className="truncate text-sm text-muted">{occurrence.customer_name || '-'}</span>
-                          <span className="text-xs text-muted">{RETURN_TYPE_LABELS[occurrence.internal_return_type || occurrence.inferred_return_type] || occurrence.inferred_return_type}</span>
+                          <span className="text-xs text-muted">{RETURN_TYPE_LABELS[occurrence.internal_return_type || occurrence.effective_return_type] || occurrence.effective_return_type}</span>
                           <span className={`w-fit rounded-full border px-2 py-1 text-xs font-semibold ${occurrence.approval_status === 'approved' ? 'semantic-panel-success' : occurrence.approval_status === 'rejected' ? 'semantic-panel-danger' : 'semantic-panel-warning'}`}>
                             {APPROVAL_LABELS[occurrence.approval_status]}
                           </span>
@@ -564,6 +601,49 @@ function ReturnDataRegistry() {
                               <span><strong>Primeira importação:</strong> {formatDateTime(occurrence.first_seen_at)}</span>
                               <span><strong>Última atualização:</strong> {formatDateTime(occurrence.last_seen_at)}</span>
                               <span><strong>Categoria:</strong> {occurrence.return_reason_category}</span>
+                            </div>
+                            <div className="rounded-md border border-border bg-card p-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <strong>Tipo da devolução:</strong>{' '}
+                                  <span className="font-semibold text-text">
+                                    {RETURN_TYPE_LABELS[occurrence.effective_return_type] || occurrence.effective_return_type}
+                                  </span>
+                                  {occurrence.operational_return_type ? (
+                                    <>
+                                      <span className="ml-2 rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200">Corrigido pela operação</span>
+                                      <p className="mt-1 text-xs text-muted">
+                                        Importado como {RETURN_TYPE_LABELS[occurrence.inferred_return_type] || occurrence.inferred_return_type}
+                                        {occurrence.return_type_corrected_by_username ? ` · por ${occurrence.return_type_corrected_by_username}` : ''}
+                                        {occurrence.return_type_corrected_at ? ` · ${formatDateTime(occurrence.return_type_corrected_at)}` : ''}
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p className="mt-1 text-xs text-muted">Classificação inferida da planilha da MAR E RIO.</p>
+                                  )}
+                                </div>
+                                {canEdit && editingOccurrenceId !== occurrence.id ? (
+                                  <button type="button" onClick={() => startEditingReturnType(occurrence)} className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-border px-3 text-xs font-semibold hover:bg-surface">
+                                    <Pencil size={14} /> Corrigir tipo
+                                  </button>
+                                ) : null}
+                              </div>
+                              {editingOccurrenceId === occurrence.id ? (
+                                <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
+                                  <select aria-label={`Corrigir tipo da ocorrência ${occurrence.source_occurrence_id}`} value={editingReturnType} onChange={(event) => setEditingReturnType(event.target.value as ReturnDataType)} disabled={savingReturnType} className="h-10 rounded-md border border-border bg-surface px-3 text-sm">
+                                    <option value="unclassified">Usar classificação importada ({RETURN_TYPE_LABELS[occurrence.inferred_return_type] || occurrence.inferred_return_type})</option>
+                                    <option value="total">Total</option>
+                                    <option value="partial">Parcial</option>
+                                    <option value="collection">Coleta</option>
+                                    <option value="weight_break">Quebra de peso</option>
+                                    <option value="surplus">Sobra</option>
+                                  </select>
+                                  <button type="button" disabled={savingReturnType} onClick={() => void saveReturnType(occurrence)} className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-white disabled:opacity-50">
+                                    <Save size={15} /> {savingReturnType ? 'Salvando...' : 'Salvar correção'}
+                                  </button>
+                                  <button type="button" disabled={savingReturnType} onClick={() => setEditingOccurrenceId(null)} className="h-10 rounded-md border border-border px-4 text-sm font-semibold disabled:opacity-50">Cancelar</button>
+                                </div>
+                              ) : null}
                             </div>
                             <div>
                               <strong>Motivo original:</strong>
@@ -593,7 +673,10 @@ function ReturnDataRegistry() {
                                   <p className="text-muted">Esta ocorrência ainda não sofreu alterações.</p>
                                 ) : historyByOccurrence[occurrence.id].map((change: any) => (
                                   <div key={change.id} className="rounded border border-border bg-card px-2 py-1 text-xs text-muted">
-                                    {formatDateTime(change.created_at)} · Campos alterados: {(change.changed_fields_json || []).join(', ')}
+                                    {formatDateTime(change.created_at)}
+                                    {change.change_source === 'operational_correction'
+                                      ? ` · Correção operacional${change.changed_by_username ? ` por ${change.changed_by_username}` : ''}: ${RETURN_TYPE_LABELS[change.new_data_json?.effective_return_type] || change.new_data_json?.effective_return_type || '-'}`
+                                      : ` · Importação${change.import?.original_file_name ? ` ${change.import.original_file_name}` : ''} · Campos alterados: ${(change.changed_fields_json || []).join(', ')}`}
                                   </div>
                                 ))}
                               </div>

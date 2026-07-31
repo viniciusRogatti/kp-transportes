@@ -500,6 +500,56 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     });
   });
 
+  it('impede tipo incompatível com a classificação aprovada da base', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/return-data/occurrences/by-invoice/1694432')) {
+        return Promise.resolve({
+          data: {
+            invoice_number: '1694432',
+            invoice_number_normalized: '1694432',
+            consolidated_status: 'approved',
+            total_occurrences: 1,
+            approved_count: 1,
+            rejected_count: 0,
+            latest_base_update: '2026-07-30T22:27:00.000Z',
+            occurrences: [{
+              id: 8356,
+              source_occurrence_id: '8356',
+              approval_status: 'approved',
+              inferred_return_type: 'total',
+              effective_return_type: 'total',
+              operational_return_type: null,
+              items: [],
+            }],
+          },
+        });
+      }
+      return defaultGet?.(url);
+    }) as any);
+
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
+
+    fireEvent.click(screen.getByLabelText('Parcial'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
+      target: { value: 'RV001899' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining(
+      'O tipo selecionado (Parcial) não é compatível com a base de devoluções (Total)',
+    ));
+    expect(screen.queryByText('NF 1694432', { selector: 'strong' })).not.toBeInTheDocument();
+  });
+
   it('exige confirmacao do alerta quando a NF nao existe na base de devolucoes', async () => {
     const defaultGet = mockedAxios.get.getMockImplementation();
     mockedAxios.get.mockImplementation(((url: string) => {

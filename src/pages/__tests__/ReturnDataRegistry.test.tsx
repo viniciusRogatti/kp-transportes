@@ -138,4 +138,78 @@ describe('ReturnDataRegistry', () => {
     expect(await screen.findByText('10')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeInTheDocument();
   });
+
+  it('corrige o tipo sem apagar a classificação importada', async () => {
+    const occurrence = {
+      id: 8356,
+      source_occurrence_id: '8356',
+      invoice_number: '1816619',
+      invoice_number_normalized: '1816619',
+      invoice_total_value: 1212.72,
+      calculated_return_value: null,
+      return_value_source: 'unavailable',
+      invoice_issued_at: '2026-07-21',
+      customer_name: 'SUPERMERCADO BIG BOM LTDA',
+      customer_tax_id: '50582170000442',
+      seller_name: 'VALENTIN FIORINI',
+      return_reason_raw: '3 PEÇAS ESTÃO SEM VACUO',
+      return_reason_category: 'Produto avariado ou fora do padrão',
+      return_justification: 'Produto avariado',
+      approval_justification: 'PRODUTO FORA DAS CONFORMIDADES',
+      approval_status: 'approved',
+      carrier_name: 'KP TRANSPORTES',
+      redelivery_carrier_name: null,
+      inferred_return_type: 'unclassified',
+      return_type_source: 'unclassified',
+      operational_return_type: null,
+      effective_return_type: 'unclassified',
+      effective_return_type_source: 'unclassified',
+      return_type_corrected_at: null,
+      return_type_corrected_by_user_id: null,
+      return_type_corrected_by_username: null,
+      first_seen_at: '2026-07-30T22:27:00.000Z',
+      last_seen_at: '2026-07-30T22:27:00.000Z',
+      linked_batch_code: null,
+      items: [],
+    };
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/occurrences/overview')) return Promise.resolve({ data: overview });
+      if (url.endsWith('/return-data/imports')) return Promise.resolve({ data: [] });
+      if (url.endsWith('/return-data/occurrences')) {
+        return Promise.resolve({
+          data: { rows: [occurrence], total: 1, page: 1, limit: 25, total_pages: 1 },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    mockedAxios.patch.mockResolvedValueOnce({
+      data: {
+        ...occurrence,
+        operational_return_type: 'partial',
+        effective_return_type: 'partial',
+        effective_return_type_source: 'operational_correction',
+        return_type_corrected_by_user_id: 7,
+        return_type_corrected_by_username: 'expedicao',
+        return_type_corrected_at: '2026-07-30T23:00:00.000Z',
+      },
+    });
+
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /ocorrências/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /ID 8356/i }));
+    fireEvent.click(screen.getByRole('button', { name: /corrigir tipo/i }));
+    fireEvent.change(screen.getByLabelText('Corrigir tipo da ocorrência 8356'), {
+      target: { value: 'partial' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /salvar correção/i }));
+
+    await waitFor(() => {
+      expect(mockedAxios.patch).toHaveBeenCalledWith(
+        expect.stringContaining('/return-data/occurrences/8356/return-type'),
+        { return_type: 'partial' },
+      );
+    });
+    expect(await screen.findByText('Corrigido pela operação')).toBeInTheDocument();
+    expect(screen.getByText(/Importado como Não classificado/)).toBeInTheDocument();
+  });
 });

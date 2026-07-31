@@ -226,6 +226,21 @@ type SurplusInversionAllocationDraft = SurplusInversionDraft & {
   quantity: number;
 };
 type ReturnType = 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break';
+const registryTypeToReturnType = (value?: string | null): ReturnType | null => {
+  if (value === 'collection') return 'coleta';
+  if (value === 'surplus') return 'sobra';
+  if (value === 'total' || value === 'partial' || value === 'weight_break') return value;
+  return null;
+};
+const getRegistryTypeLabel = (value?: string | null) => {
+  const normalized = registryTypeToReturnType(value);
+  if (normalized === 'total') return 'Total';
+  if (normalized === 'partial') return 'Parcial';
+  if (normalized === 'coleta') return 'Coleta';
+  if (normalized === 'weight_break') return 'Quebra de peso';
+  if (normalized === 'sobra') return 'Sobra';
+  return 'Não classificado';
+};
 type ReturnDraftNote = {
   invoice_number: string;
   return_type: ReturnType;
@@ -1892,6 +1907,25 @@ function ReturnsOccurrences() {
       return;
     }
 
+    if (effectiveReturnType !== 'sobra' && returnDataLookup?.consolidated_status === 'approved') {
+      const registeredTypes = Array.from(new Set(
+        returnDataLookup.occurrences
+          .filter((occurrence) => occurrence.approval_status === 'approved')
+          .map((occurrence) => registryTypeToReturnType(
+            occurrence.effective_return_type || occurrence.inferred_return_type,
+          ))
+          .filter((value): value is ReturnType => Boolean(value)),
+      ));
+      if (registeredTypes.length && !registeredTypes.includes(effectiveReturnType)) {
+        alert(
+          `O tipo selecionado (${getReturnTypeLabel(effectiveReturnType)}) não é compatível com a base de devoluções `
+          + `(${registeredTypes.map(getReturnTypeLabel).join(' ou ')}). `
+          + 'Selecione o tipo correto ou corrija a classificação na página Base de devoluções.',
+        );
+        return;
+      }
+    }
+
     const noteItems = getCurrentNoteItems();
     if (!noteItems.length) {
       if (effectiveReturnType === 'partial' || effectiveReturnType === 'coleta' || effectiveReturnType === 'weight_break') {
@@ -3436,6 +3470,13 @@ function ReturnsOccurrences() {
                                   <p className="mt-1"><strong>Justificativa:</strong> {registryOccurrence.return_justification || '-'}</p>
                                   <p className="mt-1"><strong>Aprovação:</strong> {registryOccurrence.approval_justification || '-'}</p>
                                   <p className="mt-1"><strong>Transportadora:</strong> {registryOccurrence.carrier_name || '-'}</p>
+                                  <p className="mt-1">
+                                    <strong>Tipo:</strong>{' '}
+                                    {getRegistryTypeLabel(
+                                      registryOccurrence.effective_return_type || registryOccurrence.inferred_return_type,
+                                    )}
+                                    {registryOccurrence.operational_return_type ? ' (corrigido pela operação)' : ''}
+                                  </p>
                                   <div className="mt-1">
                                     <strong>Produtos:</strong>
                                     {registryOccurrence.items.length ? registryOccurrence.items.map((item, index) => (

@@ -31,6 +31,12 @@ export type ReturnRegistryOccurrence = {
   redelivery_carrier_name: string | null;
   inferred_return_type: ReturnDataType;
   return_type_source: 'inferred' | 'unclassified' | string;
+  operational_return_type: Exclude<ReturnDataType, 'unclassified'> | null;
+  effective_return_type: ReturnDataType;
+  effective_return_type_source: 'operational_correction' | 'inferred' | 'unclassified' | string;
+  return_type_corrected_at: string | null;
+  return_type_corrected_by_user_id: number | null;
+  return_type_corrected_by_username: string | null;
   first_seen_at: string;
   last_seen_at: string;
   linked_batch_code: string | null;
@@ -206,6 +212,17 @@ export const getReturnDataByInvoice = async (invoiceNumber: string) => {
 
 export const getReturnRegistryOccurrenceHistory = async (id: number) => {
   const { data } = await axios.get(`${API_URL}/return-data/occurrences/${id}/history`);
+  return data;
+};
+
+export const updateReturnRegistryOccurrenceType = async (
+  id: number,
+  returnType: ReturnDataType,
+) => {
+  const { data } = await axios.patch<ReturnRegistryOccurrence>(
+    `${API_URL}/return-data/occurrences/${id}/return-type`,
+    { return_type: returnType },
+  );
   return data;
 };
 

@@ -126,6 +126,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
   afterEach(() => {
     localStorage.clear();
+    jest.restoreAllMocks();
   });
 
   it('permite pesquisar um lote diretamente pelo ID', async () => {
@@ -500,7 +501,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     });
   });
 
-  it('impede tipo incompatível com a classificação aprovada da base', async () => {
+  it('preenche pela base e confirma antes de aceitar tipo divergente', async () => {
     const defaultGet = mockedAxios.get.getMockImplementation();
     mockedAxios.get.mockImplementation(((url: string) => {
       if (url.includes('/return-data/occurrences/by-invoice/1694432')) {
@@ -529,6 +530,9 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     }) as any);
 
     renderPage();
+    const confirmSpy = jest.spyOn(window, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValue(true);
     await openNewReturnModal();
     await fillTransportStep();
 
@@ -537,17 +541,29 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
     await continueAfterReturnLookup();
 
+    expect(screen.getByLabelText('Total')).toBeChecked();
+    expect(screen.getByTestId('return-type-base-match')).toHaveTextContent(
+      'Tipo Total preenchido automaticamente conforme a base de devoluções.',
+    );
     fireEvent.click(screen.getByLabelText('Parcial'));
-    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Total')).toBeChecked();
+
+    fireEvent.click(screen.getByLabelText('Parcial'));
+    const partialProduct = await screen.findByRole('combobox', { name: 'Produto da devolucao parcial' });
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining(
+      'A base de devoluções classifica esta NF como Total, mas você selecionou Parcial.',
+    ));
+    expect(screen.getByText(/O usuário confirmou que deseja manter essa diferença/)).toBeInTheDocument();
+    fireEvent.change(partialProduct, {
       target: { value: 'RV001899' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining(
-      'O tipo selecionado (Parcial) não é compatível com a base de devoluções (Total)',
-    ));
-    expect(screen.queryByText('NF 1694432', { selector: 'strong' })).not.toBeInTheDocument();
+    expect(await screen.findByText('NF 1694432', { selector: 'strong' })).toBeInTheDocument();
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+    confirmSpy.mockRestore();
   });
 
   it('exige confirmacao do alerta quando a NF nao existe na base de devolucoes', async () => {

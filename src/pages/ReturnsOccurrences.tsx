@@ -241,6 +241,14 @@ const getRegistryTypeLabel = (value?: string | null) => {
   if (normalized === 'sobra') return 'Sobra';
   return 'Não classificado';
 };
+const getApprovedRegistryReturnTypes = (lookup: InvoiceReturnDataLookup | null) => Array.from(new Set(
+  (lookup?.occurrences || [])
+    .filter((occurrence) => occurrence.approval_status === 'approved')
+    .map((occurrence) => registryTypeToReturnType(
+      occurrence.effective_return_type || occurrence.inferred_return_type,
+    ))
+    .filter((value): value is ReturnType => Boolean(value)),
+));
 type ReturnDraftNote = {
   invoice_number: string;
   return_type: ReturnType;
@@ -499,6 +507,7 @@ function ReturnsOccurrences() {
   const [showReturnDataDetails, setShowReturnDataDetails] = useState(false);
   const [returnDataLastUpdate, setReturnDataLastUpdate] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<ReturnType>('total');
+  const [returnTypeDivergenceAcknowledged, setReturnTypeDivergenceAcknowledged] = useState('');
   const [returnWizardStep, setReturnWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);
   const [returnNfCollectionLookupLoading, setReturnNfCollectionLookupLoading] = useState(false);
@@ -1471,16 +1480,27 @@ function ReturnsOccurrences() {
     setLeftoverInversionAllocations([]);
   }
 
-  function handleChangeReturnType(nextType: ReturnType) {
-    if (
-      isReturnNfCollection
-      && returnDanfe
-      && (nextType === 'total' || nextType === 'partial' || nextType === 'weight_break')
-    ) {
-      alert('Esta NF possui coleta solicitada pela Mar e Rio. O tipo foi travado automaticamente como Coleta.');
-      return;
-    }
+  const approvedRegistryReturnTypes = useMemo(
+    () => getApprovedRegistryReturnTypes(returnDataLookup),
+    [returnDataLookup],
+  );
+  const suggestedRegistryReturnType = approvedRegistryReturnTypes.length === 1
+    ? approvedRegistryReturnTypes[0]
+    : null;
+  const returnTypeDivergenceKey = suggestedRegistryReturnType && returnDanfe
+    ? `${returnDanfe.invoice_number}:${suggestedRegistryReturnType}:${returnType}`
+    : '';
+  const hasReturnTypeDivergence = Boolean(
+    suggestedRegistryReturnType
+    && returnType !== 'sobra'
+    && returnType !== suggestedRegistryReturnType,
+  );
+  const isReturnTypeDivergenceAcknowledged = Boolean(
+    hasReturnTypeDivergence
+    && returnTypeDivergenceAcknowledged === returnTypeDivergenceKey,
+  );
 
+  function applyReturnType(nextType: ReturnType) {
     setReturnType(nextType);
 
     if (nextType === 'sobra') {
@@ -1512,6 +1532,42 @@ function ReturnsOccurrences() {
     setLeftoverProductType('');
     setLeftoverLoadNumber('');
     resetSurplusInversionBuilder();
+  }
+
+  async function handleChangeReturnType(nextType: ReturnType) {
+    if (
+      isReturnNfCollection
+      && returnDanfe
+      && (nextType === 'total' || nextType === 'partial' || nextType === 'weight_break')
+    ) {
+      alert('Esta NF possui coleta solicitada pela Mar e Rio. O tipo foi travado automaticamente como Coleta.');
+      return;
+    }
+
+    if (
+      nextType !== 'sobra'
+      && suggestedRegistryReturnType
+      && nextType !== suggestedRegistryReturnType
+      && returnDanfe
+    ) {
+      const divergenceKey = `${returnDanfe.invoice_number}:${suggestedRegistryReturnType}:${nextType}`;
+      const confirmed = await showConfirm(
+        `A base de devoluções classifica esta NF como ${getRegistryTypeLabel(suggestedRegistryReturnType)}, `
+        + `mas você selecionou ${getRegistryTypeLabel(nextType)}.\n\n`
+        + 'A base pode estar incorreta, mas esta escolha ficará divergente. Deseja continuar mesmo assim?',
+        {
+          title: 'Confirmar divergência de tipo',
+          confirmLabel: 'Sim, usar tipo diferente',
+          cancelLabel: 'Manter tipo da base',
+        },
+      );
+      if (!confirmed) return;
+      setReturnTypeDivergenceAcknowledged(divergenceKey);
+    } else {
+      setReturnTypeDivergenceAcknowledged('');
+    }
+
+    applyReturnType(nextType);
   }
 
   async function handleSearchSurplusInversionNf() {
@@ -1669,7 +1725,13 @@ function ReturnsOccurrences() {
       setPartialQuantityInput('1');
 
       const normalizedInvoice = String(data.invoice_number || returnNf.trim()).trim();
-      await loadReturnRegistryLookup(normalizedInvoice);
+      const registryLookup = await loadReturnRegistryLookup(normalizedInvoice);
+      const registryTypes = getApprovedRegistryReturnTypes(registryLookup);
+      const suggestedType = registryTypes.length === 1 ? registryTypes[0] : null;
+      setReturnTypeDivergenceAcknowledged('');
+      if (suggestedType && suggestedType !== 'sobra') {
+        applyReturnType(suggestedType);
+      }
       try {
         const isCollectionInvoice = await hasActionQueueCollectionForInvoice(normalizedInvoice);
         setIsReturnNfCollection(isCollectionInvoice);
@@ -1702,9 +1764,11 @@ function ReturnsOccurrences() {
       }
       setReturnDataLookup(lookup);
       setReturnDataLastUpdate(lookup.latest_base_update || returnDataLastUpdate);
+      return lookup;
     } catch (error) {
-      if (handleAuthenticationError(error)) return;
+      if (handleAuthenticationError(error)) return null;
       setReturnDataLookupError('Não foi possível consultar esta NF na base de devoluções. O lote pode continuar normalmente.');
+      return null;
     } finally {
       setReturnDataLookupLoading(false);
     }
@@ -1908,21 +1972,21 @@ function ReturnsOccurrences() {
     }
 
     if (effectiveReturnType !== 'sobra' && returnDataLookup?.consolidated_status === 'approved') {
-      const registeredTypes = Array.from(new Set(
-        returnDataLookup.occurrences
-          .filter((occurrence) => occurrence.approval_status === 'approved')
-          .map((occurrence) => registryTypeToReturnType(
-            occurrence.effective_return_type || occurrence.inferred_return_type,
-          ))
-          .filter((value): value is ReturnType => Boolean(value)),
-      ));
+      const registeredTypes = getApprovedRegistryReturnTypes(returnDataLookup);
       if (registeredTypes.length && !registeredTypes.includes(effectiveReturnType)) {
-        alert(
-          `O tipo selecionado (${getReturnTypeLabel(effectiveReturnType)}) não é compatível com a base de devoluções `
-          + `(${registeredTypes.map(getReturnTypeLabel).join(' ou ')}). `
-          + 'Selecione o tipo correto ou corrija a classificação na página Base de devoluções.',
+        const divergenceKey = `${returnDanfe?.invoice_number}:${registeredTypes.join(',')}:${effectiveReturnType}`;
+        const confirmed = returnTypeDivergenceAcknowledged === divergenceKey || await showConfirm(
+          `A base de devoluções classifica esta NF como ${registeredTypes.map(getReturnTypeLabel).join(' ou ')}, `
+          + `mas você selecionou ${getReturnTypeLabel(effectiveReturnType)}.\n\n`
+          + 'A base pode estar incorreta. Confirma que deseja adicionar a NF com o tipo divergente?',
+          {
+            title: 'Divergência com a base de devoluções',
+            confirmLabel: 'Confirmar tipo diferente',
+            cancelLabel: 'Revisar preenchimento',
+          },
         );
-        return;
+        if (!confirmed) return;
+        setReturnTypeDivergenceAcknowledged(divergenceKey);
       }
     }
 
@@ -2121,6 +2185,7 @@ function ReturnsOccurrences() {
     setReturnDataLookupLoading(false);
     setShowReturnDataDetails(false);
     setReturnType('total');
+    setReturnTypeDivergenceAcknowledged('');
     setIsReturnNfCollection(false);
     setReturnNfCollectionLookupLoading(false);
     setPartialItems([]);
@@ -3442,6 +3507,15 @@ function ReturnsOccurrences() {
                                   ? `Base atualizada em ${formatReturnDataUpdate(returnDataLookup.latest_base_update)}`
                                   : 'Base ainda não importada'}
                               </p>
+                              {approvedRegistryReturnTypes.length === 1 ? (
+                                <p className="mt-1 text-xs font-semibold">
+                                  Tipo sugerido pela base: {getReturnTypeLabel(approvedRegistryReturnTypes[0])}
+                                </p>
+                              ) : approvedRegistryReturnTypes.length > 1 ? (
+                                <p className="mt-1 text-xs font-semibold">
+                                  A base possui mais de um tipo aprovado: {approvedRegistryReturnTypes.map(getReturnTypeLabel).join(' e ')}
+                                </p>
+                              ) : null}
                             </div>
                             {returnDataLookup.occurrences.length ? (
                               <button
@@ -3522,6 +3596,28 @@ function ReturnsOccurrences() {
                           Coleta solicitada identificada para esta NF. Tipo ajustado automaticamente para Coleta.
                         </InfoText>
                       )}
+                      {returnDanfe && returnType !== 'sobra' && suggestedRegistryReturnType && !hasReturnTypeDivergence ? (
+                        <div
+                          data-testid="return-type-base-match"
+                          className="mt-3 rounded-lg border semantic-panel-success px-3 py-2 text-sm"
+                        >
+                          Tipo <strong>{getReturnTypeLabel(returnType)}</strong> preenchido automaticamente conforme a base de devoluções.
+                        </div>
+                      ) : null}
+                      {returnDanfe && returnType !== 'sobra' && hasReturnTypeDivergence ? (
+                        <div
+                          data-testid="return-type-divergence-warning"
+                          className="mt-3 rounded-lg border semantic-panel-warning px-3 py-2 text-sm"
+                        >
+                          <strong>Divergência de tipo:</strong> a base informa {getReturnTypeLabel(suggestedRegistryReturnType as ReturnType)}, mas o preenchimento está como {getReturnTypeLabel(returnType)}.
+                          {isReturnTypeDivergenceAcknowledged ? ' O usuário confirmou que deseja manter essa diferença.' : ' A confirmação será solicitada antes de continuar.'}
+                        </div>
+                      ) : null}
+                      {returnDanfe && returnType !== 'sobra' && approvedRegistryReturnTypes.length > 1 ? (
+                        <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-2 text-sm">
+                          A base possui classificações aprovadas diferentes ({approvedRegistryReturnTypes.map(getReturnTypeLabel).join(' e ')}). Revise as ocorrências antes de concluir.
+                        </div>
+                      ) : null}
 
                       {(returnType === 'partial' || returnType === 'coleta' || returnType === 'weight_break') && returnDanfe && (
                         <>

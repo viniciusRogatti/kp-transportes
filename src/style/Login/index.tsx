@@ -1,5 +1,14 @@
-import type { DetailedHTMLProps, HTMLAttributes, InputHTMLAttributes, ButtonHTMLAttributes } from 'react';
-import VolksImage from '../../assets/images/volks.png';
+import type {
+  ButtonHTMLAttributes,
+  CSSProperties,
+  DetailedHTMLProps,
+  FormHTMLAttributes,
+  HTMLAttributes,
+  InputHTMLAttributes,
+} from 'react';
+import VolvoFallback from '../../assets/images/Volvo.png';
+import VolvoLarge from '../../assets/images/volvo-login.webp';
+import VolvoSmall from '../../assets/images/volvo-login-720.webp';
 import { cn } from '../../lib/cn';
 
 type SectionProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement>;
@@ -9,22 +18,18 @@ type SpanProps = DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElem
 type H1Props = DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>;
 type H2Props = DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>;
 type PProps = DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>;
+type FormProps = DetailedHTMLProps<FormHTMLAttributes<HTMLFormElement>, HTMLFormElement>;
 type InputProps = InputHTMLAttributes<HTMLInputElement>;
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
 export function Container({ className, children, ...props }: SectionProps) {
   return (
     <section
-      className={cn(
-        'relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden bg-bg px-s4 py-s5',
-        className,
-      )}
+      className={cn('login-scene relative min-h-[100svh] w-full overflow-hidden bg-[var(--login-background)] text-[var(--login-text-primary)]', className)}
       {...props}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-accent"
-      />
+      <div aria-hidden="true" className="login-scene-grid pointer-events-none absolute inset-0" />
+      <div aria-hidden="true" className="login-scene-glow pointer-events-none absolute inset-0" />
       {children}
     </section>
   );
@@ -33,71 +38,54 @@ export function Container({ className, children, ...props }: SectionProps) {
 export function LoginCard({ className, ...props }: DivProps) {
   return (
     <div
-      className={cn(
-        'relative z-[1] grid min-h-[640px] w-[min(1080px,94vw)] grid-cols-[1.08fr_0.92fr] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-3)] max-[950px]:min-h-0 max-[950px]:w-[min(560px,94vw)] max-[950px]:grid-cols-1',
-        className,
-      )}
+      className={cn('login-stage login-panel-enter relative mx-auto min-h-[100svh] w-full max-w-[1800px]', className)}
       {...props}
     />
   );
 }
 
-export function HeroPanel({ className, ...props }: AsideProps) {
+export function HeroPanel({ className, children, ...props }: AsideProps) {
   return (
-    <aside
-      className={cn(
-        'relative flex min-h-[420px] flex-col justify-end gap-s4 border-r border-border p-s8 max-[950px]:min-h-[300px] max-[950px]:border-b max-[950px]:border-r-0 max-[950px]:p-s6 max-[560px]:min-h-[260px] max-[560px]:p-s5',
-        className,
-      )}
-      style={{
-        backgroundImage: `linear-gradient(180deg, rgba(7, 15, 28, 0.12) 0%, rgba(7, 15, 28, 0.92) 82%), url(${VolksImage})`,
-        backgroundPosition: 'center',
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat',
-      }}
-      {...props}
-    >
-      {props.children}
+    <aside className={cn('login-hero absolute inset-0 isolate overflow-hidden', className)} {...props}>
+      <picture
+        className="login-photo absolute -z-20 bg-[#07111f]"
+        style={{
+          '--login-photo-large': `url(${VolvoLarge})`,
+          '--login-photo-small': `url(${VolvoSmall})`,
+        } as CSSProperties}
+      >
+        <source type="image/webp" srcSet={`${VolvoSmall} 720w, ${VolvoLarge} 1086w`} sizes="(max-width: 760px) 100vw, 74vw" />
+        <img
+          src={VolvoFallback}
+          alt="Caminhão Volvo da frota em ambiente operacional"
+          className="login-photo-foreground h-full object-cover"
+          loading="eager"
+          decoding="async"
+          onError={(event) => { event.currentTarget.style.display = 'none'; }}
+        />
+      </picture>
+      <div aria-hidden="true" className="login-photo-tone absolute -z-10" />
+      <div aria-hidden="true" className="login-photo-edge absolute -z-[5]" />
+      {children}
     </aside>
   );
 }
 
 export function HeroBadge({ className, ...props }: SpanProps) {
-  return (
-    <span
-      className={cn(
-        'relative z-[1] w-fit rounded-sm border border-blue-300/40 bg-[#0f172a] px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-[0.12em] text-blue-100',
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <span className={cn('login-kicker w-fit text-[0.66rem] font-bold uppercase tracking-[0.2em] text-blue-200', className)} {...props} />;
 }
 
 export function HeroTitle({ className, children, ...props }: H1Props) {
-  return (
-    <h1
-      className={cn('relative z-[1] block max-w-[440px] text-[clamp(1.6rem,1.25rem+1.2vw,2.45rem)] leading-[1.15] text-white', className)}
-      {...props}
-    >
-      {children}
-    </h1>
-  );
+  return <h1 className={cn('block max-w-[690px] text-[clamp(2.15rem,1.15rem+3.1vw,5rem)] font-bold leading-[0.98] tracking-[-0.05em] text-white', className)} {...props}>{children}</h1>;
 }
 
 export function HeroDescription({ className, ...props }: PProps) {
-  return <p className={cn('relative z-[1] max-w-[420px] text-[0.95rem] leading-[1.6] text-slate-200', className)} {...props} />;
+  return <p className={cn('max-w-[570px] text-[0.92rem] leading-7 text-slate-200 sm:text-base', className)} {...props} />;
 }
 
 export function BoxLogin({ className, ...props }: DivProps) {
   return (
-    <div
-      className={cn(
-        'relative flex min-h-full w-full flex-col justify-center bg-surface p-s8 max-[950px]:min-h-0 max-[950px]:p-s6 max-[560px]:p-s5',
-        className,
-      )}
-      {...props}
-    />
+    <div className={cn('login-document relative z-30 flex w-[min(430px,calc(100vw-32px))] flex-col justify-center px-9 py-10 text-[var(--login-text-primary)]', className)} {...props} />
   );
 }
 
@@ -105,7 +93,7 @@ export function ButtonLogin({ className, ...props }: ButtonProps) {
   return (
     <button
       className={cn(
-        'h-12 w-full cursor-pointer rounded-md border border-accent-strong bg-accent text-sm font-bold text-white shadow-soft transition-colors duration-200 hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
+        'login-submit inline-flex h-12 w-full items-center justify-center gap-2 rounded-md border border-transparent bg-[var(--login-accent)] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(29,78,216,0.24)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--login-accent-hover)] hover:shadow-[0_14px_30px_rgba(29,78,216,0.3)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none motion-reduce:transform-none',
         className,
       )}
       {...props}
@@ -114,14 +102,14 @@ export function ButtonLogin({ className, ...props }: ButtonProps) {
 }
 
 export function BoxInput({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-full flex-col gap-s2 [&_label]:mt-1 [&_label]:text-xs [&_label]:font-semibold [&_label]:uppercase [&_label]:tracking-wide [&_label]:text-muted', className)} {...props} />;
+  return <div className={cn('flex w-full flex-col gap-2 [&_label]:mt-1 [&_label]:text-xs [&_label]:font-bold [&_label]:tracking-wide [&_label]:text-[var(--login-text-primary)]', className)} {...props} />;
 }
 
 export function InputLogin({ className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        'h-12 w-full rounded-md border border-border bg-card px-4 text-text outline-none transition placeholder:text-muted focus:border-accent focus:shadow-[0_0_0_3px_rgba(37,99,235,0.18)]',
+        'login-input h-12 w-full rounded-md border border-[var(--login-input-border)] bg-[var(--login-input-background)] px-4 text-[var(--login-text-primary)] caret-[var(--login-accent)] outline-none transition placeholder:text-[var(--login-text-secondary)] focus:border-[var(--login-accent)] focus:shadow-[0_0_0_4px_var(--login-input-focus)] disabled:cursor-not-allowed disabled:opacity-65',
         className,
       )}
       {...props}
@@ -130,45 +118,42 @@ export function InputLogin({ className, ...props }: InputProps) {
 }
 
 export function BoxPassword({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex w-full [&_svg]:absolute [&_svg]:right-[14px] [&_svg]:top-1/2 [&_svg]:-translate-y-1/2 [&_svg]:cursor-pointer [&_svg]:text-muted', className)} {...props} />;
+  return <div className={cn('relative flex w-full', className)} {...props} />;
 }
 
-export function FormHeader({ className, ...props }: DivProps) {
-  return <div className={cn('mb-s6 flex flex-col gap-s2', className)} {...props} />;
-}
-
-export function BrandName({ className, ...props }: SpanProps) {
+export function PasswordToggle({ className, ...props }: ButtonProps) {
   return (
-    <span
-      className={cn(
-        'w-fit border-l-4 border-accent pl-3 text-[0.75rem] font-bold uppercase tracking-[0.12em] text-text-accent',
-        className,
-      )}
+    <button
+      className={cn('absolute right-1.5 top-1/2 z-[1] inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-[var(--login-text-secondary)] transition hover:bg-surface-2 hover:text-[var(--login-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--login-accent)]', className)}
       {...props}
     />
   );
 }
 
+export function FormHeader({ className, ...props }: DivProps) {
+  return <div className={cn('mb-6 flex flex-col gap-2', className)} {...props} />;
+}
+
+export function BrandName({ className, ...props }: SpanProps) {
+  return <span className={cn('text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--login-accent)]', className)} {...props} />;
+}
+
 export function FormTitle({ className, children, ...props }: H2Props) {
-  return (
-    <h2 className={cn('block text-[clamp(1.4rem,1.1rem+0.9vw,2rem)] leading-[1.15] text-text', className)} {...props}>
-      {children}
-    </h2>
-  );
+  return <h2 className={cn('block text-[clamp(1.55rem,1.25rem+0.7vw,1.95rem)] font-bold leading-tight tracking-[-0.03em] text-[var(--login-text-primary)]', className)} {...props}>{children}</h2>;
 }
 
 export function FormSubtitle({ className, ...props }: PProps) {
-  return <p className={cn('max-w-[340px] text-[0.93rem] leading-[1.5] text-muted', className)} {...props} />;
+  return <p className={cn('max-w-[390px] text-[0.86rem] leading-6 text-[var(--login-text-secondary)]', className)} {...props} />;
 }
 
-export function LoginForm({ className, ...props }: DivProps) {
-  return <div className={cn('flex w-[min(100%,340px)] flex-col gap-s4', className)} {...props} />;
+export function LoginForm({ className, ...props }: FormProps) {
+  return <form className={cn('flex w-full flex-col gap-4', className)} {...props} />;
 }
 
-export function ErrorText({ className, ...props }: SpanProps) {
-  return <span className={cn('mt-[2px] rounded-sm border semantic-panel-danger px-3 py-2 text-[0.84rem] font-semibold', className)} {...props} />;
+export function ErrorText({ className, ...props }: PProps) {
+  return <p role="alert" aria-live="assertive" className={cn('mt-1 rounded-md border border-red-400/45 bg-red-500/10 px-3 py-2.5 text-[0.82rem] font-semibold leading-5 text-[var(--login-error)]', className)} {...props} />;
 }
 
 export function SupportText({ className, ...props }: SpanProps) {
-  return <span className={cn('border-t border-border pt-4 text-center text-[0.78rem] text-muted', className)} {...props} />;
+  return <span className={cn('border-t border-[var(--login-border)] pt-4 text-center text-[0.73rem] leading-5 text-[var(--login-text-secondary)]', className)} {...props} />;
 }

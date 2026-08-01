@@ -36,7 +36,7 @@ const waitForTurnstile = (timeoutMs = 10000): Promise<void> => (
       }
 
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error('Turnstile indisponível no navegador.'));
+        reject(new Error('Verificação de segurança indisponível.'));
         return;
       }
 
@@ -70,7 +70,7 @@ const loadTurnstileScript = (): Promise<void> => {
       resolve();
     };
 
-    const onError = () => reject(new Error('Falha ao carregar script do Turnstile.'));
+    const onError = () => reject(new Error('Não foi possível carregar a verificação de segurança.'));
 
     if (existing) {
       if (!existing.id) existing.id = TURNSTILE_SCRIPT_ID;
@@ -144,7 +144,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
     onReadyRef.current?.(false);
 
     if (!siteKey) {
-      onErrorRef.current?.('Site key do Turnstile não configurada.');
+      onErrorRef.current?.('A verificação de segurança está indisponível. Contate o suporte.');
       return () => {
         cancelled = true;
       };

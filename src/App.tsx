@@ -4,11 +4,8 @@ import GlobalAlertHost from './components/ui/GlobalAlertHost';
 import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
 import {
-  ADMIN_MASTER_PERMISSIONS,
-  CONTROL_TOWER_PERMISSION,
-  TRANSPORT_INTERNAL_PERMISSIONS,
-  USER_ALLOWED_PERMISSIONS,
   getDefaultRouteByPermission,
+  getRoutePermissions,
 } from './utils/permissions';
 import axios from 'axios';
 import { lazy, Suspense, useEffect } from 'react';
@@ -16,6 +13,7 @@ import { useLocation } from 'react-router-dom';
 import { isAuthenticationError, redirectToLoginBecauseSessionExpired } from './utils/authErrorHandler';
 import useSessionInactivityLogout from './hooks/useSessionInactivityLogout';
 import { clearLocalSession } from './utils/logoutSession';
+import { TutorialProvider } from './tutorial/TutorialContext';
 
 const Home = lazy(() => import('./pages/Home'));
 const TodayInvoices = lazy(() => import('./pages/TodayInvoices'));
@@ -132,34 +130,36 @@ function App() {
   return (
     <div className={isControlTowerRoute ? undefined : 'professional-ui'}>
       <RealtimeNotificationsProvider token={realtimeToken}>
-        <GlobalAlertHost />
-        <Suspense fallback={<RouteFallback />}>
-          <Routes>
+        <TutorialProvider>
+          <GlobalAlertHost />
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
           <Route path="/" element={<Login />} />
-          <Route path="/home" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><Home /></ProtectedRoute>} />
-          <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><TodayInvoices /></ProtectedRoute>} />
-          <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Invoices /></ProtectedRoute>} />
-          <Route path="/invoice-journey" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><InvoiceJourney /></ProtectedRoute>} />
-          <Route path="/invoices/:invoiceNumber/journey" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><InvoiceJourney /></ProtectedRoute>} />
-          <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><OperationalPendencies /></ProtectedRoute>} />
-          <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><AlertsPage /></ProtectedRoute>} />
-          <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><DeliveryMonitoring /></ProtectedRoute>} />
-          <Route path="/receipt-bag-closing" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><ReceiptBagClosing /></ProtectedRoute>} />
-          <Route path="/products" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Products /></ProtectedRoute>} />
-          <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS]}><Customers /></ProtectedRoute>} />
-          <Route path="/trips" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><RoutePlanning /></ProtectedRoute>} />
-          <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><FileUploadPage /></ProtectedRoute>} />
-          <Route path="/cte-management" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS]}><CteManagement /></ProtectedRoute>} />
-          <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnsOccurrences /></ProtectedRoute>} />
-          <Route path="/returns-occurrences/base" element={<ProtectedRoute allowedPermissions={[...USER_ALLOWED_PERMISSIONS, CONTROL_TOWER_PERMISSION]}><ReturnDataRegistry /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute allowedPermissions={[...ADMIN_MASTER_PERMISSIONS]}><UserManagement /></ProtectedRoute>} />
-          <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={['master']}><UserSessions /></ProtectedRoute>} />
-          <Route path="/whatsapp-bot/connect" element={<ProtectedRoute allowedPermissions={['master']}><WhatsappBotConnection /></ProtectedRoute>} />
-          <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={[CONTROL_TOWER_PERMISSION, 'admin', 'master', 'expedicao']}><ControlTowerCollections /></ProtectedRoute>} />
+          <Route path="/home" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/home')]}><Home /></ProtectedRoute>} />
+          <Route path="/todayInvoices" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/todayInvoices')]}><TodayInvoices /></ProtectedRoute>} />
+          <Route path="/invoices" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/invoices')]}><Invoices /></ProtectedRoute>} />
+          <Route path="/invoice-journey" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/invoice-journey')]}><InvoiceJourney /></ProtectedRoute>} />
+          <Route path="/invoices/:invoiceNumber/journey" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/invoices/:invoiceNumber/journey')]}><InvoiceJourney /></ProtectedRoute>} />
+          <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/operational-pendencies')]}><OperationalPendencies /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/alerts')]}><AlertsPage /></ProtectedRoute>} />
+          <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/delivery-monitoring')]}><DeliveryMonitoring /></ProtectedRoute>} />
+          <Route path="/receipt-bag-closing" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/receipt-bag-closing')]}><ReceiptBagClosing /></ProtectedRoute>} />
+          <Route path="/products" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/products')]}><Products /></ProtectedRoute>} />
+          <Route path="/routePlanning" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/routePlanning')]}><RoutePlanning /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/customers')]}><Customers /></ProtectedRoute>} />
+          <Route path="/trips" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/trips')]}><RoutePlanning /></ProtectedRoute>} />
+          <Route path="/uploadFiles" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/uploadFiles')]}><FileUploadPage /></ProtectedRoute>} />
+          <Route path="/cte-management" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/cte-management')]}><CteManagement /></ProtectedRoute>} />
+          <Route path="/returns-occurrences" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/returns-occurrences')]}><ReturnsOccurrences /></ProtectedRoute>} />
+          <Route path="/returns-occurrences/base" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/returns-occurrences/base')]}><ReturnDataRegistry /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/users')]}><UserManagement /></ProtectedRoute>} />
+          <Route path="/user-sessions" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/user-sessions')]}><UserSessions /></ProtectedRoute>} />
+          <Route path="/whatsapp-bot/connect" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/whatsapp-bot/connect')]}><WhatsappBotConnection /></ProtectedRoute>} />
+          <Route path="/control-tower/coletas" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/control-tower/coletas')]}><ControlTowerCollections /></ProtectedRoute>} />
           <Route path="*" element={<Login />} />
-          </Routes>
-        </Suspense>
+            </Routes>
+          </Suspense>
+        </TutorialProvider>
       </RealtimeNotificationsProvider>
     </div>
   );

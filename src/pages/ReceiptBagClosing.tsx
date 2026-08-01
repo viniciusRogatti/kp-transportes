@@ -455,7 +455,7 @@ function ReceiptBagClosing() {
       <Header />
       <Container>
         <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
-          <section className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <section data-tutorial="bag-page-intro" className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-600">Controle físico</p>
               <h1 className="mt-1 text-3xl font-black text-text">Fechamento de Canhotos</h1>
@@ -464,7 +464,7 @@ function ReceiptBagClosing() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
+              <label data-tutorial="bag-date-filter" className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
                 <CalendarDays className="h-4 w-4 text-muted" />
                 <input type="date" min={data?.operation_start_date || '2026-08-01'} value={date} onChange={(event) => setDate(event.target.value)} className="bg-transparent outline-none" />
               </label>
@@ -485,9 +485,9 @@ function ReceiptBagClosing() {
             <SummaryCard label="Divergentes" value={data?.summary.divergent_bags || 0} icon={<Undo2 className="h-5 w-5" />} tone="amber" />
           </section>
 
-          <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <section data-tutorial="bag-list" className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap gap-2">
+              <div data-tutorial="bag-status-filters" className="flex flex-wrap gap-2">
                 {([['pending', 'Pendentes'], ['overdue', 'Atrasados'], ['completed', 'Conferidos'], ['all', 'Todos']] as Array<[ViewFilter, string]>).map(([key, label]) => (
                   <FilterButton key={key} active={viewFilter === key} onClick={() => setViewFilter(key)}>{label}</FilterButton>
                 ))}

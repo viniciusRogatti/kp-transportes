@@ -5,6 +5,13 @@ import Header from '../components/Header';
 import { API_URL } from '../data';
 import { Container, FilterBar, FilterInput } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
+import {
+  dismissTutorialProgressAdmin,
+  listTutorialProgressAdmin,
+  resetTutorialProgressAdmin,
+  TutorialAdminRow,
+} from '../services/tutorialProgressService';
+import { getTutorialModulesForPermission } from '../tutorial/tutorialConfig';
 
 type UserRow = {
   id: number;
@@ -31,9 +38,19 @@ const PERMISSION_LABELS: Record<string, string> = {
   control_tower: 'Torre de Controle',
 };
 
+const TUTORIAL_STATUS_LABELS: Record<string, string> = {
+  not_started: 'Não iniciado',
+  in_progress: 'Em andamento',
+  completed: 'Concluído',
+  skipped: 'Pulado',
+  dismissed_by_admin: 'Dispensado',
+};
+
 function UserManagement() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [tutorialProgress, setTutorialProgress] = useState<TutorialAdminRow[]>([]);
+  const [tutorialActionUserId, setTutorialActionUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -52,13 +69,52 @@ function UserManagement() {
     try {
       setLoading(true);
       setErrorMessage('');
-      const { data } = await axios.get<UserRow[]>(`${API_URL}/users`);
+      const [{ data }, progressRows] = await Promise.all([
+        axios.get<UserRow[]>(`${API_URL}/users`),
+        listTutorialProgressAdmin(),
+      ]);
       setUsers(Array.isArray(data) ? data : []);
+      setTutorialProgress(Array.isArray(progressRows) ? progressRows : []);
     } catch (error) {
       console.error(error);
       setErrorMessage('Não foi possível carregar os usuários.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  const progressByUser = useMemo(() => new Map(
+    tutorialProgress.map((item) => [Number(item.user_id), item]),
+  ), [tutorialProgress]);
+
+  async function resetTutorial(user: UserRow) {
+    if (!window.confirm(`Reiniciar o tutorial de ${user.name || user.username}?`)) return;
+    try {
+      setTutorialActionUserId(user.id);
+      setErrorMessage('');
+      await resetTutorialProgressAdmin(user.id);
+      setSuccessMessage('Tutorial reiniciado com sucesso.');
+      await loadUsers();
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || 'Não foi possível reiniciar o tutorial.');
+    } finally {
+      setTutorialActionUserId(null);
+    }
+  }
+
+  async function dismissTutorial(user: UserRow) {
+    const reason = window.prompt(`Justificativa para dispensar ${user.name || user.username} do tutorial:`)?.trim();
+    if (!reason) return;
+    try {
+      setTutorialActionUserId(user.id);
+      setErrorMessage('');
+      await dismissTutorialProgressAdmin(user.id, reason);
+      setSuccessMessage('Usuário dispensado do tutorial com sucesso.');
+      await loadUsers();
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.error || 'Não foi possível dispensar o tutorial.');
+    } finally {
+      setTutorialActionUserId(null);
     }
   }
 
@@ -243,27 +299,47 @@ function UserManagement() {
                   <th>Nome</th>
                   <th>Usuário</th>
                   <th>Permissão</th>
+                  <th>Tutorial</th>
                   <th>Criado em</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={4}>Carregando usuários...</td>
+                    <td colSpan={6}>Carregando usuários...</td>
                   </tr>
                 ) : !filteredUsers.length ? (
                   <tr>
-                    <td colSpan={4}>Nenhum usuário encontrado.</td>
+                    <td colSpan={6}>Nenhum usuário encontrado.</td>
                   </tr>
                 ) : (
-                  filteredUsers.map((user) => (
+                  filteredUsers.map((user) => {
+                    const tutorial = progressByUser.get(user.id);
+                    const status = tutorial?.status || 'not_started';
+                    const totalModules = getTutorialModulesForPermission(user.permission).length;
+                    const completedCount = tutorial?.completed_modules?.length || 0;
+                    return (
                     <tr key={`user-row-${user.id}`}>
                       <td>{user.name || '-'}</td>
                       <td>{user.username || '-'}</td>
                       <td>{PERMISSION_LABELS[user.permission] || user.permission}</td>
+                      <td>
+                        <span className="font-semibold">{TUTORIAL_STATUS_LABELS[status] || status}</span>
+                        {tutorial?.current_module ? <span className="block text-xs text-muted">{tutorial.current_module} · passo {tutorial.current_step + 1}</span> : null}
+                        <span className="block text-xs text-muted">{completedCount}/{totalModules} módulos</span>
+                        {tutorial?.last_interaction_at ? <span className="block text-xs text-muted">Atualizado em {new Date(tutorial.last_interaction_at).toLocaleString('pt-BR')}</span> : null}
+                      </td>
                       <td>{user.created_at ? new Date(user.created_at).toLocaleString('pt-BR') : '-'}</td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-50">Reiniciar</button>
+                          <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="rounded-md border border-amber-400 px-2 py-1 text-xs font-semibold text-amber-600 disabled:opacity-50">Dispensar</button>
+                        </div>
+                      </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

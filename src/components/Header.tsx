@@ -33,11 +33,10 @@ import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProv
 import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 import { logoutSession } from '../utils/logoutSession';
 import {
-  ADMIN_MASTER_PERMISSIONS,
-  TRANSPORT_INTERNAL_PERMISSIONS,
-  USER_ALLOWED_PERMISSIONS,
+  getRoutePermissions,
 } from '../utils/permissions';
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
+import TutorialHelpButton from '../tutorial/TutorialHelpButton';
 
 type NavItem = {
   to: string;
@@ -85,22 +84,22 @@ const formatNotificationTime = (value: string) => {
 };
 
 const navItems: NavItem[] = [
-  { to: '/home', label: 'Início', shortLabel: 'Início', icon: <Home className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/invoice-journey', label: 'Jornada da NF', shortLabel: 'Jornada', icon: <History className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/products', label: 'Produtos', shortLabel: 'Produtos', icon: <ClipboardList className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/delivery-monitoring', label: 'Monitoramento', shortLabel: 'Monitor', icon: <MapPinned className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS, 'control_tower'] },
-  { to: '/receipt-bag-closing', label: 'Fechamento de Canhotos', shortLabel: 'Canhotos', icon: <PackageCheck className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/operational-pendencies', label: 'Central de Tratativas', shortLabel: 'Tratativas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/alerts', label: 'Alertas', shortLabel: 'Alertas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...USER_ALLOWED_PERMISSIONS] },
-  { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/cte-management', label: 'CT-e', shortLabel: 'CT-e', icon: <FileText className="h-4 w-4" />, allowedPermissions: [...TRANSPORT_INTERNAL_PERMISSIONS] },
-  { to: '/users', label: 'Usuários', shortLabel: 'Usuários', icon: <UserPlus className="h-4 w-4" />, allowedPermissions: [...ADMIN_MASTER_PERMISSIONS] },
-  { to: '/user-sessions', label: 'Horários', shortLabel: 'Horários', icon: <Clock3 className="h-4 w-4" />, allowedPermissions: ['master'] },
+  { to: '/home', label: 'Início', shortLabel: 'Início', icon: <Home className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/home')] },
+  { to: '/todayInvoices', label: 'Notas do Dia', shortLabel: 'Hoje', icon: <CalendarDays className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/todayInvoices')] },
+  { to: '/invoices', label: 'Pesquisar Notas', shortLabel: 'Notas', icon: <Search className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/invoices')] },
+  { to: '/invoice-journey', label: 'Jornada da NF', shortLabel: 'Jornada', icon: <History className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/invoice-journey')] },
+  { to: '/products', label: 'Produtos', shortLabel: 'Produtos', icon: <ClipboardList className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/products')] },
+  { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/customers')] },
+  { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/routePlanning')] },
+  { to: '/delivery-monitoring', label: 'Monitoramento', shortLabel: 'Monitor', icon: <MapPinned className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/delivery-monitoring')] },
+  { to: '/receipt-bag-closing', label: 'Fechamento de Canhotos', shortLabel: 'Canhotos', icon: <PackageCheck className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/receipt-bag-closing')] },
+  { to: '/returns-occurrences', label: 'Devolução/Ocorrência', shortLabel: 'Dev/Ocorr', icon: <FileArchive className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/returns-occurrences')] },
+  { to: '/operational-pendencies', label: 'Central de Tratativas', shortLabel: 'Tratativas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/operational-pendencies')] },
+  { to: '/alerts', label: 'Alertas', shortLabel: 'Alertas', icon: <AlertTriangle className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/alerts')] },
+  { to: '/uploadFiles', label: 'Enviar XML', shortLabel: 'XML', icon: <Upload className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/uploadFiles')] },
+  { to: '/cte-management', label: 'CT-e', shortLabel: 'CT-e', icon: <FileText className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/cte-management')] },
+  { to: '/users', label: 'Usuários', shortLabel: 'Usuários', icon: <UserPlus className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/users')] },
+  { to: '/user-sessions', label: 'Horários', shortLabel: 'Horários', icon: <Clock3 className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/user-sessions')] },
 ];
 
 const routeTitles: Record<string, string> = {
@@ -289,7 +288,7 @@ function Header() {
           </button>
         </div>
 
-        <nav className="scrollbar-ui flex-1 space-y-1 overflow-auto pr-1">
+        <nav data-tutorial="app-navigation" className="scrollbar-ui flex-1 space-y-1 overflow-auto pr-1">
           {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.to;
             return (
@@ -336,6 +335,7 @@ function Header() {
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
+              data-tutorial="mobile-menu-button"
               onClick={() => setIsMobileDrawerOpen(true)}
               className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text md:hidden"
               aria-label="Abrir menu"
@@ -344,7 +344,7 @@ function Header() {
             </button>
             <div className="min-w-0">
               <p className="truncate text-[11px] uppercase tracking-wide text-muted">{currentSection} / {permissionLabel}</p>
-              <h1 className="truncate text-[1.05rem] font-semibold text-text">{currentTitle}</h1>
+              <h1 data-tutorial="app-page-title" className="truncate text-[1.05rem] font-semibold text-text">{currentTitle}</h1>
             </div>
           </div>
 
@@ -362,6 +362,7 @@ function Header() {
           </div>
 
           <div className="flex items-center gap-2">
+            <TutorialHelpButton compact />
             <ThemeToggleButton iconOnly />
             <button
               ref={notificationButtonRef}
@@ -532,7 +533,7 @@ function Header() {
 
         <ThemeToggleButton className="mb-3 w-full justify-center" />
 
-        <nav className="scrollbar-ui space-y-1 overflow-auto pb-3">
+        <nav data-tutorial="app-navigation" className="scrollbar-ui space-y-1 overflow-auto pb-3">
           {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.to;
             return (

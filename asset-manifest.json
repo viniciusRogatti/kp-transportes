@@ -1,7 +1,7 @@
 {
   "files": {
-    "main.css": "/kp-transportes/static/css/main.cfd30dc7.css",
-    "main.js": "/kp-transportes/static/js/main.42cce93a.js",
+    "main.css": "/kp-transportes/static/css/main.07857924.css",
+    "main.js": "/kp-transportes/static/js/main.248748a3.js",
     "static/js/50.ae039609.chunk.js": "/kp-transportes/static/js/50.ae039609.chunk.js",
     "static/js/356.3232454a.chunk.js": "/kp-transportes/static/js/356.3232454a.chunk.js",
     "static/js/221.d01899c4.chunk.js": "/kp-transportes/static/js/221.d01899c4.chunk.js",
@@ -38,8 +38,8 @@
     "static/media/volvo-login.webp": "/kp-transportes/static/media/volvo-login.cb949df9d5fccc5a6b39.webp",
     "static/media/volvo-login-720.webp": "/kp-transportes/static/media/volvo-login-720.0796545a26ecbc344240.webp",
     "index.html": "/kp-transportes/index.html",
-    "main.cfd30dc7.css.map": "/kp-transportes/static/css/main.cfd30dc7.css.map",
-    "main.42cce93a.js.map": "/kp-transportes/static/js/main.42cce93a.js.map",
+    "main.07857924.css.map": "/kp-transportes/static/css/main.07857924.css.map",
+    "main.248748a3.js.map": "/kp-transportes/static/js/main.248748a3.js.map",
     "50.ae039609.chunk.js.map": "/kp-transportes/static/js/50.ae039609.chunk.js.map",
     "356.3232454a.chunk.js.map": "/kp-transportes/static/js/356.3232454a.chunk.js.map",
     "221.d01899c4.chunk.js.map": "/kp-transportes/static/js/221.d01899c4.chunk.js.map",
@@ -74,7 +74,7 @@
     "216.60b35482.chunk.js.map": "/kp-transportes/static/js/216.60b35482.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.cfd30dc7.css",
-    "static/js/main.42cce93a.js"
+    "static/css/main.07857924.css",
+    "static/js/main.248748a3.js"
   ]
 }

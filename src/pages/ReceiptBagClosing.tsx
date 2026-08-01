@@ -205,9 +205,9 @@ function ReceiptBagClosing() {
     setMutating(true);
     setError('');
     try {
-      const bag = row.bag_id
-        ? await getReceiptBagClosing(row.bag_id)
-        : await startReceiptBagClosing(row.trip_id);
+      const bag = row.status === 'not_started'
+        ? await startReceiptBagClosing(row.trip_id)
+        : await getReceiptBagClosing(row.bag_id as number);
       setActiveBag(bag);
       setSelectedItemId(bag.items.find((item) => item.status === 'pending')?.id || bag.items[0]?.id || null);
       setItemFilter('all');
@@ -402,7 +402,13 @@ function ReceiptBagClosing() {
         setMutating(true);
         bag = await markRemainingReceiptBagItemsAbsent(bag.id);
       }
-      applyBag(await finishReceiptBagClosing(bag.id), 'Conferência finalizada.');
+      const finishedBag = await finishReceiptBagClosing(bag.id);
+      applyBag(
+        finishedBag,
+        finishedBag.status === 'completed_with_pending'
+          ? 'Conferência registrada com divergências; o malote continua na fila.'
+          : 'Conferência finalizada.',
+      );
       void loadList(true);
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível finalizar a conferência.'));
@@ -460,7 +466,7 @@ function ReceiptBagClosing() {
             <div className="flex flex-wrap gap-2">
               <label className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
                 <CalendarDays className="h-4 w-4 text-muted" />
-                <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="bg-transparent outline-none" />
+                <input type="date" min={data?.operation_start_date || '2026-08-01'} value={date} onChange={(event) => setDate(event.target.value)} className="bg-transparent outline-none" />
               </label>
               <button type="button" onClick={() => void loadList()} className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-bold hover:bg-muted/40">
                 <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Atualizar
@@ -706,7 +712,11 @@ function BagTable({ rows, mutating, onOpen }: {
             <tr key={`${row.company_id}-${row.trip_id}`} className="hover:bg-muted/20">
               <td className="px-5 py-4"><p className="font-black">#{row.trip_id}</p><p className="text-xs text-muted">Saída #{row.run_number} · {row.company?.name || row.company?.code || 'Empresa'}</p></td>
               <td className="px-5 py-4"><p className="font-bold">{row.driver?.name || 'Motorista não identificado'}</p><p className="text-xs text-muted">{row.car?.license_plate || '-'} · {row.car?.model || 'Veículo'}</p></td>
-              <td className="px-5 py-4"><p className="font-semibold">{formatDate(row.operation_date)}</p>{row.is_overdue ? <p className="mt-1 text-xs font-bold text-red-600">Malote atrasado</p> : null}</td>
+              <td className="px-5 py-4">
+                <p className="font-semibold">{formatDate(row.operation_date)}</p>
+                {row.is_overdue ? <p className="mt-1 text-xs font-bold text-red-600">Malote atrasado</p> : null}
+                {row.generated_by_timeout ? <p className="mt-1 max-w-56 text-xs font-bold text-amber-700 dark:text-amber-300">Rota incluída por segurança com {row.route_incomplete_stops} parada(s) sem resultado.</p> : null}
+              </td>
               <td className="px-5 py-4 text-center">
                 <p className="font-black">{row.counts.confirmed}/{row.counts.expected}</p>
                 <div className="mx-auto mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${row.counts.expected ? Math.min(100, row.counts.confirmed / row.counts.expected * 100) : 100}%` }} /></div>
@@ -825,8 +835,9 @@ function ItemRow({ item, selected, onSelect, onConfirm }: {
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-2"><strong className="text-base">NF {item.invoice_number}</strong><span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${config.badge}`}>{config.label}</span>{!item.has_receipt_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">Sem foto</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[11px] font-black text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200">Extra</span> : null}</span>
         <span className="mt-1 block truncate text-xs text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
-        {suggestionDiffers ? <span className="mt-1 block text-xs font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</span>
+        {suggestionDiffers ? <span className="mt-1 block text-xs font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_confidence ? ` · confiança ${item.suggestion_confidence}%` : ''}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</span>
           : item.suggestion_source === 'whatsapp_phone' ? <span className="mt-1 block text-xs font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</span> : null}
+        {item.is_suggested_extra && item.suggestion_reason ? <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">{item.suggestion_reason}</span> : null}
         {item.confirmed_bag ? <span className="mt-1 block text-xs font-bold text-violet-700 dark:text-violet-300">Encontrado com {item.confirmed_bag.driver_name || 'outro motorista'} · rota #{item.confirmed_bag.trip_id}</span> : null}
       </span>
       <span className="text-right text-xs text-muted">{item.confirmed_at ? `Confirmado ${formatDateTime(item.confirmed_at)}` : ''}</span>
@@ -861,6 +872,7 @@ function BagSummary({ bag }: { bag: ReceiptBag }) {
     ['Canhotos esperados', bag.counts.expected, ''], ['Confirmados', bag.counts.confirmed, 'text-emerald-600'],
     ['Aguardando', bag.counts.pending, ''], ['Ausentes', bag.counts.absent, 'text-red-600'],
     ['Recuperados', bag.counts.recovered, 'text-teal-600'], ['NFs extras', bag.counts.extras, 'text-violet-600'],
+    ['Adicionais sugeridos', bag.counts.suggested, 'text-amber-600'],
     ['Devoluções', bag.counts.returned, 'text-orange-600'],
   ];
   return <section className="rounded-2xl border border-border bg-card p-4"><h3 className="font-black">Resumo do malote</h3><dl className="mt-3 space-y-2 text-sm">{rows.map(([label, value, className]) => <div key={label} className="flex justify-between"><dt className="text-muted">{label}</dt><dd className={`font-black ${className}`}>{value}</dd></div>)}</dl></section>;

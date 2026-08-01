@@ -14,6 +14,7 @@ export type ReceiptBagCounts = {
   pending: number;
   returned: number;
   recovered: number;
+  suggested: number;
   extras: number;
 };
 
@@ -31,6 +32,8 @@ export type ReceiptBagListRow = {
   completed_at: string | null;
   counts: ReceiptBagCounts;
   is_overdue: boolean;
+  route_incomplete_stops: number;
+  generated_by_timeout: boolean;
 };
 
 export type ReceiptBagItem = {
@@ -43,12 +46,15 @@ export type ReceiptBagItem = {
   city: string | null;
   route_order: number | null;
   status: ReceiptBagItemStatus;
+  operational_status?: ReceiptBagItemStatus;
   is_extra: boolean;
   is_suggested_extra: boolean;
   expected_driver_id: number;
   suggested_driver_id: number | null;
   suggested_driver_name: string | null;
   suggestion_source: string;
+  suggestion_confidence: number | null;
+  suggestion_reason: string | null;
   suggestion_sender_name: string | null;
   suggestion_sender_phone: string | null;
   has_receipt_photo: boolean;
@@ -89,6 +95,8 @@ export type ReceiptBag = {
 
 export type ReceiptBagListResponse = {
   date: string;
+  operational_date: string;
+  operation_start_date: string;
   summary: {
     bags: number;
     expected: number;

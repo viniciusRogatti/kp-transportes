@@ -14,6 +14,7 @@ type ButtonProps = DetailedHTMLProps<ButtonHTMLAttributes<HTMLButtonElement>, HT
 export function Container({ className, ...props }: DivProps) {
   return (
     <div
+      data-tutorial="page-content"
       className={cn(
         'relative flex min-h-screen w-full flex-col items-center bg-transparent px-s5 pb-s8 pt-[calc(var(--header-height)+var(--space-5))] text-text max-[768px]:px-s4 max-[768px]:pb-s6 max-[768px]:pt-[calc(var(--header-height)+var(--space-4))]',
         '[&_table]:w-full [&_table]:max-w-[1200px] [&_table]:border-collapse [&_table]:text-[clamp(0.78rem,1.2vw,0.95rem)]',
@@ -27,7 +28,7 @@ export function Container({ className, ...props }: DivProps) {
 }
 
 export function FilterBar({ className, ...props }: DivProps) {
-  return <div className={cn('mb-s5 grid w-full max-w-[900px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-s3 max-[768px]:gap-s2', className)} {...props} />;
+  return <div data-tutorial="page-filters" className={cn('mb-s5 grid w-full max-w-[900px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-s3 max-[768px]:gap-s2', className)} {...props} />;
 }
 
 export function FilterInput({ className, ...props }: InputProps) {
@@ -37,6 +38,7 @@ export function FilterInput({ className, ...props }: InputProps) {
 export function SearchBar({ className, ...props }: DivProps) {
   return (
     <div
+      data-tutorial="page-filters"
       className={cn(
         'mb-s5 flex w-full max-w-[1100px] flex-nowrap items-end gap-s3 max-[768px]:flex-col max-[768px]:gap-s2',
         '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-text [&_input]:placeholder:text-muted [&_input:focus]:border-accent [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',

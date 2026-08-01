@@ -11,6 +11,7 @@ export type TutorialStep = {
   targetMobile?: string;
   placement?: TutorialPlacement;
   required?: boolean;
+  discoverControls?: 'filters' | 'actions';
 };
 export type TutorialModule = {
   id: string;
@@ -41,8 +42,18 @@ const page = (
       content: description, placement: 'bottom', required: true,
     },
     {
-      id: `${id}-workflow`, title: 'Fluxo principal',
+      id: `${id}-filters`, target: 'auto-filters', title: 'Filtros e pesquisa',
+      content: 'Use os filtros para reduzir a lista e localizar exatamente o registro necessário. Os campos disponíveis nesta tela aparecem abaixo.',
+      placement: 'bottom', required: false, discoverControls: 'filters',
+    },
+    {
+      id: `${id}-content`, target: 'auto-content', title: 'Informações da página',
       content: summary.join(' '), placement: 'center', required: true,
+    },
+    {
+      id: `${id}-actions`, target: 'auto-actions', title: 'Botões e ações',
+      content: 'Os botões mudam conforme o estado do registro e as permissões do seu perfil. Confira o resultado antes de confirmar qualquer alteração.',
+      placement: 'top', required: false, discoverControls: 'actions',
     },
     ...(importantRules.length ? [{
       id: `${id}-rules`, title: 'Antes de confirmar',
@@ -55,14 +66,43 @@ export const tutorialModules: TutorialModule[] = [
   {
     ...page('home', '/home', 'Painel Operacional', 'Acompanhe indicadores, pendências e atalhos centrais da operação.', 10,
       ['Veja o resumo da operação.', 'Abra pendências diretamente pelos cartões.', 'Use os atalhos para os módulos principais.']),
+    importantRules: [
+      'O número do radar representa itens em aberto; ele não confirma que todos estejam vencidos.',
+      'Prioridades vencidas exigem tratamento antes das pendências ainda dentro do prazo.',
+      'Resolva a causa na página indicada e confirme o resultado antes de encerrar a tratativa.',
+    ],
+    faq: [
+      { question: 'Por onde devo começar?', answer: 'Comece pelas Prioridades vencidas. Depois trate os maiores volumes do Radar operacional.' },
+      { question: 'Por que o número não baixou?', answer: 'Atualize o radar e confirme se a causa foi concluída no módulo de origem. Apenas abrir ou visualizar não resolve a pendência.' },
+    ],
     steps: [
-      { id: 'home-overview', target: 'app-page-title', title: 'Painel Operacional', content: 'Este é o ponto de partida para acompanhar a operação e localizar pendências.', placement: 'bottom', required: true },
-      { id: 'home-help', target: 'global-help', title: 'Ajuda sempre disponível', content: 'Clique neste botão quando quiser rever o guia da página atual, regras e dúvidas frequentes.', placement: 'bottom', required: true },
-      { id: 'home-navigation', target: 'app-navigation', targetMobile: 'mobile-menu-button', title: 'Navegação por perfil', content: 'O menu mostra somente páginas autorizadas para o seu perfil.', placement: 'right', required: true },
+      { id: 'home-overview', target: 'app-page-title', title: 'Painel Operacional', content: 'Use este painel como uma fila de trabalho: leia primeiro o prazo e a gravidade, depois abra o cartão e trate a causa no módulo indicado.', placement: 'bottom', required: true },
+      { id: 'home-radar', target: 'home-radar', title: 'Como ler o radar', content: 'Cada número mostra quantos itens continuam em aberto. Zero significa que não há item naquela fila; um número maior pede organização, mas somente a área de prioridades indica o que já venceu.', placement: 'bottom', required: true, discoverControls: 'actions' },
+      { id: 'home-occurrences', target: 'home-reminder-occurrences', title: 'Ocorrências abertas', content: 'São faltas, avarias, inversões ou outras divergências aguardando análise. Abra o cartão, valide NF, produtos, quantidades e motivo; registre a solução e conclua apenas com evidência do tratamento.', placement: 'right', required: true },
+      { id: 'home-redelivery', target: 'home-reminder-redelivery', title: 'Reentregas sem nova rota', content: 'A entrega anterior não foi concluída e a NF ainda precisa de uma nova saída. Abra a tratativa, confirme o motivo e associe a NF a uma rota de reentrega antes de encerrar.', placement: 'right', required: true },
+      { id: 'home-unassigned', target: 'home-reminder-unassigned', title: 'Notas sem rota', content: 'São notas disponíveis que ainda não foram direcionadas a motorista e veículo. Confira data, empresa e destino, depois inclua a NF na rota correta.', placement: 'right', required: true },
+      { id: 'home-returned', target: 'home-reminder-returned', title: 'Devoluções fora de lote', content: 'A mercadoria retornou, mas ainda não entrou em um lote de devolução. Confira tipo e quantidade, adicione ao lote correto e acompanhe até o envio.', placement: 'right', required: true },
+      { id: 'home-retained', target: 'home-reminder-retained', title: 'Canhotos retidos', content: 'O comprovante ficou temporariamente com alguém ou em outro ponto da operação. Identifique o responsável, recupere o documento e registre a regularização na tratativa.', placement: 'right', required: true },
+      { id: 'home-pending-receipts', target: 'home-reminder-pending', title: 'Notas sem canhoto', content: 'A entrega de uma operação anterior ainda não possui comprovante válido. Verifique a situação da entrega e regularize o canhoto ou a justificativa correspondente.', placement: 'right', required: true },
+      { id: 'home-treatment-center', target: 'home-treatment-center', title: 'Central de Tratativas', content: 'Este botão reúne as filas detalhadas. Ao abrir um cartão do radar, a central já recebe a aba correspondente; use seus filtros para localizar a NF e executar a correção.', placement: 'top', required: true },
+      { id: 'home-overdue', target: 'home-overdue-priorities', title: 'Prioridades vencidas', content: 'Aqui aparecem somente itens que ultrapassaram o prazo operacional. Leia o tipo, a NF e os dias em aberto; trate primeiro os mais antigos e os destacados como urgentes.', placement: 'top', required: true, discoverControls: 'actions' },
+      { id: 'home-resolution-rule', title: 'Ciclo correto de resolução', content: '1. Entenda o motivo e a idade. 2. Abra o item. 3. Corrija a causa no módulo indicado. 4. Registre observação ou evidência. 5. Atualize o radar e confirme que o item saiu da fila.', placement: 'center', required: true },
+      { id: 'home-help', target: 'global-help', title: 'Ajuda sempre disponível', content: 'Use a ajuda para rever esta leitura, consultar as regras e reiniciar o guia da página quando surgir uma dúvida.', placement: 'bottom', required: true },
+      { id: 'home-navigation', target: 'app-navigation', targetMobile: 'mobile-menu-button', title: 'Navegação por perfil', content: 'O menu mostra somente páginas autorizadas para o seu perfil. Os cartões do painel também respeitam essas permissões.', placement: 'right', required: true },
     ],
   },
-  page('today-invoices', '/todayInvoices', 'Notas do Dia', 'Consulte as notas da operação atual e seus estados.', 20,
-    ['Filtre as notas do dia.', 'Confira situação e empresa.', 'Abra os detalhes antes de agir.']),
+  {
+    ...page('today-invoices', '/todayInvoices', 'Notas do Dia', 'Consulte as notas da operação atual e seus estados.', 20,
+      ['Filtre as notas por empresa, NF, produto, cliente, cidade, motorista, rota, carga ou situação.', 'Confira os dados e o status de cada nota.', 'Abra detalhes ou atribua uma nota somente depois de validar a operação.']),
+    steps: [
+      { id: 'today-overview', target: 'app-page-title', title: 'Notas do Dia', content: 'Aqui ficam as notas da operação atual, com pesquisa, situação documental e vínculo com as rotas.', placement: 'bottom', required: true },
+      { id: 'today-companies', target: 'company-tabs', title: 'Empresas', content: 'Alterne entre as empresas ou use a visão de todas. Ao escolher “Todas”, o filtro de empresa permite refinar a consulta.', placement: 'bottom', required: true, discoverControls: 'actions' },
+      { id: 'today-filters', target: 'today-filters', targetMobile: 'today-mobile-product-search', title: 'Filtros da página', content: 'Pesquise por NF, produto, cliente, cidade, motorista, rota e carga. Os filtros podem ser combinados e a lista de produtos respeita a seleção atual.', placement: 'bottom', required: true, discoverControls: 'filters' },
+      { id: 'today-status', target: 'invoice-status-filters', title: 'Situação das notas', content: 'Use os indicadores de situação para mostrar apenas notas pendentes, atribuídas, entregues, devolvidas ou em outros estados operacionais.', placement: 'bottom', required: true, discoverControls: 'actions' },
+      { id: 'today-active-filters', target: 'today-active-filters', title: 'Filtros ativos', content: 'Cada filtro aplicado aparece como um marcador. Clique em um marcador para remover somente aquele critério ou use “Limpar filtros” para recomeçar.', placement: 'bottom', required: true, discoverControls: 'actions' },
+      { id: 'today-results', target: 'today-results', title: 'Notas encontradas', content: 'Os cartões mostram os dados da nota, cliente, produtos, status e contexto da entrega. As ações disponíveis dependem do estado atual e do seu perfil.', placement: 'top', required: true, discoverControls: 'actions' },
+    ],
+  },
   page('invoice-search', '/invoices', 'Pesquisar Notas', 'Localize notas fiscais e consulte o histórico operacional.', 30,
     ['Pesquise pelo número da NF.', 'Confira status e comprovantes.', 'Acesse a jornada completa da nota.']),
   page('invoice-journey', '/invoice-journey', 'Jornada da NF', 'Entenda a sequência de eventos e responsáveis por cada alteração.', 40,

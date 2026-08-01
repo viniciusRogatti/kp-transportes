@@ -1569,7 +1569,7 @@ function Home() {
     <HomeStyle>
       <Header />
       <HomeContent>
-        <Card>
+        <Card data-tutorial="home-radar">
           <CardHeaderRow>
             <div>
               <h2>Radar operacional</h2>
@@ -1586,6 +1586,7 @@ function Home() {
               return (
                 <button
                   key={`home-treatment-reminder-${reminder.key}`}
+                  data-tutorial={`home-reminder-${reminder.key}`}
                   type="button"
                   onClick={() => navigate(`/operational-pendencies?tab=${reminder.key}`)}
                   className="group flex min-h-[104px] items-center gap-3 rounded-md border border-border bg-surface p-3 text-left transition hover:border-accent/55 hover:bg-surface-2"
@@ -1612,6 +1613,7 @@ function Home() {
             </p>
             <button
               type="button"
+              data-tutorial="home-treatment-center"
               onClick={() => navigate('/operational-pendencies')}
               className="inline-flex h-9 items-center gap-2 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"
             >
@@ -1620,7 +1622,7 @@ function Home() {
           </div>
         </Card>
 
-        <Card>
+        <Card data-tutorial="home-overdue-priorities">
           <CardHeaderRow>
             <div>
               <h2>Prioridades vencidas</h2>

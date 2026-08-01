@@ -333,7 +333,7 @@ function UserManagement() {
                       <td>{user.created_at ? new Date(user.created_at).toLocaleString('pt-BR') : '-'}</td>
                       <td>
                         <div className="flex gap-2">
-                          <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-surface-muted disabled:opacity-50">Reiniciar</button>
+                          <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-surface-2 disabled:opacity-50">Reiniciar</button>
                           <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="rounded-md border border-amber-400 px-2 py-1 text-xs font-semibold text-amber-600 disabled:opacity-50">Dispensar</button>
                         </div>
                       </td>

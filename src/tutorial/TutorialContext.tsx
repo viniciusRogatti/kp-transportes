@@ -27,13 +27,81 @@ type TutorialContextValue = {
 
 const TutorialContext = createContext<TutorialContextValue | null>(null);
 
+const isVisibleElement = (element: HTMLElement) => {
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+};
+
+const firstVisible = (selector: string, root: ParentNode = document) => (
+  Array.from(root.querySelectorAll<HTMLElement>(selector)).find(isVisibleElement) || null
+);
+
+const findControlCluster = (kind: 'filters' | 'actions') => {
+  const pageRoot = firstVisible('[data-tutorial="page-content"]') || firstVisible('main') || document.body;
+  const controlSelector = kind === 'filters' ? 'input, select, textarea' : 'button, [role="button"]';
+  const controls = Array.from(pageRoot.querySelectorAll<HTMLElement>(controlSelector)).filter((element) => (
+    isVisibleElement(element) && !element.closest('[data-tutorial="global-help"]')
+  ));
+  if (!controls.length) return null;
+
+  const candidates = new Set<HTMLElement>();
+  controls.forEach((control) => {
+    let parent = control.parentElement;
+    for (let depth = 0; parent && depth < 4 && parent !== pageRoot; depth += 1) {
+      const visibleControls = Array.from(parent.querySelectorAll<HTMLElement>(controlSelector)).filter(isVisibleElement);
+      if (visibleControls.length >= 2 && visibleControls.length <= 12) candidates.add(parent);
+      parent = parent.parentElement;
+    }
+  });
+  const ranked = Array.from(candidates).sort((left, right) => {
+    const leftRect = left.getBoundingClientRect();
+    const rightRect = right.getBoundingClientRect();
+    return (leftRect.width * leftRect.height) - (rightRect.width * rightRect.height);
+  });
+  return ranked[0] || controls[0].parentElement || controls[0];
+};
+
 const visibleTarget = (target: string | undefined) => {
   if (!target) return null;
-  const candidates = Array.from(document.querySelectorAll<HTMLElement>(`[data-tutorial="${target}"]`));
-  return candidates.find((element) => {
-    const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
-  }) || null;
+  const explicit = firstVisible(`[data-tutorial="${target}"]`);
+  if (explicit) return explicit;
+  if (target === 'auto-filters') {
+    return firstVisible('[data-tutorial="page-filters"]') || findControlCluster('filters');
+  }
+  if (target === 'auto-actions') {
+    return firstVisible('[data-tutorial="page-actions"]') || findControlCluster('actions');
+  }
+  if (target === 'auto-content') {
+    return firstVisible('[data-tutorial="page-main"]')
+      || firstVisible('[data-tutorial="page-content"] table, [data-tutorial="page-content"] [role="table"], main table, main [role="table"], main section')
+      || firstVisible('[data-tutorial="page-content"]')
+      || firstVisible('main');
+  }
+  return null;
+};
+
+const getControlLabel = (element: HTMLElement) => {
+  const explicit = element.getAttribute('aria-label') || element.getAttribute('title');
+  if (explicit) return explicit.trim();
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    const label = element.id ? document.querySelector<HTMLLabelElement>(`label[for="${element.id}"]`)?.innerText : '';
+    return String(label || element.placeholder || element.name || '').trim();
+  }
+  if (element instanceof HTMLSelectElement) {
+    const label = element.id ? document.querySelector<HTMLLabelElement>(`label[for="${element.id}"]`)?.innerText : '';
+    return String(label || element.options[0]?.text || element.name || '').trim();
+  }
+  return String(element.innerText || '').replace(/\s+/g, ' ').trim();
+};
+
+const discoverControlLabels = (target: HTMLElement | null, kind: TutorialStep['discoverControls']) => {
+  if (!target || !kind) return [];
+  const selector = kind === 'filters' ? 'input, select, textarea' : 'button, [role="button"]';
+  return mergeUnique(Array.from(target.querySelectorAll<HTMLElement>(selector))
+    .filter(isVisibleElement)
+    .map(getControlLabel)
+    .filter(Boolean))
+    .slice(0, 10);
 };
 
 const mergeUnique = (values: string[]) => Array.from(new Set(values));
@@ -173,7 +241,7 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     timeout = window.setTimeout(() => {
       observer.disconnect();
       if (!stopped && !find()) setTargetMissing(true);
-    }, 7000);
+    }, targetName.startsWith('auto-') ? 1500 : 7000);
     return () => {
       stopped = true;
       observer.disconnect();
@@ -286,7 +354,7 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
           type="button"
           data-tutorial="global-help"
           onClick={() => setHelpOpen(true)}
-          className="fixed bottom-5 right-5 z-[1200] inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="fixed bottom-5 right-5 z-[1200] inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           aria-label="Abrir ajuda desta página"
           title="Ajuda desta página"
         >
@@ -346,17 +414,32 @@ function TourOverlay({
   const [rect, setRect] = useState<DOMRect | null>(target?.getBoundingClientRect() || null);
   useEffect(() => {
     if (!target) { setRect(null); return undefined; }
-    const update = () => setRect(target.getBoundingClientRect());
+    let animationFrameId = 0;
+    const update = () => {
+      const nextRect = target.getBoundingClientRect();
+      setRect((currentRect) => {
+        if (
+          currentRect
+          && Math.abs(currentRect.left - nextRect.left) < 0.5
+          && Math.abs(currentRect.top - nextRect.top) < 0.5
+          && Math.abs(currentRect.width - nextRect.width) < 0.5
+          && Math.abs(currentRect.height - nextRect.height) < 0.5
+        ) return currentRect;
+        return nextRect;
+      });
+      animationFrameId = window.requestAnimationFrame(update);
+    };
     update();
-    window.addEventListener('resize', update);
-    window.addEventListener('scroll', update, true);
     return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update, true);
+      window.cancelAnimationFrame(animationFrameId);
     };
   }, [target]);
 
   const last = active.stepIndex === module.steps.length - 1;
+  const discoveredControls = useMemo(
+    () => discoverControlLabels(target, step.discoverControls),
+    [step.discoverControls, target],
+  );
   return (
     <div className="fixed inset-0 z-[2500]" role="dialog" aria-modal="true" aria-label={`Tutorial: ${step.title}`}>
       {!rect && <div className="absolute inset-0 bg-slate-950/65" />}
@@ -367,25 +450,33 @@ function TourOverlay({
           aria-hidden="true"
         />
       )}
-      <section className="fixed inset-x-3 bottom-3 z-[2502] mx-auto max-w-lg rounded-2xl border border-white/20 bg-surface p-5 text-text shadow-2xl md:bottom-6" tabIndex={-1}>
+      <section className="fixed inset-x-3 bottom-3 z-[2502] mx-auto max-w-lg rounded-2xl border border-border bg-card p-5 text-text shadow-2xl md:bottom-6" tabIndex={-1}>
         <div className="mb-3 flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-primary">{module.title}</p>
-            <h2 className="mt-1 text-lg font-bold">{step.title}</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-text-accent">{module.title}</p>
+            <h2 className="mt-1 text-lg font-bold text-text">{step.title}</h2>
           </div>
-          <button type="button" onClick={onPause} className="rounded-lg p-2 text-muted hover:bg-surface-muted" aria-label="Pausar tutorial"><Pause className="h-5 w-5" /></button>
+          <button type="button" onClick={onPause} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-text" aria-label="Pausar tutorial"><Pause className="h-5 w-5" /></button>
         </div>
         <p className="text-sm leading-6 text-muted">{step.content}</p>
+        {!!discoveredControls.length && (
+          <div className="mt-3 rounded-lg border border-border bg-surface p-3">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-text-accent">Controles disponíveis</p>
+            <div className="flex flex-wrap gap-1.5">
+              {discoveredControls.map((label) => <span key={label} className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs font-medium text-text">{label}</span>)}
+            </div>
+          </div>
+        )}
         {targetMissing && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900">Este elemento não está disponível agora. Você pode continuar sem executar nenhuma ação.</p>}
-        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-muted" aria-label={`${overallStep} de ${totalSteps}`}>
-          <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(4, (overallStep / Math.max(totalSteps, 1)) * 100)}%` }} />
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-label={`${overallStep} de ${totalSteps}`}>
+          <div className="h-full bg-accent transition-all" style={{ width: `${Math.max(4, (overallStep / Math.max(totalSteps, 1)) * 100)}%` }} />
         </div>
         <div className="mt-4 flex items-center justify-between gap-3">
           <span className="text-xs font-semibold text-muted">Passo {overallStep} de {totalSteps}</span>
           <div className="flex gap-2">
-            <button type="button" onClick={onBack} disabled={!canGoBack} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-sm font-semibold disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Voltar</button>
-            <button type="button" autoFocus onClick={onNext} className="inline-flex items-center gap-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:brightness-110">
-              {last && active.mode === 'page' ? 'Concluir' : 'Próximo'}<ChevronRight className="h-4 w-4" />
+            <button type="button" onClick={onBack} disabled={!canGoBack} className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-text hover:bg-surface-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Voltar</button>
+            <button type="button" autoFocus onClick={onNext} className="inline-flex items-center gap-1 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong">
+              {targetMissing && step.required === false ? 'Pular' : last && active.mode === 'page' ? 'Concluir' : 'Próximo'}<ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -401,25 +492,25 @@ function HelpDialog({ module, modules, progress, onClose, onStartPage, onStartFu
   const completed = new Set(progress?.completed_modules || []);
   return (
     <div className="fixed inset-0 z-[2500] grid place-items-center bg-slate-950/60 p-3" role="dialog" aria-modal="true" aria-labelledby="tutorial-help-title">
-      <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-surface p-5 text-text shadow-2xl md:p-7">
+      <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-5 text-text shadow-2xl md:p-7">
         <div className="flex items-start justify-between gap-4">
-          <div><p className="text-xs font-bold uppercase tracking-wider text-primary">Ajuda contextual</p><h2 id="tutorial-help-title" className="mt-1 text-xl font-bold">{module?.title || 'Ajuda do sistema'}</h2></div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 hover:bg-surface-muted" aria-label="Fechar ajuda"><X className="h-5 w-5" /></button>
+          <div><p className="text-xs font-bold uppercase tracking-wider text-text-accent">Ajuda contextual</p><h2 id="tutorial-help-title" className="mt-1 text-xl font-bold text-text">{module?.title || 'Ajuda do sistema'}</h2></div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-text hover:bg-surface-2" aria-label="Fechar ajuda"><X className="h-5 w-5" /></button>
         </div>
         {module ? (
           <>
             <p className="mt-3 text-sm text-muted">{module.description}</p>
-            <h3 className="mt-5 font-bold">O que você faz aqui</h3>
+            <h3 className="mt-5 font-bold text-text">O que você faz aqui</h3>
             <ul className="mt-2 space-y-2 text-sm text-muted">{module.summary.map((item) => <li key={item} className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />{item}</li>)}</ul>
-            {!!module.importantRules?.length && <><h3 className="mt-5 font-bold">Regras importantes</h3><ul className="mt-2 space-y-2 text-sm text-muted">{module.importantRules.map((item) => <li key={item}>• {item}</li>)}</ul></>}
-            {!!module.faq?.length && <><h3 className="mt-5 font-bold">Dúvidas frequentes</h3><div className="mt-2 space-y-2">{module.faq.map((item) => <details key={item.question} className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-semibold">{item.question}</summary><p className="mt-2 text-sm text-muted">{item.answer}</p></details>)}</div></>}
+            {!!module.importantRules?.length && <><h3 className="mt-5 font-bold text-text">Regras importantes</h3><ul className="mt-2 space-y-2 text-sm text-muted">{module.importantRules.map((item) => <li key={item}>• {item}</li>)}</ul></>}
+            {!!module.faq?.length && <><h3 className="mt-5 font-bold text-text">Dúvidas frequentes</h3><div className="mt-2 space-y-2">{module.faq.map((item) => <details key={item.question} className="rounded-xl border border-border bg-surface p-3 text-text"><summary className="cursor-pointer text-sm font-semibold">{item.question}</summary><p className="mt-2 text-sm text-muted">{item.answer}</p></details>)}</div></>}
           </>
         ) : <p className="mt-3 text-sm text-muted">Esta página ainda não possui um guia específico. Você pode abrir o tutorial completo para conhecer os módulos disponíveis ao seu perfil.</p>}
-        <h3 className="mt-6 font-bold">Seu progresso</h3>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">{modules.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"><Check className={`h-4 w-4 ${completed.has(item.id) ? 'text-emerald-500' : 'text-muted'}`} />{item.title}</div>)}</div>
+        <h3 className="mt-6 font-bold text-text">Seu progresso</h3>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">{modules.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-xs text-text"><Check className={`h-4 w-4 ${completed.has(item.id) ? 'text-emerald-500' : 'text-muted'}`} />{item.title}</div>)}</div>
         <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={onStartFull} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-semibold"><RotateCcw className="h-4 w-4" />Rever tutorial completo</button>
-          {module && <button type="button" onClick={onStartPage} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"><Play className="h-4 w-4" />Iniciar guia desta página</button>}
+          <button type="button" onClick={onStartFull} className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-semibold text-text hover:bg-surface-2"><RotateCcw className="h-4 w-4" />Rever tutorial completo</button>
+          {module && <button type="button" onClick={onStartPage} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong"><Play className="h-4 w-4" />Iniciar guia desta página</button>}
         </div>
       </section>
     </div>
@@ -429,14 +520,14 @@ function HelpDialog({ module, modules, progress, onClose, onStartPage, onStartFu
 function ResumeDialog({ onResume, onRestart, onLater }: { onResume: () => void; onRestart: () => void; onLater: () => void }) {
   return (
     <div className="fixed inset-0 z-[2500] grid place-items-center bg-slate-950/60 p-3" role="dialog" aria-modal="true" aria-labelledby="resume-title">
-      <section className="w-full max-w-md rounded-2xl bg-surface p-6 text-text shadow-2xl">
-        <BookOpen className="h-9 w-9 text-primary" />
-        <h2 id="resume-title" className="mt-3 text-xl font-bold">Continuar de onde parou?</h2>
+      <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-text shadow-2xl">
+        <BookOpen className="h-9 w-9 text-text-accent" />
+        <h2 id="resume-title" className="mt-3 text-xl font-bold text-text">Continuar de onde parou?</h2>
         <p className="mt-2 text-sm leading-6 text-muted">Seu progresso foi salvo. Você pode continuar, rever desde o início ou deixar para mais tarde.</p>
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          <button type="button" onClick={onResume} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white"><Play className="h-4 w-4" />Continuar</button>
-          <button type="button" onClick={onRestart} className="inline-flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold"><RotateCcw className="h-4 w-4" />Reiniciar</button>
-          <button type="button" onClick={onLater} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted sm:col-span-2">Continuar mais tarde</button>
+          <button type="button" onClick={onResume} className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong"><Play className="h-4 w-4" />Continuar</button>
+          <button type="button" onClick={onRestart} className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold text-text hover:bg-surface-2"><RotateCcw className="h-4 w-4" />Reiniciar</button>
+          <button type="button" onClick={onLater} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-text sm:col-span-2">Continuar mais tarde</button>
         </div>
       </section>
     </div>

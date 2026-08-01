@@ -11,6 +11,7 @@ export function ContainerTodayInvoices({ className, ...props }: DivProps) {
 export function FilterBar({ className, ...props }: DivProps) {
   return (
     <div
+      data-tutorial="page-filters"
       className={cn(
         'mb-s6 grid w-full grid-cols-[repeat(auto-fit,minmax(200px,1fr))] items-end gap-s3 text-text max-[768px]:grid-cols-2 max-[768px]:gap-s2',
         '[&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-text [&_input:focus]:border-accent [&_input:focus]:outline-none [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',

@@ -350,7 +350,7 @@ function TodayInvoices() {
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <div className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface/95 p-2 shadow-elevated backdrop-blur md:hidden">
+        <div data-tutorial="today-mobile-product-search" className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface/95 p-2 shadow-elevated backdrop-blur md:hidden">
           <label htmlFor="mobile-product-search" className="mb-1 block text-xs font-semibold text-text">
             Busca rápida de produto
           </label>
@@ -376,7 +376,7 @@ function TodayInvoices() {
             ) : null}
           </div>
         </div>
-        <FilterBar>
+        <FilterBar data-tutorial="today-filters">
           {activeCompanyTab === 'all' ? (
             <select value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
               <option value="all">Empresa: todas</option>
@@ -437,7 +437,7 @@ function TodayInvoices() {
           totalCount={visibleDanfes.length}
           filteredCount={filteredDanfes.length}
         />
-        <div className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
+        <div data-tutorial="today-active-filters" className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
           </span>
@@ -521,7 +521,7 @@ function TodayInvoices() {
         ) : filteredDanfes.length === 0 ? (
           <p>Nenhuma nota encontrada com os filtros atuais.</p>
         ) : (
-          <ContainerDanfes> 
+          <ContainerDanfes data-tutorial="today-results">
             { isPrinting ? (
               <LoaderPrinting />
             ) : (

@@ -10,7 +10,7 @@ function CompanyTabs({ activeTab, onChange, includeAll = true }: CompanyTabsProp
   const tabs = includeAll ? [...COMPANY_TAB_ORDER, 'all'] : [...COMPANY_TAB_ORDER];
 
   return (
-    <div className="mb-s4 flex w-full justify-start">
+    <div data-tutorial="company-tabs" className="mb-s4 flex w-full justify-start">
       <div className="relative inline-flex max-w-full flex-wrap items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
         {tabs.map((companyCode) => {
           const isActive = activeTab === companyCode;

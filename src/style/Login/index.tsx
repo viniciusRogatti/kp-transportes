@@ -131,7 +131,7 @@ export function PasswordToggle({ className, ...props }: ButtonProps) {
 }
 
 export function FormHeader({ className, ...props }: DivProps) {
-  return <div className={cn('mb-6 flex flex-col gap-2', className)} {...props} />;
+  return <div className={cn('login-form-header mb-6 flex flex-col gap-2', className)} {...props} />;
 }
 
 export function BrandName({ className, ...props }: SpanProps) {

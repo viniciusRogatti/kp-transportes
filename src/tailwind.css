@@ -360,15 +360,103 @@
   .login-traffic-hint { display: none; }
 }
 
-@media (max-width: 520px) {
-  .login-hero { height: 330px; }
-  .login-brand span:first-child { width: 2.5rem; height: 2.5rem; }
-  .login-brand p:last-child { display: none; }
-  .login-hero-copy { bottom: 34px; }
-  .login-hero-copy h1 { font-size: clamp(1.68rem, 7.8vw, 2.1rem); line-height: 1.02; }
-  .login-hero-copy p { max-width: 92%; }
-  .login-document { width: calc(100vw - 24px); padding: 32px 22px 24px; }
-  .login-flow-signature { height: 340px; transform: scaleX(1.55); transform-origin: center; }
+@media (max-width: 640px) {
+  .login-scene { overflow-x: hidden; }
+  .login-stage { padding-bottom: 12px; }
+
+  .login-hero {
+    height: 124px;
+    min-height: 124px;
+  }
+
+  .login-photo,
+  .login-photo-tone,
+  .login-photo-edge {
+    inset: 8px 8px 0;
+    clip-path: polygon(22px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 22px);
+  }
+
+  .login-photo {
+    background-position: center 56%;
+  }
+
+  .login-photo-foreground {
+    width: 100%;
+    object-position: center 56%;
+    opacity: 0.48;
+    mask-image: none;
+  }
+
+  .login-photo-tone {
+    background:
+      linear-gradient(90deg, rgba(4, 12, 23, 0.86), rgba(4, 12, 23, 0.42) 66%, rgba(4, 12, 23, 0.7)),
+      linear-gradient(0deg, rgba(4, 12, 23, 0.88), transparent 75%);
+  }
+
+  .login-photo-edge { transform: translate(4px, 4px); }
+
+  .login-brand {
+    left: 24px;
+    top: 28px;
+  }
+
+  .login-brand span:first-child {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .login-brand p:last-child {
+    display: block;
+    font-size: 0.7rem;
+  }
+
+  .login-hero-copy,
+  .login-flow-signature,
+  .login-traffic-hint {
+    display: none;
+  }
+
+  .login-document {
+    width: calc(100vw - 16px);
+    margin: -8px auto 0;
+    padding: 30px 22px 20px;
+    clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+  }
+
+  .login-document::before {
+    inset: 8px -8px -8px 8px;
+  }
+
+  .login-document::after { display: none; }
+  .login-document-index { display: none; }
+  .login-theme-toggle { right: 14px; top: 14px; }
+  .login-form-header { padding-right: 2.5rem; }
+  .login-form-header > span:first-child {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+  }
+  .login-document form { gap: 0.875rem; }
+  .login-document form > span:last-child { padding-top: 0.75rem; }
+}
+
+@media (max-width: 640px) and (max-height: 700px) {
+  .login-hero {
+    height: 96px;
+    min-height: 96px;
+  }
+
+  .login-brand {
+    left: 20px;
+    top: 20px;
+  }
+
+  .login-document {
+    padding-top: 26px;
+  }
+
+  .login-document form > span:last-child {
+    padding-top: 0.6rem;
+  }
 }
 
 :root {

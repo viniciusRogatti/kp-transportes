@@ -334,7 +334,7 @@ function Login() {
 
         <BoxLogin>
           <div aria-hidden="true" className="login-document-index absolute left-0 top-10 flex flex-col items-center gap-2 text-[0.58rem] font-bold tracking-[0.15em]"><span>KP</span><i /><span>01—06</span></div>
-          <div className="absolute right-5 top-5">
+          <div className="login-theme-toggle absolute right-5 top-5">
             <ThemeToggleButton iconOnly />
           </div>
           <FormHeader>

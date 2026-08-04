@@ -264,7 +264,7 @@ function CardDanfes({
   return (
     <>
       {showLegend && danfes.length ? (
-        <div className="mx-auto mb-s3 w-full max-w-[1200px] rounded-lg border border-border bg-surface/90 p-s3" data-testid="danfe-status-legend">
+        <div className="mx-auto mb-s3 w-full max-w-[1200px] rounded-lg border border-border bg-surface p-s3" data-testid="danfe-status-legend">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
               Legenda das bordas
@@ -417,7 +417,7 @@ function CardDanfes({
                             <button
                               type="button"
                               onClick={openLastTrip}
-                              className="inline-flex items-center gap-1 rounded-full border border-sky-500/50 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-200 transition hover:bg-sky-500/20"
+                              className="inline-flex items-center gap-1 rounded-full border semantic-solid-info px-2 py-0.5 text-[10px] font-semibold transition hover:brightness-110"
                               aria-label={`Abrir última rota da NF ${invoiceNumber}`}
                               title={`Abrir rota #${lastTripId} no monitoramento`}
                             >
@@ -541,7 +541,7 @@ function CardDanfes({
                       <button
                         type="button"
                         onClick={() => toggleFlip(key)}
-                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                         aria-label={`Mostrar detalhes da NF ${danfe.invoice_number}`}
                       >
                         Detalhes
@@ -607,7 +607,7 @@ function CardDanfes({
                           <button
                             type="button"
                             onClick={() => openReplacementModal(danfe)}
-                            className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                            className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                           >
                             Vincular NF substituta
                           </button>
@@ -659,7 +659,7 @@ function CardDanfes({
                       <button
                         type="button"
                         onClick={() => toggleFlip(key)}
-                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2/85 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                         aria-label={`Voltar para frente do card da NF ${danfe.invoice_number}`}
                       >
                         Voltar
@@ -696,13 +696,13 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={closeProductsModal}
-                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
               >
                 Fechar
               </button>
             </div>
 
-            <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface-2/65 p-2">
+            <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface-2 p-2">
               <DescriptionColumns className="shrink-0 pr-1">
                 <span>Codigo</span>
                 <span>Descricao</span>
@@ -743,7 +743,7 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={() => closeReplacementModal()}
-                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
                 disabled={isLinkingReplacement}
               >
                 Fechar
@@ -755,7 +755,7 @@ function CardDanfes({
               <input
                 value={replacementInvoiceInput}
                 onChange={(event) => setReplacementInvoiceInput(event.target.value)}
-                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2/85 px-3 text-sm text-text"
+                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2 px-3 text-sm text-text"
                 placeholder="Ex.: 1722999"
               />
             </label>
@@ -765,7 +765,7 @@ function CardDanfes({
               <input
                 value={replacementReasonInput}
                 onChange={(event) => setReplacementReasonInput(event.target.value)}
-                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2/85 px-3 text-sm text-text"
+                className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2 px-3 text-sm text-text"
                 placeholder="Refaturada"
               />
             </label>
@@ -817,7 +817,7 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={() => closeAssignmentModal()}
-                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
               >
                 Fechar
               </button>
@@ -837,7 +837,7 @@ function CardDanfes({
                       'w-full rounded-lg border px-3 py-2 text-left transition',
                       isSelected
                         ? 'border-accent bg-accent/10'
-                        : 'border-border bg-surface-2/70 hover:border-accent/45 hover:bg-surface-2',
+                        : 'border-border bg-surface-2 hover:border-accent/45 hover:bg-surface-2',
                     )}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -861,7 +861,7 @@ function CardDanfes({
             </div>
 
             {assignmentError ? (
-              <p className="mt-3 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-2 text-xs text-rose-100">
+              <p className="mt-3 rounded-md border semantic-panel-danger px-2 py-2 text-xs">
                 {assignmentError}
               </p>
             ) : null}
@@ -870,7 +870,7 @@ function CardDanfes({
               <button
                 type="button"
                 onClick={() => closeAssignmentModal()}
-                className="inline-flex h-9 items-center rounded-md border border-border bg-surface-2/85 px-3 text-sm font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                className="inline-flex h-9 items-center rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                 disabled={isAssigningDanfe}
               >
                 Cancelar

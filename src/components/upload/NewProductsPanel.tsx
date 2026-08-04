@@ -63,13 +63,13 @@ function NewProductsPanel({ newProducts, updatedProducts }: NewProductsPanelProp
         title="Novos produtos cadastrados"
         products={newProducts}
         badgeLabel="Novo"
-        badgeClassName="border-emerald-500/45 bg-emerald-500/15 text-[color:var(--color-success)]"
+        badgeClassName="semantic-solid-success"
       />
       <ProductRows
         title="Produtos atualizados"
         products={updatedProducts}
         badgeLabel="Atualizado"
-        badgeClassName="border-amber-500/45 bg-amber-500/15 text-[color:var(--color-warning)]"
+        badgeClassName="semantic-solid-warning"
       />
     </div>
   );

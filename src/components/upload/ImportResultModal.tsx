@@ -21,9 +21,9 @@ function ResultCount({ label, value, tone = 'default' }: {
 }) {
   const toneClass = {
     default: 'border-border bg-card text-text',
-    success: 'border-emerald-500/35 bg-emerald-500/10 text-[color:var(--color-success)]',
-    warning: 'border-amber-500/35 bg-amber-500/10 text-[color:var(--color-warning)]',
-    danger: 'border-rose-500/35 bg-rose-500/10 text-[color:var(--color-danger)]',
+    success: 'semantic-panel-success',
+    warning: 'semantic-panel-warning',
+    danger: 'semantic-panel-danger',
   }[tone];
 
   return (
@@ -86,10 +86,10 @@ function ImportResultModal({
 
   const HeaderIcon = hasErrors ? AlertTriangle : hasIgnored ? Info : CheckCircle2;
   const headerTone = hasErrors
-    ? 'border-rose-500/40 bg-rose-500/12 text-[color:var(--color-danger)]'
+    ? 'semantic-panel-danger'
     : hasIgnored
-      ? 'border-amber-500/40 bg-amber-500/12 text-[color:var(--color-warning)]'
-      : 'border-emerald-500/40 bg-emerald-500/12 text-[color:var(--color-success)]';
+      ? 'semantic-panel-warning'
+      : 'semantic-panel-success';
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 px-3 py-5">
@@ -157,7 +157,7 @@ function ImportResultModal({
                       <summary className="cursor-pointer list-none">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="text-sm font-semibold text-text">{item.fileName}</span>
-                          <span className="rounded-full border border-rose-500/35 bg-rose-500/10 px-2 py-1 text-[0.68rem] font-semibold text-[color:var(--color-danger)]">
+                          <span className="rounded-full border semantic-solid-danger px-2 py-1 text-[0.68rem] font-semibold">
                             {presentation.title}
                           </span>
                         </div>

@@ -611,7 +611,7 @@ function ReturnDataRegistry() {
                                   </span>
                                   {occurrence.operational_return_type ? (
                                     <>
-                                      <span className="ml-2 rounded-full border border-violet-300 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200">Corrigido pela operação</span>
+                                      <span className="ml-2 rounded-full border semantic-solid-info px-2 py-0.5 text-[11px] font-semibold">Corrigido pela operação</span>
                                       <p className="mt-1 text-xs text-muted">
                                         Importado como {RETURN_TYPE_LABELS[occurrence.inferred_return_type] || occurrence.inferred_return_type}
                                         {occurrence.return_type_corrected_by_username ? ` · por ${occurrence.return_type_corrected_by_username}` : ''}

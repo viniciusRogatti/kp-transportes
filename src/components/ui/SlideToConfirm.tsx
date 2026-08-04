@@ -67,7 +67,7 @@ function SlideToConfirm({
         className={cn(
           'relative h-10 w-full select-none touch-pan-y overflow-hidden rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
           isConfirmed
-            ? 'border-emerald-600 bg-emerald-900/40'
+            ? 'semantic-panel-success'
             : 'border-emerald-700 bg-surface-2',
           !isInteractionDisabled && 'cursor-grab active:cursor-grabbing',
           isDragging && 'ring-2 ring-accent/45',
@@ -82,7 +82,7 @@ function SlideToConfirm({
         <div
           className={cn(
             'pointer-events-none absolute inset-y-0 left-0',
-            'bg-emerald-600/45',
+            'bg-[var(--semantic-success-solid-bg)]',
           )}
           style={{ width: `${progressPercent}%`, transition: fillTransition }}
         />

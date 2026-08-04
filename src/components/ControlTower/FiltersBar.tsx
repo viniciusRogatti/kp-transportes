@@ -78,7 +78,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
   ];
 
   return (
-    <div className="sticky top-0 z-30 rounded-lg border border-border bg-surface/95 p-3 shadow-[0_12px_26px_rgba(2,6,23,0.55)] backdrop-blur">
+    <div className="sticky top-0 z-30 rounded-lg border border-border bg-surface p-3 shadow-[0_12px_26px_rgba(2,6,23,0.55)] backdrop-blur">
       <div className="grid gap-2 lg:grid-cols-[2fr_repeat(6,minmax(0,1fr))_auto]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted" />
@@ -86,14 +86,14 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
             value={filters.search}
             onChange={(event) => onChange({ search: event.target.value })}
             placeholder="Buscar cliente, produto ou motivo"
-            className="border-accent/35 bg-surface-2/85 pl-9 text-text focus:ring-accent/60"
+            className="border-accent/35 bg-surface-2 pl-9 text-text focus:ring-accent/60"
           />
         </div>
 
         <select
           value={filters.periodPreset}
           onChange={(event) => onChange({ periodPreset: event.target.value as PeriodPreset })}
-          className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           {periodOptions.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -104,20 +104,20 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
           type="date"
           value={filters.startDate}
           onChange={(event) => onChange({ startDate: event.target.value, periodPreset: 'custom' })}
-          className="border-accent/35 bg-surface-2/85 text-text focus:ring-accent/60"
+          className="border-accent/35 bg-surface-2 text-text focus:ring-accent/60"
         />
 
         <Input
           type="date"
           value={filters.endDate}
           onChange={(event) => onChange({ endDate: event.target.value, periodPreset: 'custom' })}
-          className="border-accent/35 bg-surface-2/85 text-text focus:ring-accent/60"
+          className="border-accent/35 bg-surface-2 text-text focus:ring-accent/60"
         />
 
         <select
           value={filters.returnStatus}
           onChange={(event) => onChange({ returnStatus: event.target.value as ControlTowerFilters['returnStatus'] })}
-          className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           <option value="all">Status devolução: todos</option>
           <option value="confirmed">Confirmadas</option>
@@ -127,7 +127,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         <select
           value={filters.pickupStatus}
           onChange={(event) => onChange({ pickupStatus: event.target.value as ControlTowerFilters['pickupStatus'] })}
-          className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           <option value="all">Status coleta: todos</option>
           <option value="PENDENTE">Pendente</option>
@@ -140,7 +140,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         <select
           value={filters.city}
           onChange={(event) => onChange({ city: event.target.value })}
-          className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           <option value="">Cidade: todas</option>
           {options.cities.map((city) => <option key={city} value={city}>{city}</option>)}
@@ -163,7 +163,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         <select
           value={filters.customer}
           onChange={(event) => onChange({ customer: event.target.value })}
-          className="h-9 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-9 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           <option value="">Cliente: todos</option>
           {options.customers.map((customer) => <option key={customer} value={customer}>{customer}</option>)}
@@ -171,7 +171,7 @@ function FiltersBar({ filters, options, updatedAgoLabel, onChange, onRefresh, on
         <select
           value={filters.product}
           onChange={(event) => onChange({ product: event.target.value })}
-          className="h-9 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+          className="h-9 rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
         >
           <option value="">Produto: todos</option>
           {options.products.map((product) => <option key={product} value={product}>{product}</option>)}

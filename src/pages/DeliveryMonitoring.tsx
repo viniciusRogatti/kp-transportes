@@ -37,6 +37,7 @@ import {
 } from '../utils/alertReadState';
 import { COMPANY_LABELS, COMPANY_TAB_ORDER } from '../utils/companyTabs';
 import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
+import { showConfirm } from '../utils/dialog';
 import {
   canManuallyUpdateStopStatus,
   getManualStopStatusLabel,
@@ -1314,9 +1315,10 @@ function DeliveryMonitoring() {
     }
 
     const invoiceLabel = invoiceNumber ? `NF ${invoiceNumber}` : 'esta parada';
-    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
-      ? true
-      : window.confirm(`Confirmar ${getManualStopStatusLabel(nextStatus)} para ${invoiceLabel}?`);
+    const confirmed = await showConfirm(
+      `Confirmar ${getManualStopStatusLabel(nextStatus)} para ${invoiceLabel}?`,
+      { title: 'Alterar status da entrega', confirmLabel: 'Alterar status' },
+    );
 
     if (!confirmed) return;
 
@@ -1693,7 +1695,7 @@ function DeliveryMonitoring() {
                       }}
                       disabled={!canHighlight}
                       className={`flex min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-1 text-left transition md:py-0.5 lg:min-w-[250px] lg:max-w-[320px] ${canHighlight
-                        ? 'hover:bg-surface-2/70'
+                        ? 'hover:bg-surface-2'
                         : 'cursor-default'
                         }`}
                       title={canHighlight ? 'Destacar rota do motorista no mapa' : 'Motorista sem rota destacável'}
@@ -1772,7 +1774,7 @@ function DeliveryMonitoring() {
                   </div>
 
                   {selectedStopSequence ? (
-                    <div className="mt-1.5 rounded-md border border-border/80 bg-surface/90 px-2.5 py-2 text-xs md:px-2 md:py-1.5">
+                    <div className="mt-1.5 rounded-md border border-border/80 bg-surface px-2.5 py-2 text-xs md:px-2 md:py-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 font-semibold text-text">
                           {`Parada ${selectedStopSequence}`}
@@ -2048,7 +2050,7 @@ function DeliveryMonitoring() {
                 <button
                   type="button"
                   onClick={closeReplacementModal}
-                  className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2/85 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
                   disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
                 >
                   Fechar

@@ -64,7 +64,7 @@ export default function MissingCargoOccurrenceDetails({ occurrence }: { occurren
         <span><strong>Motorista da saída:</strong> {occurrence.motorista_name || '-'}</span>
         <span><strong>Valor da ocorrência:</strong> {currencyFormatter.format(getMissingCargoOccurrenceValue(occurrence))}</span>
       </div>
-      <div className="flex flex-col gap-1 rounded-md border border-warning/25 bg-surface/75 px-2 py-1.5">
+      <div className="flex flex-col gap-1 rounded-md border border-warning/25 bg-surface px-2 py-1.5">
         <strong>Mercadoria faltante:</strong>
         {items.length ? items.map((item, index) => (
           <span

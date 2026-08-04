@@ -131,7 +131,7 @@ export function OccurrenceActionsRight({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-nowrap items-center justify-end gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-surface-2/85 [&_button.secondary]:text-text [&_button.danger]:bg-[#f05e5e] [&_button.danger]:text-white',
+        'flex flex-nowrap items-center justify-end gap-s2 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-surface-2 [&_button.secondary]:text-text [&_button.danger]:bg-[#f05e5e] [&_button.danger]:text-white',
         className,
       )}
       {...props}
@@ -171,7 +171,7 @@ export function CardHeaderRow({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-s2 [&_h2]:mb-0 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-surface-2/85 [&_button.secondary]:text-text',
+        'flex flex-wrap items-center justify-between gap-s2 [&_h2]:mb-0 [&_button]:cursor-pointer [&_button]:rounded-md [&_button]:border-none [&_button]:px-4 [&_button]:py-[0.65rem] [&_button]:font-semibold [&_button.secondary]:bg-surface-2 [&_button.secondary]:text-text',
         className,
       )}
       {...props}
@@ -211,7 +211,7 @@ export function TopActionBar({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex items-center justify-start gap-s2 [&_button.secondary]:cursor-pointer [&_button.secondary]:rounded-md [&_button.secondary]:border-none [&_button.secondary]:bg-surface-2/85 [&_button.secondary]:px-4 [&_button.secondary]:py-[0.65rem] [&_button.secondary]:font-semibold [&_button.secondary]:text-text',
+        'flex items-center justify-start gap-s2 [&_button.secondary]:cursor-pointer [&_button.secondary]:rounded-md [&_button.secondary]:border-none [&_button.secondary]:bg-surface-2 [&_button.secondary]:px-4 [&_button.secondary]:py-[0.65rem] [&_button.secondary]:font-semibold [&_button.secondary]:text-text',
         className,
       )}
       {...props}

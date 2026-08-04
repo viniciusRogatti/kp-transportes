@@ -147,7 +147,7 @@ function AlertsPage() {
       <Header />
       <Container>
         <div className="w-full max-w-[1280px] space-y-3">
-          <section className="rounded-md border border-border bg-surface/70 p-3">
+          <section className="rounded-md border border-border bg-surface p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-lg font-semibold text-text">Central de Alertas</h2>
@@ -159,7 +159,7 @@ function AlertsPage() {
                 type="button"
                 onClick={refreshHistory}
                 disabled={loading}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2/80 px-3 text-sm text-text transition hover:bg-surface-2 disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2 disabled:opacity-60"
               >
                 <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
               </button>
@@ -182,7 +182,7 @@ function AlertsPage() {
             </div>
           </section>
 
-          <section className="rounded-md border border-border bg-surface/70 p-3">
+          <section className="rounded-md border border-border bg-surface p-3">
             <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,auto))]">
               <label className="relative">
                 <span className="sr-only">Pesquisar</span>
@@ -250,7 +250,7 @@ function AlertsPage() {
             </p>
           </section>
 
-          <section className="rounded-md border border-border bg-surface/70 p-3">
+          <section className="rounded-md border border-border bg-surface p-3">
             {error ? <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">{error}</div> : null}
             {loading ? (
               <p className="text-sm text-muted">Carregando alertas...</p>

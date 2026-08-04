@@ -10,9 +10,20 @@ export type DialogConfirmOptions = {
   tone?: 'default' | 'danger';
 };
 
+export type DialogPromptOptions = {
+  title?: string;
+  label?: string;
+  placeholder?: string;
+  initialValue?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  required?: boolean;
+};
+
 type DialogHandlers = {
   alert: (message: string, options?: DialogAlertOptions) => Promise<void>;
   confirm: (message: string, options?: DialogConfirmOptions) => Promise<boolean>;
+  prompt: (message: string, options?: DialogPromptOptions) => Promise<string | null>;
 };
 
 let handlers: DialogHandlers | null = null;
@@ -31,9 +42,7 @@ export async function showAlert(message: string, options?: DialogAlertOptions) {
     return;
   }
 
-  if (typeof window !== 'undefined') {
-    window.alert(message);
-  }
+  if (typeof console !== 'undefined') console.warn(message);
 }
 
 export async function showConfirm(message: string, options?: DialogConfirmOptions) {
@@ -41,10 +50,10 @@ export async function showConfirm(message: string, options?: DialogConfirmOption
     return handlers.confirm(message, options);
   }
 
-  if (typeof window !== 'undefined') {
-    return window.confirm(message);
-  }
-
   return false;
 }
 
+export async function showPrompt(message: string, options?: DialogPromptOptions) {
+  if (handlers) return handlers.prompt(message, options);
+  return null;
+}

@@ -35,7 +35,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
 
   if (!errors.length) {
     return (
-      <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/12 p-4 text-sm text-[color:var(--color-success)]">
+      <div className="rounded-xl border semantic-panel-success p-4 text-sm">
         Nenhum erro encontrado no processamento.
       </div>
     );
@@ -43,7 +43,7 @@ function ImportErrorsPanel({ results }: ImportErrorsPanelProps) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-rose-500/35 bg-rose-500/12 p-4 text-sm text-[color:var(--color-danger)]">
+      <div className="rounded-xl border semantic-panel-danger p-4 text-sm">
         {errors.length} arquivo(s) tiveram problema. {successCount} foi/foram importado(s) normalmente.
         Verifique abaixo o motivo em linguagem simples e, se quiser, use "Reenviar apenas com erro".
       </div>

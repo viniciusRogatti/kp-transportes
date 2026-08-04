@@ -17,7 +17,7 @@ export default function DanfeStatusLegend({
   const activeLegendItem = activeStatusFilter ? getDanfeLegendItem(activeStatusFilter) : null;
 
   return (
-    <div data-tutorial="invoice-status-filters" className="mx-auto mb-s3 w-full max-w-[1200px] rounded-lg border border-border bg-surface/90 p-s3" data-testid="danfe-status-legend">
+    <div data-tutorial="invoice-status-filters" className="mx-auto mb-s3 w-full max-w-[1200px] rounded-lg border border-border bg-surface p-s3" data-testid="danfe-status-legend">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
           Status da NF

@@ -91,8 +91,8 @@ function WhatsappBotConnection() {
           Esta página acompanha a sessão executada na VPS. Você poderá fechá-la assim que o bot estiver pronto.
         </p>
 
-        <div className={`mt-5 rounded-lg border p-4 ${isReady ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-amber-300/30 bg-amber-400/10'}`}>
-          <p className={`font-semibold ${isReady ? 'text-emerald-400' : 'text-amber-400'}`}>
+        <div className={`mt-5 rounded-lg border p-4 ${isReady ? 'semantic-panel-success' : 'semantic-panel-warning'}`}>
+          <p className="font-semibold">
             {statusLabel}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -132,13 +132,13 @@ function WhatsappBotConnection() {
         ) : null}
 
         {isReady ? (
-          <div className="mt-5 rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+          <div className="mt-5 rounded-lg border semantic-panel-success p-4 text-sm">
             A sessão está rodando no servidor. Fechar esta página não desconecta o bot.
           </div>
         ) : null}
 
         {requestError ? (
-          <div className="mt-5 rounded-lg border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-200">
+          <div className="mt-5 rounded-lg border semantic-panel-danger p-4 text-sm">
             {requestError}
           </div>
         ) : null}

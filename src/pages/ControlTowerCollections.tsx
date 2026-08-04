@@ -123,20 +123,20 @@ const CONTROL_TOWER_THEME_CLASSES = {
   },
   dark: {
     mainCard: 'border-border bg-card',
-    filterSection: 'group rounded-lg border border-border bg-surface/60',
-    kpiSection: 'group rounded-lg border border-border bg-card/60',
+    filterSection: 'group rounded-lg border border-border bg-surface',
+    kpiSection: 'group rounded-lg border border-border bg-card',
     notificationBadge: 'border-amber-300/70 bg-amber-500 text-slate-950',
     notificationMarkRead: 'text-sky-300 hover:text-[color:var(--color-text-accent)]',
-    notificationUnreadCard: 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70',
-    notificationUnreadPill: 'border-sky-400/55 bg-sky-900/55 text-sky-100',
+    notificationUnreadCard: 'semantic-panel-info hover:brightness-110',
+    notificationUnreadPill: 'semantic-solid-info',
     register: {
-      card: 'border-amber-500/60 bg-gradient-to-br from-amber-900/25 to-[#101b2b] shadow-[0_0_0_1px_rgba(245,158,11,0.18)]',
+      card: 'semantic-panel-warning shadow-soft',
       title: 'text-sm font-semibold text-[color:var(--color-warning)]',
       description: 'text-xs text-[color:var(--color-warning)]/80',
       label: 'text-xs font-medium text-text',
       inputBorder: 'border-amber-500/35',
       validateButton: 'h-10 border-amber-500/45 bg-card text-[color:var(--color-warning)] hover:bg-surface-2 disabled:opacity-60',
-      submitButton: 'h-10 bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60',
+      submitButton: 'h-10 semantic-solid-warning hover:brightness-110 disabled:opacity-60',
       hint: 'text-xs text-muted',
       contextBox: 'border-amber-500/35 text-text',
       contextMeta: 'text-muted',
@@ -148,9 +148,9 @@ const CONTROL_TOWER_THEME_CLASSES = {
       itemMeta: 'text-muted',
       itemLabel: 'text-muted',
       itemInputBorder: 'border-border',
-      openInvoiceButton: 'rounded-md border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 font-semibold text-[color:var(--color-warning)] transition hover:bg-amber-900/35',
-      highlightedOccurrence: 'border-amber-400/70 bg-amber-900/25 ring-1 ring-amber-300/40',
-      collectionStatusBadge: 'border-sky-500/55 bg-sky-900/55 text-sky-100',
+      openInvoiceButton: 'rounded-md border semantic-solid-warning px-2 py-0.5 font-semibold transition hover:brightness-110',
+      highlightedOccurrence: 'semantic-panel-warning ring-1 ring-[color:var(--semantic-warning-border)]',
+      collectionStatusBadge: 'semantic-solid-info',
     },
   },
 } as const;
@@ -1896,7 +1896,7 @@ function ControlTowerCollections() {
             </div>
 
             {collectionTrackingError ? (
-              <p className="mt-2 rounded-sm border border-red-500/40 bg-red-900/20 px-2 py-1 text-xs text-red-200">
+              <p className="mt-2 rounded-sm border semantic-panel-danger px-2 py-1 text-xs">
                 {collectionTrackingError}
               </p>
             ) : null}
@@ -1945,7 +1945,7 @@ function ControlTowerCollections() {
                             {formatCollectionWorkflowStatus(request)}
                           </span>
                           <span className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${requestIsPriority
-                            ? 'border-rose-400/70 bg-rose-700/25 text-[color:var(--color-danger)]'
+                            ? 'semantic-solid-danger'
                             : 'border-emerald-400/55 bg-emerald-100 text-[color:var(--color-success)]'
                             }`}
                           >
@@ -1955,7 +1955,7 @@ function ControlTowerCollections() {
                             type="button"
                             onClick={() => setCollectionOccurrenceDialog(request)}
                             className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold transition ${hasNotes
-                              ? 'border-amber-400/60 bg-amber-700/25 text-[color:var(--color-warning)] hover:bg-amber-700/35'
+                              ? 'semantic-solid-warning hover:brightness-110'
                               : 'border-border bg-surface-2 text-text hover:bg-surface-2'
                               }`}
                           >
@@ -1971,7 +1971,7 @@ function ControlTowerCollections() {
                           {` | Escopo: ${scopeLabel}`}
                         </span>
                         {request.scheduled_for ? (
-                          <span className="rounded-md border border-emerald-400/70 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-bold text-[color:var(--color-success)]">
+                          <span className="rounded-md border semantic-solid-success px-2 py-0.5 text-[11px] font-bold">
                             {`Agendada para ${formatDateBR(request.scheduled_for)}`}
                           </span>
                         ) : null}
@@ -2005,7 +2005,7 @@ function ControlTowerCollections() {
                             onClick={() => handleToggleCollectionPriority(request)}
                             disabled={prioritizingCollectionId === String(request.id)}
                             className={`inline-flex h-7 items-center rounded-md border px-2.5 text-[11px] font-bold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60 ${requestIsPriority
-                              ? 'border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] hover:from-rose-600 hover:to-rose-500'
+                              ? 'semantic-solid-danger hover:brightness-110'
                               : 'border-border bg-surface-2 text-text hover:bg-surface-2'
                               }`}
                           >
@@ -2019,7 +2019,7 @@ function ControlTowerCollections() {
                             type="button"
                             onClick={() => handleCancelCollectionRequest(request)}
                             disabled={cancellingCollectionInvoice === String(request.id)}
-                            className="inline-flex h-7 items-center rounded-md border border-rose-400/70 bg-gradient-to-r from-rose-700/80 to-rose-600/75 px-2.5 text-[11px] font-bold tracking-wide text-rose-50 shadow-[0_8px_16px_rgba(190,24,93,0.28)] transition hover:from-rose-600 hover:to-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-7 items-center rounded-md border semantic-solid-danger px-2.5 text-[11px] font-bold tracking-wide transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {cancellingCollectionInvoice === String(request.id) ? 'Cancelando...' : 'Cancelar coleta'}
                           </button>
@@ -2029,7 +2029,7 @@ function ControlTowerCollections() {
                             type="button"
                             onClick={() => handleRequestCollectionCancellation(request)}
                             disabled={cancellingCollectionInvoice === String(request.id)}
-                            className="inline-flex h-7 items-center rounded-md border border-amber-300/70 bg-gradient-to-r from-amber-700/85 to-amber-600/80 px-2.5 text-[11px] font-bold tracking-wide text-amber-50 shadow-[0_8px_16px_rgba(217,119,6,0.26)] transition hover:from-amber-600 hover:to-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-7 items-center rounded-md border semantic-solid-warning px-2.5 text-[11px] font-bold tracking-wide transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {cancellingCollectionInvoice === String(request.id) ? 'Enviando...' : 'Solicitar cancelamento'}
                           </button>
@@ -2146,7 +2146,7 @@ function ControlTowerCollections() {
                       {canConfirmTowerBatchReceipt ? (
                         <Button
                           tone="secondary"
-                          className="h-8 bg-emerald-700/80 px-3 text-[11px] font-semibold text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
+                          className="h-8 semantic-solid-success px-3 text-[11px] font-semibold hover:brightness-110 disabled:opacity-60"
                           onClick={() => handleConfirmBatchReceipt(batch.batch_code)}
                           disabled={receivingBatchCode === batch.batch_code}
                         >
@@ -2363,8 +2363,8 @@ function ControlTowerCollections() {
                 <Button
                   tone="primary"
                   className={`${collectionCancellationDialog.mode === 'direct_cancel'
-                    ? 'h-9 bg-rose-700/90 text-rose-50 hover:bg-rose-600'
-                    : 'h-9 bg-amber-700/90 text-amber-50 hover:bg-amber-600'
+                    ? 'h-9 semantic-solid-danger hover:brightness-110'
+                    : 'h-9 semantic-solid-warning hover:brightness-110'
                     } disabled:opacity-60`}
                   onClick={confirmCollectionCancellationDialog}
                   disabled={Boolean(cancellingCollectionInvoice)}
@@ -2471,7 +2471,7 @@ function ControlTowerCollections() {
                 </Button>
                 <Button
                   tone="primary"
-                  className="h-9 bg-emerald-700/90 text-emerald-50 hover:bg-emerald-600 disabled:opacity-60"
+                  className="h-9 semantic-solid-success hover:brightness-110 disabled:opacity-60"
                   onClick={confirmBatchReceiptWithModal}
                   disabled={Boolean(receivingBatchCode)}
                 >

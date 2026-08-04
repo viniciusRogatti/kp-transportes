@@ -87,7 +87,7 @@ function ReturnsTable({
   const { isLightTheme } = useTheme();
   const selectedReturnTypeFilterClass = isLightTheme
     ? 'ct-light-active-filter border-sky-600 bg-sky-100 text-[color:var(--color-text-accent)]'
-    : 'border-sky-500/65 bg-sky-900/55 text-sky-100';
+    : 'semantic-solid-info';
 
   const columns = useMemo<ColumnDef<ReturnsTableRow>[]>(() => [
     { accessorKey: 'flowOrigin', header: 'Fluxo', cell: ({ row }) => getFlowOriginLabel(row.original.flowOrigin) },
@@ -108,7 +108,7 @@ function ReturnsTable({
         <span className="inline-flex items-center gap-1.5">
           <span>{getReturnTypeLabel(row.original.returnType)}</span>
           {row.original.returnType === 'sobra' && row.original.isInversion ? (
-            <span className="rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-warning)]">
+            <span className="rounded-full border semantic-solid-warning px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide">
               Inversao
             </span>
           ) : null}
@@ -144,7 +144,7 @@ function ReturnsTable({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Buscar por NF, lote, cliente, cidade ou produto"
-            className="h-9 w-[320px] border-accent/35 bg-surface-2/85 text-text focus:ring-accent/60"
+            className="h-9 w-[320px] border-accent/35 bg-surface-2 text-text focus:ring-accent/60"
           />
           <span className="text-xs text-muted">{total} registros</span>
         </div>

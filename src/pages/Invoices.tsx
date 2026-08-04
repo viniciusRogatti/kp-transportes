@@ -381,7 +381,7 @@ function Invoices() {
                 <button
                   type="button"
                   onClick={() => navigate(invoiceSearchFeedback.actionUrl as string)}
-                  className="ml-2 rounded-md border border-current/30 bg-card/70 px-2 py-1 text-xs font-semibold"
+                  className="ml-2 rounded-md border border-current/30 bg-card px-2 py-1 text-xs font-semibold"
                 >
                   {invoiceSearchFeedback.actionLabel || 'Abrir referência'}
                 </button>
@@ -424,7 +424,7 @@ function Invoices() {
           <div className="mt-2 flex w-full justify-end">
             <select
               onChange={(event) => updateFilter('route', event.target.value)}
-              className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:w-full max-[768px]:min-w-0"
+              className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:w-full max-[768px]:min-w-0"
               value={filters.route}
             >
               {routes.map((route, index) => (
@@ -485,13 +485,13 @@ function Invoices() {
           </span>
         </div>
         <div className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-text">
+          <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
           </span>
           {activeFilters.map((filter) => (
             <button
               key={filter.key}
-              className="rounded-full border border-border bg-surface/75 px-2.5 py-1 text-muted hover:text-text"
+              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
               onClick={() => clearFilter(filter.key)}
             >
               {filter.label} ×
@@ -500,7 +500,7 @@ function Invoices() {
           {filters.loadNumbers.map((load) => (
             <button
               key={load}
-              className="rounded-full border border-border bg-surface/75 px-2.5 py-1 text-muted hover:text-text"
+              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
               onClick={() => clearLoadFilter(load)}
             >
               {`Carga: ${load}`} ×

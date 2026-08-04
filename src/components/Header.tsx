@@ -32,6 +32,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 import { logoutSession } from '../utils/logoutSession';
+import { showConfirm } from '../utils/dialog';
 import {
   getRoutePermissions,
 } from '../utils/permissions';
@@ -161,8 +162,8 @@ function Header() {
   // operacional e na Central de Alertas, mas nao poluem novamente este menu.
   const latestNotifications = notifications.filter((notification) => !notification.read);
   const unreadNotificationClass = isLightTheme
-    ? 'border-sky-500/60 bg-sky-100 hover:bg-sky-100'
-    : 'border-sky-500/45 bg-sky-950/55 hover:bg-sky-900/70';
+    ? 'semantic-panel-info hover:bg-sky-100'
+    : 'semantic-panel-info hover:bg-[#163654]';
   const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission));
 
   useEffect(() => {
@@ -252,8 +253,9 @@ function Header() {
       navigate(buildIncorrectReceiptUrl(notification));
       return;
     }
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       'Confirma que o problema foi resolvido? Esta notificação será removida para todos os usuários.',
+      { title: 'Resolver notificação', confirmLabel: 'Marcar como resolvido' },
     );
     if (!confirmed) return;
     await resolveNotification(notification.id);
@@ -305,7 +307,7 @@ function Header() {
                 title={item.label}
               >
                 <span className={cn(
-                  'inline-flex items-center justify-center rounded-md border',
+                  'inline-flex shrink-0 items-center justify-center rounded-md border',
                   isActive
                     ? 'border-blue-300/60 bg-accent-strong text-white'
                     : 'border-border bg-surface-2 text-muted group-hover:text-text',
@@ -403,8 +405,8 @@ function Header() {
               <span className={cn(
                 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
                 connected
-                  ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-500'
-                  : 'border-amber-500/60 bg-amber-500/10 text-amber-500',
+                  ? 'semantic-solid-success'
+                  : 'semantic-solid-warning',
               )}>
                 <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} />
                 {connected ? 'Tempo real ativo' : 'Atualização periódica'}
@@ -441,7 +443,7 @@ function Header() {
             </div>
 
             {!latestNotifications.length ? (
-              <p className="mt-3 rounded-md border border-border bg-surface-2/70 px-2 py-2 text-xs text-muted">
+              <p className="mt-3 rounded-md border border-border bg-surface-2 px-2 py-2 text-xs text-muted">
                 Nenhuma notificação nova. As pendências visualizadas continuam disponíveis no painel e no histórico.
               </p>
             ) : (
@@ -458,7 +460,7 @@ function Header() {
                           'w-full rounded-md border text-left transition',
                           isUnread
                             ? unreadNotificationClass
-                            : 'border-border bg-surface-2/70 hover:bg-surface-2',
+                            : 'border-border bg-surface-2 hover:bg-surface-2',
                         )}
                       >
                         <button
@@ -484,7 +486,7 @@ function Header() {
                               type="button"
                               onClick={() => handleResolveNotification(notification)}
                               disabled={correctionPending}
-                              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/50 bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-500"
+                              className="inline-flex items-center gap-1 rounded-md border semantic-solid-success px-2 py-1 text-[11px] font-semibold"
                             >
                               <CircleCheck className="h-3.5 w-3.5" />
                               {notification.type === 'WHATSAPP_INVOICE_NOT_FOUND'
@@ -548,7 +550,7 @@ function Header() {
                 )}
               >
                 <span className={cn(
-                  'inline-flex h-8 w-8 items-center justify-center rounded-md border',
+                  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border',
                   isActive
                     ? 'border-blue-300/60 bg-accent-strong text-white'
                     : 'border-border bg-surface-2 text-text',

@@ -16,10 +16,11 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
+import { showConfirm } from '../utils/dialog';
 import verifyToken from '../utils/verifyToken';
 import {
   ReceiptBag,
@@ -66,15 +67,15 @@ const BAG_STATUS: Record<ReceiptBagStatus, { label: string; className: string }>
   completed_with_pending: { label: 'Conferido com pendências', className: 'border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200' },
 };
 const ITEM_STATUS: Record<ReceiptBagItemStatus, { label: string; badge: string; row: string }> = {
-  pending: { label: 'Aguardando', badge: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200', row: 'border-border bg-card hover:border-sky-400' },
-  confirmed: { label: 'Presente', badge: 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200', row: 'border-emerald-300 bg-emerald-50/80 dark:border-emerald-900 dark:bg-emerald-950/30' },
-  absent: { label: 'Ausente', badge: 'border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200', row: 'border-red-300 bg-red-50/80 dark:border-red-900 dark:bg-red-950/30' },
-  recovered: { label: 'Recuperado', badge: 'border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-200', row: 'border-teal-300 bg-teal-50/80 dark:border-teal-900 dark:bg-teal-950/30' },
-  resolved_elsewhere: { label: 'Em outro malote', badge: 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200', row: 'border-violet-300 bg-violet-50/80 dark:border-violet-900 dark:bg-violet-950/30' },
-  returned: { label: 'Devolução', badge: 'border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-200', row: 'border-orange-300 bg-orange-50/80 dark:border-orange-900 dark:bg-orange-950/30' },
-  retained: { label: 'Retido no cliente', badge: 'border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200', row: 'border-amber-300 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/30' },
-  redelivery: { label: 'Reentrega', badge: 'border-fuchsia-300 bg-fuchsia-100 text-fuchsia-800 dark:border-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-200', row: 'border-fuchsia-300 bg-fuchsia-50/80 dark:border-fuchsia-900 dark:bg-fuchsia-950/30' },
-  cancelled: { label: 'Cancelada', badge: 'border-slate-300 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400', row: 'border-border bg-muted/30 opacity-75' },
+  pending: { label: 'Aguardando', badge: 'semantic-solid-neutral', row: 'semantic-panel-neutral shadow-sm hover:border-slate-500' },
+  confirmed: { label: 'Presente', badge: 'semantic-solid-success', row: 'semantic-panel-success' },
+  absent: { label: 'Ausente', badge: 'semantic-solid-danger', row: 'semantic-panel-danger' },
+  recovered: { label: 'Recuperado', badge: 'semantic-solid-success', row: 'semantic-panel-success' },
+  resolved_elsewhere: { label: 'Em outro malote', badge: 'semantic-solid-info', row: 'semantic-panel-info' },
+  returned: { label: 'Devolução', badge: 'semantic-solid-danger', row: 'semantic-panel-danger' },
+  retained: { label: 'Retido no cliente', badge: 'semantic-solid-warning', row: 'semantic-panel-warning' },
+  redelivery: { label: 'Reentrega', badge: 'semantic-solid-redelivery', row: 'semantic-panel-redelivery' },
+  cancelled: { label: 'Cancelada', badge: 'semantic-solid-neutral', row: 'semantic-panel-neutral' },
 };
 const CLOSED_STATUSES = ['confirmed', 'recovered', 'resolved_elsewhere'];
 const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled'];
@@ -95,9 +96,9 @@ function BagBadge({ status }: { status: ReceiptBagStatus }) {
 function SummaryCard({ label, value, icon, tone = '' }: {
   label: string; value: number; icon: JSX.Element; tone?: 'red' | 'amber' | 'green' | '';
 }) {
-  const toneClass = tone === 'red' ? 'border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/25'
-    : tone === 'amber' ? 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/25'
-      : tone === 'green' ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/25'
+  const toneClass = tone === 'red' ? 'semantic-panel-danger'
+    : tone === 'amber' ? 'semantic-panel-warning'
+      : tone === 'green' ? 'semantic-panel-success'
         : 'border-border bg-card';
   return (
     <div className={`rounded-2xl border p-4 shadow-sm ${toneClass}`}>
@@ -191,6 +192,12 @@ function ReceiptBagClosing() {
         || (itemFilter === 'exceptions' && EXEMPT_STATUSES.includes(item.status));
       return matchesFilter && (!term || [item.invoice_number, item.customer_name, item.city]
         .some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(term)));
+    }).sort((left, right) => {
+      const leftPending = left.status === 'pending' ? 0 : 1;
+      const rightPending = right.status === 'pending' ? 0 : 1;
+      return leftPending - rightPending
+        || Number(left.route_order ?? Number.MAX_SAFE_INTEGER) - Number(right.route_order ?? Number.MAX_SAFE_INTEGER)
+        || left.invoice_number.localeCompare(right.invoice_number, 'pt-BR', { numeric: true });
     });
   }, [activeBag, itemFilter, itemSearch]);
   const selectedItem = activeBag?.items.find((item) => item.id === selectedItemId) || null;
@@ -209,7 +216,7 @@ function ReceiptBagClosing() {
         ? await startReceiptBagClosing(row.trip_id)
         : await getReceiptBagClosing(row.bag_id as number);
       setActiveBag(bag);
-      setSelectedItemId(bag.items.find((item) => item.status === 'pending')?.id || bag.items[0]?.id || null);
+      setSelectedItemId(null);
       setItemFilter('all');
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível iniciar a conferência.'));
@@ -220,24 +227,26 @@ function ReceiptBagClosing() {
     item: ReceiptBagItem,
     action: 'confirm' | 'absent' | 'returned',
     forceTransfer = false,
-  ) => {
-    if (!activeBag || mutating) return;
+  ): Promise<boolean> => {
+    if (!activeBag || mutating) return false;
     if (action === 'absent' && item.is_suggested_extra) {
       setError('Uma NF apenas sugerida para este malote não pode ser marcada como ausente aqui.');
-      return;
+      return false;
     }
     if (
       action === 'confirm'
       && !forceTransfer
       && !item.has_receipt_photo
-      && !window.confirm(
+      && !await showConfirm(
         `A NF ${item.invoice_number} ainda está sem foto de canhoto.\n\n`
         + 'O documento físico está realmente neste malote?',
+        { title: 'Canhoto sem foto', confirmLabel: 'Confirmar presença' },
       )
-    ) return;
-    if (action === 'returned' && !window.confirm(
+    ) return false;
+    if (action === 'returned' && !await showConfirm(
       `Registrar a NF ${item.invoice_number} como devolução?\n\nIsso removerá a necessidade do canhoto e atualizará a jornada da NF.`,
-    )) return;
+      { title: 'Registrar devolução', confirmLabel: 'Registrar devolução', tone: 'danger' },
+    )) return false;
     setMutating(true);
     setError('');
     try {
@@ -246,26 +255,34 @@ function ReceiptBagClosing() {
         ? item.status === 'absent' ? `NF ${item.invoice_number} recuperada.` : `NF ${item.invoice_number} confirmada.`
         : action === 'absent' ? `NF ${item.invoice_number} marcada como ausente.`
           : `Devolução da NF ${item.invoice_number} registrada.`);
-      const index = visibleItems.findIndex((row) => row.id === item.id);
-      setSelectedItemId(visibleItems[index + 1]?.id || visibleItems[index - 1]?.id || null);
+      setSelectedItemId(null);
       void loadList(true);
+      return true;
     } catch (requestError) {
       const payload = errorPayload(requestError);
       if (payload.code === 'RECEIPT_ALREADY_CONFIRMED' && !forceTransfer) {
-        const correction = window.confirm(
+        const correction = await showConfirm(
           `${payload.error || 'Esta NF já foi confirmada em outro malote.'}\n\n`
           + `Local atual: ${payload.details?.driver_name || 'outro motorista'}`
           + `${payload.details?.trip_id ? ` — rota #${payload.details.trip_id}` : ''}.\n\n`
           + `Corrigir a localização para o malote de ${activeBag.driver?.name || 'motorista atual'}?`,
+          { title: 'Canhoto em outro malote', confirmLabel: 'Corrigir localização' },
         );
         if (correction) {
           setMutating(false);
-          await mutateItem(item, action, true);
-          return;
+          return await mutateItem(item, action, true);
         }
       } else setError(errorMessage(requestError, 'Não foi possível atualizar o canhoto.'));
+      return false;
     } finally { setMutating(false); }
-  }, [activeBag, loadList, mutating, visibleItems]);
+  }, [activeBag, loadList, mutating]);
+
+  useEffect(() => {
+    if (!activeBag) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [activeBag]);
 
   const openHistoricalRouteSelection = useCallback(async (invoiceNumber: string, routeDate = '') => {
     if (!activeBag) return;
@@ -298,9 +315,10 @@ function ReceiptBagClosing() {
     } catch (requestError) {
       const payload = errorPayload(requestError);
       if (payload.code === 'RECEIPT_ALREADY_CONFIRMED' && !forceTransfer) {
-        const correction = window.confirm(
+        const correction = await showConfirm(
           `${payload.error || 'Esta NF já foi confirmada em outro malote.'}\n\n`
           + `Corrigir a localização para o malote de ${activeBag.driver?.name || 'motorista atual'}?`,
+          { title: 'Canhoto em outro malote', confirmLabel: 'Corrigir localização' },
         );
         if (correction) {
           setMutating(false);
@@ -319,14 +337,16 @@ function ReceiptBagClosing() {
     if (!activeBag || !historicalRoutes || !selectedHistoricalTripId || mutating) return;
     const route = historicalRoutes.routes.find((candidate) => candidate.id === selectedHistoricalTripId);
     if (!route) return;
-    if (!historicalRoutes.invoice.has_receipt_photo && !window.confirm(
+    if (!historicalRoutes.invoice.has_receipt_photo && !await showConfirm(
       `A NF ${historicalRoutes.invoice.invoice_number} está sem foto de canhoto.\n\n`
       + 'Deseja vincular a entrega à rota mesmo assim?',
+      { title: 'Canhoto sem foto', confirmLabel: 'Vincular mesmo assim' },
     )) return;
-    if (!window.confirm(
+    if (!await showConfirm(
       `Vincular a NF ${historicalRoutes.invoice.invoice_number} retroativamente à rota #${route.id}?\n\n`
       + `${route.driver?.name || 'Motorista'} · ${formatDate(route.date)} · ${route.car?.license_plate || 'sem placa'}\n\n`
       + 'A NF será incluída na rota já como entregue e a alteração ficará registrada na jornada.',
+      { title: 'Vincular à rota histórica', confirmLabel: 'Vincular NF' },
     )) return;
     setMutating(true);
     setError('');
@@ -351,9 +371,10 @@ function ReceiptBagClosing() {
 
   const confirmUnroutedExtra = async () => {
     if (!activeBag || !historicalRoutes || mutating) return;
-    if (!window.confirm(
+    if (!await showConfirm(
       `Registrar a NF ${historicalRoutes.invoice.invoice_number} somente neste malote?\n\n`
       + 'A NF continuará pendente e sem vínculo com uma rota.',
+      { title: 'Registrar sem rota', confirmLabel: 'Registrar no malote' },
     )) return;
     setMutating(true);
     setError('');
@@ -376,8 +397,10 @@ function ReceiptBagClosing() {
   };
 
   const markRemainingAbsent = async () => {
-    if (!activeBag?.counts.pending || mutating || !window.confirm(
+    if (!activeBag?.counts.pending || mutating) return;
+    if (!await showConfirm(
       `Marcar ${activeBag.counts.pending} canhoto(s) restante(s) como ausente(s)?`,
+      { title: 'Ausentar canhotos restantes', confirmLabel: 'Marcar como ausentes', tone: 'danger' },
     )) return;
     setMutating(true);
     try {
@@ -396,20 +419,23 @@ function ReceiptBagClosing() {
       let bag = activeBag;
       if (bag.counts.pending) {
         setMutating(false);
-        if (!window.confirm(
+        if (!await showConfirm(
           `Ainda existem ${bag.counts.pending} canhoto(s) sem definição.\n\nMarcá-los como ausentes e finalizar?`,
+          { title: 'Finalizar com pendências', confirmLabel: 'Ausentar e finalizar', tone: 'danger' },
         )) return;
         setMutating(true);
         bag = await markRemainingReceiptBagItemsAbsent(bag.id);
       }
       const finishedBag = await finishReceiptBagClosing(bag.id);
-      applyBag(
-        finishedBag,
-        finishedBag.status === 'completed_with_pending'
-          ? 'Conferência registrada com divergências; o malote continua na fila.'
-          : 'Conferência finalizada.',
-      );
-      void loadList(true);
+      await loadList(true);
+      setActiveBag(null);
+      setSelectedItemId(null);
+      setItemSearch('');
+      setExtraInvoice('');
+      setHistoricalRoutes(null);
+      setFeedback(finishedBag.status === 'completed_with_pending'
+        ? 'Conferência registrada com divergências.'
+        : 'Conferência finalizada.');
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível finalizar a conferência.'));
     } finally { setMutating(false); }
@@ -453,15 +479,12 @@ function ReceiptBagClosing() {
   return (
     <>
       <Header />
-      <Container>
-        <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6">
-          <section data-tutorial="bag-page-intro" className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <Container className="h-dvh min-h-0 overflow-hidden pb-0">
+        <main className="mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col px-2 py-3 sm:px-4">
+          <section data-tutorial="bag-page-intro" className="mb-3 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-sky-600">Controle físico</p>
-              <h1 className="mt-1 text-3xl font-black text-text">Fechamento de Canhotos</h1>
-              <p className="mt-2 max-w-3xl text-sm text-muted">
-                Confira os canhotos de cada malote e registre ausências, devoluções e documentos recebidos com outro motorista.
-              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-600">Controle físico</p>
+              <h1 className="text-2xl font-black text-text">Fechamento de Canhotos</h1>
             </div>
             <div className="flex flex-wrap gap-2">
               <label data-tutorial="bag-date-filter" className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
@@ -475,8 +498,9 @@ function ReceiptBagClosing() {
           </section>
 
           {error && !activeBag ? <ErrorBanner message={error} /> : null}
+          {feedback && !activeBag ? <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400 bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"><CheckCircle2 className="h-5 w-5" />{feedback}</div> : null}
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <section className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6 [&>div]:rounded-xl [&>div]:p-3 [&>div>p]:mt-1 [&>div>p]:text-xl">
             <SummaryCard label="Malotes" value={data?.summary.bags || 0} icon={<PackageCheck className="h-5 w-5" />} />
             <SummaryCard label="Esperados" value={data?.summary.expected || 0} icon={<ClipboardCheck className="h-5 w-5" />} />
             <SummaryCard label="Conferidos" value={data?.summary.confirmed || 0} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
@@ -485,8 +509,8 @@ function ReceiptBagClosing() {
             <SummaryCard label="Divergentes" value={data?.summary.divergent_bags || 0} icon={<Undo2 className="h-5 w-5" />} tone="amber" />
           </section>
 
-          <section data-tutorial="bag-list" className="mt-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+          <section data-tutorial="bag-list" className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex shrink-0 flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center lg:justify-between">
               <div data-tutorial="bag-status-filters" className="flex flex-wrap gap-2">
                 {([['pending', 'Pendentes'], ['overdue', 'Atrasados'], ['completed', 'Conferidos'], ['all', 'Todos']] as Array<[ViewFilter, string]>).map(([key, label]) => (
                   <FilterButton key={key} active={viewFilter === key} onClick={() => setViewFilter(key)}>{label}</FilterButton>
@@ -518,7 +542,7 @@ function ReceiptBagClosing() {
           onSearch={setItemSearch}
           onExtraChange={setExtraInvoice}
           onExtra={() => void addExtra()}
-          onMutate={(item, action) => void mutateItem(item, action)}
+          onMutate={mutateItem}
           onMarkRemaining={() => void markRemainingAbsent()}
           onFinish={() => void finish()}
         />
@@ -548,7 +572,7 @@ function ReceiptBagClosing() {
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="mb-5 flex items-center gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+    <div className="mb-5 flex items-center gap-3 rounded-xl border semantic-panel-danger px-4 py-3 text-sm font-semibold">
       <AlertCircle className="h-5 w-5 shrink-0" />{message}
     </div>
   );
@@ -556,13 +580,19 @@ function ErrorBanner({ message }: { message: string }) {
 function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button type="button" onClick={onClick} className={`rounded-xl px-4 py-2 text-sm font-bold ${active ? 'bg-sky-600 text-white' : 'border border-border hover:bg-muted/40'}`}>{children}</button>;
 }
-function SearchBox({ value, onChange, placeholder, autoFocus = false }: {
-  value: string; onChange: (value: string) => void; placeholder: string; autoFocus?: boolean;
+function SearchBox({ value, onChange, placeholder, autoFocus = false, inputRef, onKeyDown, className = '' }: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  inputRef?: React.Ref<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  className?: string;
 }) {
   return (
-    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 lg:w-[390px]">
+    <label className={`flex min-w-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2 ${className || 'lg:w-[390px]'}`}>
       <Search className="h-4 w-4 shrink-0 text-muted" />
-      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} autoFocus={autoFocus} className="w-full bg-transparent text-sm outline-none" />
+      <input ref={inputRef} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} className="w-full bg-transparent text-sm outline-none" />
       {value ? <button type="button" onClick={() => onChange('')} aria-label="Limpar busca"><X className="h-4 w-4 text-muted" /></button> : null}
     </label>
   );
@@ -590,7 +620,7 @@ function HistoricalRouteDialog({
 }) {
   const selectedRoute = data.routes.find((route) => route.id === selectedTripId);
   return (
-    <div className="fixed inset-0 z-[130] grid place-items-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6">
+    <div className="fixed inset-0 z-[1500] grid place-items-center bg-slate-950/75 p-3 backdrop-blur-sm sm:p-6">
       <section role="dialog" aria-modal="true" aria-labelledby="historical-route-title" className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border bg-surface text-text shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-border bg-card p-5 sm:p-6">
           <div className="flex min-w-0 gap-3">
@@ -608,7 +638,7 @@ function HistoricalRouteDialog({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+        <div className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
           {error ? <ErrorBanner message={error} /> : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-border bg-card p-4">
@@ -622,15 +652,15 @@ function HistoricalRouteDialog({
               <p className="mt-1 text-xs text-muted">Status atual: {data.invoice.status}</p>
             </div>
             <div className={`rounded-2xl border p-4 ${data.invoice.has_receipt_photo
-              ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30'
-              : 'border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'}`}>
+              ? 'semantic-panel-success'
+              : 'semantic-panel-warning'}`}>
               <p className="text-xs font-bold uppercase text-muted">Evidência do canhoto</p>
               <p className="mt-1 font-black">{data.invoice.has_receipt_photo ? 'Foto localizada' : 'Sem foto localizada'}</p>
               <p className="mt-1 text-xs text-muted">{data.invoice.has_receipt_photo ? 'A publicação será preservada no histórico.' : 'A confirmação exigirá uma validação adicional.'}</p>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/35 dark:text-sky-100">
+          <div className="mt-5 rounded-2xl border semantic-panel-info p-4 text-sm">
             <strong>O que será registrado:</strong> a NF entrará na rota escolhida como entregue, sem reabrir a viagem. A data, o motorista, o veículo, o motivo e o usuário responsável ficarão na jornada e na auditoria.
           </div>
 
@@ -653,7 +683,7 @@ function HistoricalRouteDialog({
               return (
                 <button key={route.id} type="button" disabled={loading} onClick={() => onSelect(route.id)}
                   className={`rounded-2xl border p-4 text-left transition disabled:opacity-50 ${selected
-                    ? 'border-violet-500 bg-violet-50 ring-2 ring-violet-500/25 dark:bg-violet-950/35'
+                    ? 'semantic-panel-info ring-2 ring-[color:var(--semantic-info-border)]'
                     : 'border-border bg-card hover:border-violet-300 hover:bg-muted/20'}`}>
                   <span className="flex items-start justify-between gap-3">
                     <span><span className="block text-lg font-black">Rota #{route.id}</span><span className="mt-0.5 block text-xs text-muted">{formatDate(route.date)} · saída #{route.run_number}</span></span>
@@ -680,7 +710,7 @@ function HistoricalRouteDialog({
 
           <label className="mt-5 block">
             <span className="text-sm font-black">Observação para auditoria <span className="font-normal text-muted">(opcional)</span></span>
-            <textarea value={reasonNotes} disabled={loading} onChange={(event) => onReasonNotesChange(event.target.value)} maxLength={500} rows={3} placeholder="Ex.: produtos entregues sem a NF por falha no faturamento; documento emitido no dia seguinte." className="mt-2 w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
+            <textarea value={reasonNotes} disabled={loading} onChange={(event) => onReasonNotesChange(event.target.value)} maxLength={500} rows={3} placeholder="Ex.: produtos entregues sem a NF por falha no faturamento; documento emitido no dia seguinte." className="scrollbar-ui mt-2 w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
           </label>
         </div>
 
@@ -702,29 +732,29 @@ function BagTable({ rows, mutating, onOpen }: {
   rows: ReceiptBagListRow[]; mutating: boolean; onOpen: (row: ReceiptBagListRow) => void;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[980px] text-left text-sm">
+    <div className="scrollbar-ui min-h-0 flex-1 overflow-auto">
+      <table className="w-full min-w-[900px] text-left text-xs">
         <thead className="bg-muted/30 text-xs uppercase tracking-wide text-muted">
           <tr><th className="px-5 py-3">Rota</th><th className="px-5 py-3">Motorista / veículo</th><th className="px-5 py-3">Data</th><th className="px-5 py-3 text-center">Progresso</th><th className="px-5 py-3">Situação</th><th className="px-5 py-3 text-right">Ação</th></tr>
         </thead>
         <tbody className="divide-y divide-border">
           {rows.map((row) => (
             <tr key={`${row.company_id}-${row.trip_id}`} className="hover:bg-muted/20">
-              <td className="px-5 py-4"><p className="font-black">#{row.trip_id}</p><p className="text-xs text-muted">Saída #{row.run_number} · {row.company?.name || row.company?.code || 'Empresa'}</p></td>
-              <td className="px-5 py-4"><p className="font-bold">{row.driver?.name || 'Motorista não identificado'}</p><p className="text-xs text-muted">{row.car?.license_plate || '-'} · {row.car?.model || 'Veículo'}</p></td>
-              <td className="px-5 py-4">
+              <td className="px-4 py-3"><p className="font-black">#{row.trip_id}</p><p className="text-[11px] text-muted">Saída #{row.run_number} · {row.company?.name || row.company?.code || 'Empresa'}</p></td>
+              <td className="px-4 py-3"><p className="font-bold">{row.driver?.name || 'Motorista não identificado'}</p><p className="text-[11px] text-muted">{row.car?.license_plate || '-'} · {row.car?.model || 'Veículo'}</p></td>
+              <td className="px-4 py-3">
                 <p className="font-semibold">{formatDate(row.operation_date)}</p>
                 {row.is_overdue ? <p className="mt-1 text-xs font-bold text-red-600">Malote atrasado</p> : null}
                 {row.generated_by_timeout ? <p className="mt-1 max-w-56 text-xs font-bold text-amber-700 dark:text-amber-300">Rota incluída por segurança com {row.route_incomplete_stops} parada(s) sem resultado.</p> : null}
               </td>
-              <td className="px-5 py-4 text-center">
+              <td className="px-4 py-3 text-center">
                 <p className="font-black">{row.counts.confirmed}/{row.counts.expected}</p>
                 <div className="mx-auto mt-2 h-1.5 w-28 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${row.counts.expected ? Math.min(100, row.counts.confirmed / row.counts.expected * 100) : 100}%` }} /></div>
                 {row.counts.absent ? <p className="mt-1 text-xs font-bold text-red-600">{row.counts.absent} ausente(s)</p> : null}
               </td>
-              <td className="px-5 py-4"><BagBadge status={row.status} /></td>
-              <td className="px-5 py-4 text-right">
-                <button type="button" disabled={mutating} onClick={() => onOpen(row)} className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 font-bold text-white hover:bg-sky-700 disabled:opacity-50">
+              <td className="px-4 py-3"><BagBadge status={row.status} /></td>
+              <td className="px-4 py-3 text-right">
+                <button type="button" disabled={mutating} onClick={() => onOpen(row)} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 font-bold text-white hover:bg-sky-700 disabled:opacity-50">
                   <ClipboardCheck className="h-4 w-4" />{row.status === 'not_started' ? 'Iniciar conferência' : row.status === 'completed' ? 'Visualizar' : 'Retomar'}
                 </button>
               </td>
@@ -752,122 +782,210 @@ type ConferenceProps = {
   onSearch: (value: string) => void;
   onExtraChange: (value: string) => void;
   onExtra: () => void;
-  onMutate: (item: ReceiptBagItem, action: 'confirm' | 'absent' | 'returned') => void;
+  onMutate: (item: ReceiptBagItem, action: 'confirm' | 'absent' | 'returned') => Promise<boolean>;
   onMarkRemaining: () => void;
   onFinish: () => void;
 };
 
-function ConferencePanel(props: ConferenceProps) {
+export function ConferencePanel(props: ConferenceProps) {
   const { bag, items, selectedItem } = props;
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [finishPromptOpen, setFinishPromptOpen] = useState(false);
+  const [keyboardCandidateId, setKeyboardCandidateId] = useState<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const canFinish = bag.items.length > 0
+    && bag.items.every((item) => item.status !== 'pending')
+    && bag.status !== 'completed';
+
+  useEffect(() => {
+    if (canFinish) setFinishPromptOpen(true);
+  }, [bag.id, canFinish]);
+
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, [bag.id]);
+
+  useEffect(() => {
+    if (items.length !== 1 || items[0].id !== keyboardCandidateId) {
+      setKeyboardCandidateId(null);
+    }
+  }, [items, keyboardCandidateId]);
+
+  const handleSearchChange = (value: string) => {
+    setKeyboardCandidateId(null);
+    props.onSearch(value);
+  };
+
+  const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = async (event) => {
+    if (event.key !== 'Enter' || event.repeat || props.mutating || !props.itemSearch.trim() || items.length !== 1) return;
+    event.preventDefault();
+    const item = items[0];
+    const term = props.itemSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!String(item.invoice_number).toLocaleLowerCase('pt-BR').includes(term)) return;
+
+    if (keyboardCandidateId !== item.id) {
+      props.onSelect(item.id);
+      setKeyboardCandidateId(item.id);
+      return;
+    }
+
+    if (EXEMPT_STATUSES.includes(item.status)) return;
+    setKeyboardCandidateId(null);
+    const confirmed = await props.onMutate(item, 'confirm');
+    if (!confirmed) return;
+    props.onSearch('');
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-surface text-text">
-      <header className="border-b border-border bg-card px-4 py-3 shadow-sm sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1700px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="fixed bottom-[var(--mobile-bottom-nav-height)] left-0 right-0 top-[var(--header-height)] z-[1000] flex flex-col overflow-hidden bg-surface text-sm text-text md:bottom-0 md:left-[var(--app-sidebar-current)]">
+      <header className="shrink-0 border-b border-border bg-card px-3 py-2 shadow-sm sm:px-4">
+        <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={props.onClose} className="grid h-10 w-10 place-items-center rounded-xl border border-border" aria-label="Voltar"><ArrowLeft className="h-5 w-5" /></button>
-            <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black">Rota #{bag.trip_id}</h2><BagBadge status={bag.status} /></div>
-              <p className="text-sm text-muted">{bag.driver?.name || 'Motorista'} · {bag.car?.license_plate || 'Sem placa'} · saída #{bag.run_number || 1} · {formatDate(bag.operation_date)}</p>
+            <button type="button" onClick={props.onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted/40" aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></button>
+            <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-black">Rota #{bag.trip_id}</h2><BagBadge status={bag.status} /></div>
+              <p className="text-xs text-muted">{bag.driver?.name || 'Motorista'} · {bag.car?.license_plate || 'Sem placa'} · saída #{bag.run_number || 1} · {formatDate(bag.operation_date)}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <CountPill className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{bag.counts.confirmed} conferidos</CountPill>
-            <CountPill className="bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-200">{bag.counts.pending} aguardando</CountPill>
-            <CountPill className="bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200">{bag.counts.absent} ausentes</CountPill>
-            <button type="button" onClick={props.onClose} className="grid h-10 w-10 place-items-center rounded-xl border border-border" aria-label="Fechar"><X className="h-5 w-5" /></button>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <CountPill className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">{bag.counts.confirmed} presentes</CountPill>
+            <CountPill className="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100">{bag.counts.pending} aguardando</CountPill>
+            <CountPill className="bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100">{bag.counts.absent} ausentes</CountPill>
+            <button type="button" onClick={() => setSummaryOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 font-bold hover:bg-muted/40"><ClipboardCheck className="h-4 w-4" />Resumo</button>
+            {bag.counts.pending ? <button type="button" disabled={props.mutating} onClick={props.onMarkRemaining} className="h-9 rounded-lg border border-red-400 px-3 font-bold text-red-700 hover:bg-red-50 disabled:opacity-40 dark:text-red-200 dark:hover:bg-red-950">Ausentar restantes</button> : null}
+            {canFinish ? <button type="button" disabled={props.mutating} onClick={() => setFinishPromptOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />Finalizar rota</button> : null}
+            <button type="button" onClick={props.onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted/40" aria-label="Fechar"><X className="h-4 w-4" /></button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto grid min-h-0 w-full max-w-[1700px] flex-1 gap-4 overflow-hidden p-4 lg:grid-cols-[minmax(0,1fr)_350px] lg:p-6">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="space-y-3 border-b border-border p-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex flex-wrap gap-2">
+      <div className="mx-auto h-10 w-full max-w-[1800px] shrink-0 px-2 pt-1 sm:px-3" aria-live="polite">
+        {props.error ? (
+          <div role="alert" className="flex h-9 items-center gap-2 truncate rounded-lg border semantic-panel-danger px-3 text-xs font-semibold" title={props.error}>
+            <AlertCircle className="h-4 w-4 shrink-0" /><span className="truncate">{props.error}</span>
+          </div>
+        ) : props.feedback ? (
+          <div role="status" className="flex h-9 items-center gap-2 truncate rounded-lg border semantic-panel-success px-3 text-xs font-semibold" title={props.feedback}>
+            <CheckCircle2 className="h-4 w-4 shrink-0" /><span className="truncate">{props.feedback}</span>
+          </div>
+        ) : (
+          <div className="h-9 rounded-lg border border-transparent" aria-hidden="true" />
+        )}
+      </div>
+
+      <div className="mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 overflow-hidden p-2 sm:p-3">
+        <section className="flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border bg-card">
+          <div className="shrink-0 space-y-2 border-b border-border p-2.5">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex w-full max-w-[520px] flex-col gap-2">
+                <SearchBox
+                  value={props.itemSearch}
+                  onChange={handleSearchChange}
+                  onKeyDown={handleSearchKeyDown}
+                  inputRef={searchInputRef}
+                  placeholder="Localizar NF, cliente ou cidade..."
+                  className="w-full"
+                  autoFocus
+                />
+                <div className="flex min-w-0 gap-1.5">
+                  <label className="sr-only" htmlFor="extra-receipt-invoice">NF não listada</label>
+                  <input id="extra-receipt-invoice" value={props.extraInvoice} onChange={(event) => props.onExtraChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && props.onExtra()} placeholder="Número da NF não listada" inputMode="numeric" className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold outline-none focus:border-violet-500" />
+                  <button type="button" disabled={props.mutating || !props.extraInvoice.trim()} onClick={props.onExtra} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700 disabled:opacity-40"><FilePlus2 className="h-3.5 w-3.5" />Adicionar NF</button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 xl:items-end">
+                <div className="flex flex-wrap gap-2">
                 {([['all', 'Todas'], ['pending', 'Aguardando'], ['confirmed', 'Conferidas'], ['absent', 'Ausentes'], ['exceptions', 'Sem necessidade']] as Array<[ItemFilter, string]>).map(([key, label]) => (
                   <FilterButton key={key} active={props.itemFilter === key} onClick={() => props.onFilter(key)}>{label}</FilterButton>
                 ))}
+                </div>
+                <p className="text-[11px] text-muted"><strong>1 clique</strong> mostra opções · <strong>2 cliques</strong> confirma · busca com 1 resultado: <strong>Enter 2x</strong>.</p>
               </div>
-              <SearchBox value={props.itemSearch} onChange={props.onSearch} placeholder="Localizar NF, cliente ou cidade..." />
             </div>
-            <p className="text-xs text-muted">Duplo clique confirma. Clique uma vez e use <strong>Enter</strong> para confirmar, <strong>A</strong> para ausente ou <strong>D</strong> para devolução.</p>
           </div>
-          <div className="p-4 pb-0">{props.error ? <ErrorBanner message={props.error} /> : null}
-            {props.feedback ? <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"><CheckCircle2 className="h-5 w-5" />{props.feedback}</div> : null}
-          </div>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 pt-0 sm:p-4 sm:pt-0">
-            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} onSelect={() => props.onSelect(item.id)} onConfirm={() => !EXEMPT_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} />)}
+          <div className="scrollbar-ui min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5 pr-1.5">
+            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id && !item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !EXEMPT_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
             {!items.length ? <EmptyState text="Nenhuma NF encontrada neste filtro." /> : null}
           </div>
         </section>
-
-        <aside className="min-h-0 space-y-4 overflow-y-auto">
-          <ActionPanel selectedItem={selectedItem} mutating={props.mutating} onMutate={props.onMutate} />
-          <section className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-center gap-2"><FilePlus2 className="h-5 w-5 text-violet-600" /><h3 className="font-black">NF não listada</h3></div>
-            <p className="mt-2 text-xs text-muted">Digite somente quando o canhoto físico veio neste malote, mas não aparece na lista.</p>
-            <div className="mt-3 flex gap-2">
-              <input value={props.extraInvoice} onChange={(event) => props.onExtraChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && props.onExtra()} placeholder="Número da NF" inputMode="numeric" className="min-w-0 flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-sm font-bold outline-none focus:border-violet-500" />
-              <button type="button" disabled={props.mutating || !props.extraInvoice.trim()} onClick={props.onExtra} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white disabled:opacity-40">Adicionar</button>
-            </div>
-          </section>
-          <BagSummary bag={bag} />
-          <div className="grid gap-2">
-            {bag.counts.pending ? <button type="button" disabled={props.mutating} onClick={props.onMarkRemaining} className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-black text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">Marcar {bag.counts.pending} restante(s) como ausente(s)</button> : null}
-            <button type="button" disabled={props.mutating} onClick={props.onFinish} className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"><PackageCheck className="h-5 w-5" />Finalizar conferência</button>
-          </div>
-        </aside>
       </div>
+      {summaryOpen ? <BagSummaryDialog bag={bag} onClose={() => setSummaryOpen(false)} /> : null}
+      {finishPromptOpen ? <FinishConferenceDialog bag={bag} mutating={props.mutating} onClose={() => setFinishPromptOpen(false)} onFinish={props.onFinish} /> : null}
     </div>
   );
 }
 
 function CountPill({ className, children }: { className: string; children: React.ReactNode }) {
-  return <span className={`rounded-xl px-3 py-2 font-black ${className}`}>{children}</span>;
+  return <span className={`rounded-lg px-2.5 py-1.5 font-black ${className}`}>{children}</span>;
 }
-function ItemRow({ item, selected, onSelect, onConfirm }: {
-  item: ReceiptBagItem; selected: boolean; onSelect: () => void; onConfirm: () => void;
+function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, onMutate }: {
+  item: ReceiptBagItem;
+  selected: boolean;
+  mutating: boolean;
+  allowAbsent: boolean;
+  onSelect: () => void;
+  onConfirm: () => void;
+  onMutate: (item: ReceiptBagItem, action: 'confirm' | 'absent' | 'returned') => Promise<boolean>;
 }) {
   const config = ITEM_STATUS[item.status];
   const suggestionDiffers = item.suggested_driver_id && item.suggested_driver_id !== item.expected_driver_id;
   return (
-    <button type="button" onClick={onSelect} onDoubleClick={onConfirm} className={`flex w-full flex-col gap-3 rounded-xl border p-3 text-left transition sm:flex-row sm:items-center ${selected ? 'ring-2 ring-sky-500 ring-offset-1 ring-offset-surface' : ''} ${config.row}`}>
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface text-sm font-black text-muted">{item.route_order || '•'}</span>
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2"><strong className="text-base">NF {item.invoice_number}</strong><span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${config.badge}`}>{config.label}</span>{!item.has_receipt_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">Sem foto</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-300 bg-violet-100 px-2 py-0.5 text-[11px] font-black text-violet-800 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200">Extra</span> : null}</span>
-        <span className="mt-1 block truncate text-xs text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
-        {suggestionDiffers ? <span className="mt-1 block text-xs font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_confidence ? ` · confiança ${item.suggestion_confidence}%` : ''}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</span>
-          : item.suggestion_source === 'whatsapp_phone' ? <span className="mt-1 block text-xs font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</span> : null}
-        {item.is_suggested_extra && item.suggestion_reason ? <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">{item.suggestion_reason}</span> : null}
-        {item.confirmed_bag ? <span className="mt-1 block text-xs font-bold text-violet-700 dark:text-violet-300">Encontrado com {item.confirmed_bag.driver_name || 'outro motorista'} · rota #{item.confirmed_bag.trip_id}</span> : null}
-      </span>
-      <span className="text-right text-xs text-muted">{item.confirmed_at ? `Confirmado ${formatDateTime(item.confirmed_at)}` : ''}</span>
-    </button>
+    <div role="button" tabIndex={0} onClick={onSelect} onDoubleClick={onConfirm} onKeyDown={(event) => event.key === 'Enter' && onSelect()} className={`w-full cursor-pointer rounded-lg border px-2.5 py-2 text-left transition ${selected ? 'ring-2 ring-sky-500 ring-offset-1 ring-offset-surface' : ''} ${config.row}`}>
+      <div className="flex items-center gap-2">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface text-xs font-black text-muted">{item.route_order || '•'}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5"><strong className="text-sm">NF {item.invoice_number}</strong><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${config.badge}`}>{config.label}</span>{!item.has_receipt_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">Sem foto</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-400 bg-violet-100 px-1.5 py-0.5 text-[10px] font-black text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100">Extra</span> : null}</span>
+          <span className="block truncate text-[11px] text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
+        </span>
+        <span className="shrink-0 text-right text-[10px] text-muted">{item.confirmed_at ? formatDateTime(item.confirmed_at) : ''}</span>
+      </div>
+      {suggestionDiffers ? <p className="mt-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_confidence ? ` · confiança ${item.suggestion_confidence}%` : ''}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</p>
+        : item.suggestion_source === 'whatsapp_phone' ? <p className="mt-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</p> : null}
+      {item.is_suggested_extra && item.suggestion_reason ? <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{item.suggestion_reason}</p> : null}
+      {item.confirmed_bag ? <p className="mt-1 text-[11px] font-bold text-violet-700 dark:text-violet-300">Encontrado com {item.confirmed_bag.driver_name || 'outro motorista'} · rota #{item.confirmed_bag.trip_id}</p> : null}
+      {selected ? (
+        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-current/15 pt-2" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+          <CompactActionButton disabled={mutating || EXEMPT_STATUSES.includes(item.status)} className="bg-emerald-600 text-white" onClick={() => onMutate(item, 'confirm')} icon={<Check className="h-3.5 w-3.5" />} label="Presente" />
+          <CompactActionButton disabled={mutating || !allowAbsent || EXEMPT_STATUSES.includes(item.status)} className="border border-red-400 bg-red-100 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100" onClick={() => onMutate(item, 'absent')} icon={<AlertCircle className="h-3.5 w-3.5" />} label="Ausente" />
+          <CompactActionButton disabled={mutating || item.status === 'returned'} className="border border-orange-400 bg-orange-100 text-orange-900 dark:border-orange-700 dark:bg-orange-950 dark:text-orange-100" onClick={() => onMutate(item, 'returned')} icon={<RotateCcw className="h-3.5 w-3.5" />} label="Devolução" />
+        </div>
+      ) : null}
+    </div>
   );
 }
-function ActionPanel({ selectedItem, mutating, onMutate }: {
-  selectedItem: ReceiptBagItem | null; mutating: boolean;
-  onMutate: (item: ReceiptBagItem, action: 'confirm' | 'absent' | 'returned') => void;
+function CompactActionButton({ disabled, className, onClick, icon, label }: {
+  disabled: boolean; className: string; onClick: () => void; icon: JSX.Element; label: string;
+}) {
+  return <button type="button" disabled={disabled} onClick={onClick} className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-black disabled:cursor-not-allowed disabled:opacity-40 ${className}`}>{icon}{label}</button>;
+}
+function FinishConferenceDialog({ bag, mutating, onClose, onFinish }: {
+  bag: ReceiptBag;
+  mutating: boolean;
+  onClose: () => void;
+  onFinish: () => void;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
-      <h3 className="font-black">Ações da NF</h3>
-      {selectedItem ? <>
-        <p className="mt-1 text-sm text-muted">NF {selectedItem.invoice_number}</p>
-        <div className="mt-4 grid gap-2">
-          <ActionButton disabled={mutating || EXEMPT_STATUSES.includes(selectedItem.status)} className="bg-emerald-600 text-white" onClick={() => onMutate(selectedItem, 'confirm')} icon={<Check className="h-5 w-5" />} label="Canhoto presente" shortcut="Enter" />
-          <ActionButton disabled={mutating || selectedItem.is_suggested_extra || CLOSED_STATUSES.includes(selectedItem.status) || EXEMPT_STATUSES.includes(selectedItem.status)} className="border border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200" onClick={() => onMutate(selectedItem, 'absent')} icon={<AlertCircle className="h-5 w-5" />} label="Canhoto ausente" shortcut="A" />
-          <ActionButton disabled={mutating || selectedItem.status === 'returned'} className="border border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-200" onClick={() => onMutate(selectedItem, 'returned')} icon={<RotateCcw className="h-5 w-5" />} label="Registrar devolução" shortcut="D" />
+    <div className="absolute inset-0 z-[1400] grid place-items-center bg-slate-950/70 p-4 backdrop-blur-sm">
+      <section role="dialog" aria-modal="true" aria-labelledby="finish-conference-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-emerald-500/50 bg-surface text-text shadow-2xl">
+        <div className="border-b border-border semantic-panel-success p-5">
+          <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-600 text-white"><PackageCheck className="h-6 w-6" /></span>
+          <h3 id="finish-conference-title" className="mt-3 text-xl font-black">Todos os canhotos foram conferidos</h3>
+          <p className="mt-1 text-sm text-muted">Finalize a rota #{bag.trip_id} para voltar à lista e escolher o próximo malote.</p>
         </div>
-      </> : <p className="mt-2 text-sm text-muted">Selecione uma NF para ver as ações.</p>}
-    </section>
+        <div className="grid grid-cols-3 gap-2 p-4 text-center text-xs">
+          <div className="rounded-xl bg-emerald-100 p-3 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"><strong className="block text-lg">{bag.counts.confirmed}</strong>presentes</div>
+          <div className="rounded-xl bg-red-100 p-3 text-red-900 dark:bg-red-950 dark:text-red-100"><strong className="block text-lg">{bag.counts.absent}</strong>ausentes</div>
+          <div className="rounded-xl bg-orange-100 p-3 text-orange-900 dark:bg-orange-950 dark:text-orange-100"><strong className="block text-lg">{bag.counts.returned}</strong>devoluções</div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-border p-4">
+          <button type="button" disabled={mutating} onClick={onClose} className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-bold hover:bg-muted/40 disabled:opacity-40">Continuar conferindo</button>
+          <button type="button" disabled={mutating} onClick={onFinish} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />{mutating ? 'Finalizando...' : 'Finalizar rota'}</button>
+        </div>
+      </section>
+    </div>
   );
 }
-function ActionButton({ disabled, className, onClick, icon, label, shortcut }: {
-  disabled: boolean; className: string; onClick: () => void; icon: JSX.Element; label: string; shortcut: string;
-}) {
-  return <button type="button" disabled={disabled} onClick={onClick} className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 ${className}`}>{icon}{label}<span className="ml-auto text-xs opacity-75">{shortcut}</span></button>;
-}
-function BagSummary({ bag }: { bag: ReceiptBag }) {
+function BagSummaryDialog({ bag, onClose }: { bag: ReceiptBag; onClose: () => void }) {
   const rows: Array<[string, number, string]> = [
     ['Canhotos esperados', bag.counts.expected, ''], ['Confirmados', bag.counts.confirmed, 'text-emerald-600'],
     ['Aguardando', bag.counts.pending, ''], ['Ausentes', bag.counts.absent, 'text-red-600'],
@@ -875,7 +993,14 @@ function BagSummary({ bag }: { bag: ReceiptBag }) {
     ['Adicionais sugeridos', bag.counts.suggested, 'text-amber-600'],
     ['Devoluções', bag.counts.returned, 'text-orange-600'],
   ];
-  return <section className="rounded-2xl border border-border bg-card p-4"><h3 className="font-black">Resumo do malote</h3><dl className="mt-3 space-y-2 text-sm">{rows.map(([label, value, className]) => <div key={label} className="flex justify-between"><dt className="text-muted">{label}</dt><dd className={`font-black ${className}`}>{value}</dd></div>)}</dl></section>;
+  return (
+    <div className="absolute inset-0 z-[1400] grid place-items-center bg-slate-950/70 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="bag-summary-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3"><h3 id="bag-summary-title" className="font-black">Resumo do malote</h3><button type="button" onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg border border-border" aria-label="Fechar resumo"><X className="h-4 w-4" /></button></div>
+        <dl className="mt-3 space-y-2 text-sm">{rows.map(([label, value, className]) => <div key={label} className="flex justify-between"><dt className="text-muted">{label}</dt><dd className={`font-black ${className}`}>{value}</dd></div>)}</dl>
+      </section>
+    </div>
+  );
 }
 
 export default ReceiptBagClosing;

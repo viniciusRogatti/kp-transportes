@@ -25,7 +25,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
 export function Container({ className, children, ...props }: SectionProps) {
   return (
     <section
-      className={cn('login-scene relative min-h-[100svh] w-full overflow-hidden bg-[var(--login-background)] text-[var(--login-text-primary)]', className)}
+      className={cn('login-scene relative min-h-[100dvh] w-full overflow-x-hidden overflow-y-auto bg-[var(--login-background)] text-[var(--login-text-primary)]', className)}
       {...props}
     >
       <div aria-hidden="true" className="login-scene-grid pointer-events-none absolute inset-0" />
@@ -38,7 +38,7 @@ export function Container({ className, children, ...props }: SectionProps) {
 export function LoginCard({ className, ...props }: DivProps) {
   return (
     <div
-      className={cn('login-stage login-panel-enter relative mx-auto min-h-[100svh] w-full max-w-[1800px]', className)}
+      className={cn('login-stage login-panel-enter relative mx-auto min-h-[100dvh] w-full max-w-[1800px]', className)}
       {...props}
     />
   );
@@ -76,7 +76,7 @@ export function HeroBadge({ className, ...props }: SpanProps) {
 }
 
 export function HeroTitle({ className, children, ...props }: H1Props) {
-  return <h1 className={cn('block max-w-[690px] text-[clamp(2.15rem,1.15rem+3.1vw,5rem)] font-bold leading-[0.98] tracking-[-0.05em] text-white', className)} {...props}>{children}</h1>;
+  return <h1 className={cn('block max-w-[690px] text-[clamp(2rem,1.15rem+2.7vw,4.75rem)] font-bold leading-[0.98] tracking-[-0.05em] text-white', className)} {...props}>{children}</h1>;
 }
 
 export function HeroDescription({ className, ...props }: PProps) {
@@ -151,7 +151,7 @@ export function LoginForm({ className, ...props }: FormProps) {
 }
 
 export function ErrorText({ className, ...props }: PProps) {
-  return <p role="alert" aria-live="assertive" className={cn('mt-1 rounded-md border border-red-400/45 bg-red-500/10 px-3 py-2.5 text-[0.82rem] font-semibold leading-5 text-[var(--login-error)]', className)} {...props} />;
+  return <p role="alert" aria-live="assertive" className={cn('mt-1 rounded-md border semantic-panel-danger px-3 py-2.5 text-[0.82rem] font-semibold leading-5', className)} {...props} />;
 }
 
 export function SupportText({ className, ...props }: SpanProps) {

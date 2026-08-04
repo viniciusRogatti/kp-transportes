@@ -92,7 +92,7 @@ function Products() {
                   className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
                     activeCompanyTab === companyCode
                       ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                      : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                      : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                   }`}
                 >
                   {COMPANY_LABELS[companyCode] || companyCode}
@@ -104,7 +104,7 @@ function Products() {
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${
                   activeCompanyTab === 'all'
                     ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                    : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                    : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                 }`}
               >
                 Todas

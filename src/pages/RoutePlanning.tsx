@@ -35,6 +35,7 @@ import { buildSalmonLoadList } from '../utils/salmonLoadList';
 import { buildOccurrenceReminders } from '../utils/occurrenceReminders';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
+import { showConfirm } from '../utils/dialog';
 import { formatDateBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { listReceiptBacklog } from '../services/receiptsService';
@@ -2484,7 +2485,10 @@ function RoutePlanning() {
   };
 
   const handleDeleteListedTrip = useCallback(async (trip: ITrip) => {
-    const confirmed = window.confirm(`Deseja excluir a rota de ${trip.Driver.name} com ${trip.TripNotes.length} nota(s)?`);
+    const confirmed = await showConfirm(
+      `Deseja excluir a rota de ${trip.Driver.name} com ${trip.TripNotes.length} nota(s)?`,
+      { title: 'Excluir rota', confirmLabel: 'Excluir rota', tone: 'danger' },
+    );
     if (!confirmed) return;
 
     try {
@@ -2533,7 +2537,7 @@ function RoutePlanning() {
                 onClick={() => setTab('routing')}
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'routing'
                   ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                  : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                   }`}
               >
                 Roteirização
@@ -2543,7 +2547,7 @@ function RoutePlanning() {
                 onClick={() => setTab('trips')}
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'trips'
                   ? 'border-border border-b-transparent bg-card text-text shadow-soft'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                  : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                   }`}
               >
                 Viagens
@@ -2577,7 +2581,7 @@ function RoutePlanning() {
           </div>
 
           {activeTab === 'routing' ? (
-            <section className="flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+            <section className="flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-b-lg rounded-tr-lg border border-border bg-surface p-3 shadow-[var(--shadow-2)]">
               <div className="flex min-h-0 flex-1 flex-col">
                 {isUpdating && tripToUpdate ? (
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-700 bg-sky-700 px-2 py-1.5 text-xs text-white">
@@ -2767,7 +2771,7 @@ function RoutePlanning() {
                 ) : null}
 
                 {!showAssignmentFields && (selectedDriver !== 'null' || selectedCar !== 'null') ? (
-                  <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2/60 px-2 py-1.5 text-xs">
+                  <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs">
                     <span className="text-muted">
                       <strong className="text-text">Motorista:</strong> {selectedDriverName || '-'} | <strong className="text-text">Veículo:</strong> {selectedVehicleLabel || '-'}
                       {vehicleSuggestionMessage ? ` | ${vehicleSuggestionMessage}` : ''}
@@ -2861,7 +2865,7 @@ function RoutePlanning() {
                   </ActionButton>
                 </div>
 
-                <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2/45 md:min-h-0">
+                <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2 md:min-h-0">
                   <div className="flex h-full min-h-0 flex-col">
                     <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1 md:p-1.5">
                       <ul className="space-y-1">
@@ -2872,7 +2876,7 @@ function RoutePlanning() {
                             .filter((row) => String(row.invoice_number) !== String(note.invoice_number));
 
                           return (
-                            <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-2.5 py-1.5 ${lastScannedInvoice === String(note.invoice_number) ? 'border-emerald-500/70 bg-emerald-950/20' : noteIsLocked ? 'border-amber-700/55 bg-amber-950/15' : 'border-border bg-surface-2/70'}`}>
+                            <li key={`${note.invoice_number}-${note.order}`} className={`rounded-md border px-2.5 py-1.5 ${lastScannedInvoice === String(note.invoice_number) ? 'semantic-panel-success' : noteIsLocked ? 'semantic-panel-warning' : 'border-border bg-surface-2'}`}>
                               <div className="flex flex-col gap-1.5 md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-start md:gap-2.5">
                                 <div className="shrink-0">
                                   <input
@@ -2901,11 +2905,11 @@ function RoutePlanning() {
                                     <p className="text-sm font-semibold text-text">NF {note.invoice_number}</p>
                                     <p className="mt-0.5 break-words text-sm leading-tight text-text md:truncate">{note.customer_name || '-'}</p>
 
-                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${noteIsLocked ? 'border-amber-700/65 bg-amber-950/30 text-amber-100' : 'border-border bg-surface text-muted'}`}>
+                                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${noteIsLocked ? 'semantic-solid-warning' : 'border-border bg-surface text-muted'}`}>
                                       {getTripNoteStatusLabel(note.status)}
                                     </span>
                                     {retainedContexts.length ? (
-                                      <span className="inline-flex rounded-full border border-amber-700/65 bg-amber-950/30 px-2 py-0.5 text-[11px] text-amber-100">
+                                      <span className="inline-flex rounded-full border semantic-solid-warning px-2 py-0.5 text-[11px]">
                                         {`${retainedContexts.length} canhoto(s) retido(s) vinculado(s)`}
                                       </span>
                                     ) : null}
@@ -2915,7 +2919,7 @@ function RoutePlanning() {
                                     <span>{note.gross_weight} Kg</span>
                                   </div>
                                   {isProntoTripNote(note) ? (
-                                    <label className="mt-1.5 inline-flex items-center gap-2 rounded-md border border-sky-700/60 bg-sky-950/20 px-2 py-1 text-xs font-semibold text-text">
+                                    <label className="mt-1.5 inline-flex items-center gap-2 rounded-md border semantic-panel-info px-2 py-1 text-xs font-semibold">
                                       Caixas da PRONTO
                                       <input
                                         type="number"
@@ -2933,7 +2937,7 @@ function RoutePlanning() {
                                     </label>
                                   ) : null}
                                   {retainedContexts.length ? (
-                                    <div className="mt-1.5 rounded-md border border-amber-700/65 bg-amber-950/25 px-2 py-1.5 text-[11px] text-amber-100">
+                                    <div className="mt-1.5 rounded-md border semantic-panel-warning px-2 py-1.5 text-[11px]">
                                       <p className="font-semibold uppercase tracking-[0.08em]">Canhoto retido do cliente</p>
                                       <div className="mt-1 space-y-0.5">
                                         {retainedContexts.map((row) => (
@@ -2999,7 +3003,7 @@ function RoutePlanning() {
               </div>
             </section>
           ) : (
-            <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface/70 p-3 shadow-[var(--shadow-2)]">
+            <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface p-3 shadow-[var(--shadow-2)]">
               <div className="mb-3 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
@@ -3090,10 +3094,10 @@ function RoutePlanning() {
               ) : (
                 <div className="scrollbar-ui min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                   {!filteredDisplayedTrips.length ? (
-                    <div className="rounded-md border border-border bg-surface-2/70 p-3 text-sm text-muted">Nenhuma rota encontrada para essa data.</div>
+                    <div className="rounded-md border border-border bg-surface-2 p-3 text-sm text-muted">Nenhuma rota encontrada para essa data.</div>
                   ) : (
                     filteredDisplayedTrips.map((trip) => (
-                      <article key={trip.id} className="rounded-md border border-border bg-surface-2/70 p-3">
+                      <article key={trip.id} className="rounded-md border border-border bg-surface-2 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="text-sm font-semibold text-text">{trip.Driver.name} | {trip.Car.license_plate}</p>
@@ -3159,7 +3163,7 @@ function RoutePlanning() {
               </div>
 
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'all' ? 'border-emerald-600 bg-emerald-950/25' : 'border-border bg-surface-2/70'}`}>
+                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'all' ? 'semantic-panel-success' : 'border-border bg-surface-2'}`}>
                   <span className="flex items-center gap-2 text-sm font-semibold text-text">
                     <input
                       type="radio"
@@ -3171,7 +3175,7 @@ function RoutePlanning() {
                   </span>
                   <span className="mt-1 block text-xs text-muted">Inclui também as viagens já impressas.</span>
                 </label>
-                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'selected' ? 'border-emerald-600 bg-emerald-950/25' : 'border-border bg-surface-2/70'}`}>
+                <label className={`cursor-pointer rounded-md border p-3 ${salmonPrintScope === 'selected' ? 'semantic-panel-success' : 'border-border bg-surface-2'}`}>
                   <span className="flex items-center gap-2 text-sm font-semibold text-text">
                     <input
                       type="radio"
@@ -3227,7 +3231,7 @@ function RoutePlanning() {
                   return (
                     <label
                       key={trip.id}
-                      className={`flex gap-3 rounded-md border p-3 ${isSelected ? 'border-emerald-700/70 bg-emerald-950/15' : 'border-border bg-surface-2/70'} ${salmonPrintScope === 'all' ? 'cursor-default' : 'cursor-pointer'}`}
+                      className={`flex gap-3 rounded-md border p-3 ${isSelected ? 'semantic-panel-success' : 'border-border bg-surface-2'} ${salmonPrintScope === 'all' ? 'cursor-default' : 'cursor-pointer'}`}
                     >
                       <input
                         type="checkbox"
@@ -3241,7 +3245,7 @@ function RoutePlanning() {
                           <span className="text-sm font-semibold text-text">
                             Rota #{trip.id} · {trip.Driver.name} · {trip.Car.license_plate}
                           </span>
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${printCount > 0 ? 'border-amber-600 bg-amber-950/25 text-amber-300' : 'border-emerald-700 bg-emerald-950/25 text-emerald-300'}`}>
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${printCount > 0 ? 'semantic-solid-warning' : 'semantic-solid-success'}`}>
                             {printCount > 0
                               ? `Impressa${printCount > 1 ? ` ${printCount}x` : ''}${formatPrintTimestamp(trip.salmon_list_printed_at) ? ` · ${formatPrintTimestamp(trip.salmon_list_printed_at)}` : ''}`
                               : 'Ainda não impressa'}
@@ -3466,15 +3470,15 @@ function RoutePlanning() {
               ) : null}
 
               {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'cancelled_replaced' ? (
-                <div className="mt-3 rounded-md border border-border bg-surface-2/80 px-3 py-2 text-sm text-text">
+                <div className="mt-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">
                   <p><strong>NF substituta:</strong> {routingModalState.decision.replacementInvoiceNumber}</p>
                   <p className="mt-1 text-xs text-muted">Use a NF nova para continuar a roteirizacao sem sair desta tela.</p>
                 </div>
               ) : null}
 
               {routingModalState.decision.outcome === 'blocked' && routingModalState.decision.reason === 'delivered' ? (
-                <div className="mt-3 rounded-md border border-amber-700/70 bg-amber-950/20 p-3">
-                  <p className="text-sm font-semibold text-amber-200">Conferência obrigatória da foto</p>
+                <div className="mt-3 rounded-md border semantic-panel-warning p-3">
+                  <p className="text-sm font-semibold">Conferência obrigatória da foto</p>
                   <p className="mt-1 text-xs text-muted">
                     Digite a NF visível na foto publicada no WhatsApp. Se for esta mesma NF, ela apenas será confirmada e removida da rota. Se for outra, esta NF volta para reentrega e a NF da foto será confirmada como entregue.
                   </p>
@@ -3639,7 +3643,7 @@ function RoutePlanning() {
               <p className="text-sm text-muted">Motorista: {detailsTrip.Driver.name} | Veículo: {detailsTrip.Car.license_plate} | Data: {formatDateBR(detailsTrip.date)}</p>
               <ul className="scrollbar-ui mt-3 max-h-[340px] space-y-1 overflow-y-auto pr-1">
                 {detailsTrip.TripNotes.slice().sort((a, b) => a.order - b.order).map((note) => (
-                  <li key={`${note.invoice_number}-${note.order}`} className="rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm text-text">
+                  <li key={`${note.invoice_number}-${note.order}`} className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-text">
                     {note.order}. NF {note.invoice_number} | {note.customer_name} | {note.city}
                     {isProntoTripNote(note) ? ` | ${note.box_quantity || '-'} caixa(s)` : ''}
                   </li>
@@ -3668,7 +3672,7 @@ function RoutePlanning() {
                   <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas atribuídas</p>
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {editNotes.slice().sort((a, b) => a.order - b.order).map((note, index) => (
-                      <li key={`${note.invoice_number}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2/70' : 'border-amber-700/55 bg-amber-950/15'}`}>
+                      <li key={`${note.invoice_number}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2' : 'semantic-panel-warning'}`}>
                         <span className="min-w-0 flex-1 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
                         {isProntoTripNote(note) ? (
                           <label className="inline-flex items-center gap-1 text-xs font-semibold text-text">
@@ -3695,7 +3699,7 @@ function RoutePlanning() {
                   <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text" />
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {filteredAvailableDanfes.map((danfe) => (
-                      <li key={danfe.invoice_number} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2/70 px-2 py-1.5 text-sm">
+                      <li key={danfe.invoice_number} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm">
                         <span className="min-w-0 truncate text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}</span>
                         <button type="button" className="rounded border border-sky-700 bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white transition hover:bg-sky-600" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
                       </li>

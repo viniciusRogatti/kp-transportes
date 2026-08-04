@@ -17,7 +17,7 @@ export function DescriptionColumns({ className, ...props }: DivProps) {
 }
 
 export function ContainerItems({ className, ...props }: DivProps) {
-  return <div className={cn('mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-surface-2/65 p-s2', className)} {...props} />;
+  return <div className={cn('mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-surface-2 p-s2', className)} {...props} />;
 }
 
 export function ItemsScrollArea({ className, ...props }: DivProps) {

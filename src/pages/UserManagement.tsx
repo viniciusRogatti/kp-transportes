@@ -12,6 +12,7 @@ import {
   TutorialAdminRow,
 } from '../services/tutorialProgressService';
 import { getTutorialModulesForPermission } from '../tutorial/tutorialConfig';
+import { showConfirm, showPrompt } from '../utils/dialog';
 
 type UserRow = {
   id: number;
@@ -88,7 +89,10 @@ function UserManagement() {
   ), [tutorialProgress]);
 
   async function resetTutorial(user: UserRow) {
-    if (!window.confirm(`Reiniciar o tutorial de ${user.name || user.username}?`)) return;
+    if (!await showConfirm(
+      `Reiniciar o tutorial de ${user.name || user.username}?`,
+      { title: 'Reiniciar tutorial', confirmLabel: 'Reiniciar' },
+    )) return;
     try {
       setTutorialActionUserId(user.id);
       setErrorMessage('');
@@ -103,7 +107,16 @@ function UserManagement() {
   }
 
   async function dismissTutorial(user: UserRow) {
-    const reason = window.prompt(`Justificativa para dispensar ${user.name || user.username} do tutorial:`)?.trim();
+    const reason = await showPrompt(
+      `Informe por que ${user.name || user.username} será dispensado do tutorial.`,
+      {
+        title: 'Dispensar tutorial',
+        label: 'Justificativa',
+        placeholder: 'Digite a justificativa...',
+        confirmLabel: 'Dispensar usuário',
+        required: true,
+      },
+    );
     if (!reason) return;
     try {
       setTutorialActionUserId(user.id);

@@ -350,7 +350,7 @@ function TodayInvoices() {
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <div data-tutorial="today-mobile-product-search" className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface/95 p-2 shadow-elevated backdrop-blur md:hidden">
+        <div data-tutorial="today-mobile-product-search" className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface p-2 shadow-elevated backdrop-blur md:hidden">
           <label htmlFor="mobile-product-search" className="mb-1 block text-xs font-semibold text-text">
             Busca rápida de produto
           </label>
@@ -438,13 +438,13 @@ function TodayInvoices() {
           filteredCount={filteredDanfes.length}
         />
         <div data-tutorial="today-active-filters" className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full border border-border bg-surface/80 px-3 py-1 text-text">
+          <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
           </span>
           {activeFilters.map((filter) => (
             <button
               key={filter.id}
-              className="rounded-full border border-border bg-surface/75 px-2.5 py-1 text-muted hover:text-text"
+              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
               onClick={filter.onClear}
             >
               {filter.label} ×
@@ -453,7 +453,7 @@ function TodayInvoices() {
           {filters.loadNumbers.map((load) => (
             <button
               key={load}
-              className="rounded-full border border-border bg-surface/75 px-2.5 py-1 text-muted hover:text-text"
+              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
               onClick={() => clearLoadFilter(load)}
             >
               {`Carga: ${load}`} ×

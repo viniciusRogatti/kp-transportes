@@ -79,7 +79,7 @@ function FileDropzone({
           isDragOver
             ? 'border-accent/65 bg-accent/10'
             : hasSelection
-              ? 'border-emerald-500/45 bg-emerald-500/12'
+              ? 'semantic-panel-success'
               : 'border-border bg-card',
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         )}

@@ -183,7 +183,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
             <h3 className="text-lg font-semibold">NF {row.invoiceNumber}</h3>
             <p className="text-xs text-muted">Lote {row.batchCode} | {row.customer}</p>
             {row.sourceType === 'sobra' && row.isInversion ? (
-              <p className="mt-1 inline-flex rounded-full border border-amber-400/70 bg-amber-500/20 px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-warning)]">
+              <p className="mt-1 inline-flex rounded-full border semantic-solid-warning px-2 py-[1px] text-[10px] font-semibold uppercase tracking-wide">
                 Sobra com inversao
               </p>
             ) : null}
@@ -197,7 +197,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs ${activeTab === tab.id ? 'bg-sky-900/60 text-[color:var(--color-text-accent)]' : 'bg-surface-2 text-muted'}`}
+              className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs ${activeTab === tab.id ? 'semantic-solid-info' : 'bg-surface-2 text-muted'}`}
             >
               {tab.icon}
               {tab.label}
@@ -286,7 +286,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
             ) : (
               <Button
                 tone="secondary"
-                className="w-full justify-center bg-amber-700/80 text-amber-50 hover:bg-amber-600"
+                className="w-full justify-center semantic-solid-warning hover:brightness-110"
                 onClick={() => setIsOccurrenceModalOpen(true)}
               >
                 Registrar ocorrência
@@ -411,7 +411,7 @@ function DetailsDrawer({ row, onClose, onAddObservation, onRegisterOccurrence, r
               </Button>
               <Button
                 tone="secondary"
-                className="bg-amber-700/80 text-amber-50 hover:bg-amber-600 disabled:opacity-60"
+                className="semantic-solid-warning hover:brightness-110 disabled:opacity-60"
                 disabled={registeringOccurrence}
                 onClick={handleRegisterOccurrence}
               >

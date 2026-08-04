@@ -2886,7 +2886,7 @@ function ReturnsOccurrences() {
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'returns'
                   ? 'z-10 border-border border-b-transparent bg-card text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-card after:content-[""]'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                  : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                   }`}
                 onClick={() => setTab('returns')}
                 type="button"
@@ -2896,7 +2896,7 @@ function ReturnsOccurrences() {
               <button
                 className={`relative -mb-px rounded-t-[10px] border px-4 py-2 text-sm font-semibold transition ${activeTab === 'occurrences'
                   ? 'z-10 border-border border-b-transparent bg-card text-text shadow-none after:absolute after:inset-x-0 after:-bottom-px after:h-[2px] after:bg-card after:content-[""]'
-                  : 'border-transparent bg-surface/70 text-muted hover:bg-surface-2/70 hover:text-text'
+                  : 'border-transparent bg-surface text-muted hover:bg-surface-2 hover:text-text'
                   }`}
                 onClick={() => setTab('occurrences')}
                 type="button"
@@ -3032,7 +3032,7 @@ function ReturnsOccurrences() {
                       aria-label={selectedBatch ? `Lote de devolucao ${selectedBatch.batch_code}` : 'Nova devolucao'}
                       className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1120px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)]"
                     >
-                      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card/95 px-4 py-3 sm:px-5">
+                      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-5">
                         <div className="min-w-0">
                           <h2 className="truncate text-base font-bold text-text sm:text-lg">
                             {selectedBatch
@@ -3105,7 +3105,7 @@ function ReturnsOccurrences() {
                                   isActive
                                     ? 'border-accent bg-accent/15 text-text-accent'
                                     : isComplete
-                                      ? 'border-emerald-600/50 bg-emerald-500/10 text-text'
+                                      ? 'semantic-panel-success'
                                       : 'border-border bg-card text-muted'
                                 } disabled:cursor-not-allowed disabled:opacity-55`}
                               >
@@ -3486,7 +3486,7 @@ function ReturnsOccurrences() {
                             ? 'semantic-panel-success'
                             : returnDataLookup.consolidated_status === 'registered_without_approval'
                               ? 'semantic-panel-warning'
-                              : 'border-orange-500/45 bg-orange-500/10 text-text'
+                              : 'semantic-panel-redelivery'
                         }`}>
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
@@ -3521,7 +3521,7 @@ function ReturnsOccurrences() {
                               <button
                                 type="button"
                                 onClick={() => setShowReturnDataDetails((current) => !current)}
-                                className="rounded-md border border-current/30 bg-card/60 px-3 py-2 text-xs font-semibold"
+                                className="rounded-md border border-current/30 bg-card px-3 py-2 text-xs font-semibold"
                               >
                                 {showReturnDataDetails ? 'Ocultar ocorrências' : 'Ver ocorrências'}
                               </button>
@@ -3535,7 +3535,7 @@ function ReturnsOccurrences() {
                           {showReturnDataDetails ? (
                             <div className="mt-3 space-y-2">
                               {returnDataLookup.occurrences.map((registryOccurrence) => (
-                                <article key={registryOccurrence.id} className="rounded-md border border-current/20 bg-card/70 p-2 text-xs text-text">
+                                <article key={registryOccurrence.id} className="rounded-md border border-current/20 bg-card p-2 text-xs text-text">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
                                     <strong>ID {registryOccurrence.source_occurrence_id}</strong>
                                     <span>{registryOccurrence.approval_status === 'approved' ? 'Aprovada' : registryOccurrence.approval_status === 'rejected' ? 'Reprovada' : 'Não classificada'}</span>
@@ -3622,7 +3622,7 @@ function ReturnsOccurrences() {
                       {(returnType === 'partial' || returnType === 'coleta' || returnType === 'weight_break') && returnDanfe && (
                         <>
                           {returnType === 'weight_break' && (
-                            <div className="mt-3 rounded-lg border border-amber-500/45 bg-amber-500/10 px-3 py-2 text-sm text-text">
+                            <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-2 text-sm">
                               Informe os produtos e as quantidades afetadas. Estes itens aparecerao no PDF como
                               <strong> quebra de peso, sem retorno fisico</strong>.
                             </div>
@@ -3748,7 +3748,7 @@ function ReturnsOccurrences() {
                                 {` | Tipo: ${normalizeProductType(item.product_type) || 'N/A'} | Qtd: ${item.quantity}`}
                               </span>
                               {returnType === 'weight_break' ? (
-                                <span className="mt-1 inline-flex rounded-full bg-amber-500/15 px-2 py-1 text-xs font-bold text-amber-700">
+                                <span className="mt-1 inline-flex rounded-full border semantic-solid-warning px-2 py-1 text-xs font-bold">
                                   Quebra de peso — sem produto fisico
                                 </span>
                               ) : (
@@ -3846,7 +3846,7 @@ function ReturnsOccurrences() {
                             </div>
                           </Grid>
 
-                          <div className="mt-3 rounded-md border border-border bg-surface/75 px-3 py-2">
+                          <div className="mt-3 rounded-md border border-border bg-surface px-3 py-2">
                             <label className="flex cursor-pointer items-start gap-2 text-[0.83rem] text-text">
                               <input
                                 type="checkbox"
@@ -4414,7 +4414,7 @@ function ReturnsOccurrences() {
                   <button
                     type="button"
                     onClick={closeOccurrenceBuilder}
-                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md border border-rose-800/70 bg-rose-950/35 text-rose-200 transition hover:bg-rose-900/45"
+                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-md border semantic-solid-danger transition hover:brightness-110"
                     aria-label="Fechar popup"
                     title="Fechar"
                   >

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import DeliveryMonitoring from '../DeliveryMonitoring';
+import { showConfirm } from '../../utils/dialog';
 
 let mockLocationSearch = '';
 
@@ -32,8 +33,12 @@ jest.mock('../../utils/alertReadState', () => ({
   getReadAlertIds: () => [],
   subscribeToAlertReadChanges: () => () => undefined,
 }));
+jest.mock('../../utils/dialog', () => ({
+  showConfirm: jest.fn(),
+}));
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedShowConfirm = showConfirm as jest.MockedFunction<typeof showConfirm>;
 
 type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained';
 
@@ -166,7 +171,7 @@ describe('DeliveryMonitoring', () => {
       })),
     });
 
-    window.confirm = jest.fn(() => true);
+    mockedShowConfirm.mockResolvedValue(true);
     localStorage.setItem('token', 'token-teste');
   });
 
@@ -205,7 +210,10 @@ describe('DeliveryMonitoring', () => {
       );
     });
 
-    expect(window.confirm).toHaveBeenCalledWith('Confirmar devolucao para NF 123456?');
+    expect(mockedShowConfirm).toHaveBeenCalledWith(
+      'Confirmar devolucao para NF 123456?',
+      expect.objectContaining({ title: 'Alterar status da entrega' }),
+    );
     expect(await screen.findByText('NF 123456 atualizada com sucesso para devolucao.')).toBeInTheDocument();
   });
 
@@ -239,7 +247,10 @@ describe('DeliveryMonitoring', () => {
       );
     });
 
-    expect(window.confirm).toHaveBeenCalledWith('Confirmar canhoto retido para NF 123456?');
+    expect(mockedShowConfirm).toHaveBeenCalledWith(
+      'Confirmar canhoto retido para NF 123456?',
+      expect.objectContaining({ title: 'Alterar status da entrega' }),
+    );
     expect(await screen.findByText('NF 123456 atualizada com sucesso para canhoto retido.')).toBeInTheDocument();
   });
 
@@ -275,7 +286,10 @@ describe('DeliveryMonitoring', () => {
       );
     });
 
-    expect(window.confirm).toHaveBeenCalledWith('Confirmar reentrega para NF 123456?');
+    expect(mockedShowConfirm).toHaveBeenCalledWith(
+      'Confirmar reentrega para NF 123456?',
+      expect.objectContaining({ title: 'Alterar status da entrega' }),
+    );
     expect(await screen.findByText('NF 123456 atualizada com sucesso para reentrega.')).toBeInTheDocument();
   });
 

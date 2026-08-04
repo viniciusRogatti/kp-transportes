@@ -5,9 +5,11 @@ import axios from 'axios';
 import { pdf } from '@react-pdf/renderer';
 import ReturnsOccurrences from '../ReturnsOccurrences';
 import verifyToken from '../../utils/verifyToken';
+import { showConfirm } from '../../utils/dialog';
 
 jest.mock('axios');
 jest.mock('../../utils/verifyToken');
+jest.mock('../../utils/dialog', () => ({ showConfirm: jest.fn() }));
 jest.mock('../../components/Header', () => () => <div data-testid="header" />);
 jest.mock('../../components/ReturnReceiptPDF', () => () => null);
 jest.mock('@react-pdf/renderer', () => ({
@@ -18,6 +20,7 @@ jest.mock('@react-pdf/renderer', () => ({
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedVerifyToken = verifyToken as jest.Mock;
+const mockedShowConfirm = showConfirm as jest.MockedFunction<typeof showConfirm>;
 
 function mockInitialGets() {
   mockedAxios.get.mockImplementation((url: string) => {
@@ -101,6 +104,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     mockedVerifyToken.mockReset();
     mockedVerifyToken.mockResolvedValue(true);
+    mockedShowConfirm.mockReset();
+    mockedShowConfirm.mockResolvedValue(true);
     (pdf as jest.Mock).mockReturnValue({
       toBlob: jest.fn().mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' })),
     });
@@ -530,9 +535,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     }) as any);
 
     renderPage();
-    const confirmSpy = jest.spyOn(window, 'confirm')
-      .mockReturnValueOnce(false)
-      .mockReturnValue(true);
+    mockedShowConfirm.mockResolvedValueOnce(false).mockResolvedValue(true);
     await openNewReturnModal();
     await fillTransportStep();
 
@@ -546,14 +549,15 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       'Tipo Total preenchido automaticamente conforme a base de devoluções.',
     );
     fireEvent.click(screen.getByLabelText('Parcial'));
-    await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockedShowConfirm).toHaveBeenCalledTimes(1));
     expect(screen.getByLabelText('Total')).toBeChecked();
 
     fireEvent.click(screen.getByLabelText('Parcial'));
     const partialProduct = await screen.findByRole('combobox', { name: 'Produto da devolucao parcial' });
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining(
-      'A base de devoluções classifica esta NF como Total, mas você selecionou Parcial.',
-    ));
+    expect(mockedShowConfirm).toHaveBeenCalledWith(
+      expect.stringContaining('A base de devoluções classifica esta NF como Total, mas você selecionou Parcial.'),
+      expect.any(Object),
+    );
     expect(screen.getByText(/O usuário confirmou que deseja manter essa diferença/)).toBeInTheDocument();
     fireEvent.change(partialProduct, {
       target: { value: 'RV001899' },
@@ -562,8 +566,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
 
     expect(await screen.findByText('NF 1694432', { selector: 'strong' })).toBeInTheDocument();
-    expect(confirmSpy).toHaveBeenCalledTimes(2);
-    confirmSpy.mockRestore();
+    expect(mockedShowConfirm).toHaveBeenCalledTimes(2);
   });
 
   it('exige confirmacao do alerta quando a NF nao existe na base de devolucoes', async () => {

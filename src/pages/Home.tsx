@@ -2167,7 +2167,7 @@ function Home() {
                                 <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
-                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">
+                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-2 py-2">
                                   <strong>Produtos faltantes:</strong>
                                   {itemsSummary.length ? (
                                     itemsSummary.map((item, index) => (
@@ -2199,10 +2199,10 @@ function Home() {
                           return (
                             <li
                               key={occurrence.id}
-                              className="!border-border !bg-surface-2/70"
+                              className="!border-border !bg-surface-2"
                             >
                               <OccurrenceItemContent className="gap-1.5">
-                                <span className="w-fit rounded-full border border-border bg-surface-2/85 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text">
+                                <span className="w-fit rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text">
                                   Formulario de faltante
                                 </span>
                                 <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
@@ -2211,7 +2211,7 @@ function Home() {
                                 <span><strong>Valor faltante:</strong> {currencyFmt.format(getOccurrenceMissingValue(occurrence))}</span>
                                 <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
                                 <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
-                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2/70 px-2 py-2">
+                                <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-2 py-2">
                                   <strong>Produtos faltantes:</strong>
                                   {itemsSummary.length ? (
                                     itemsSummary.map((item, index) => (
@@ -2358,7 +2358,7 @@ function Home() {
                         )}
                       </div>
                       <button
-                        className="secondary h-[42px] shrink-0 rounded-md border-none bg-surface-2/85 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                        className="secondary h-[42px] shrink-0 rounded-md border-none bg-surface-2 px-4 font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
                         onClick={addOccurrenceItem}
                         type="button"
                         disabled={!selectedOccurrenceProduct || occurrenceProductRemainingQty <= 0}
@@ -2523,7 +2523,7 @@ function Home() {
             </List>
 
             <InlineText style={{ marginTop: '10px' }}>Itens da coleta</InlineText>
-            <div className="mt-2 rounded-md border border-border bg-surface-2/75 px-3 py-2 text-sm text-text">
+            <div className="mt-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">
               {collectionDetailsRequest.request_scope === 'invoice_total'
                 ? 'NF total'
                 : (
@@ -2596,7 +2596,7 @@ function Home() {
             {collectionDetailsRequest.notes ? (
               <>
                 <InlineText style={{ marginTop: '10px' }}>Observacao</InlineText>
-                <div className="mt-2 rounded-md border border-border bg-surface-2/75 px-3 py-2 text-sm text-text">
+                <div className="mt-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">
                   {collectionDetailsRequest.notes}
                 </div>
               </>

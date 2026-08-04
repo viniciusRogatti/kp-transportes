@@ -340,7 +340,7 @@ function InvoiceJourney() {
                             <span className={cn('relative z-10 grid h-9 w-9 place-items-center rounded-full border', TONE_CLASS_NAMES[event.tone])}>
                               <Icon className="h-4 w-4" />
                             </span>
-                            <article className="min-w-0 rounded-md border border-border bg-surface-2/55 p-3">
+                            <article className="min-w-0 rounded-md border border-border bg-surface-2 p-3">
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
                                   <h3 className="font-semibold text-text">{event.title}</h3>

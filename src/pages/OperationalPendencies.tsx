@@ -43,6 +43,7 @@ import {
 import { API_URL } from '../data';
 import { getApiErrorMessage, handleAuthenticationError } from '../utils/authErrorHandler';
 import { getOccurrenceAgeDays, isTreatmentOverdue } from '../utils/operationalTreatments';
+import { showConfirm } from '../utils/dialog';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -737,9 +738,10 @@ function OperationalPendencies() {
       return;
     }
 
-    const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
-      ? true
-      : window.confirm(`Confirmar ${getManualStopStatusLabel(nextStatus)} para NF ${row.invoice_number}?`);
+    const confirmed = await showConfirm(
+      `Confirmar ${getManualStopStatusLabel(nextStatus)} para NF ${row.invoice_number}?`,
+      { title: 'Alterar status da entrega', confirmLabel: 'Alterar status' },
+    );
 
     if (!confirmed) return;
 
@@ -839,7 +841,7 @@ function OperationalPendencies() {
       <Header />
       <Container>
         <div className="w-full max-w-[1250px] space-y-3">
-          <section className="rounded-md border border-border bg-surface/70 p-3">
+          <section className="rounded-md border border-border bg-surface p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-text">Central de Tratativas</h2>
@@ -857,7 +859,7 @@ function OperationalPendencies() {
                 <button
                   type="button"
                   onClick={handleSearch}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2/80 px-3 text-sm text-text transition hover:bg-surface-2"
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2"
                 >
                   <RefreshCcw className="h-4 w-4" /> Atualizar
                 </button>
@@ -916,7 +918,7 @@ function OperationalPendencies() {
               <button
                 type="button"
                 onClick={handleSearch}
-                className="h-10 self-end rounded-md border border-border bg-surface-2/80 px-3 text-sm text-text transition hover:bg-surface-2"
+                className="h-10 self-end rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2"
               >
                 <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Buscar</span>
               </button>
@@ -937,7 +939,7 @@ function OperationalPendencies() {
             ) : null}
           </section>
 
-          <section className="rounded-md border border-border bg-surface/70 p-3">
+          <section className="rounded-md border border-border bg-surface p-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
               <button
                 type="button"
@@ -1060,7 +1062,7 @@ function OperationalPendencies() {
                     const currentStatusFeedback = statusFeedback?.invoiceNumber === row.invoice_number ? statusFeedback : null;
 
                     return (
-                      <li key={`${row.queue_type}-${row.invoice_number}-${row.trip_id || 'sem-rota'}`} className="rounded-md border border-border bg-surface/90 p-3">
+                      <li key={`${row.queue_type}-${row.invoice_number}-${row.trip_id || 'sem-rota'}`} className="rounded-md border border-border bg-surface p-3">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="space-y-1 text-xs">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1088,7 +1090,7 @@ function OperationalPendencies() {
 
                             {Array.isArray(row.route_history) && row.route_history.length ? (
                               <details
-                                className="mt-2 rounded-md border border-border bg-card/70 p-2"
+                                className="mt-2 rounded-md border border-border bg-card p-2"
                                 open={shouldExpandRouteHistory(row)}
                               >
                                 <summary className="cursor-pointer list-none text-[11px] font-semibold text-text">
@@ -1291,7 +1293,7 @@ function OperationalPendencies() {
                 {selectedPreviewUrl ? (
                   <div className="rounded-md border border-border bg-card p-2">
                     <p className="mb-2 text-xs text-muted">Previa</p>
-                    <div className="aspect-[4/3] overflow-hidden rounded-md border border-border bg-surface-2/60">
+                    <div className="aspect-[4/3] overflow-hidden rounded-md border border-border bg-surface-2">
                       <img src={selectedPreviewUrl} alt="Previa do canhoto" className="h-full w-full object-contain" />
                     </div>
                   </div>

@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
+import { showConfirm } from '../utils/dialog';
 
 type UserOption = {
   id: number;
@@ -232,8 +233,9 @@ function UserSessions() {
   }
 
   async function restartWhatsappBot() {
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       'Deseja reiniciar agora o bot de leitura do grupo de WhatsApp no servidor?',
+      { title: 'Reiniciar bot do WhatsApp', confirmLabel: 'Reiniciar bot' },
     );
     if (!confirmed) return;
 
@@ -285,8 +287,9 @@ function UserSessions() {
   }
 
   async function recoverPendingWhatsappMessages() {
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       'O bot vai reler as fotos com legenda dos grupos configurados enviadas hoje e tentar dar baixa apenas nas NFs pendentes. Deseja continuar?',
+      { title: 'Recuperar fotos pendentes', confirmLabel: 'Iniciar recuperação' },
     );
     if (!confirmed) return;
 
@@ -509,7 +512,7 @@ function UserSessions() {
             <p className="mt-1 text-xs text-muted">
               Visão ativa: {USER_GROUP_LABELS[selectedUserGroup]}. {audienceDescription}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-amber-400/20 bg-amber-500/8 p-3">
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-md border semantic-panel-warning p-3">
               <div className="min-w-[220px] flex-1">
                 <p className="text-sm font-semibold text-text">Bot de leitura do WhatsApp</p>
                 <p className="mt-1 text-xs text-muted">
@@ -520,7 +523,7 @@ function UserSessions() {
                 type="button"
                 onClick={restartWhatsappBot}
                 disabled={botRestarting}
-                className="h-10 rounded-md border border-amber-300/30 bg-amber-400/90 px-4 font-semibold text-[#2b1600] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                className="h-10 rounded-md border semantic-solid-warning px-4 font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {botRestarting ? 'Reiniciando bot...' : 'Reiniciar bot WhatsApp'}
               </button>
@@ -528,7 +531,7 @@ function UserSessions() {
                 type="button"
                 onClick={recoverPendingWhatsappMessages}
                 disabled={botRestarting || botRecovering}
-                className="h-10 rounded-md border border-emerald-300/30 bg-emerald-400/90 px-4 font-semibold text-[#082619] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+                className="h-10 rounded-md border semantic-solid-success px-4 font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {botRecovering ? 'Lendo mensagens...' : 'Recuperar fotos pendentes de hoje'}
               </button>
@@ -547,7 +550,7 @@ function UserSessions() {
                   setSelectedUserGroup(nextValue);
                   setSelectedUserId('');
                 }}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               >
                 <option value="kp">Operação KP</option>
                 <option value="control_tower">Torre de Controle (MAR E RIO)</option>
@@ -556,7 +559,7 @@ function UserSessions() {
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               >
                 <option value="">Todos os usuários</option>
                 {users.map((user) => (
@@ -570,14 +573,14 @@ function UserSessions() {
                 type="date"
                 value={fromDate}
                 onChange={(event) => setFromDate(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
 
               <input
                 type="date"
                 value={toDate}
                 onChange={(event) => setToDate(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2/85 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
 
               <button
@@ -596,39 +599,39 @@ function UserSessions() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Acessos no período</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.logins}</p>
             </div>
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Interações registradas</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.interactions}</p>
               <p className="mt-1 text-[11px] text-muted">Eventos de auditoria no período: {analytics.totals.auditEvents || 0}</p>
             </div>
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Sessões ativas</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.activeSessions}</p>
             </div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <h3 className="text-sm font-semibold text-text">Picos semanais de acesso</h3>
               <ReactECharts option={weeklyLoginsOption} style={{ height: 260 }} notMerge lazyUpdate />
             </div>
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <h3 className="text-sm font-semibold text-text">Picos por horário</h3>
               <ReactECharts option={hourlyPeaksOption} style={{ height: 260 }} notMerge lazyUpdate />
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+          <div className="rounded-md border border-white/10 bg-surface p-3">
             <h3 className="text-sm font-semibold text-text">Acessos x interações por dia</h3>
             <ReactECharts option={dailyActivityOption} style={{ height: 300 }} notMerge lazyUpdate />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <h3 className="mb-2 text-sm font-semibold text-text">Ações com mais interações</h3>
               <div className="max-h-[260px] overflow-auto">
                 <table className="min-w-[420px]">
@@ -656,7 +659,7 @@ function UserSessions() {
               </div>
             </div>
 
-            <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+            <div className="rounded-md border border-white/10 bg-surface p-3">
               <h3 className="mb-2 text-sm font-semibold text-text">Usuários com mais logins</h3>
               <div className="max-h-[260px] overflow-auto">
                 <table className="min-w-[420px]">
@@ -685,7 +688,7 @@ function UserSessions() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+          <div className="rounded-md border border-white/10 bg-surface p-3">
             <h3 className="mb-2 text-sm font-semibold text-text">Usuários com mais interações de negócio</h3>
             <div className="max-h-[260px] overflow-auto">
               <table className="min-w-[420px]">
@@ -713,7 +716,7 @@ function UserSessions() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface/70 p-3">
+          <div className="rounded-md border border-white/10 bg-surface p-3">
             <h3 className="mb-2 text-sm font-semibold text-text">Para quê cada usuário usa mais o sistema</h3>
             <div className="max-h-[320px] overflow-auto">
               <table className="min-w-[720px]">

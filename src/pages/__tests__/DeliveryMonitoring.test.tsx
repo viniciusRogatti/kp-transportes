@@ -42,8 +42,8 @@ const mockedShowConfirm = showConfirm as jest.MockedFunction<typeof showConfirm>
 
 type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained';
 
-const buildOverview = (status: MonitoringStatus) => ({
-  date: '2026-03-23',
+const buildOverview = (status: MonitoringStatus, date = '2026-03-23') => ({
+  date,
   generated_at: '2026-03-23T12:00:00.000Z',
   summary: {
     total: 1,
@@ -127,8 +127,8 @@ const buildOverview = (status: MonitoringStatus) => ({
   alerts: [],
 });
 
-const diagnostics = {
-  date: '2026-03-23',
+const buildDiagnostics = (date = '2026-03-23') => ({
+  date,
   summary: {
     total: 1,
     problematic: 0,
@@ -138,18 +138,19 @@ const diagnostics = {
     missing_number: 0,
     missing_zip_code: 0,
   },
-};
+});
 
 describe('DeliveryMonitoring', () => {
   beforeEach(() => {
     mockLocationSearch = '';
     let currentStatus: MonitoringStatus = 'on_the_way';
 
-    mockedAxios.get.mockImplementation((url) => {
+    mockedAxios.get.mockImplementation((url, config) => {
+      const requestedDate = String((config as { params?: { date?: string } } | undefined)?.params?.date || '2026-03-23');
       if (String(url).includes('/address-diagnostics')) {
-        return Promise.resolve({ data: diagnostics } as never);
+        return Promise.resolve({ data: buildDiagnostics(requestedDate) } as never);
       }
-      return Promise.resolve({ data: buildOverview(currentStatus) } as never);
+      return Promise.resolve({ data: buildOverview(currentStatus, requestedDate) } as never);
     });
 
     mockedAxios.post.mockImplementation(async (_url, payload) => {
@@ -256,11 +257,12 @@ describe('DeliveryMonitoring', () => {
 
   it('permite corrigir canhoto retido para reentrega direto no monitoramento', async () => {
     let currentStatus: MonitoringStatus = 'retained';
-    mockedAxios.get.mockImplementation((url) => {
+    mockedAxios.get.mockImplementation((url, config) => {
+      const requestedDate = String((config as { params?: { date?: string } } | undefined)?.params?.date || '2026-03-23');
       if (String(url).includes('/address-diagnostics')) {
-        return Promise.resolve({ data: diagnostics } as never);
+        return Promise.resolve({ data: buildDiagnostics(requestedDate) } as never);
       }
-      return Promise.resolve({ data: buildOverview(currentStatus) } as never);
+      return Promise.resolve({ data: buildOverview(currentStatus, requestedDate) } as never);
     });
     mockedAxios.post.mockImplementation(async (_url, payload) => {
       currentStatus = String((payload as { status?: string })?.status || 'redelivery') as MonitoringStatus;
@@ -294,7 +296,7 @@ describe('DeliveryMonitoring', () => {
   });
 
   it('preserva no celular a data da viagem recebida pelo alerta', async () => {
-    mockLocationSearch = '?date=15-07-2026&nf=123456';
+    mockLocationSearch = '?date=2026-07-15&nf=123456';
     (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
       matches: true,
       media: query,
@@ -313,6 +315,23 @@ describe('DeliveryMonitoring', () => {
         expect.stringContaining('/api/delivery-monitoring'),
         { params: { date: '2026-07-15' } },
       );
+    });
+  });
+
+  it('nao interpreta uma data brasileira da URL como data da API', async () => {
+    mockLocationSearch = '?date=06/08/2026&nf=123456';
+
+    render(<DeliveryMonitoring />);
+
+    await waitFor(() => {
+      const monitoringCalls = mockedAxios.get.mock.calls.filter(([url]) => (
+        String(url).endsWith('/api/delivery-monitoring')
+      ));
+      expect(monitoringCalls.length).toBeGreaterThan(0);
+      expect(monitoringCalls).not.toContainEqual([
+        expect.anything(),
+        { params: { date: '2026-08-06' } },
+      ]);
     });
   });
 });

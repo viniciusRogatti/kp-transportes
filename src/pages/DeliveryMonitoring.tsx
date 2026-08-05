@@ -36,6 +36,7 @@ import {
   subscribeToAlertReadChanges,
 } from '../utils/alertReadState';
 import { COMPANY_LABELS, COMPANY_TAB_ORDER } from '../utils/companyTabs';
+import { normalizeDateForApi } from '../utils/dateDisplay';
 import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
 import { showConfirm } from '../utils/dialog';
 import {
@@ -579,12 +580,8 @@ const getStopStatusUpdateErrorMessage = (error: unknown) => {
 
 const normalizeMonitoringDateParam = (value: string) => {
   const normalized = String(value || '').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(normalized)) {
-    const [day, month, year] = normalized.split(/[/-]/);
-    return `${year}-${month}-${day}`;
-  }
-  return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return null;
+  return normalizeDateForApi(normalized);
 };
 
 const getMonitoringQuery = (search?: string) => {
@@ -631,6 +628,7 @@ function DeliveryMonitoring() {
   });
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const overviewRequestIdRef = useRef(0);
   const todayDate = getTodayMonitoringDate();
   const effectiveDate = isMobileView && !monitoringQuery.date ? todayDate : date;
 
@@ -697,6 +695,8 @@ function DeliveryMonitoring() {
   }, [monitoringQuery.tripId]);
 
   const fetchOverview = useCallback(async () => {
+    const requestId = overviewRequestIdRef.current + 1;
+    overviewRequestIdRef.current = requestId;
     setLoading(true);
     try {
       const overviewRequest = axios.get<MonitoringResponse>(`${API_URL}/api/delivery-monitoring`, {
@@ -710,6 +710,7 @@ function DeliveryMonitoring() {
 
       const [overviewResponse, diagnosticsResponse] = await Promise.all([overviewRequest, diagnosticsRequest]);
       const overviewData = overviewResponse.data;
+      if (requestId !== overviewRequestIdRef.current || overviewData.date !== effectiveDate) return;
 
       setOverview((current) => {
         const previousDeliveries = current?.deliveries || [];
@@ -722,9 +723,10 @@ function DeliveryMonitoring() {
       });
       setDiagnostics(diagnosticsResponse?.data || null);
     } catch (error) {
+      if (requestId !== overviewRequestIdRef.current) return;
       console.error('Falha ao carregar monitoramento de entregas.', error);
     } finally {
-      setLoading(false);
+      if (requestId === overviewRequestIdRef.current) setLoading(false);
     }
   }, [effectiveDate, isMobileView]);
 

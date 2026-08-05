@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ConferencePanel } from '../ReceiptBagClosing';
+import { ConferencePanel, getRecoveredReceiptOrigin } from '../ReceiptBagClosing';
 import { ReceiptBag, ReceiptBagItem } from '../../services/receiptBagClosingService';
 
 const item = {
@@ -69,5 +69,24 @@ describe('ConferencePanel por teclado', () => {
     await waitFor(() => expect(onMutate).toHaveBeenCalledWith(item, 'confirm'));
     await waitFor(() => expect(search).toHaveValue(''));
     expect(search).toHaveFocus();
+  });
+
+  it('identifica a rota de origem de um canhoto ausente recuperado em outro malote', () => {
+    const recoveredItem = {
+      ...item,
+      status: 'recovered',
+      origin_bag_id: 19,
+      confirmed_bag_id: 20,
+      origin_bag: { id: 19, trip_id: 1903, driver_id: 7, driver_name: 'DIOGO' },
+    } as ReceiptBagItem;
+    const currentBag = {
+      ...bag,
+      id: 20,
+      trip_id: 2001,
+      items: [recoveredItem],
+    } as ReceiptBag;
+
+    expect(getRecoveredReceiptOrigin(currentBag, { invoiceNumber: '123456' })).toEqual(recoveredItem.origin_bag);
+    expect(getRecoveredReceiptOrigin({ ...currentBag, trip_id: 1903 }, { itemId: recoveredItem.id })).toBeNull();
   });
 });

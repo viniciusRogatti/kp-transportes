@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
-import { showConfirm } from '../utils/dialog';
+import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import verifyToken from '../utils/verifyToken';
 import {
@@ -82,6 +82,32 @@ const errorPayload = (error: unknown): ReceiptBagApiError => (
 const errorMessage = (error: unknown, fallback: string) => {
   const payload = errorPayload(error);
   return payload.error || (error instanceof Error ? error.message : '') || fallback;
+};
+
+export const getRecoveredReceiptOrigin = (
+  bag: ReceiptBag,
+  reference: { itemId?: number; invoiceNumber?: string },
+) => {
+  const normalizedInvoice = String(reference.invoiceNumber || '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+  const item = bag.items.find((candidate) => {
+    const matchesReference = reference.itemId
+      ? candidate.id === reference.itemId
+      : String(candidate.invoice_number).replace(/\D/g, '').replace(/^0+(?=\d)/, '') === normalizedInvoice;
+    return matchesReference
+      && candidate.status === 'recovered'
+      && candidate.origin_bag
+      && candidate.origin_bag.trip_id !== bag.trip_id;
+  });
+  return item?.origin_bag || null;
+};
+
+const showRecoveredReceiptAlert = async (invoiceNumber: string, origin: NonNullable<ReceiptBagItem['origin_bag']>) => {
+  await showAlert(
+    `O canhoto da NF ${invoiceNumber} estava AUSENTE no malote da rota #${origin.trip_id}`
+    + `${origin.driver_name ? `, do motorista ${origin.driver_name}` : ''}.\n\n`
+    + 'Ele foi localizado e confirmado neste malote.',
+    { title: 'Canhoto ausente localizado', okLabel: 'Entendi' },
+  );
 };
 
 function BagBadge({ status }: { status: ReceiptBagStatus }) {
@@ -247,12 +273,16 @@ function ReceiptBagClosing() {
     setError('');
     try {
       const bag = await updateReceiptBagItem(activeBag.id, item.id, action, { forceTransfer });
+      const recoveredOrigin = action === 'confirm'
+        ? getRecoveredReceiptOrigin(bag, { itemId: item.id })
+        : null;
       applyBag(bag, action === 'confirm'
         ? item.status === 'absent' ? `NF ${item.invoice_number} recuperada.` : `NF ${item.invoice_number} confirmada.`
         : action === 'absent' ? `NF ${item.invoice_number} marcada como ausente.`
           : `Devolução da NF ${item.invoice_number} registrada.`);
       setSelectedItemId(null);
       void loadList(true);
+      if (recoveredOrigin) await showRecoveredReceiptAlert(item.invoice_number, recoveredOrigin);
       return true;
     } catch (requestError) {
       const payload = errorPayload(requestError);
@@ -302,12 +332,14 @@ function ReceiptBagClosing() {
     setMutating(true);
     setError('');
     try {
-      applyBag(
-        await addExtraReceiptBagInvoice(activeBag.id, invoice, { forceTransfer }),
-        `NF ${invoice} adicionada neste malote.`,
-      );
+      const bag = await addExtraReceiptBagInvoice(activeBag.id, invoice, { forceTransfer });
+      const recoveredOrigin = getRecoveredReceiptOrigin(bag, { invoiceNumber: invoice });
+      applyBag(bag, recoveredOrigin
+        ? `NF ${invoice} recuperada de outro malote.`
+        : `NF ${invoice} adicionada neste malote.`);
       setExtraInvoice('');
       void loadList(true);
+      if (recoveredOrigin) await showRecoveredReceiptAlert(invoice, recoveredOrigin);
     } catch (requestError) {
       const payload = errorPayload(requestError);
       if (payload.code === 'RECEIPT_ALREADY_CONFIRMED' && !forceTransfer) {
@@ -939,6 +971,11 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
         : item.suggestion_source === 'whatsapp_phone' ? <p className="mt-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</p> : null}
       {item.is_suggested_extra && item.suggestion_reason ? <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{item.suggestion_reason}</p> : null}
       {item.confirmed_bag ? <p className="mt-1 text-[11px] font-bold text-violet-700 dark:text-violet-300">Encontrado com {item.confirmed_bag.driver_name || 'outro motorista'} · rota #{item.confirmed_bag.trip_id}</p> : null}
+      {item.status === 'recovered' && item.origin_bag && item.origin_bag.trip_id !== item.confirmed_bag?.trip_id ? (
+        <p className="mt-1 text-[11px] font-black text-red-700 dark:text-red-300">
+          Estava ausente no malote da rota #{item.origin_bag.trip_id}{item.origin_bag.driver_name ? ` · ${item.origin_bag.driver_name}` : ''}
+        </p>
+      ) : null}
       {selected ? (
         <div className="mt-2 flex flex-wrap gap-1.5 border-t border-current/15 pt-2" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
           <CompactActionButton disabled={mutating || EXEMPT_STATUSES.includes(item.status)} className="bg-emerald-600 text-white" onClick={() => onMutate(item, 'confirm')} icon={<Check className="h-3.5 w-3.5" />} label="Presente" />

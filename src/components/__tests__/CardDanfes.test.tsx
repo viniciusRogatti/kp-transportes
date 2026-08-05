@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react-dom/test-utils';
+import axios from 'axios';
 import CardDanfes from '../CardDanfes';
 import { IDanfe, IInvoiceSearchContext } from '../../types/types';
 
@@ -13,6 +14,7 @@ jest.mock('axios', () => ({
 
 const buildDanfe = (invoiceNumber: string, status: string): IDanfe => ({
   customer_id: '1',
+  company_id: 1,
   invoice_number: invoiceNumber,
   status,
   barcode: `barcode-${invoiceNumber}`,
@@ -77,7 +79,13 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
   },
 };
 
+const mockedAxios = axios as jest.Mocked<typeof axios>;
+
 describe('CardDanfes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('informa que o motorista ainda esta sendo carregado', () => {
     render(
       <CardDanfes
@@ -207,5 +215,60 @@ describe('CardDanfes', () => {
 
     expect(screen.getByText('Substitui a NF cancelada:')).toBeInTheDocument();
     expect(screen.getAllByText('777111').length).toBeGreaterThan(0);
+  });
+
+  it('cancela uma NF sem rota e vincula a NF de refaturamento pela pesquisa', async () => {
+    const sourceDanfe = buildDanfe('880011', 'pending');
+    const replacementDanfe = buildDanfe('880022', 'pending');
+    const cancelledDanfe = { ...sourceDanfe, status: 'cancelled' };
+    const linkedDanfe = {
+      ...cancelledDanfe,
+      replacement_invoice_number: '880022',
+      replacement_reason: 'Refaturada por troca comercial',
+    };
+    const onDanfeUpdated = jest.fn();
+
+    mockedAxios.patch
+      .mockResolvedValueOnce({ data: cancelledDanfe } as never)
+      .mockResolvedValueOnce({ data: linkedDanfe } as never);
+    mockedAxios.get.mockResolvedValue({ data: replacementDanfe } as never);
+
+    render(
+      <CardDanfes
+        danfes={[sourceDanfe]}
+        allowStatusActions
+        onDanfeUpdated={onDanfeUpdated}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 880011' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Alterar status da NF 880011' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Cancelada/ }));
+    fireEvent.change(screen.getByLabelText('NF substituta (opcional)'), { target: { value: '880022' } });
+    fireEvent.change(screen.getByLabelText('Motivo/observação'), { target: { value: 'Refaturada por troca comercial' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar status' }));
+
+    await waitFor(() => {
+      expect(mockedAxios.patch).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('/danfes/nf/880011/status'),
+        { status: 'cancelled', companyId: 1 },
+      );
+      expect(mockedAxios.patch).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('/danfes/nf/880011/replacement'),
+        {
+          replacementInvoiceNumber: '880022',
+          replacementReason: 'Refaturada por troca comercial',
+          companyId: 1,
+        },
+      );
+    });
+
+    expect(onDanfeUpdated).toHaveBeenCalledWith(expect.objectContaining({
+      invoice_number: '880011',
+      status: 'cancelled',
+      replacement_invoice_number: '880022',
+    }));
   });
 });

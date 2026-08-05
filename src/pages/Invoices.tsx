@@ -51,6 +51,9 @@ function Invoices() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const deferredFilters = useDeferredValue(filters);
+  const canChangeInvoiceStatus = ['admin', 'master', 'user', 'expedicao'].includes(
+    String(localStorage.getItem('user_permission') || '').trim().toLowerCase(),
+  );
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -348,6 +351,7 @@ function Invoices() {
       const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
       return [sanitizeDanfeTextFields(updatedDanfe), ...nextRows];
     });
+    void loadInvoiceContext([updatedDanfe], { force: true, includeTripDriver: true });
   }
   
   return (
@@ -514,6 +518,7 @@ function Invoices() {
           driverLoadingByInvoice={driverLoadingByInvoice}
           invoiceContextByNf={invoiceContextByNf}
           onDanfeUpdated={handleDanfeUpdated}
+          allowStatusActions={canChangeInvoiceStatus}
           onOpenReturnBatch={(batchCode) => navigate(
             `/returns-occurrences?tab=returns&batch=${encodeURIComponent(batchCode)}`,
           )}

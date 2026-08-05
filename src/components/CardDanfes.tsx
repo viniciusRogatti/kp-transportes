@@ -30,7 +30,16 @@ interface CardDanfesProps {
   assignableTrips?: ITrip[];
   onAssignDanfeToTrip?: (danfe: IDanfe, tripId: number) => Promise<void>;
   onOpenReturnBatch?: (batchCode: string, invoiceNumber: string) => void;
+  allowStatusActions?: boolean;
 }
+
+type InvoiceSearchStatus = 'returned' | 'cancelled' | 'redelivery';
+
+const INVOICE_SEARCH_STATUS_OPTIONS: Array<{ value: InvoiceSearchStatus; label: string; description: string }> = [
+  { value: 'returned', label: 'Devolução', description: 'Marca a NF como devolvida.' },
+  { value: 'cancelled', label: 'Cancelada', description: 'Cancela a NF e permite vincular uma NF de refaturamento.' },
+  { value: 'redelivery', label: 'Reentrega', description: 'Devolve a NF ao fluxo operacional de entrega.' },
+];
 
 const RETURN_TYPE_LABELS: Record<string, string> = {
   total: 'Devolucao total',
@@ -91,6 +100,7 @@ function CardDanfes({
   assignableTrips = [],
   onAssignDanfeToTrip,
   onOpenReturnBatch,
+  allowStatusActions = false,
 }: CardDanfesProps) {
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
   const [productsModalDanfe, setProductsModalDanfe] = useState<IDanfe | null>(null);
@@ -104,6 +114,12 @@ function CardDanfes({
   const [selectedTripId, setSelectedTripId] = useState('');
   const [isAssigningDanfe, setIsAssigningDanfe] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
+  const [statusModalDanfe, setStatusModalDanfe] = useState<IDanfe | null>(null);
+  const [selectedOperationalStatus, setSelectedOperationalStatus] = useState<InvoiceSearchStatus>('returned');
+  const [statusReplacementInvoice, setStatusReplacementInvoice] = useState('');
+  const [statusReplacementReason, setStatusReplacementReason] = useState('Refaturada');
+  const [statusUpdateError, setStatusUpdateError] = useState('');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const filteredDanfes = useMemo(() => {
     if (!activeStatusFilter) return danfes;
@@ -149,6 +165,79 @@ function CardDanfes({
     setAssignmentModalDanfe(danfe);
     setSelectedTripId('');
     setAssignmentError('');
+  }
+
+  function openStatusModal(danfe: IDanfe) {
+    const currentStatus = String(danfe.status || '').trim().toLowerCase();
+    const initialStatus = INVOICE_SEARCH_STATUS_OPTIONS.some((option) => option.value === currentStatus)
+      ? currentStatus as InvoiceSearchStatus
+      : 'returned';
+    setStatusModalDanfe(danfe);
+    setSelectedOperationalStatus(initialStatus);
+    setStatusReplacementInvoice(danfe.replacement_invoice_number || '');
+    setStatusReplacementReason(danfe.replacement_reason || 'Refaturada');
+    setStatusUpdateError('');
+  }
+
+  const closeStatusModal = useCallback((force = false) => {
+    if (isUpdatingStatus && !force) return;
+    setStatusModalDanfe(null);
+    setSelectedOperationalStatus('returned');
+    setStatusReplacementInvoice('');
+    setStatusReplacementReason('Refaturada');
+    setStatusUpdateError('');
+  }, [isUpdatingStatus]);
+
+  async function handleOperationalStatusUpdate() {
+    if (!statusModalDanfe) return;
+
+    try {
+      setIsUpdatingStatus(true);
+      setStatusUpdateError('');
+
+      const { data } = await axios.patch<IDanfe>(
+        `${API_URL}/danfes/nf/${encodeURIComponent(statusModalDanfe.invoice_number)}/status`,
+        {
+          status: selectedOperationalStatus,
+          companyId: statusModalDanfe.company_id || null,
+        },
+      );
+      let updatedDanfe = sanitizeDanfeTextFields(data);
+      onDanfeUpdated?.(updatedDanfe);
+
+      const replacementInvoiceNumber = String(statusReplacementInvoice || '').trim();
+      if (selectedOperationalStatus === 'cancelled' && replacementInvoiceNumber) {
+        const replacementResponse = await axios.patch<IDanfe>(
+          `${API_URL}/danfes/nf/${encodeURIComponent(statusModalDanfe.invoice_number)}/replacement`,
+          {
+            replacementInvoiceNumber,
+            replacementReason: String(statusReplacementReason || '').trim() || 'Refaturada',
+            companyId: statusModalDanfe.company_id || null,
+          },
+        );
+        updatedDanfe = sanitizeDanfeTextFields(replacementResponse.data);
+        onDanfeUpdated?.(updatedDanfe);
+
+        try {
+          const refreshedReplacement = await axios.get<IDanfe>(
+            `${API_URL}/danfes/nf/${encodeURIComponent(replacementInvoiceNumber)}`,
+            { params: statusModalDanfe.company_id ? { companyId: statusModalDanfe.company_id } : undefined },
+          );
+          if (refreshedReplacement.data) onDanfeUpdated?.(sanitizeDanfeTextFields(refreshedReplacement.data));
+        } catch {
+          // A NF principal ja foi atualizada; a substituta sera recarregada na proxima busca.
+        }
+      }
+
+      closeStatusModal(true);
+    } catch (error: any) {
+      setStatusUpdateError(
+        error?.response?.data?.error
+          || 'Nao foi possivel atualizar o status desta NF.',
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   }
 
   const closeAssignmentModal = useCallback((force = false) => {
@@ -237,7 +326,7 @@ function CardDanfes({
   }
 
   useEffect(() => {
-    if (!productsModalDanfe && !replacementModalDanfe && !assignmentModalDanfe) return undefined;
+    if (!productsModalDanfe && !replacementModalDanfe && !assignmentModalDanfe && !statusModalDanfe) return undefined;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -251,6 +340,10 @@ function CardDanfes({
         }
         if (assignmentModalDanfe && !isAssigningDanfe) {
           closeAssignmentModal();
+          return;
+        }
+        if (statusModalDanfe && !isUpdatingStatus) {
+          closeStatusModal();
         }
       }
     };
@@ -259,7 +352,7 @@ function CardDanfes({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [assignmentModalDanfe, closeAssignmentModal, closeReplacementModal, isAssigningDanfe, isLinkingReplacement, productsModalDanfe, replacementModalDanfe]);
+  }, [assignmentModalDanfe, closeAssignmentModal, closeReplacementModal, closeStatusModal, isAssigningDanfe, isLinkingReplacement, isUpdatingStatus, productsModalDanfe, replacementModalDanfe, statusModalDanfe]);
 
   return (
     <>
@@ -603,6 +696,16 @@ function CardDanfes({
                         {replacedInvoiceNumber ? (
                           <p><strong>Substitui a NF cancelada:</strong> {replacedInvoiceNumber}</p>
                         ) : null}
+                        {allowStatusActions ? (
+                          <button
+                            type="button"
+                            onClick={() => openStatusModal(danfe)}
+                            className="inline-flex h-8 items-center rounded-md border border-accent/50 bg-accent/10 px-2 text-xs font-semibold text-text-accent transition hover:bg-accent/20"
+                            aria-label={`Alterar status da NF ${danfe.invoice_number}`}
+                          >
+                            Alterar status
+                          </button>
+                        ) : null}
                         {normalizeTextValue(danfe.status) === 'cancelled' && !replacementInvoiceNumber ? (
                           <button
                             type="button"
@@ -792,6 +895,106 @@ function CardDanfes({
                 disabled={isLinkingReplacement}
               >
                 {isLinkingReplacement ? 'Vinculando...' : 'Salvar vinculo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {statusModalDanfe ? (
+        <div className="fixed inset-0 z-[1430] flex items-center justify-center p-3">
+          <button
+            type="button"
+            aria-label="Fechar alteracao de status"
+            className="absolute inset-0 bg-slate-950/80"
+            onClick={() => closeStatusModal()}
+          />
+          <div className="relative z-[1435] flex max-h-[92vh] w-full max-w-[540px] flex-col overflow-y-auto rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-base font-semibold">{`Alterar status da NF ${statusModalDanfe.invoice_number}`}</h3>
+                <p className="text-xs text-muted">Esta ação funciona mesmo quando a NF ainda não foi atribuída a uma rota.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeStatusModal()}
+                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text disabled:opacity-50"
+                disabled={isUpdatingStatus}
+              >
+                Fechar
+              </button>
+            </div>
+
+            <fieldset className="mt-4 space-y-2">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-muted">Novo status</legend>
+              {INVOICE_SEARCH_STATUS_OPTIONS.map((option) => (
+                <label key={option.value} className={cn(
+                  'flex cursor-pointer gap-3 rounded-md border p-3 transition',
+                  selectedOperationalStatus === option.value ? 'border-accent bg-accent/10' : 'border-border bg-surface-2',
+                )}>
+                  <input
+                    type="radio"
+                    name="invoice-operational-status"
+                    value={option.value}
+                    checked={selectedOperationalStatus === option.value}
+                    onChange={() => setSelectedOperationalStatus(option.value)}
+                    disabled={isUpdatingStatus}
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">{option.label}</span>
+                    <span className="block text-xs text-muted">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            {selectedOperationalStatus === 'cancelled' ? (
+              <div className="mt-4 rounded-md border border-border bg-surface p-3">
+                <p className="text-sm font-semibold">Refaturamento</p>
+                <p className="mt-1 text-xs text-muted">Se já existir uma NF substituta importada, informe-a agora. O vínculo é opcional.</p>
+                <label className="mt-3 block text-xs text-muted">
+                  NF substituta (opcional)
+                  <input
+                    value={statusReplacementInvoice}
+                    onChange={(event) => setStatusReplacementInvoice(event.target.value)}
+                    className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2 px-3 text-sm text-text"
+                    placeholder="Ex.: 1722999"
+                    disabled={isUpdatingStatus}
+                  />
+                </label>
+                <label className="mt-3 block text-xs text-muted">
+                  Motivo/observação
+                  <input
+                    value={statusReplacementReason}
+                    onChange={(event) => setStatusReplacementReason(event.target.value)}
+                    className="mt-1 h-10 w-full rounded-sm border border-border bg-surface-2 px-3 text-sm text-text"
+                    placeholder="Refaturada"
+                    disabled={isUpdatingStatus}
+                  />
+                </label>
+              </div>
+            ) : null}
+
+            {statusUpdateError ? (
+              <div className="mt-3 rounded-md border semantic-panel-danger px-3 py-2 text-sm">{statusUpdateError}</div>
+            ) : null}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeStatusModal()}
+                className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text"
+                disabled={isUpdatingStatus}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleOperationalStatusUpdate}
+                className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:opacity-60"
+                disabled={isUpdatingStatus}
+              >
+                {isUpdatingStatus ? 'Salvando...' : 'Salvar status'}
               </button>
             </div>
           </div>

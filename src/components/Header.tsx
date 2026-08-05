@@ -38,6 +38,7 @@ import {
 } from '../utils/permissions';
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 import TutorialHelpButton from '../tutorial/TutorialHelpButton';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 type NavItem = {
   to: string;
@@ -74,14 +75,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 const formatNotificationTime = (value: string) => {
-  const timestamp = new Date(value).getTime();
-  if (!Number.isFinite(timestamp)) return 'agora';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(timestamp));
+  return formatDateTimeBR(value, 'agora');
 };
 
 const navItems: NavItem[] = [

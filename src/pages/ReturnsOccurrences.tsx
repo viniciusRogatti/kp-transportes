@@ -66,7 +66,7 @@ import {
   IReturnBatch,
 } from '../types/types';
 import verifyToken from '../utils/verifyToken';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeTextFields } from '../utils/textNormalization';
@@ -349,16 +349,7 @@ const formatOccurrenceQtyWithType = (quantity: number, productType?: string | nu
   return `${Number(quantity || 0)}${normalizedType || ''}`;
 };
 const formatReturnDataUpdate = (value?: string | null) => {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value, '');
 };
 const buildOccurrenceCardItemSummary = (occurrence: IOccurrence): OccurrenceCardItemSummary[] => {
   if (occurrence.items?.length) {
@@ -3145,8 +3136,8 @@ function ReturnsOccurrences() {
                         </InlineText>
                         <InlineText>
                           Status do lote: {RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']}
-                          {selectedBatch.sent_to_control_tower_at ? ` | Enviado em: ${formatDateBR(selectedBatch.sent_to_control_tower_at)}` : ''}
-                          {selectedBatch.received_by_control_tower_at ? ` | Recebido em: ${formatDateBR(selectedBatch.received_by_control_tower_at)}` : ''}
+                          {selectedBatch.sent_to_control_tower_at ? ` | Enviado em: ${formatDateTimeBR(selectedBatch.sent_to_control_tower_at)}` : ''}
+                          {selectedBatch.received_by_control_tower_at ? ` | Recebido em: ${formatDateTimeBR(selectedBatch.received_by_control_tower_at)}` : ''}
                         </InlineText>
                         {!isSelectedBatchEditableByTransportadora && selectedBatchWorkflowStatus === 'awaiting_control_tower' && (
                           <InfoText>
@@ -4635,7 +4626,7 @@ function ReturnsOccurrences() {
                         <span>
                           <strong>{entry.action}</strong>
                           {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
-                          {` | Data: ${formatDateBR(entry.created_at)}`}
+                          {` | Data: ${formatDateTimeBR(entry.created_at)}`}
                         </span>
                       </li>
                     ))}

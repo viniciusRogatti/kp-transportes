@@ -24,6 +24,7 @@ import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 import {
   confirmReturnDataImport,
   exportReturnRegistryOccurrences,
@@ -66,16 +67,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 const numberFormatter = new Intl.NumberFormat('pt-BR');
 
 const formatDateTime = (value?: string | null) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value);
 };
 
 const APPROVAL_LABELS: Record<string, string> = {

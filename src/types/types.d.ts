@@ -347,6 +347,7 @@ export interface IReceiptBacklogRouteHistoryRow {
   note_status?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  status_changed_at?: string | null;
 }
 
 export interface IReceiptBacklogRow {
@@ -372,6 +373,7 @@ export interface IReceiptBacklogRow {
   receipt_created_at?: string | null;
   route_history?: IReceiptBacklogRouteHistoryRow[];
   age_days?: number;
+  age_reference_at?: string | null;
   return_marked_at?: string | null;
   short_shelf_life?: boolean;
   short_shelf_life_products?: string[];

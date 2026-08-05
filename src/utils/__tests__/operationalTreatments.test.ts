@@ -26,4 +26,15 @@ describe('regras da Central de Tratativas', () => {
     expect(getBacklogAgeDays({ age_days: -4 } as IReceiptBacklogRow)).toBe(0);
     expect(getBacklogAgeDays({ age_days: 5 } as IReceiptBacklogRow)).toBe(5);
   });
+
+  it('recalcula o card desde a entrada operacional mesmo com idade antiga em cache', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(new Date('2026-08-04T15:00:00.000Z').getTime());
+
+    expect(getBacklogAgeDays({
+      age_days: 150,
+      age_reference_at: '2026-08-01T12:00:00.000Z',
+    } as IReceiptBacklogRow)).toBe(3);
+
+    jest.restoreAllMocks();
+  });
 });

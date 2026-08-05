@@ -27,6 +27,7 @@ import {
 import { getAlertSeverityTone, getSemanticToneClassName } from '../utils/statusStyles';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 const EMPTY_SUMMARY: IAlertHistoryResponse['summary'] = {
   total: 0,
@@ -50,16 +51,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const formatDateTime = (value: string | null | undefined) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value);
 };
 
 const statusLabel = (status: IAlertHistoryRow['status']) => (

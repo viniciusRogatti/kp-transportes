@@ -44,6 +44,7 @@ import { API_URL } from '../data';
 import { getApiErrorMessage, handleAuthenticationError } from '../utils/authErrorHandler';
 import { getOccurrenceAgeDays, isTreatmentOverdue } from '../utils/operationalTreatments';
 import { showConfirm } from '../utils/dialog';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 
 type UploadPreviewReport = {
   originalSizeKb: number;
@@ -154,27 +155,11 @@ const getInitialNotificationSearchParams = () => {
 };
 
 const formatDateTime = (value: string | number | null | undefined) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value);
 };
 
 const formatDateOnly = (value: string | null | undefined) => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(parsed);
+  return formatDateBR(value);
 };
 
 const toLocalDateInput = (date: Date) => {

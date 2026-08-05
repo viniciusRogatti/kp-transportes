@@ -7,6 +7,7 @@ import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { showConfirm } from '../utils/dialog';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 type UserOption = {
   id: number;
@@ -109,10 +110,7 @@ const USER_GROUP_LABELS: Record<UserGroup, string> = {
 const SESSIONS_PER_PAGE = 10;
 
 function formatDateTime(value: string | null) {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleString('pt-BR');
+  return formatDateTimeBR(value);
 }
 
 function formatDuration(minutes: number) {

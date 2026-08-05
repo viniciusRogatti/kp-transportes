@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import { IDanfe } from '../types/types';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { RetainedReminder } from '../utils/retainedReminders';
 import { ProntoBoxRow, SalmonSeparationRow } from '../utils/tripProductManifest';
 import { OccurrenceReminder } from '../utils/occurrenceReminders';
@@ -297,16 +297,7 @@ const resolveEmissionDate = (tripCreatedAt?: string | null, tripDate?: string | 
   if (!source) return '-';
   if (/^\d{4}-\d{2}-\d{2}$/.test(source)) return formatDateBR(source);
 
-  const parsed = new Date(source);
-  if (Number.isNaN(parsed.getTime())) return '-';
-
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(source);
 };
 
 const formatDecimal = (value: number | string | null | undefined) => {

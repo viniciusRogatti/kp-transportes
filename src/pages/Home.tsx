@@ -46,7 +46,7 @@ import {
 } from '../style/returnsOccurrences';
 import { ICollectionRequest, IDanfe, IOccurrence, IReceiptBacklogRow } from '../types/types';
 import verifyToken from '../utils/verifyToken';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { getSemanticToneClassName } from '../utils/statusStyles';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeProduct, sanitizeDanfeTextFields } from '../utils/textNormalization';
@@ -1965,7 +1965,7 @@ function Home() {
                               <span className="flex flex-wrap items-center gap-2">
                                 <strong className="text-[color:var(--color-danger)]">CANCELAMENTO SOLICITADO</strong>
                                 <span className="rounded-full border semantic-solid-danger px-2 py-0.5 text-[11px] font-semibold">
-                                  {`Em: ${formatDateBR(request.updated_at)}`}
+                                  {`Em: ${formatDateTimeBR(request.updated_at)}`}
                                 </span>
                               </span>
                               <span>
@@ -2110,7 +2110,7 @@ function Home() {
                               <span className="flex flex-wrap items-center gap-2">
                                 <strong className="text-[color:var(--color-success)]">COLETA COLETADA</strong>
                                 <span className="rounded-full border semantic-solid-success px-2 py-0.5 text-[11px] font-semibold">
-                                  {`Confirmada em: ${formatDateBR(request.collected_at || request.updated_at)}`}
+                                  {`Confirmada em: ${formatDateTimeBR(request.collected_at || request.updated_at)}`}
                                 </span>
                               </span>
                               <span>
@@ -2512,7 +2512,7 @@ function Home() {
                 <span><strong>Urgencia:</strong> {formatUrgencyLabel(collectionDetailsRequest.urgency_level)}</span>
               </li>
               <li>
-                <span><strong>Solicitada em:</strong> {formatDateBR(collectionDetailsRequest.created_at)}</span>
+                <span><strong>Solicitada em:</strong> {formatDateTimeBR(collectionDetailsRequest.created_at)}</span>
               </li>
               <li>
                 <span><strong>Data agendada:</strong> {formatDateBR(collectionDetailsRequest.scheduled_for)}</span>
@@ -2668,7 +2668,7 @@ function Home() {
                         <span>
                           <strong>{entry.action}</strong>
                           {` | Usuario: ${entry.actor_username || entry.actor_user_id || 'nao identificado'}`}
-                          {` | Data: ${formatDateBR(entry.created_at)}`}
+                          {` | Data: ${formatDateTimeBR(entry.created_at)}`}
                         </span>
                         {metadataSummary ? <span className="text-xs text-text-accent">{metadataSummary}</span> : null}
                       </div>

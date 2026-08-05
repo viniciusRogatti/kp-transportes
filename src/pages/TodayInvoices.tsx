@@ -79,7 +79,7 @@ function TodayInvoices() {
 
   async function loadTodayTrips() {
     try {
-      const today = format(new Date(), 'dd-MM-yyyy');
+      const today = format(new Date(), 'yyyy-MM-dd');
       const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
       const map: Record<string, string> = {};
       const assignmentMap: Record<string, TodayInvoiceAssignment> = {};

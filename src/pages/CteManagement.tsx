@@ -6,6 +6,7 @@ import Badge from '../components/ui/Badge';
 import { API_URL } from '../data';
 import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 type CompanyOption = {
   id: number;
@@ -698,7 +699,7 @@ function CteManagement() {
                         <p>{`CFOP: ${cte.cfop || '-'}`}</p>
                         <p>{`Tomador: ${cte.taker_role || '-'}`}</p>
                         <p>{`Frete: ${money(cte.total_service_value)}`}</p>
-                        <p>{`Criado em: ${new Date(cte.created_at).toLocaleString('pt-BR')}`}</p>
+                        <p>{`Criado em: ${formatDateTimeBR(cte.created_at)}`}</p>
                       </div>
                     </div>
                   ))}

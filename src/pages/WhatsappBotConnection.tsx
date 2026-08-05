@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { API_URL } from '../data';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 type ConnectionState = {
   status?: string;
@@ -102,7 +103,7 @@ function WhatsappBotConnection() {
 
         {statusData?.connectionState?.lastMessageReceivedAt ? (
           <p className="mt-3 text-xs text-muted">
-            Última mensagem recebida: {new Date(statusData.connectionState.lastMessageReceivedAt).toLocaleString('pt-BR')}
+            Última mensagem recebida: {formatDateTimeBR(statusData.connectionState.lastMessageReceivedAt)}
           </p>
         ) : null}
         {statusData?.connectionState?.lastIgnoredReason ? (

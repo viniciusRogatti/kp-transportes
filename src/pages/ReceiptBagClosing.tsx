@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import { showConfirm } from '../utils/dialog';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import verifyToken from '../utils/verifyToken';
 import {
   ReceiptBag,
@@ -49,15 +50,10 @@ const todayInput = () => {
   return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
 const formatDate = (value: string) => {
-  const [year, month, day] = String(value || '').split('-');
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  return formatDateBR(value);
 };
 const formatDateTime = (value?: string | null) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).format(date);
+  return formatDateTimeBR(value);
 };
 
 const BAG_STATUS: Record<ReceiptBagStatus, { label: string; className: string }> = {

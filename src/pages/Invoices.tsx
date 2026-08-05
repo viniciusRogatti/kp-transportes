@@ -394,7 +394,7 @@ function Invoices() {
                 selected={startDate}
                 onChange={date => setStartDate(date)}
                 placeholderText="Data de início"
-                dateFormat="yyyy-MM-dd"
+                dateFormat="dd/MM/yyyy"
                 locale="ptBR"
                 popperPlacement="bottom-start"
                 className="date-picker-input"
@@ -404,7 +404,7 @@ function Invoices() {
                 selected={endDate}
                 onChange={date => setEndDate(date)}
                 placeholderText="Data de fim"
-                dateFormat="yyyy-MM-dd"
+                dateFormat="dd/MM/yyyy"
                 locale="ptBR"
                 popperPlacement="bottom-start"
                 className="date-picker-input"

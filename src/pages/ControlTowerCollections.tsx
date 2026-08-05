@@ -19,7 +19,7 @@ import { useControlTowerData, useControlTowerMutations } from '../hooks/useContr
 import { ControlTowerFilters, RegisterControlTowerOccurrenceInput } from '../types/controlTower';
 import { API_URL } from '../data';
 import { ICollectionRequest, IDanfe, IOccurrence, IReturnBatch } from '../types/types';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { logoutSession } from '../utils/logoutSession';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
@@ -274,7 +274,7 @@ function buildManualCollectionPayloads(danfe: IDanfe, fallbackInvoice: string): 
 }
 
 function formatDateTimeLabel(value?: string | null) {
-  return formatDateBR(value);
+  return formatDateTimeBR(value);
 }
 
 function splitCollectionNotes(notes: unknown) {

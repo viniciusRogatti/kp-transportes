@@ -13,6 +13,7 @@ import {
 } from '../services/tutorialProgressService';
 import { getTutorialModulesForPermission } from '../tutorial/tutorialConfig';
 import { showConfirm, showPrompt } from '../utils/dialog';
+import { formatDateTimeBR } from '../utils/dateDisplay';
 
 type UserRow = {
   id: number;
@@ -341,9 +342,9 @@ function UserManagement() {
                         <span className="font-semibold">{TUTORIAL_STATUS_LABELS[status] || status}</span>
                         {tutorial?.current_module ? <span className="block text-xs text-muted">{tutorial.current_module} · passo {tutorial.current_step + 1}</span> : null}
                         <span className="block text-xs text-muted">{completedCount}/{totalModules} módulos</span>
-                        {tutorial?.last_interaction_at ? <span className="block text-xs text-muted">Atualizado em {new Date(tutorial.last_interaction_at).toLocaleString('pt-BR')}</span> : null}
+                        {tutorial?.last_interaction_at ? <span className="block text-xs text-muted">Atualizado em {formatDateTimeBR(tutorial.last_interaction_at)}</span> : null}
                       </td>
-                      <td>{user.created_at ? new Date(user.created_at).toLocaleString('pt-BR') : '-'}</td>
+                      <td>{formatDateTimeBR(user.created_at)}</td>
                       <td>
                         <div className="flex gap-2">
                           <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-surface-2 disabled:opacity-50">Reiniciar</button>

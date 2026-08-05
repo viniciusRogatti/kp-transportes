@@ -36,7 +36,7 @@ import { buildOccurrenceReminders } from '../utils/occurrenceReminders';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { showConfirm } from '../utils/dialog';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { listReceiptBacklog } from '../services/receiptsService';
 import { ICar, IDanfe, IDriver, IOccurrence, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
@@ -97,7 +97,7 @@ interface RoutingCityOption {
 }
 
 function toApiDate(date: Date) {
-  return format(date, 'dd-MM-yyyy');
+  return format(date, 'yyyy-MM-dd');
 }
 
 function toQueryDate(date: Date) {
@@ -108,8 +108,8 @@ function toISODate(date: string) {
   const normalized = String(date || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
 
-  const [day, month, year] = normalized.split('-');
-  return `${year}-${month}-${day}`;
+  const match = normalized.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
 function parseSupportedDateInput(date: string) {
@@ -119,8 +119,8 @@ function parseSupportedDateInput(date: string) {
     return new Date(year, month - 1, day);
   }
 
-  if (/^\d{2}-\d{2}-\d{4}$/.test(normalized)) {
-    const [day, month, year] = normalized.split('-').map(Number);
+  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(normalized)) {
+    const [day, month, year] = normalized.split(/[/-]/).map(Number);
     return new Date(year, month - 1, day);
   }
 
@@ -128,16 +128,7 @@ function parseSupportedDateInput(date: string) {
 }
 
 function formatPrintTimestamp(value?: string | null) {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value, '');
 }
 
 function resolveRoutingInvoiceDateCandidates(date: string) {
@@ -795,15 +786,7 @@ function RoutePlanning() {
   const formatAssignmentDateTime = useCallback((value?: string | null) => {
     if (!value) return '-';
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDateBR(value);
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '-';
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(parsed);
+    return formatDateTimeBR(value);
   }, []);
 
   const extractActiveReturnInfo = useCallback((batches: IReturnBatch[], invoiceNumber: string): RouteReturnInfo => {

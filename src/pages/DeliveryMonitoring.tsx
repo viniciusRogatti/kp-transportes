@@ -580,8 +580,8 @@ const getStopStatusUpdateErrorMessage = (error: unknown) => {
 const normalizeMonitoringDateParam = (value: string) => {
   const normalized = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-  if (/^\d{2}-\d{2}-\d{4}$/.test(normalized)) {
-    const [day, month, year] = normalized.split('-');
+  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(normalized)) {
+    const [day, month, year] = normalized.split(/[/-]/);
     return `${year}-${month}-${day}`;
   }
   return null;

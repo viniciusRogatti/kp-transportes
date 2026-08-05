@@ -1,4 +1,4 @@
-import { formatDateBR } from '../../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../../utils/dateDisplay';
 
 export const numberFmt = new Intl.NumberFormat('pt-BR');
 export const decimalFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -9,5 +9,5 @@ export function formatCompactDate(dateIso: string) {
 }
 
 export function formatDateTime(dateIso: string) {
-  return formatDateBR(dateIso);
+  return formatDateTimeBR(dateIso);
 }

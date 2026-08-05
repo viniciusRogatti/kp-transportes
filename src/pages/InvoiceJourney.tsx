@@ -38,7 +38,7 @@ import {
 } from '../utils/invoiceJourney';
 import { cn } from '../lib/cn';
 import verifyToken from '../utils/verifyToken';
-import { formatDateBR } from '../utils/dateDisplay';
+import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 
 type JourneyFilter = 'all' | InvoiceJourneyCategory;
 
@@ -64,16 +64,7 @@ const TONE_CLASS_NAMES: Record<IInvoiceJourneyEvent['tone'], string> = {
 const FILTERS = Object.keys(JOURNEY_CATEGORY_LABELS) as JourneyFilter[];
 
 function formatDateTime(value: string | null) {
-  if (!value) return 'Não registrado';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return 'Não registrado';
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
+  return formatDateTimeBR(value, 'Não registrado');
 }
 
 function formatCurrency(value: number | null) {

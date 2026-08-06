@@ -85,7 +85,7 @@ async function fillTransportStep() {
   fireEvent.click(await screen.findByRole('option', { name: 'Truck - ABC-1234' }));
 
   fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-  await screen.findByText('Digite ou leia o codigo de barras da NF');
+  await screen.findByText('Localizar nota fiscal');
 }
 
 async function continueAfterReturnLookup() {
@@ -320,6 +320,50 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     expect(screen.queryByRole('button', { name: 'Remover NF' })).not.toBeInTheDocument();
   });
 
+  it('edita lote pendente usando o mesmo wizard da criacao', async () => {
+    const batch = {
+      batch_code: 'RET-20260806-EDITAVEL',
+      batch_status: 'open',
+      workflow_status: 'pending_transportadora',
+      driver_id: 1,
+      vehicle_plate: 'ABC-1234',
+      return_date: '2026-08-06',
+      sent_to_control_tower_at: null,
+      received_by_control_tower_at: null,
+      Driver: { id: 1, name: 'Motorista Teste' },
+      notes: [{
+        id: 10,
+        invoice_number: '1694432',
+        return_type: 'total',
+        items: [{ product_id: 'RV001899', product_description: 'Produto Faltante', product_type: 'UN', quantity: 1 }],
+      }],
+      aggregated_items: [],
+    };
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/drivers')) return Promise.resolve({ data: [{ id: '1', name: 'Motorista Teste' }] });
+      if (url.includes('/cars')) return Promise.resolve({ data: [{ id: '1', model: 'Truck', license_plate: 'ABC-1234' }] });
+      if (url.includes('/products') || url.includes('/occurrences/search')) return Promise.resolve({ data: [] });
+      if (url.includes('/returns/batches/search')) return Promise.resolve({ data: [batch] });
+      return Promise.resolve({ data: [] });
+    });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar lote' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Lote de devolucao RET-20260806-EDITAVEL' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Etapas da devolucao' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Motorista da devolucao' })).toHaveValue('Motorista Teste');
+    expect(screen.getByRole('combobox', { name: 'Veiculo da devolucao' })).toHaveValue('Truck - ABC-1234');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByText('Localizar nota fiscal')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Etapa 4.*Revisao do lote/i }));
+
+    expect(await screen.findByText('Notas fiscais do lote RET-20260806-EDITAVEL')).toBeInTheDocument();
+    expect(screen.getByText('NF 1694432', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Salvar lote' })).toBeDisabled();
+  });
+
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {
     renderPage();
     await openNewReturnModal();
@@ -545,9 +589,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     await continueAfterReturnLookup();
 
     expect(screen.getByLabelText('Total')).toBeChecked();
-    expect(screen.getByTestId('return-type-base-match')).toHaveTextContent(
-      'Tipo Total preenchido automaticamente conforme a base de devoluções.',
-    );
+    expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('Possui ocorrência aprovada');
+    expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('Tipo sugerido pela base: Total');
     fireEvent.click(screen.getByLabelText('Parcial'));
     await waitFor(() => expect(mockedShowConfirm).toHaveBeenCalledTimes(1));
     expect(screen.getByLabelText('Total')).toBeChecked();
@@ -601,6 +644,9 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ciente, continuar para tipo e produtos' }));
 
     expect(await screen.findByText('Tipo e produtos da devolucao')).toBeInTheDocument();
+    expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('NF não localizada na base de devoluções');
+    expect(screen.getByTestId('return-base-compact-reminder')).not.toHaveTextContent('Base atualizada em');
+    expect(screen.getByText(/Há produtos e ações abaixo/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
   });
 
@@ -663,10 +709,10 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     expect(await screen.findByText('2 ocorrências aprovadas')).toBeInTheDocument();
     expect(screen.getByText(/não impede adicionar a NF nem concluir o lote/i)).toBeInTheDocument();
-    await continueAfterReturnLookup();
-    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Ver ocorrências' }));
     expect(await screen.findByText('ID OC-10')).toBeInTheDocument();
-    expect(screen.getAllByText(/Produto faltante/i).length).toBeGreaterThan(0);
+    await continueAfterReturnLookup();
+    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
+    expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('2 ocorrências aprovadas');
   });
 });

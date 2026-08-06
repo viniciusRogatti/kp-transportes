@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 import {
   ArrowLeft,
+  ArrowDown,
   ArrowRight,
   CheckCircle2,
   Database,
@@ -496,6 +497,7 @@ function ReturnsOccurrences() {
   const [returnDataLookupLoading, setReturnDataLookupLoading] = useState(false);
   const [returnDataLookupError, setReturnDataLookupError] = useState('');
   const [showReturnDataDetails, setShowReturnDataDetails] = useState(false);
+  const returnLookupFeedbackRef = useRef<HTMLDivElement>(null);
   const [returnDataLastUpdate, setReturnDataLastUpdate] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<ReturnType>('total');
   const [returnTypeDivergenceAcknowledged, setReturnTypeDivergenceAcknowledged] = useState('');
@@ -545,9 +547,8 @@ function ReturnsOccurrences() {
   const [returnBatches, setReturnBatches] = useState<IReturnBatch[]>([]);
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const returnModalContentRef = useRef<HTMLDivElement>(null);
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
-  const [selectedBatchDriverId, setSelectedBatchDriverId] = useState('');
-  const [selectedBatchCarId, setSelectedBatchCarId] = useState('');
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
@@ -600,6 +601,8 @@ function ReturnsOccurrences() {
       && canManageBatchTransportadora,
   );
   const isSelectedBatchAwaitingControlTower = selectedBatchWorkflowStatus === 'awaiting_control_tower';
+  const isReturnWizardMode = !selectedBatch || isSelectedBatchEditableByTransportadora;
+  const returnWizardNoteCount = selectedBatch ? batchDraftNotes.length : draftNotes.length;
 
   function setTab(nextTab: 'returns' | 'occurrences') {
     setReturnModalOpen(false);
@@ -650,6 +653,18 @@ function ReturnsOccurrences() {
   }, [returnModalOpen]);
 
   useEffect(() => {
+    if (!returnModalOpen || !isReturnWizardMode) return;
+    returnModalContentRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+  }, [isReturnWizardMode, returnModalOpen, returnWizardStep]);
+
+  useEffect(() => {
+    if (returnWizardStep !== 2 || (!returnDataLookup && !returnDataLookupError)) return;
+    window.requestAnimationFrame(() => {
+      returnLookupFeedbackRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    });
+  }, [returnDataLookup, returnDataLookupError, returnWizardStep]);
+
+  useEffect(() => {
     if (!isOccurrenceBuilderOpen || editingOccurrenceId) return;
     if (!occurrenceNf.trim()) return;
     const draft: SavedOccurrenceDraft = {
@@ -681,16 +696,27 @@ function ReturnsOccurrences() {
   useEffect(() => {
     if (!selectedBatch) {
       setBatchDraftNotes([]);
-      setSelectedBatchDriverId('');
-      setSelectedBatchCarId('');
       return;
     }
 
     setBatchDraftNotes(selectedBatch.notes);
-    setSelectedBatchDriverId(String(selectedBatch.driver_id || ''));
+    const driverId = String(selectedBatch.driver_id || '');
+    const currentDriver = drivers.find((driver) => String(driver.id) === driverId);
+    setReturnDriverId(driverId);
+    setReturnDriverInput(currentDriver?.name || selectedBatch.Driver?.name || '');
     const currentCar = cars.find((car) => String(car.license_plate).toUpperCase() === String(selectedBatch.vehicle_plate || '').toUpperCase());
-    setSelectedBatchCarId(currentCar ? String(currentCar.id) : '');
-  }, [selectedBatch, cars]);
+    setSelectedCarId(currentCar ? String(currentCar.id) : '');
+    setReturnCarInput(currentCar ? `${currentCar.model} - ${currentCar.license_plate}` : selectedBatch.vehicle_plate || '');
+    setReturnDate(selectedBatch.return_date);
+  }, [selectedBatch, cars, drivers]);
+
+  useEffect(() => {
+    if (!selectedBatchCode) return;
+    clearNfBuilder();
+    setReturnWizardStep(1);
+  // A abertura de outro lote sempre reinicia a navegacao, sem apagar o conteudo carregado.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBatchCode]);
 
   const selectedBatchHasUnsavedChanges = useMemo(() => {
     if (!selectedBatch) {
@@ -709,28 +735,28 @@ function ReturnsOccurrences() {
       return true;
     }
 
-    if (String(selectedBatch.driver_id || '') !== String(selectedBatchDriverId || '')) {
+    if (String(selectedBatch.driver_id || '') !== String(returnDriverId || '')) {
       return true;
     }
 
-    const selectedBatchCar = cars.find((car) => String(car.id) === String(selectedBatchCarId));
+    const selectedBatchCar = cars.find((car) => String(car.id) === String(selectedCarId));
     const nextVehiclePlate = String(selectedBatchCar?.license_plate || selectedBatch.vehicle_plate || '').toUpperCase();
     return String(selectedBatch.vehicle_plate || '').toUpperCase() !== nextVehiclePlate;
-  }, [selectedBatch, batchDraftNotes, selectedBatchDriverId, selectedBatchCarId, cars]);
+  }, [selectedBatch, batchDraftNotes, returnDriverId, selectedCarId, cars]);
 
   const selectedBatchDriverName = useMemo(() => {
     if (!selectedBatch) return 'Motorista';
-    return drivers.find((driver) => String(driver.id) === String(selectedBatchDriverId || selectedBatch.driver_id))?.name
+    return drivers.find((driver) => String(driver.id) === String(returnDriverId || selectedBatch.driver_id))?.name
       || selectedBatch.Driver?.name
-      || String(selectedBatchDriverId || selectedBatch.driver_id || 'Motorista');
-  }, [drivers, selectedBatch, selectedBatchDriverId]);
+      || String(returnDriverId || selectedBatch.driver_id || 'Motorista');
+  }, [drivers, selectedBatch, returnDriverId]);
 
   const selectedBatchVehiclePlate = useMemo(() => {
     if (!selectedBatch) return '';
-    return cars.find((car) => String(car.id) === String(selectedBatchCarId))?.license_plate
+    return cars.find((car) => String(car.id) === String(selectedCarId))?.license_plate
       || selectedBatch.vehicle_plate
       || '';
-  }, [cars, selectedBatch, selectedBatchCarId]);
+  }, [cars, selectedBatch, selectedCarId]);
 
   const selectedBatchAggregatedPreview = useMemo(() => {
     if (!selectedBatch) {
@@ -2146,6 +2172,7 @@ function ReturnsOccurrences() {
         ? `${addedCountLabel} adicionadas na edicao do lote. Clique em "Salvar lote" para persistir.`
         : 'NF adicionada na edicao do lote. Clique em "Salvar lote" para persistir.');
       clearNfBuilder();
+      setReturnWizardStep(4);
       return;
     }
 
@@ -2374,7 +2401,7 @@ function ReturnsOccurrences() {
     const originalNotes = selectedBatch.notes;
     const draftInvoices = new Set(batchDraftNotes.map((note) => note.invoice_number));
     const originalInvoices = new Set(originalNotes.map((note) => note.invoice_number));
-    const driverChanged = String(selectedBatch.driver_id || '') !== String(selectedBatchDriverId || '');
+    const driverChanged = String(selectedBatch.driver_id || '') !== String(returnDriverId || '');
     const vehicleChanged = String(selectedBatch.vehicle_plate || '').toUpperCase() !== String(selectedBatchVehiclePlate || '').toUpperCase();
 
     const notesToAdd = batchDraftNotes.filter((note) => !originalInvoices.has(note.invoice_number));
@@ -2388,7 +2415,7 @@ function ReturnsOccurrences() {
     try {
       if (driverChanged || vehicleChanged) {
         await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/transport`, {
-          driver_id: Number(selectedBatchDriverId),
+          driver_id: Number(returnDriverId),
           vehicle_plate: selectedBatchVehiclePlate,
         });
       }
@@ -3043,7 +3070,7 @@ function ReturnsOccurrences() {
                           className="!h-10 !w-10 !min-h-10 !min-w-10 !shrink-0 !px-0 !py-0"
                         />
                       </div>
-                      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                      <div ref={returnModalContentRef} className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
                 {selectedBatch && (
                   <TopActionBar className="mb-3 flex-wrap">
                     <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
@@ -3071,9 +3098,9 @@ function ReturnsOccurrences() {
                 )}
 
                 <Card>
-                  {!selectedBatch && (
+                  {isReturnWizardMode && (
                     <div className="mb-5 overflow-x-auto pb-1">
-                      <ol className="grid min-w-[620px] grid-cols-4 gap-2" aria-label="Etapas da nova devolucao">
+                      <ol className="grid min-w-[620px] grid-cols-4 gap-2" aria-label="Etapas da devolucao">
                         {([
                           { step: 1 as const, label: 'Transporte', icon: Truck },
                           { step: 2 as const, label: 'Nota fiscal', icon: FileSearch },
@@ -3087,11 +3114,11 @@ function ReturnsOccurrences() {
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (step === 1 || step < returnWizardStep || (step === 4 && draftNotes.length)) {
+                                  if (step === 1 || step < returnWizardStep || (step === 4 && returnWizardNoteCount)) {
                                     setReturnWizardStep(step);
                                   }
                                 }}
-                                disabled={step > returnWizardStep && !(step === 4 && draftNotes.length)}
+                                disabled={step > returnWizardStep && !(step === 4 && returnWizardNoteCount)}
                                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
                                   isActive
                                     ? 'border-accent bg-accent/15 text-text-accent'
@@ -3129,7 +3156,7 @@ function ReturnsOccurrences() {
                         </>
                       )}
                     </h2>
-                    {selectedBatch ? (
+                    {selectedBatch && !isSelectedBatchEditableByTransportadora ? (
                       <>
                         <InlineText>
                           Motorista: {selectedBatchDriverName} | Placa: {selectedBatchVehiclePlate} | Data: {formatDateBR(selectedBatch.return_date)}
@@ -3149,43 +3176,11 @@ function ReturnsOccurrences() {
                             Este lote ja foi finalizado pela Torre de Controle e permanece somente para consulta.
                           </InfoText>
                         )}
-                        {isSelectedBatchEditableByTransportadora && (
-                          <>
-                            <Grid className="mt-2 grid-cols-1 gap-3 md:grid-cols-2 md:max-w-[680px]">
-                              <div>
-                                <InlineText>Motorista do lote</InlineText>
-                                <select value={selectedBatchDriverId} onChange={(event) => setSelectedBatchDriverId(event.target.value)}>
-                                  <option value="">Selecione</option>
-                                  {drivers.map((driver) => (
-                                    <option key={driver.id} value={driver.id}>{driver.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <InlineText>Veiculo / Placa do lote</InlineText>
-                                <select value={selectedBatchCarId} onChange={(event) => setSelectedBatchCarId(event.target.value)}>
-                                  <option value="">Selecione</option>
-                                  {cars.map((car) => (
-                                    <option key={car.id} value={car.id}>
-                                      {car.model} - {car.license_plate}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            </Grid>
-                            <InfoText>
-                              Lote em rascunho: NFs adicionadas aqui ainda nao bloqueiam coleta/ocorrencia ate a confirmacao do envio.
-                            </InfoText>
-                            <InfoText>
-                              Ao confirmar o envio da devolucao, o lote sera bloqueado para edicao.
-                            </InfoText>
-                          </>
-                        )}
                       </>
                     ) : null}
 
                   </BoxDescription>
-                  {!selectedBatch && returnWizardStep === 1 && (
+                  {isReturnWizardMode && returnWizardStep === 1 && (
                     <div className="mt-4 rounded-xl border border-border bg-card p-4 sm:p-5">
                       <div className="mb-4">
                         <h3 className="text-base font-bold text-text">Quem vai carregar esta devolucao?</h3>
@@ -3320,12 +3315,12 @@ function ReturnsOccurrences() {
                     </div>
                   )}
                   <div className={
-                    selectedBatch
-                      ? (!isSelectedBatchEditableByTransportadora ? 'hidden' : 'contents')
-                      : (returnWizardStep === 2 || returnWizardStep === 3 ? 'contents' : 'hidden')
+                    isReturnWizardMode && (returnWizardStep === 2 || returnWizardStep === 3)
+                      ? 'contents'
+                      : 'hidden'
                   }>
-                    {!selectedBatch && (
-                      <div className="mt-4 flex items-center justify-between gap-3">
+                    {isReturnWizardMode && (
+                      <div className="mt-2 flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => {
@@ -3343,70 +3338,80 @@ function ReturnsOccurrences() {
                           <ArrowLeft size={16} />
                           Voltar
                         </button>
-                        <span className="text-xs font-semibold text-muted">
-                          {returnWizardStep === 2 ? 'Localize a nota fiscal' : 'Classifique a devolucao'}
-                        </span>
                       </div>
                     )}
-                    <InlineText
-                      className={!selectedBatch && returnWizardStep === 2 ? 'mt-4 text-center text-sm' : ''}
-                      style={!selectedBatch && returnWizardStep === 2 ? undefined : { margin: '10px 0 6px 0' }}
-                    >
-                      {returnWizardStep === 2 && !selectedBatch ? 'Digite ou leia o codigo de barras da NF' : 'Tipo e produtos da devolucao'}
-                    </InlineText>
+                    {returnWizardStep === 3 ? (
+                      <InlineText style={{ margin: '10px 0 6px 0' }}>Tipo e produtos da devolucao</InlineText>
+                    ) : null}
                     <div className={
-                      !selectedBatch && returnWizardStep === 2
-                        ? 'mx-auto mt-3 w-full max-w-[620px] space-y-4 rounded-xl border border-border bg-card p-5 shadow-soft sm:p-7'
+                      isReturnWizardMode && returnWizardStep === 2
+                        ? 'mx-auto mt-2 w-full max-w-[480px] space-y-3 rounded-xl border border-border bg-card p-4 shadow-soft sm:p-5'
                         : 'space-y-2'
                     }>
-                    {!selectedBatch && returnWizardStep === 2 && (
+                    {isReturnWizardMode && returnWizardStep === 2 && (
                       <div className="flex flex-col items-center text-center">
-                        <span className="grid h-12 w-12 place-items-center rounded-full bg-accent/15 text-text-accent">
-                          <FileSearch size={24} />
+                        <span className="grid h-9 w-9 place-items-center rounded-full bg-accent/15 text-text-accent">
+                          <FileSearch size={19} />
                         </span>
-                        <h3 className="mt-3 text-base font-bold text-text">Localizar nota fiscal</h3>
-                        <p className="mt-1 max-w-[440px] text-xs leading-relaxed text-muted">
-                          Use o leitor de codigo de barras ou informe o numero da NF para carregar os produtos.
+                        <h3 className="mt-2 text-base font-bold text-text">Localizar nota fiscal</h3>
+                        <p className="mt-1 max-w-[400px] text-xs leading-relaxed text-muted">
+                          Informe o número da NF para carregar os produtos.
                         </p>
                       </div>
                     )}
                     <div className={`flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3 ${
-                      !selectedBatch && returnWizardStep === 2 ? 'justify-center' : ''
+                      isReturnWizardMode && returnWizardStep === 2 ? 'justify-center' : ''
                     }`}>
-                      <div className={`${!selectedBatch && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
-                        !selectedBatch && returnWizardStep === 2 ? 'w-full' : 'md:w-[320px] md:shrink-0'
+                      <div className={`${isReturnWizardMode && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
+                        isReturnWizardMode && returnWizardStep === 2 ? 'w-full max-w-[320px]' : 'md:w-[320px] md:shrink-0'
                       }`}>
                         {returnType === 'sobra' ? (
                           <div className="rounded-md border border-border bg-card px-3 py-[11px] text-[0.82rem] text-muted">
                             Cadastro manual de sobra
                           </div>
                         ) : (
-                          <SearchInput
-                            type="text"
-                            inputMode="numeric"
-                            value={returnNf}
-                            onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
-                            placeholder="Digite a NF"
-                            maxLength={9}
-                            onSearch={handleSearchReturnNf}
-                            searchLabel="Buscar NF de devolucao"
-                            className="border-border bg-card tracking-[0.03em]"
-                          />
+                          <div className="flex w-full items-center justify-center gap-2">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={returnNf}
+                              onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter') return;
+                                event.preventDefault();
+                                void handleSearchReturnNf();
+                              }}
+                              placeholder="Digite a NF"
+                              aria-label="Número da NF da devolução"
+                              maxLength={9}
+                              className="h-10 min-w-0 flex-1 rounded-sm border border-accent/35 bg-card px-3 text-center text-base font-semibold tracking-[0.08em] text-text placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Buscar NF de devolucao"
+                              onClick={() => void handleSearchReturnNf()}
+                              disabled={!returnNf.trim() || returnNfCollectionLookupLoading}
+                              className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-4 text-sm font-bold text-white transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              {returnNfCollectionLookupLoading ? 'Buscando...' : 'Pesquisar'}
+                            </button>
+                          </div>
                         )}
-                        {!selectedBatch && returnWizardStep === 2 && (
+                        {isReturnWizardMode && returnWizardStep === 2 && (
                           <button
                             type="button"
                             onClick={() => {
                               handleChangeReturnType('sobra');
                               setReturnWizardStep(3);
                             }}
-                            className="mt-3 w-full rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
+                            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-amber-500 bg-amber-500/15 px-3 py-2.5 text-sm font-bold text-amber-800 shadow-sm transition hover:bg-amber-500/25 dark:text-amber-200"
                           >
+                            <PackageCheck size={17} />
                             Registrar sobra sem NF
                           </button>
                         )}
                       </div>
-                      <ReturnSearchRow className={`${!selectedBatch && returnWizardStep !== 3 ? 'hidden' : ''} md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none`}>
+                      <ReturnSearchRow className={`${isReturnWizardMode && returnWizardStep !== 3 ? 'hidden' : ''} md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-3 md:[&_label]:px-1 md:[&_label]:text-[0.86rem] md:[&_label]:leading-none`}>
                         <label>
                           <input
                             type="checkbox"
@@ -3467,24 +3472,26 @@ function ReturnsOccurrences() {
                         </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnDataLookupError && (
-                        <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
+                        <div ref={returnLookupFeedbackRef} className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
                           {returnDataLookupError}
                         </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnDataLookup && (
-                        <div className={`mt-3 rounded-lg border px-3 py-3 text-sm ${
+                        <div
+                          ref={returnLookupFeedbackRef}
+                          data-testid={returnWizardStep === 3 ? 'return-base-compact-reminder' : 'return-base-lookup-result'}
+                          className={`mx-auto mt-3 max-w-[640px] rounded-lg border px-3 py-2.5 text-sm ${
                           returnDataLookup.consolidated_status === 'approved'
                             ? 'semantic-panel-success'
                             : returnDataLookup.consolidated_status === 'registered_without_approval'
                               ? 'semantic-panel-warning'
-                              : 'semantic-panel-redelivery'
+                              : 'border-red-500 bg-red-500/10 text-red-800 dark:text-red-200'
                         }`}>
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                              <strong className="flex items-center gap-2">
-                                <Database size={16} /> Base de devoluções
-                              </strong>
-                              <p className="mt-1 font-semibold">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                              <Database size={16} className="shrink-0" />
+                              <strong>Base de devoluções:</strong>
+                              <span className="font-semibold">
                                 {returnDataLookup.consolidated_status === 'approved'
                                   ? returnDataLookup.approved_count > 1
                                     ? `${returnDataLookup.approved_count} ocorrências aprovadas`
@@ -3492,23 +3499,23 @@ function ReturnsOccurrences() {
                                   : returnDataLookup.consolidated_status === 'registered_without_approval'
                                     ? 'Registrada, mas sem aprovação'
                                     : 'Atenção: NF não localizada na base de devoluções'}
-                              </p>
-                              <p className="mt-1 text-xs opacity-80">
+                              </span>
+                              {returnWizardStep === 2 ? <span className="text-xs opacity-80">
                                 {returnDataLookup.latest_base_update
                                   ? `Base atualizada em ${formatReturnDataUpdate(returnDataLookup.latest_base_update)}`
                                   : 'Base ainda não importada'}
-                              </p>
-                              {approvedRegistryReturnTypes.length === 1 ? (
-                                <p className="mt-1 text-xs font-semibold">
+                              </span> : null}
+                              {returnWizardStep === 3 && approvedRegistryReturnTypes.length === 1 ? (
+                                <span className="text-xs font-semibold">
                                   Tipo sugerido pela base: {getReturnTypeLabel(approvedRegistryReturnTypes[0])}
-                                </p>
-                              ) : approvedRegistryReturnTypes.length > 1 ? (
-                                <p className="mt-1 text-xs font-semibold">
+                                </span>
+                              ) : returnWizardStep === 3 && approvedRegistryReturnTypes.length > 1 ? (
+                                <span className="text-xs font-semibold">
                                   A base possui mais de um tipo aprovado: {approvedRegistryReturnTypes.map(getReturnTypeLabel).join(' e ')}
-                                </p>
+                                </span>
                               ) : null}
-                            </div>
-                            {returnDataLookup.occurrences.length ? (
+                            </p>
+                            {returnWizardStep === 2 && returnDataLookup.occurrences.length ? (
                               <button
                                 type="button"
                                 onClick={() => setShowReturnDataDetails((current) => !current)}
@@ -3518,12 +3525,12 @@ function ReturnsOccurrences() {
                               </button>
                             ) : null}
                           </div>
-                          <p className="mt-2 text-xs">
+                          {returnWizardStep === 2 ? <p className="mt-1.5 text-xs">
                             {returnDataLookup.consolidated_status === 'not_found'
                               ? 'Leia este aviso e confirme abaixo para continuar o cadastro da devolução.'
                               : 'Informação orientativa: esta situação não impede adicionar a NF nem concluir o lote.'}
-                          </p>
-                          {showReturnDataDetails ? (
+                          </p> : null}
+                          {returnWizardStep === 2 && showReturnDataDetails ? (
                             <div className="mt-3 space-y-2">
                               {returnDataLookup.occurrences.map((registryOccurrence) => (
                                 <article key={registryOccurrence.id} className="rounded-md border border-current/20 bg-card p-2 text-xs text-text">
@@ -3556,7 +3563,7 @@ function ReturnsOccurrences() {
                           ) : null}
                         </div>
                       )}
-                      {!selectedBatch
+                      {isReturnWizardMode
                         && returnWizardStep === 2
                         && returnDanfe
                         && !returnDataLookupLoading
@@ -3575,8 +3582,12 @@ function ReturnsOccurrences() {
                           </button>
                         </div>
                       )}
-                      {(selectedBatch || returnWizardStep === 3) && (
+                      {returnWizardStep === 3 && (
                       <>
+                      <div className="sticky top-0 z-20 mt-2 flex items-center justify-center gap-2 rounded-md border border-accent/40 bg-card/95 px-3 py-2 text-xs font-semibold text-text-accent shadow-sm backdrop-blur">
+                        <ArrowDown size={15} className="shrink-0" />
+                        Há produtos e ações abaixo. Role para revisar e adicionar esta NF à lista.
+                      </div>
                       {returnDanfe && returnType !== 'sobra' && returnNfCollectionLookupLoading && (
                         <InfoText style={{ marginTop: '4px' }}>
                           Validando se a NF possui coleta solicitada pela Mar e Rio...
@@ -3587,14 +3598,6 @@ function ReturnsOccurrences() {
                           Coleta solicitada identificada para esta NF. Tipo ajustado automaticamente para Coleta.
                         </InfoText>
                       )}
-                      {returnDanfe && returnType !== 'sobra' && suggestedRegistryReturnType && !hasReturnTypeDivergence ? (
-                        <div
-                          data-testid="return-type-base-match"
-                          className="mt-3 rounded-lg border semantic-panel-success px-3 py-2 text-sm"
-                        >
-                          Tipo <strong>{getReturnTypeLabel(returnType)}</strong> preenchido automaticamente conforme a base de devoluções.
-                        </div>
-                      ) : null}
                       {returnDanfe && returnType !== 'sobra' && hasReturnTypeDivergence ? (
                         <div
                           data-testid="return-type-divergence-warning"
@@ -3604,12 +3607,6 @@ function ReturnsOccurrences() {
                           {isReturnTypeDivergenceAcknowledged ? ' O usuário confirmou que deseja manter essa diferença.' : ' A confirmação será solicitada antes de continuar.'}
                         </div>
                       ) : null}
-                      {returnDanfe && returnType !== 'sobra' && approvedRegistryReturnTypes.length > 1 ? (
-                        <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-2 text-sm">
-                          A base possui classificações aprovadas diferentes ({approvedRegistryReturnTypes.map(getReturnTypeLabel).join(' e ')}). Revise as ocorrências antes de concluir.
-                        </div>
-                      ) : null}
-
                       {(returnType === 'partial' || returnType === 'coleta' || returnType === 'weight_break') && returnDanfe && (
                         <>
                           {returnType === 'weight_break' && (
@@ -3981,8 +3978,8 @@ function ReturnsOccurrences() {
                     )}
                   </div>
 
-                  <div className={!selectedBatch && returnWizardStep !== 4 ? 'hidden' : ''}>
-                  {!selectedBatch && (
+                  <div className={isReturnWizardMode && returnWizardStep !== 4 ? 'hidden' : ''}>
+                  {isReturnWizardMode && (
                     <div className="mt-4 rounded-lg border border-border bg-card p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted">Transporte selecionado</p>
                       <p className="mt-1 text-sm font-bold text-text">
@@ -3996,7 +3993,7 @@ function ReturnsOccurrences() {
                     <h2 style={{ marginTop: '18px' }}>
                       {selectedBatch ? `Notas fiscais do lote ${selectedBatch.batch_code}` : 'Lista de NFs'}
                     </h2>
-                    {!selectedBatch && (
+                    {isReturnWizardMode && (
                       <button
                         type="button"
                         onClick={() => {

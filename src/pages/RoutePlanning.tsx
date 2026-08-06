@@ -1406,11 +1406,6 @@ function RoutePlanning() {
         refreshTrips(todayApiDate),
         refreshRoutingPool(tripToUpdate?.date || todayApiDate),
       ]);
-      await showAlert(
-        `A NF ${routingModalState.danfe.invoice_number} voltou para reentrega.\n\n`
-        + `Para confirmar a NF ${correctedDanfe.invoice_number}, publique novamente a foto no grupo com a legenda correta.`,
-        { title: 'Repostagem necessária', okLabel: 'Entendi' },
-      );
       focusNoteLookupInput(true);
     } catch (error: any) {
       if (handleAuthenticationError(error)) return;
@@ -1529,6 +1524,11 @@ function RoutePlanning() {
         refreshTrips(todayApiDate),
         refreshRoutingPool(tripToUpdate?.date || todayApiDate),
       ]);
+      await showAlert(
+        `A NF ${routingModalState.danfe.invoice_number} voltou para reentrega.\n\n`
+        + `Para confirmar a NF ${correctedDanfe.invoice_number}, publique novamente a foto no grupo com a legenda correta.`,
+        { title: 'Repostagem necessária', okLabel: 'Entendi' },
+      );
       focusNoteLookupInput(true);
     } catch {
       setCorrectedDeliveredInvoiceError('Não foi possível corrigir as baixas. Confira as NFs e tente novamente.');

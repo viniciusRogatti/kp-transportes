@@ -35,7 +35,7 @@ import { buildSalmonLoadList } from '../utils/salmonLoadList';
 import { buildOccurrenceReminders } from '../utils/occurrenceReminders';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
-import { showConfirm } from '../utils/dialog';
+import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import { listReceiptBacklog } from '../services/receiptsService';
@@ -1406,6 +1406,11 @@ function RoutePlanning() {
         refreshTrips(todayApiDate),
         refreshRoutingPool(tripToUpdate?.date || todayApiDate),
       ]);
+      await showAlert(
+        `A NF ${routingModalState.danfe.invoice_number} voltou para reentrega.\n\n`
+        + `Para confirmar a NF ${correctedDanfe.invoice_number}, publique novamente a foto no grupo com a legenda correta.`,
+        { title: 'Repostagem necessária', okLabel: 'Entendi' },
+      );
       focusNoteLookupInput(true);
     } catch (error: any) {
       if (handleAuthenticationError(error)) return;

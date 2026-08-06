@@ -30,6 +30,7 @@ import {
   ReceiptBagItemStatus,
   ReceiptBagListResponse,
   ReceiptBagListRow,
+  ReceiptBagPendingItem,
   ReceiptBagStatus,
   HistoricalReceiptRoutesResponse,
   addExtraReceiptBagInvoice,
@@ -137,6 +138,7 @@ function ReceiptBagClosing() {
   const [date, setDate] = useState(todayInput);
   const [search, setSearch] = useState('');
   const [viewFilter, setViewFilter] = useState<ViewFilter>('pending');
+  const [looseReceiptSearch, setLooseReceiptSearch] = useState('');
   const [data, setData] = useState<ReceiptBagListResponse | null>(null);
   const [activeBag, setActiveBag] = useState<ReceiptBag | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
@@ -204,6 +206,15 @@ function ReceiptBagClosing() {
     });
   }, [data, search, viewFilter]);
 
+  const looseReceiptMatches = useMemo(() => {
+    const term = looseReceiptSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!term) return (data?.pending_items || []).slice(0, 8);
+    return (data?.pending_items || []).filter((item) => (
+      [item.invoice_number, item.customer_name, item.city, item.driver?.name, item.trip_id]
+        .some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(term))
+    )).slice(0, 12);
+  }, [data, looseReceiptSearch]);
+
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase('pt-BR');
     return (activeBag?.items || []).filter((item) => {
@@ -228,6 +239,27 @@ function ReceiptBagClosing() {
     setActiveBag(bag);
     setFeedback(message);
     window.setTimeout(() => setFeedback(''), 2500);
+  };
+
+  const confirmLooseReceipt = async (item: ReceiptBagPendingItem) => {
+    if (mutating || !['pending', 'absent'].includes(item.status)) return;
+    if (!await showConfirm(
+      `Confirmar que o canhoto avulso da NF ${item.invoice_number} foi localizado?\n\n`
+      + `Ele pertence ao malote da rota #${item.trip_id}${item.driver?.name ? `, de ${item.driver.name}` : ''}.`,
+      { title: 'Canhoto avulso', confirmLabel: 'Confirmar localização' },
+    )) return;
+    setMutating(true);
+    setError('');
+    try {
+      await updateReceiptBagItem(item.bag_id, item.item_id, 'confirm');
+      setLooseReceiptSearch('');
+      setFeedback(`NF ${item.invoice_number} localizada. O malote aguardará a postagem da foto no grupo.`);
+      await loadList(true);
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'Não foi possível confirmar o canhoto avulso.'));
+    } finally {
+      setMutating(false);
+    }
   };
 
   const openClosing = async (row: ReceiptBagListRow) => {
@@ -258,7 +290,7 @@ function ReceiptBagClosing() {
     if (
       action === 'confirm'
       && !forceTransfer
-      && !item.has_receipt_photo
+      && !item.has_whatsapp_photo
       && !await showConfirm(
         `A NF ${item.invoice_number} ainda está sem foto de canhoto.\n\n`
         + 'O documento físico está realmente neste malote?',
@@ -365,15 +397,12 @@ function ReceiptBagClosing() {
     if (!activeBag || !historicalRoutes || !selectedHistoricalTripId || mutating) return;
     const route = historicalRoutes.routes.find((candidate) => candidate.id === selectedHistoricalTripId);
     if (!route) return;
-    if (!historicalRoutes.invoice.has_receipt_photo && !await showConfirm(
-      `A NF ${historicalRoutes.invoice.invoice_number} está sem foto de canhoto.\n\n`
-      + 'Deseja vincular a entrega à rota mesmo assim?',
-      { title: 'Canhoto sem foto', confirmLabel: 'Vincular mesmo assim' },
-    )) return;
     if (!await showConfirm(
       `Vincular a NF ${historicalRoutes.invoice.invoice_number} retroativamente à rota #${route.id}?\n\n`
       + `${route.driver?.name || 'Motorista'} · ${formatDate(route.date)} · ${route.car?.license_plate || 'sem placa'}\n\n`
-      + 'A NF será incluída na rota já como entregue e a alteração ficará registrada na jornada.',
+      + (historicalRoutes.invoice.has_whatsapp_photo
+        ? 'A postagem já localizada será preservada e a alteração ficará registrada na jornada.'
+        : 'A NF será incluída como atribuída. Ela só ficará entregue depois que a foto for publicada no grupo com a legenda correta.'),
       { title: 'Vincular à rota histórica', confirmLabel: 'Vincular NF' },
     )) return;
     setMutating(true);
@@ -537,6 +566,35 @@ function ReceiptBagClosing() {
             <SummaryCard label="Divergentes" value={data?.summary.divergent_bags || 0} icon={<Undo2 className="h-5 w-5" />} tone="amber" />
           </section>
 
+          <section className="mt-3 shrink-0 rounded-2xl border border-border bg-card p-3 shadow-sm">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-black">Canhotos pendentes e avulsos</p>
+                <p className="text-xs text-muted">Consulte por NF ou cliente. Cada NF aparece vinculada a um único malote responsável.</p>
+              </div>
+              <SearchBox value={looseReceiptSearch} onChange={setLooseReceiptSearch} placeholder="Digite a NF ou cliente do canhoto avulso..." />
+            </div>
+            {looseReceiptSearch.trim() ? (
+              <div className="scrollbar-ui mt-3 max-h-44 overflow-auto rounded-xl border border-border">
+                {looseReceiptMatches.length ? looseReceiptMatches.map((item) => (
+                  <div key={`${item.company_id}-${item.item_id}`} className="flex flex-col gap-2 border-b border-border px-3 py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-black">NF {item.invoice_number} · {item.customer_name || 'Cliente não identificado'}</p>
+                      <p className="text-xs text-muted">Rota #{item.trip_id} · {item.driver?.name || 'Motorista não identificado'} · {formatDate(item.operation_date)} · {ITEM_STATUS[item.status].label}</p>
+                    </div>
+                    {['pending', 'absent'].includes(item.status) ? (
+                      <button type="button" disabled={mutating} onClick={() => void confirmLooseReceipt(item)} className="shrink-0 rounded-lg bg-sky-600 px-3 py-2 text-xs font-black text-white hover:bg-sky-700 disabled:opacity-50">
+                        Confirmar avulso
+                      </button>
+                    ) : (
+                      <span className="shrink-0 rounded-full border border-amber-400 bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900 dark:bg-amber-950 dark:text-amber-100">Aguardando postagem no grupo</span>
+                    )}
+                  </div>
+                )) : <p className="px-4 py-5 text-center text-sm font-semibold text-muted">Nenhuma pendência encontrada.</p>}
+              </div>
+            ) : null}
+          </section>
+
           <section data-tutorial="bag-list" className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="flex shrink-0 flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center lg:justify-between">
               <div data-tutorial="bag-status-filters" className="flex flex-wrap gap-2">
@@ -679,17 +737,17 @@ function HistoricalRouteDialog({
               <p className="mt-1 font-black">{formatDate(data.invoice.invoice_date)}</p>
               <p className="mt-1 text-xs text-muted">Status atual: {data.invoice.status}</p>
             </div>
-            <div className={`rounded-2xl border p-4 ${data.invoice.has_receipt_photo
+            <div className={`rounded-2xl border p-4 ${data.invoice.has_whatsapp_photo
               ? 'semantic-panel-success'
               : 'semantic-panel-warning'}`}>
               <p className="text-xs font-bold uppercase text-muted">Evidência do canhoto</p>
-              <p className="mt-1 font-black">{data.invoice.has_receipt_photo ? 'Foto localizada' : 'Sem foto localizada'}</p>
-              <p className="mt-1 text-xs text-muted">{data.invoice.has_receipt_photo ? 'A publicação será preservada no histórico.' : 'A confirmação exigirá uma validação adicional.'}</p>
+              <p className="mt-1 font-black">{data.invoice.has_whatsapp_photo ? 'Postagem localizada' : 'Sem postagem localizada'}</p>
+              <p className="mt-1 text-xs text-muted">{data.invoice.has_whatsapp_photo ? 'A publicação no grupo será preservada no histórico.' : 'Após vincular, publique a foto no grupo com a legenda correta.'}</p>
             </div>
           </div>
 
           <div className="mt-5 rounded-2xl border semantic-panel-info p-4 text-sm">
-            <strong>O que será registrado:</strong> a NF entrará na rota escolhida como entregue, sem reabrir a viagem. A data, o motorista, o veículo, o motivo e o usuário responsável ficarão na jornada e na auditoria.
+            <strong>O que será registrado:</strong> a NF será vinculada à rota escolhida. Sem uma postagem válida no grupo, permanecerá atribuída e impedirá o fechamento definitivo do malote.
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -823,6 +881,7 @@ export function ConferencePanel(props: ConferenceProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const canFinish = bag.items.length > 0
     && bag.items.every((item) => item.status !== 'pending')
+    && bag.items.every((item) => !CLOSED_STATUSES.includes(item.status) || item.has_whatsapp_photo)
     && bag.status !== 'completed';
 
   useEffect(() => {
@@ -962,7 +1021,7 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
       <div className="flex items-center gap-2">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface text-xs font-black text-muted">{item.route_order || '•'}</span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5"><strong className="text-sm">NF {item.invoice_number}</strong><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${config.badge}`}>{config.label}</span>{!item.has_receipt_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">Sem foto</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-400 bg-violet-100 px-1.5 py-0.5 text-[10px] font-black text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100">Extra</span> : null}</span>
+          <span className="flex flex-wrap items-center gap-1.5"><strong className="text-sm">NF {item.invoice_number}</strong><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${config.badge}`}>{config.label}</span>{!item.has_whatsapp_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">Sem postagem</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-400 bg-violet-100 px-1.5 py-0.5 text-[10px] font-black text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100">Extra</span> : null}</span>
           <span className="block truncate text-[11px] text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
         </span>
         <span className="shrink-0 text-right text-[10px] text-muted">{item.confirmed_at ? formatDateTime(item.confirmed_at) : ''}</span>

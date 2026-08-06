@@ -630,7 +630,7 @@ function OperationalPendencies() {
         correctedInvoiceNumber,
       );
       closeUploadModal();
-      window.alert(`NF ${correctedInvoiceNumber} confirmada como entregue. A pendencia foi encerrada.`);
+      window.alert(`Correção registrada. Poste novamente a foto no grupo com a legenda NF ${correctedInvoiceNumber} para confirmar a entrega.`);
       navigate('/home', { replace: true });
     } catch (error) {
       console.error(error);
@@ -1188,7 +1188,7 @@ function OperationalPendencies() {
                   </h3>
                   <p className="text-xs text-muted">
                     {receiptCorrectionNotificationId
-                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Após conferir a foto, digite a NF correta para baixá-la como entregue.`
+                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Informe a NF correta e depois publique novamente a foto no grupo com a legenda corrigida.`
                       : `NF ${uploadTarget?.invoice_number || uploadNfId || '-'} · ajuste os campos e anexe a foto.`}
                   </p>
                 </div>
@@ -1204,7 +1204,7 @@ function OperationalPendencies() {
                 {receiptCorrectionNotificationId ? (
                   <div className="space-y-3">
                     <div className="rounded-md border semantic-panel-info px-3 py-2 text-sm">
-                      Após conferir a foto no WhatsApp, confirme a NF correta. Não é necessário pedir ao motorista para reenviar ou armazenar a imagem.
+                      Esta correção não confirma a entrega. A foto precisa ser publicada novamente no grupo com a legenda da NF correta para permanecer pesquisável no WhatsApp.
                     </div>
                     <label className="block text-xs text-muted">
                       NF correta
@@ -1311,7 +1311,7 @@ function OperationalPendencies() {
                     {uploading
                       ? 'Processando...'
                       : receiptCorrectionNotificationId
-                        ? 'Confirmar NF como entregue'
+                        ? 'Registrar NF correta'
                         : 'Enviar canhoto'}
                   </button>
                 </div>

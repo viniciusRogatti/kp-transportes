@@ -36,6 +36,21 @@ export type ReceiptBagListRow = {
   generated_by_timeout: boolean;
 };
 
+export type ReceiptBagPendingItem = {
+  item_id: number;
+  bag_id: number;
+  trip_id: number;
+  company_id: number;
+  invoice_number: string;
+  customer_name: string | null;
+  city: string | null;
+  status: ReceiptBagItemStatus;
+  has_whatsapp_photo: boolean;
+  operation_date: string;
+  driver: { id: number; name: string } | null;
+  company: { id?: number; code?: string; name?: string } | null;
+};
+
 export type ReceiptBagItem = {
   id: number;
   origin_bag_id: number;
@@ -58,6 +73,7 @@ export type ReceiptBagItem = {
   suggestion_sender_name: string | null;
   suggestion_sender_phone: string | null;
   has_receipt_photo: boolean;
+  has_whatsapp_photo: boolean;
   receipt_photo_posted_at: string | null;
   confirmed_at: string | null;
   absent_at: string | null;
@@ -106,6 +122,7 @@ export type ReceiptBagListResponse = {
     completed_bags: number;
     divergent_bags: number;
   };
+  pending_items: ReceiptBagPendingItem[];
   rows: ReceiptBagListRow[];
 };
 
@@ -129,6 +146,7 @@ export type HistoricalReceiptRoutesResponse = {
     customer_name: string | null;
     city: string | null;
     has_receipt_photo: boolean;
+    has_whatsapp_photo: boolean;
   };
   bag: {
     id: number;
@@ -148,6 +166,7 @@ export type ReceiptBagApiError = {
     driver_name?: string | null;
     confirmed_at?: string | null;
     unresolved?: number;
+    invoices?: string[];
     invoice_number?: string;
     invoice_date?: string;
     current_status?: string;

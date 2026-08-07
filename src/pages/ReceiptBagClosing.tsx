@@ -76,6 +76,7 @@ const ITEM_STATUS: Record<ReceiptBagItemStatus, { label: string; badge: string; 
 };
 const CLOSED_STATUSES = ['confirmed', 'recovered', 'resolved_elsewhere'];
 const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled'];
+const DELIVERY_STATUSES = ['delivered', 'completed'];
 
 const errorPayload = (error: unknown): ReceiptBagApiError => (
   axios.isAxiosError(error) ? (error.response?.data || {}) as ReceiptBagApiError : {}
@@ -1016,12 +1017,14 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
 }) {
   const config = ITEM_STATUS[item.status];
   const suggestionDiffers = item.suggested_driver_id && item.suggested_driver_id !== item.expected_driver_id;
+  const hasReceiptPhoto = item.has_whatsapp_photo
+    || DELIVERY_STATUSES.includes(String(item.operational_status || '').toLowerCase());
   return (
     <div role="button" tabIndex={0} onClick={onSelect} onDoubleClick={onConfirm} onKeyDown={(event) => event.key === 'Enter' && onSelect()} className={`w-full cursor-pointer rounded-lg border px-2.5 py-2 text-left transition ${selected ? 'ring-2 ring-sky-500 ring-offset-1 ring-offset-surface' : ''} ${config.row}`}>
       <div className="flex items-center gap-2">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface text-xs font-black text-muted">{item.route_order || '•'}</span>
         <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5"><strong className="text-sm">NF {item.invoice_number}</strong><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${config.badge}`}>{config.label}</span>{!item.has_whatsapp_photo && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">Sem postagem</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-400 bg-violet-100 px-1.5 py-0.5 text-[10px] font-black text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100">Extra</span> : null}</span>
+          <span className="flex flex-wrap items-center gap-1.5"><strong className="text-sm">NF {item.invoice_number}</strong><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${config.badge}`}>{config.label}</span>{!hasReceiptPhoto && !EXEMPT_STATUSES.includes(item.status) ? <span className="rounded-full border border-red-400 bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100">Sem postagem</span> : null}{item.is_suggested_extra ? <span className="rounded-full border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-black text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">Provável neste malote</span> : item.is_extra ? <span className="rounded-full border border-violet-400 bg-violet-100 px-1.5 py-0.5 text-[10px] font-black text-violet-900 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100">Extra</span> : null}</span>
           <span className="block truncate text-[11px] text-muted">{item.customer_name || 'Cliente não identificado'}{item.city ? ` · ${item.city}` : ''}</span>
         </span>
         <span className="shrink-0 text-right text-[10px] text-muted">{item.confirmed_at ? formatDateTime(item.confirmed_at) : ''}</span>

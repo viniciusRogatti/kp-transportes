@@ -61,7 +61,7 @@ export type ReceiptBagItem = {
   city: string | null;
   route_order: number | null;
   status: ReceiptBagItemStatus;
-  operational_status?: ReceiptBagItemStatus;
+  operational_status?: string | null;
   is_extra: boolean;
   is_suggested_extra: boolean;
   expected_driver_id: number;

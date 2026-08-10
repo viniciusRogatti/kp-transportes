@@ -1693,6 +1693,128 @@ function Home() {
           )}
         </Card>
 
+        <Card data-tutorial="home-open-occurrences">
+          <CardHeaderRow>
+            <div>
+              <h2>Ocorrências pendentes</h2>
+              <p className="mt-1 text-sm text-muted">
+                Acompanhe todas as ocorrências abertas até a conclusão do tratamento.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${pendingOccurrences.length ? 'semantic-solid-warning' : 'semantic-solid-success'}`}>
+                {pendingOccurrences.length ? `${pendingOccurrences.length} pendente(s)` : 'Nenhuma pendência'}
+              </span>
+              <button
+                className="secondary"
+                onClick={() => navigate('/operational-pendencies?tab=occurrences')}
+                type="button"
+              >
+                Abrir tratativas
+              </button>
+            </div>
+          </CardHeaderRow>
+
+          {!pendingOccurrences.length ? (
+            <div className="mt-4 flex items-center gap-3 rounded-md border semantic-panel-success p-4">
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">Nenhuma ocorrência pendente</p>
+                <p className="text-xs">Todas as ocorrências registradas já foram tratadas.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {!!priorityLoadingOccurrences.length && (
+                <section aria-labelledby="home-priority-occurrences-title">
+                  <InfoText id="home-priority-occurrences-title">Prioridade de carregamento</InfoText>
+                  <List className="mt-2">
+                    {priorityLoadingOccurrences.map((occurrence) => {
+                      const itemsSummary = getItemsSummary(occurrence);
+
+                      return (
+                        <li
+                          key={`home-open-occurrence-${occurrence.id}`}
+                          className="!border-accent/45 !bg-accent/12"
+                        >
+                          <OccurrenceItemContent className="gap-1.5">
+                            <span className="w-fit rounded-full border border-accent/35 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text-accent">
+                              Prioridade de carregamento
+                            </span>
+                            <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
+                            <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
+                            <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
+                            <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-2 py-2">
+                              <strong>Produtos faltantes:</strong>
+                              {itemsSummary.length ? (
+                                itemsSummary.map((item, index) => (
+                                  <span key={`home-open-priority-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
+                                    {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="pl-2">NF total</span>
+                              )}
+                            </span>
+
+                            {renderOccurrenceActions(occurrence)}
+                          </OccurrenceItemContent>
+                        </li>
+                      );
+                    })}
+                  </List>
+                </section>
+              )}
+
+              {!!simpleFlowOccurrences.length && (
+                <section aria-labelledby="home-missing-goods-occurrences-title">
+                  <InfoText id="home-missing-goods-occurrences-title">
+                    Ocorrências pendentes de formulário mercadoria faltante
+                  </InfoText>
+                  <List className="mt-2">
+                    {simpleFlowOccurrences.map((occurrence) => {
+                      const itemsSummary = getItemsSummary(occurrence);
+
+                      return (
+                        <li
+                          key={`home-open-occurrence-${occurrence.id}`}
+                          className="!border-border !bg-surface-2"
+                        >
+                          <OccurrenceItemContent className="gap-1.5">
+                            <span className="w-fit rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.03em] text-text">
+                              Formulário de faltante
+                            </span>
+                            <span><strong>NF:</strong> {occurrence.invoice_number || '-'}</span>
+                            <span><strong>Representante:</strong> {occurrence.representative_name || '-'}</span>
+                            <span><strong>Carga:</strong> {occurrence.load_number || '-'}</span>
+                            <span><strong>Valor faltante:</strong> {currencyFmt.format(getOccurrenceMissingValue(occurrence))}</span>
+                            <span><strong>Cliente:</strong> {occurrence.customer_name || '-'}</span>
+                            <span><strong>Cidade:</strong> {occurrence.city || '-'}</span>
+                            <span className="flex flex-col gap-1 rounded-md border border-border bg-surface-2 px-2 py-2">
+                              <strong>Produtos faltantes:</strong>
+                              {itemsSummary.length ? (
+                                itemsSummary.map((item, index) => (
+                                  <span key={`home-open-simple-summary-${occurrence.id}-${item.label}-${index}`} className="pl-2">
+                                    {item.label} | <strong>{`Qtd: ${item.quantityWithType}`}</strong>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="pl-2">NF total</span>
+                              )}
+                            </span>
+
+                            {renderOccurrenceActions(occurrence)}
+                          </OccurrenceItemContent>
+                        </li>
+                      );
+                    })}
+                  </List>
+                </section>
+              )}
+            </div>
+          )}
+        </Card>
+
         {false && (
         <Card>
           <CardHeaderRow>

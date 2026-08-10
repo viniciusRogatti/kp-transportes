@@ -378,8 +378,11 @@ function ReceiptBagClosing() {
       if (payload.code === 'RECEIPT_ALREADY_CONFIRMED' && !forceTransfer) {
         const correction = await showConfirm(
           `${payload.error || 'Esta NF já foi confirmada em outro malote.'}\n\n`
-          + `Corrigir a localização para o malote de ${activeBag.driver?.name || 'motorista atual'}?`,
-          { title: 'Canhoto em outro malote', confirmLabel: 'Corrigir localização' },
+          + `Registro atual: rota #${payload.details?.trip_id || 'não identificada'}`
+          + `${payload.details?.driver_name ? ` · ${payload.details.driver_name}` : ''}.\n\n`
+          + 'Confira se este é o mesmo documento físico colocado no malote errado ou se existem dois canhotos duplicados. '
+          + `Se for o mesmo documento, transfira a custódia para o malote de ${activeBag.driver?.name || 'motorista atual'}.`,
+          { title: 'Possível canhoto duplicado', confirmLabel: 'Transferir custódia' },
         );
         if (correction) {
           setMutating(false);

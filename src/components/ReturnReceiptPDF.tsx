@@ -175,7 +175,7 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
       items: groupItems(stockNotes.flatMap((note) => (note.items || []).filter((item) => !item.is_missing && item.keep_in_stock))),
     },
     {
-      title: 'PRODUTOS FALTANTES - NAO PROCURAR PARA SEPARACAO',
+      title: 'PRODUTOS FALTANTES - SEM RETORNO FISICO DE PRODUTO',
       notes: missingNotes,
       items: groupItems(missingNotes.flatMap((note) => (note.items || []).filter((item) => item.is_missing))),
     },

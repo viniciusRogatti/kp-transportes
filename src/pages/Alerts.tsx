@@ -26,7 +26,6 @@ import {
 } from '../types/types';
 import { getAlertSeverityTone, getSemanticToneClassName } from '../utils/statusStyles';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
-import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 import { formatDateTimeBR } from '../utils/dateDisplay';
 
 const EMPTY_SUMMARY: IAlertHistoryResponse['summary'] = {
@@ -39,14 +38,9 @@ const EMPTY_SUMMARY: IAlertHistoryResponse['summary'] = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  ASSIGNED_DELIVERY_OVERDUE: 'Nota atribuída sem andamento',
-  PREVIOUS_OPERATION_RECEIPTS_MISSING: 'Canhotos da operação anterior',
-  OCCURRENCE_OVERDUE: 'Devolução fora de lote',
-  RETURN_PENDING_OVERDUE: 'Lote de devolução não enviado',
-  INVOICE_REDELIVERY_OVERDUE: 'Reentrega pendente',
-  RETAINED_RECEIPT_OVERDUE: 'Canhoto retido',
-  INVOICE_PENDING_OVERDUE: 'Nota pendente',
   WHATSAPP_INVOICE_NOT_FOUND: 'NF não encontrada',
+  NF_NOT_FOUND_UPLOAD_ATTEMPT: 'NF não encontrada',
+  RECEIPT_WHATSAPP_GROUP_COMPANY_MISMATCH: 'NF postada no grupo incorreto',
   BOT_UNAVAILABLE: 'Integração indisponível',
 };
 
@@ -75,9 +69,9 @@ function AlertsPage() {
   const [filters, setFilters] = useState<AlertHistoryFilters>({
     status: 'ALL',
     severity: 'ALL',
-    source: 'ALL',
+    source: 'ALERT',
     search: '',
-    from: '',
+    from: '2026-08-11',
     to: '',
     limit: 500,
   });
@@ -117,14 +111,6 @@ function AlertsPage() {
   }
 
   async function handleResolve(row: IAlertHistoryRow) {
-    if (row.source === 'NOTIFICATION' && row.code === 'WHATSAPP_INVOICE_NOT_FOUND') {
-      navigate(buildIncorrectReceiptUrl({
-        id: row.record_id,
-        entity: row.entity,
-        metadata: row.metadata,
-      }));
-      return;
-    }
     try {
       await resolveAlertHistoryRow(row.source, row.record_id);
       await refreshHistory();
@@ -144,7 +130,7 @@ function AlertsPage() {
               <div>
                 <h2 className="text-lg font-semibold text-text">Central de Alertas</h2>
                 <p className="text-sm text-muted">
-                  Histórico de pendências operacionais e alertas técnicos, inclusive os já resolvidos.
+                  Acompanhe falhas de postagem no WhatsApp e alertas técnicos, inclusive os já resolvidos.
                 </p>
               </div>
               <button
@@ -175,7 +161,7 @@ function AlertsPage() {
           </section>
 
           <section className="rounded-md border border-border bg-surface p-3">
-            <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(5,minmax(130px,auto))]">
+            <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(130px,auto))]">
               <label className="relative">
                 <span className="sr-only">Pesquisar</span>
                 <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted" />
@@ -207,16 +193,6 @@ function AlertsPage() {
                 <option value="WARNING">Atenção</option>
                 <option value="INFO">Informativo</option>
               </select>
-              <select
-                aria-label="Origem"
-                value={filters.source}
-                onChange={(event) => setFilters((current) => ({ ...current, source: event.target.value as AlertHistoryFilters['source'] }))}
-                className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
-              >
-                <option value="ALL">Todas as origens</option>
-                <option value="NOTIFICATION">Pendências operacionais</option>
-                <option value="ALERT">Alertas técnicos</option>
-              </select>
               <input
                 type="date"
                 aria-label="Data inicial"
@@ -233,12 +209,12 @@ function AlertsPage() {
                 onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
                 className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
-              <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text lg:col-start-6">
+              <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text lg:col-start-5">
                 <Search className="h-4 w-4" /> Pesquisar
               </button>
             </form>
             <p className="mt-2 text-xs text-muted">
-              As datas filtram o dia inteiro no horário da operação. Deixe em branco para consultar todo o histórico disponível.
+              Os alertas começam em 11/08/2026. As pendências de canhoto e devolução são acompanhadas na Central de Tratativas.
             </p>
           </section>
 
@@ -257,8 +233,6 @@ function AlertsPage() {
                   const responsible = row.resolved_by_user?.name
                     || row.resolved_by_user?.username
                     || (resolved && row.resolution_mode === 'automatic' ? 'Sistema' : null);
-                  const correctionPending = row.code === 'WHATSAPP_INVOICE_NOT_FOUND'
-                    && String(row.metadata?.correctionStatus || '').toLowerCase() === 'pending';
 
                   return (
                     <li key={row.id} className={`rounded-md border p-3 ${severityClass} ${resolved ? 'opacity-75' : ''}`}>
@@ -283,8 +257,7 @@ function AlertsPage() {
                             {responsible ? ` · Responsável: ${responsible}` : ''}
                           </p>
                           <p className="text-[11px] text-muted">
-                            Origem: {row.source === 'ALERT' ? 'monitoramento/integração' : 'regra operacional'} · Código: {row.code}
-                            {' · '}Resolução: {row.resolution_mode === 'automatic' ? 'automática quando a condição deixa de existir' : 'manual'}
+                            Origem: monitoramento/integração · Código: {row.code}
                           </p>
                         </div>
 
@@ -302,13 +275,10 @@ function AlertsPage() {
                             <button
                               type="button"
                               onClick={() => handleResolve(row)}
-                              disabled={correctionPending}
                               className="inline-flex h-9 items-center gap-1 rounded-md border border-border bg-card px-2 text-xs text-text"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" />
-                              {row.code === 'WHATSAPP_INVOICE_NOT_FOUND'
-                                ? correctionPending ? 'Correção em processamento' : 'Informar NF correta'
-                                : 'Resolver'}
+                              Ocorrência resolvida
                             </button>
                           ) : null}
                         </div>
@@ -323,7 +293,7 @@ function AlertsPage() {
               <div className="inline-flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  Abrir uma ação não resolve a pendência. As pendências automáticas só saem da lista de abertas quando o fluxo operacional é concluído; por exemplo, a devolução termina quando o lote é enviado.
+                  Para uma NF não encontrada, exclua a foto incorreta do grupo e solicite nova postagem com a NF visível e correta. Use “Ocorrência resolvida” somente depois desse tratamento.
                 </span>
               </div>
             </div>

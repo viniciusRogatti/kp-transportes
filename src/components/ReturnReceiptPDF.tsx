@@ -18,6 +18,21 @@ interface ReturnReceiptPDFProps {
   items: IInvoiceReturnItem[];
 }
 
+type ReturnSection = {
+  title: string;
+  notes: BatchNote[];
+  items: IInvoiceReturnItem[];
+  emptyText?: string;
+};
+
+const RETURN_TYPE_LABELS: Record<BatchNote['return_type'], string> = {
+  total: 'total',
+  partial: 'parcial',
+  sobra: 'sobra',
+  coleta: 'coleta',
+  weight_break: 'quebra de peso',
+};
+
 const styles = StyleSheet.create({
   page: {
     paddingTop: 20,
@@ -107,6 +122,19 @@ const groupItems = (source: IInvoiceReturnItem[]) => {
   return Array.from(grouped.values());
 };
 
+const groupInvoicesByReturnType = (source: BatchNote[]) => {
+  const grouped = new Map<BatchNote['return_type'], string[]>();
+  source.forEach((note) => {
+    const invoices = grouped.get(note.return_type) || [];
+    if (!invoices.includes(note.invoice_number)) invoices.push(note.invoice_number);
+    grouped.set(note.return_type, invoices);
+  });
+  return Array.from(grouped.entries()).map(([returnType, invoices]) => ({
+    label: RETURN_TYPE_LABELS[returnType],
+    invoices,
+  }));
+};
+
 const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
   batchCode,
   driverName,
@@ -115,56 +143,55 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
   notes,
   items,
 }) => {
-  const totalNfs = notes
-    .filter((note) => note.return_type === 'total')
-    .map((note) => note.invoice_number)
-    .join(', ');
-
-  const partialNfs = notes
-    .filter((note) => note.return_type === 'partial')
-    .map((note) => note.invoice_number)
-    .join(', ');
-
-  const collectNfs = notes
-    .filter((note) => note.return_type === 'coleta')
-    .map((note) => note.invoice_number)
-    .join(', ');
-
-  const leftoverEntries = notes
-    .filter((note) => note.return_type === 'sobra')
-    .map((note) => note.invoice_number)
-    .join(', ');
-
-  const weightBreakNfs = notes
-    .filter((note) => note.return_type === 'weight_break')
-    .map((note) => note.invoice_number)
-    .join(', ');
-
   const notesHaveItems = notes.some((note) => Array.isArray(note.items));
-  const physicalItems = notesHaveItems
-    ? groupItems(notes.flatMap((note) => (
-      note.return_type === 'weight_break'
-        ? []
-        : (note.items || []).filter((item) => !item.is_missing && !item.keep_in_stock)
-    )))
-    : items;
-  const stockItems = groupItems(notes.flatMap((note) => (
-    note.return_type === 'weight_break'
-      ? []
-      : (note.items || []).filter((item) => !item.is_missing && item.keep_in_stock)
-  )));
-  const missingItems = groupItems(notes.flatMap((note) => (
-    note.return_type === 'weight_break'
-      ? []
-      : (note.items || []).filter((item) => item.is_missing)
-  )));
-  const weightBreakItems = groupItems(notes.flatMap((note) => (
-    note.return_type === 'weight_break' ? (note.items || []) : []
-  )));
+  const physicalNotes = notes.filter((note) => (
+    note.return_type !== 'weight_break'
+    && (notesHaveItems
+      ? (note.items || []).some((item) => !item.is_missing && !item.keep_in_stock)
+      : true)
+  ));
+  const stockNotes = notes.filter((note) => (
+    note.return_type !== 'weight_break'
+    && (note.items || []).some((item) => !item.is_missing && item.keep_in_stock)
+  ));
+  const missingNotes = notes.filter((note) => (
+    note.return_type !== 'weight_break'
+    && (note.items || []).some((item) => item.is_missing)
+  ));
+  const weightBreakNotes = notes.filter((note) => note.return_type === 'weight_break');
 
-  const renderItemsTable = (sectionTitle: string, sectionItems: IInvoiceReturnItem[], emptyText?: string) => (
-    <>
-      <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+  const sections: ReturnSection[] = [
+    {
+      title: 'Produtos que retornam para a MAR E RIO',
+      notes: physicalNotes,
+      items: notesHaveItems
+        ? groupItems(physicalNotes.flatMap((note) => (note.items || []).filter((item) => !item.is_missing && !item.keep_in_stock)))
+        : items,
+      emptyText: 'Nenhum produto para retorno fisico.',
+    },
+    {
+      title: 'Produtos que ficarao no estoque da transportadora',
+      notes: stockNotes,
+      items: groupItems(stockNotes.flatMap((note) => (note.items || []).filter((item) => !item.is_missing && item.keep_in_stock))),
+    },
+    {
+      title: 'PRODUTOS FALTANTES - NAO PROCURAR PARA SEPARACAO',
+      notes: missingNotes,
+      items: groupItems(missingNotes.flatMap((note) => (note.items || []).filter((item) => item.is_missing))),
+    },
+    {
+      title: 'QUEBRA DE PESO - SEM RETORNO FISICO DE PRODUTO',
+      notes: weightBreakNotes,
+      items: groupItems(weightBreakNotes.flatMap((note) => note.items || [])),
+    },
+  ];
+
+  const renderSection = ({ title, notes: sectionNotes, items: sectionItems, emptyText }: ReturnSection) => (
+    <React.Fragment key={title}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {groupInvoicesByReturnType(sectionNotes).map(({ label, invoices }) => (
+        <Text key={`${title}-${label}`} style={styles.compactRow}>{label}: {invoices.join(', ')}</Text>
+      ))}
       {sectionItems.length ? (
         <>
           <View style={styles.tableHeader}>
@@ -174,7 +201,7 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
             <Text style={styles.colType}>Tipo</Text>
           </View>
           {sectionItems.map((item, index) => (
-            <View style={styles.tableRow} key={`${sectionTitle}-${item.product_id}-${normalizeProductType(item.product_type)}-${index}`}>
+            <View style={styles.tableRow} key={`${title}-${item.product_id}-${normalizeProductType(item.product_type)}-${index}`}>
               <Text style={styles.colCode}>{item.product_id}</Text>
               <Text style={styles.colDescription}>{truncateText(item.product_description, 62)}</Text>
               <Text style={styles.colQty}>{item.quantity}</Text>
@@ -185,7 +212,7 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
       ) : (
         emptyText ? <Text style={styles.compactRow}>{emptyText}</Text> : null
       )}
-    </>
+    </React.Fragment>
   );
 
   return (
@@ -194,20 +221,9 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
         <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
         <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
 
-        <Text style={styles.sectionTitle}>NFs devolvidas:</Text>
-        {!!totalNfs && <Text style={styles.compactRow}>total: {totalNfs}</Text>}
-        {!!partialNfs && <Text style={styles.compactRow}>parcial: {partialNfs}</Text>}
-        {!!collectNfs && <Text style={styles.compactRow}>coleta: {collectNfs}</Text>}
-        {!!leftoverEntries && <Text style={styles.compactRow}>sobra: {leftoverEntries}</Text>}
-        {!!weightBreakNfs && <Text style={styles.compactRow}>quebra de peso: {weightBreakNfs}</Text>}
-        {!totalNfs && !partialNfs && !collectNfs && !leftoverEntries && !weightBreakNfs && (
-          <Text style={styles.compactRow}>Nenhuma NF no lote.</Text>
-        )}
-
-        {renderItemsTable('Produtos que retornam para a MAR E RIO', physicalItems, 'Nenhum produto para retorno fisico.')}
-        {!!stockItems.length && renderItemsTable('Produtos que ficarao no estoque da transportadora', stockItems)}
-        {!!missingItems.length && renderItemsTable('PRODUTOS FALTANTES - NAO PROCURAR PARA SEPARACAO', missingItems)}
-        {!!weightBreakItems.length && renderItemsTable('QUEBRA DE PESO - SEM RETORNO FISICO DE PRODUTO', weightBreakItems)}
+        {sections
+          .filter((section) => section.notes.length || section.items.length || section.emptyText)
+          .map((section) => renderSection(section))}
 
         <View fixed style={styles.signatureBox}>
           <View style={styles.signatureLine} />

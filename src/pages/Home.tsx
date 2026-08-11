@@ -44,7 +44,13 @@ import {
   OccurrenceCardFooter,
   OccurrenceItemContent,
 } from '../style/returnsOccurrences';
-import { ICollectionRequest, IDanfe, IOccurrence, IReceiptBacklogRow } from '../types/types';
+import {
+  ICollectionRequest,
+  IDanfe,
+  IOccurrence,
+  IReceiptBacklogRow,
+  IReceiptBacklogSummary,
+} from '../types/types';
 import verifyToken from '../utils/verifyToken';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { getSemanticToneClassName } from '../utils/statusStyles';
@@ -213,6 +219,14 @@ const HOME_NOTIFICATION_TYPE_PRIORITY: Record<string, number> = {
   RETAINED_RECEIPT_OVERDUE: 2,
   INVOICE_REDELIVERY_OVERDUE: 3,
   INVOICE_PENDING_OVERDUE: 4,
+};
+const EMPTY_RECEIPT_BACKLOG_SUMMARY: IReceiptBacklogSummary = {
+  redelivery: 0,
+  unassigned: 0,
+  returned: 0,
+  retained: 0,
+  pending: 0,
+  total: 0,
 };
 
 type AuditHistoryEntry = {
@@ -414,6 +428,7 @@ function Home() {
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
   const [pendingCollectionRequests, setPendingCollectionRequests] = useState<ICollectionRequest[]>([]);
   const [pendingReturnReminders, setPendingReturnReminders] = useState<IReceiptBacklogRow[]>([]);
+  const [receiptBacklogSummary, setReceiptBacklogSummary] = useState<IReceiptBacklogSummary>(EMPTY_RECEIPT_BACKLOG_SUMMARY);
   const [userPermission, setUserPermission] = useState('');
   const [showAllOperationalNotifications, setShowAllOperationalNotifications] = useState(false);
 
@@ -535,10 +550,6 @@ function Home() {
     )),
     [pendingReturnReminders],
   );
-  const backlogCounts = useMemo(() => pendingReturnReminders.reduce<Record<string, number>>((counts, row) => {
-    counts[row.queue_type] = (counts[row.queue_type] || 0) + 1;
-    return counts;
-  }, {}), [pendingReturnReminders]);
   const scheduledCollectionRequests = useMemo(
     () => pendingCollectionRequests.filter((request) => isScheduledCollectionRequest(request)),
     [pendingCollectionRequests],
@@ -821,9 +832,11 @@ function Home() {
     try {
       const data = await listReceiptBacklog({ limit: 300 });
       setPendingReturnReminders(Array.isArray(data?.rows) ? data.rows : []);
+      setReceiptBacklogSummary(data?.summary || EMPTY_RECEIPT_BACKLOG_SUMMARY);
     } catch (error) {
       console.error('Erro ao carregar lembretes de devolucao:', error);
       setPendingReturnReminders([]);
+      setReceiptBacklogSummary(EMPTY_RECEIPT_BACKLOG_SUMMARY);
     }
   }
 
@@ -1531,35 +1544,35 @@ function Home() {
       key: 'redelivery',
       label: 'Reentregas sem nova rota',
       description: 'Notas que precisam entrar em uma nova saída',
-      count: backlogCounts.redelivery || 0,
+      count: receiptBacklogSummary.redelivery || 0,
       icon: Undo2,
     },
     {
       key: 'unassigned',
       label: 'NFs sem rota',
       description: 'Notas ainda não direcionadas para entrega',
-      count: backlogCounts.unassigned || 0,
+      count: receiptBacklogSummary.unassigned || 0,
       icon: Route,
     },
     {
       key: 'returned',
       label: 'Devoluções fora de lote',
       description: 'Mercadorias aguardando formação de lote',
-      count: backlogCounts.returned || 0,
+      count: receiptBacklogSummary.returned || 0,
       icon: PackageSearch,
     },
     {
       key: 'retained',
       label: 'Canhotos retidos',
       description: 'Comprovantes que ainda precisam ser recuperados',
-      count: backlogCounts.retained || 0,
+      count: receiptBacklogSummary.retained || 0,
       icon: FileWarning,
     },
     {
       key: 'pending',
       label: 'NFs sem canhoto',
       description: 'Entregas de dias anteriores sem comprovante',
-      count: backlogCounts.pending || 0,
+      count: receiptBacklogSummary.pending || 0,
       icon: FileWarning,
     },
   ];

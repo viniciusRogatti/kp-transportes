@@ -2933,12 +2933,12 @@ function ReturnsOccurrences() {
                       <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>
                       <p className="text-xs text-muted">Pesquise por ID, periodo ou consulte os lotes mais recentes.</p>
                     </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <div className="text-right">
+                    <div className="flex flex-wrap items-start justify-end gap-2">
+                      <div className="text-left">
                         <button
                           type="button"
                           onClick={() => navigate('/returns-occurrences/base')}
-                          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-text transition hover:bg-surface-2"
+                          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
                         >
                           <Database size={16} /> Base de devoluções
                         </button>

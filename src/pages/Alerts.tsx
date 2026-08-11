@@ -67,7 +67,7 @@ function AlertsPage() {
   const [error, setError] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
   const [filters, setFilters] = useState<AlertHistoryFilters>({
-    status: 'ALL',
+    status: 'OPEN',
     severity: 'ALL',
     source: 'ALERT',
     search: '',

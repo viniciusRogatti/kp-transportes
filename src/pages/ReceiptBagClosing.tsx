@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import receiptBagClosingProgress from '../assets/images/receipt-bag-closing-progress.png';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import { showAlert, showConfirm } from '../utils/dialog';
@@ -135,6 +136,38 @@ function SummaryCard({ label, value, icon, tone = '' }: {
   );
 }
 
+function FinishingBagOverlay() {
+  return (
+    <div
+      role="status"
+      aria-live="assertive"
+      aria-label="Finalizando o malote"
+      className="fixed inset-0 z-[1700] grid place-items-center bg-slate-950/70 p-4 backdrop-blur-sm"
+    >
+      <section className="w-full max-w-md overflow-hidden rounded-3xl border border-sky-200 bg-surface text-center shadow-2xl dark:border-sky-900">
+        <div className="relative overflow-hidden bg-gradient-to-br from-sky-100 via-white to-emerald-100 px-6 pt-7 dark:from-sky-950 dark:via-slate-950 dark:to-emerald-950">
+          <div className="absolute left-1/2 top-5 h-40 w-40 -translate-x-1/2 rounded-full bg-sky-300/30 blur-3xl" />
+          <img
+            src={receiptBagClosingProgress}
+            alt="Ilustração de canhotos sendo organizados em uma caixa"
+            className="relative mx-auto h-44 w-44 object-contain motion-safe:animate-pulse"
+          />
+        </div>
+        <div className="px-6 pb-7 pt-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Finalizando rota</p>
+          <h2 className="mt-2 text-xl font-black text-text">Estamos fechando este malote</h2>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Pode organizar os canhotos e já preparar o próximo malote. Estamos dando baixa nos registros e voltamos à lista em instantes.
+          </p>
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800 dark:bg-sky-950 dark:text-sky-200">
+            <RefreshCcw className="h-3.5 w-3.5 animate-spin" />Conferindo os últimos dados
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ReceiptBagClosing() {
   const navigate = useNavigate();
   const [date, setDate] = useState(todayInput);
@@ -149,6 +182,7 @@ function ReceiptBagClosing() {
   const [extraInvoice, setExtraInvoice] = useState('');
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
   const [historicalRoutes, setHistoricalRoutes] = useState<HistoricalReceiptRoutesResponse | null>(null);
@@ -488,6 +522,7 @@ function ReceiptBagClosing() {
         setMutating(true);
         bag = await markRemainingReceiptBagItemsAbsent(bag.id);
       }
+      setIsFinishing(true);
       const finishedBag = await finishReceiptBagClosing(bag.id);
       await loadList(true);
       setActiveBag(null);
@@ -500,7 +535,10 @@ function ReceiptBagClosing() {
         : 'Conferência finalizada.');
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível finalizar a conferência.'));
-    } finally { setMutating(false); }
+    } finally {
+      setIsFinishing(false);
+      setMutating(false);
+    }
   };
 
   const closeBag = useCallback(() => {
@@ -657,6 +695,7 @@ function ReceiptBagClosing() {
           onUnrouted={() => void confirmUnroutedExtra()}
         />
       ) : null}
+      {isFinishing ? <FinishingBagOverlay /> : null}
     </>
   );
 }

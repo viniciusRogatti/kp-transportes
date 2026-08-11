@@ -125,11 +125,12 @@ function SummaryCard({ label, value, icon, tone = '' }: {
       : tone === 'green' ? 'semantic-panel-success'
         : 'border-border bg-card';
   return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3 text-muted">
-        <span className="text-xs font-bold uppercase tracking-wide">{label}</span>{icon}
+    <div className={`rounded-lg border px-2.5 py-2 shadow-sm ${toneClass}`}>
+      <div className="flex items-start justify-between gap-1.5 text-muted">
+        <span className="text-[10px] font-bold uppercase leading-tight tracking-[0.08em]">{label}</span>
+        <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
       </div>
-      <p className="mt-2 text-3xl font-black text-text">{value}</p>
+      <p className="mt-1 text-2xl font-black leading-none text-text">{value}</p>
     </div>
   );
 }
@@ -561,7 +562,7 @@ function ReceiptBagClosing() {
           {error && !activeBag ? <ErrorBanner message={error} /> : null}
           {feedback && !activeBag ? <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400 bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"><CheckCircle2 className="h-5 w-5" />{feedback}</div> : null}
 
-          <section className="grid shrink-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6 [&>div]:rounded-xl [&>div]:p-3 [&>div>p]:mt-1 [&>div>p]:text-xl">
+          <section className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-3 lg:grid-cols-6">
             <SummaryCard label="Malotes" value={data?.summary.bags || 0} icon={<PackageCheck className="h-5 w-5" />} />
             <SummaryCard label="Esperados" value={data?.summary.expected || 0} icon={<ClipboardCheck className="h-5 w-5" />} />
             <SummaryCard label="Conferidos" value={data?.summary.confirmed || 0} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />

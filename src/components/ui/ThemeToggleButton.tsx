@@ -47,7 +47,7 @@ function ThemeToggleButton({ className }: ThemeToggleButtonProps) {
       role="switch"
       aria-checked={!isLightTheme}
       className={cn(
-        'inline-flex h-12 w-[108px] items-center justify-center overflow-hidden rounded-full border border-border bg-card p-1 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
+        'inline-flex h-12 w-[110px] items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
         className,
       )}
       aria-label={isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro'}

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import receiptBagClosingProgress from '../assets/images/receipt-bag-closing-progress.png';
+import packageDeliveryAnimation from '../assets/gifs/Package Delivery.svg';
 import Header from '../components/Header';
 import { Container } from '../style/invoices';
 import { showAlert, showConfirm } from '../utils/dialog';
@@ -148,9 +148,9 @@ function FinishingBagOverlay() {
         <div className="relative overflow-hidden bg-gradient-to-br from-sky-100 via-white to-emerald-100 px-6 pt-7 dark:from-sky-950 dark:via-slate-950 dark:to-emerald-950">
           <div className="absolute left-1/2 top-5 h-40 w-40 -translate-x-1/2 rounded-full bg-sky-300/30 blur-3xl" />
           <img
-            src={receiptBagClosingProgress}
-            alt="Ilustração de canhotos sendo organizados em uma caixa"
-            className="relative mx-auto h-44 w-44 object-contain motion-safe:animate-pulse"
+            src={packageDeliveryAnimation}
+            alt="Animação de uma encomenda sendo entregue"
+            className="relative mx-auto h-44 w-44 object-contain"
           />
         </div>
         <div className="px-6 pb-7 pt-5">

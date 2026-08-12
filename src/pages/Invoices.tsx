@@ -8,12 +8,10 @@ import DatePicker, { registerLocale } from "react-datepicker";
 import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
-import IconButton from "../components/ui/IconButton";
-import SearchInput from "../components/ui/SearchInput";
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import CompanyTabs from "../components/CompanyTabs";
-import { Container, DateAction, DateGroup, DateRow, SearchBar, SearchRow } from "../style/invoices";
-import { FilterBar, NotesFound } from "../style/TodayInvoices";
+import { Container } from "../style/invoices";
+import { NotesFound } from "../style/TodayInvoices";
 import { routes } from "../data/danfes";
 import { useNavigate } from "react-router";
 import verifyToken from "../utils/verifyToken";
@@ -359,18 +357,93 @@ function Invoices() {
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <SearchBar>
-          <SearchRow className="w-full grid-cols-1 max-[768px]:grid-cols-1">
-            <SearchInput
-              value={searchNf}
-              type="number"
-              onChange={setFilter}
-              onSearch={getDanfeByNf}
-              placeholder="Digite a nf"
-              searchLabel="Pesquisar NF"
-              disabled={isSearchingInvoice}
-            />
-          </SearchRow>
+        <section
+          data-tutorial="page-filters"
+          aria-labelledby="invoice-search-title"
+          className="mb-4 w-full max-w-[1100px] rounded-xl border border-border bg-card p-4 shadow-soft"
+        >
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h1 id="invoice-search-title" className="text-lg font-semibold text-text">Buscar notas</h1>
+            <p className="text-sm text-muted">Consulte uma NF específica ou carregue as notas emitidas em um período.</p>
+          </div>
+
+          <div className="grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <div className="self-end">
+              <label htmlFor="invoice-number-search" className="mb-1.5 block text-sm font-medium text-text">
+                Número da NF
+              </label>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+                <input
+                  id="invoice-number-search"
+                  value={searchNf}
+                  type="text"
+                  inputMode="numeric"
+                  onChange={setFilter}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') void getDanfeByNf();
+                  }}
+                  placeholder="Ex.: 123456"
+                  disabled={isSearchingInvoice}
+                  className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={() => void getDanfeByNf()}
+                  disabled={isSearchingInvoice || !searchNf.trim()}
+                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                  {isSearchingInvoice ? 'Buscando...' : 'Buscar NF'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-text">Período de emissão</span>
+              <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <div className="min-w-0">
+                  <label htmlFor="invoice-start-date" className="mb-1 block text-xs text-muted">Data inicial</label>
+                  <DatePicker
+                    id="invoice-start-date"
+                    selected={startDate}
+                    onChange={date => setStartDate(date)}
+                    placeholderText="Data inicial"
+                    dateFormat="dd/MM/yyyy"
+                    locale="ptBR"
+                    popperPlacement="bottom-start"
+                    className="date-picker-input h-11"
+                    wrapperClassName="w-full"
+                    withPortal
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="invoice-end-date" className="mb-1 block text-xs text-muted">Data final</label>
+                  <DatePicker
+                    id="invoice-end-date"
+                    selected={endDate}
+                    onChange={date => setEndDate(date)}
+                    placeholderText="Data final"
+                    dateFormat="dd/MM/yyyy"
+                    locale="ptBR"
+                    popperPlacement="bottom-start"
+                    className="date-picker-input h-11"
+                    wrapperClassName="w-full"
+                    withPortal
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void getDanfesByDate()}
+                  disabled={!startDate || !endDate}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Search className="h-4 w-4" aria-hidden="true" />
+                  Buscar período
+                </button>
+              </div>
+            </div>
+          </div>
+
           {invoiceSearchFeedback ? (
             <div
               role="status"
@@ -392,89 +465,98 @@ function Invoices() {
               ) : null}
             </div>
           ) : null}
-          <DateRow className="grid-cols-[1fr_auto] max-[768px]:grid-cols-[minmax(0,1fr)_auto]">
-            <DateGroup>
-              <DatePicker
-                selected={startDate}
-                onChange={date => setStartDate(date)}
-                placeholderText="Data de início"
-                dateFormat="dd/MM/yyyy"
-                locale="ptBR"
-                popperPlacement="bottom-start"
-                className="date-picker-input"
-                withPortal
-              />
-              <DatePicker
-                selected={endDate}
-                onChange={date => setEndDate(date)}
-                placeholderText="Data de fim"
-                dateFormat="dd/MM/yyyy"
-                locale="ptBR"
-                popperPlacement="bottom-start"
-                className="date-picker-input"
-                withPortal
-              />
-            </DateGroup>
-            <DateAction className="justify-end max-[768px]:w-auto">
-              <IconButton
-                icon={Search}
-                label="Buscar notas por periodo"
-                onClick={getDanfesByDate}
-                className="h-10 w-10 min-h-10 min-w-10 rounded-md"
-                size="lg"
-              />
-            </DateAction>
-          </DateRow>
-          <div className="mt-2 flex w-full justify-end">
-            <select
-              onChange={(event) => updateFilter('route', event.target.value)}
-              className="h-10 min-w-[170px] rounded-sm border border-accent/35 bg-surface-2 px-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60 max-[768px]:w-full max-[768px]:min-w-0"
-              value={filters.route}
-            >
-              {routes.map((route, index) => (
-                <option value={route} key={`rota-${index}`}>
-                  {route}
-                </option>
-              ))}
-            </select>
-          </div>
-        </SearchBar>
+        </section>
 
-        <FilterBar>
-          <input type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Filtrar por NF" />
-          <input type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />
-          <input type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Filtrar por nome do cliente" />
-          <input type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Filtrar por cidade" />
-          <select value={filters.driver} onChange={(event) => updateFilter('driver', event.target.value)}>
-            <option value="">Motorista: todos</option>
-            {driverOptions.map((driver) => (
-              <option key={driver} value={driver}>{driver}</option>
-            ))}
-          </select>
-          {loadOptions.length > 0 ? (
-            <select
-              value=""
-              onChange={(event) => {
-                const selectedLoad = event.target.value;
-                if (selectedLoad) {
-                  toggleLoadFilter(selectedLoad);
-                }
-              }}
-            >
-              <option value="">Selecionar carga(s)</option>
-              {loadOptions.map((load) => {
-                const isActive = filters.loadNumbers.includes(load);
-                return (
-                  <option key={load} value={load}>
-                    {isActive ? `✓ Carga ${load}` : `Carga ${load}`}
-                  </option>
-                );
-              })}
-            </select>
-          ) : null}
-          <button onClick={resetFilters}>Limpar filtros</button>
-          {danfes.length > 0 ? <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button> : null}
-        </FilterBar>
+        <section
+          aria-labelledby="invoice-filter-title"
+          className="mb-4 w-full max-w-[1100px] rounded-xl border border-border bg-surface p-4"
+        >
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h2 id="invoice-filter-title" className="text-base font-semibold text-text">Refinar resultados</h2>
+              <p className="text-sm text-muted">Filtros aplicados às notas carregadas.</p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-text transition-colors hover:bg-surface-2"
+              >
+                Limpar filtros
+              </button>
+              {danfes.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={openPDFInNewTab}
+                  disabled={isPrinting}
+                  className="rounded-md border border-accent-strong bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPrinting ? 'Gerando lista...' : 'Abrir lista de produtos'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 min-[1100px]:grid-cols-[110px_minmax(135px,1.15fr)_minmax(120px,1fr)_minmax(120px,1fr)_130px_165px_165px]">
+            <label className="block text-sm font-medium text-text">
+              NF
+              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Número da nota" />
+            </label>
+            <label className="block text-sm font-medium text-text">
+              Produto
+              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Código ou descrição" />
+            </label>
+            <label className="block text-sm font-medium text-text">
+              Cliente
+              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Nome do cliente" />
+            </label>
+            <label className="block text-sm font-medium text-text">
+              Cidade
+              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Nome da cidade" />
+            </label>
+            <label className="block text-sm font-medium text-text">
+              Rota
+              <select
+                onChange={(event) => updateFilter('route', event.target.value)}
+                className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                value={filters.route}
+              >
+                {routes.map((route, index) => (
+                  <option value={route} key={`rota-${index}`}>{route}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-text">
+              Motorista
+              <select className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" value={filters.driver} onChange={(event) => updateFilter('driver', event.target.value)}>
+                <option value="">Todos os motoristas</option>
+                {driverOptions.map((driver) => (
+                  <option key={driver} value={driver}>{driver}</option>
+                ))}
+              </select>
+            </label>
+            {loadOptions.length > 0 ? (
+              <label className="block text-sm font-medium text-text">
+                Cargas
+                <select
+                  className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  value=""
+                  onChange={(event) => {
+                    const selectedLoad = event.target.value;
+                    if (selectedLoad) toggleLoadFilter(selectedLoad);
+                  }}
+                >
+                  <option value="">Selecionar carga(s)</option>
+                  {loadOptions.map((load) => {
+                    const isActive = filters.loadNumbers.includes(load);
+                    return <option key={load} value={load}>{isActive ? `✓ Carga ${load}` : `Carga ${load}`}</option>;
+                  })}
+                </select>
+              </label>
+            ) : null}
+          </div>
+
+        </section>
         <DanfeStatusLegend
           activeStatusFilter={filters.status}
           onChange={(value) => updateFilter('status', value)}

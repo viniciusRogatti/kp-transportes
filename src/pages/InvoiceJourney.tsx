@@ -99,11 +99,13 @@ function MetricCard({
   value: string | number;
   detail: string;
 }) {
+  const compactValue = typeof value === 'string' && value.length > 10;
+
   return (
-    <Card className="min-w-0 p-3">
+    <Card className="min-w-0 p-2.5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-text">{value}</p>
-      <p className="mt-1 truncate text-xs text-muted" title={detail}>{detail}</p>
+      <p className={cn('mt-1 whitespace-nowrap font-bold leading-tight text-text', compactValue ? 'text-base' : 'text-xl')}>{value}</p>
+      <p className="mt-0.5 truncate text-[11px] text-muted" title={detail}>{detail}</p>
     </Card>
   );
 }
@@ -119,6 +121,11 @@ function InvoiceJourney() {
   const [activeFilter, setActiveFilter] = useState<JourneyFilter>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    document.body.classList.add('invoice-journey-document');
+    return () => document.body.classList.remove('invoice-journey-document');
+  }, []);
 
   const loadJourney = useCallback(async () => {
     if (!invoiceNumber) {
@@ -163,6 +170,15 @@ function InvoiceJourney() {
     navigate(`/invoices?${params.toString()}`);
   };
 
+  const printJourney = () => {
+    const previousTitle = document.title;
+    document.title = `Jornada NF ${invoiceNumber} - KP Transportes`;
+    window.addEventListener('afterprint', () => {
+      document.title = previousTitle;
+    }, { once: true });
+    window.print();
+  };
+
   const openSearchedJourney = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedInvoice = invoiceSearch.trim().replace(/^(?:nf[\s.#-]*)/i, '');
@@ -171,7 +187,7 @@ function InvoiceJourney() {
   };
 
   return (
-    <div>
+    <div className="invoice-journey-page">
       <Header />
       <Container className="items-stretch">
         <main className="mx-auto w-full max-w-[1240px] print:max-w-none">
@@ -185,7 +201,7 @@ function InvoiceJourney() {
                 <RefreshCcw className={cn('h-4 w-4', loading && 'animate-spin')} />
                 Atualizar
               </Button>
-              <Button onClick={() => window.print()} disabled={!journey} className="gap-2">
+              <Button onClick={printJourney} disabled={!journey} className="gap-2">
                 <Printer className="h-4 w-4" />
                 Imprimir jornada
               </Button>
@@ -249,39 +265,43 @@ function InvoiceJourney() {
             </Card>
           ) : journey ? (
             <>
-              <Card className="overflow-hidden border-accent/30 p-0">
+              <Card className="journey-summary mt-0 overflow-hidden border-accent/30 p-0 print:mt-3">
                 <div className="border-b border-border bg-surface-2 px-5 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
                     <div>
                       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-accent">
                         <History className="h-4 w-4" />
                         Jornada logística
                       </div>
-                      <h1 className="mt-2 text-2xl font-bold text-text">{`NF ${journey.invoice.invoiceNumber}`}</h1>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <h1 className="text-2xl font-bold text-text">{`NF ${journey.invoice.invoiceNumber}`}</h1>
+                        <Badge tone={journey.currentState.hasReceipt ? 'success' : 'warning'}>
+                          {journey.currentState.statusLabel}
+                        </Badge>
+                        <span className="inline-flex h-6 items-center rounded-full border border-border bg-card px-2.5 text-xs font-semibold text-muted">
+                          {`Empresa · ${journey.invoice.companyName || journey.invoice.companyCode || `#${journey.invoice.companyId}`}`}
+                        </span>
+                      </div>
                       <p className="mt-1 text-sm text-muted">
                         {journey.invoice.customer.name || 'Cliente não registrado'}
                         {journey.invoice.customer.city ? ` · ${journey.invoice.customer.city}/${journey.invoice.customer.state || '-'}` : ''}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <Badge tone={journey.currentState.hasReceipt ? 'success' : 'warning'}>
-                        {journey.currentState.statusLabel}
-                      </Badge>
-                      <p className="mt-2 text-xs text-muted">
-                        {journey.invoice.companyName || journey.invoice.companyCode || `Empresa #${journey.invoice.companyId}`}
-                      </p>
-                    </div>
                   </div>
                 </div>
-                <div className="grid gap-3 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div className="journey-invoice-facts grid gap-3 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-4 print:grid-cols-8">
                   <div><span className="text-muted">Emissão</span><p className="font-semibold text-text">{formatDateBR(journey.invoice.invoiceDate || '') || '-'}</p></div>
                   <div><span className="text-muted">Carga</span><p className="font-semibold text-text">{journey.invoice.loadNumber || '-'}</p></div>
                   <div><span className="text-muted">Valor</span><p className="font-semibold text-text">{formatCurrency(journey.invoice.totalValue)}</p></div>
                   <div><span className="text-muted">Importação</span><p className="font-semibold text-text">{formatDateTime(journey.invoice.importedAt)}</p></div>
+                  <div className="hidden print:block"><span className="text-muted">Rota atual</span><p className="font-semibold text-text">{journey.currentState.tripId ? `#${journey.currentState.tripId}` : 'Sem rota'}</p></div>
+                  <div className="hidden print:block"><span className="text-muted">Motorista</span><p className="font-semibold text-text">{journey.currentState.driver?.name || 'Não atribuído'}</p></div>
+                  <div className="hidden print:block"><span className="text-muted">Veículo</span><p className="font-semibold text-text">{journey.currentState.vehicle?.licensePlate || 'Não atribuído'}</p></div>
+                  <div className="hidden print:block"><span className="text-muted">Canhoto</span><p className="font-semibold text-text">{journey.currentState.hasReceipt ? 'Recebido' : 'Pendente'}</p></div>
                 </div>
               </Card>
 
-              <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+              <section className="journey-metrics mt-3 grid grid-cols-2 items-start gap-2 md:grid-cols-4 lg:grid-cols-7 print:grid-cols-7">
                 <MetricCard label="Eventos" value={journey.summary.totalEvents} detail="registros encontrados" />
                 <MetricCard label="Rotas" value={journey.summary.routes} detail="atribuições históricas" />
                 <MetricCard label="Reentregas" value={journey.summary.redeliveries} detail="tentativas registradas" />
@@ -291,14 +311,14 @@ function InvoiceJourney() {
                 <MetricCard label="Tempo total" value={formatJourneyDuration(journey.summary.durationHours)} detail={journey.summary.completedAt ? 'até a conclusão' : 'jornada em andamento'} />
               </section>
 
-              <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-                <Card className="min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+              <section className="journey-content-grid mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                <Card className="journey-timeline min-w-0">
+                  <div className="border-b border-border pb-3">
                     <div>
                       <h2 className="text-lg font-bold text-text">Linha do tempo</h2>
                       <p className="text-sm text-muted">{`${visibleEvents.length} evento(s) exibido(s)`}</p>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 print:hidden">
+                    <div className="mt-3 flex flex-nowrap gap-1 overflow-x-auto pb-1 print:hidden">
                       {FILTERS.map((filter) => (
                         <button
                           key={filter}
@@ -306,7 +326,7 @@ function InvoiceJourney() {
                           onClick={() => setActiveFilter(filter)}
                           aria-pressed={activeFilter === filter}
                           className={cn(
-                            'rounded-md border px-2.5 py-1.5 text-xs font-semibold transition',
+                            'shrink-0 rounded-md border px-2 py-1 text-xs font-semibold transition',
                             activeFilter === filter
                               ? 'border-accent bg-accent text-white'
                               : 'border-border bg-surface-2 text-muted hover:border-accent/50 hover:text-text',
@@ -324,7 +344,7 @@ function InvoiceJourney() {
                         const Icon = CATEGORY_ICONS[event.category] || Clock3;
                         const details = getEventDetails(event);
                         return (
-                          <li key={event.id} className="relative grid grid-cols-[38px_minmax(0,1fr)] gap-3 pb-6">
+                          <li key={event.id} className="journey-event relative grid grid-cols-[38px_minmax(0,1fr)] gap-3 pb-6">
                             {index < visibleEvents.length - 1 ? (
                               <span className="absolute bottom-0 left-[18px] top-9 w-px bg-border" aria-hidden="true" />
                             ) : null}
@@ -365,7 +385,7 @@ function InvoiceJourney() {
                   )}
                 </Card>
 
-                <aside className="space-y-4">
+                <aside className="journey-aside space-y-4">
                   <Card>
                     <div className="flex items-center gap-2">
                       <MapPinned className="h-5 w-5 text-text-accent" />

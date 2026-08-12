@@ -1668,3 +1668,199 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     animation: none;
   }
 }
+
+@page {
+  size: A4 portrait;
+  margin: 7mm;
+}
+
+@media print {
+  body.invoice-journey-document {
+    --color-bg: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-2: #f8fafc;
+    --color-card: #ffffff;
+    --color-text: #172033;
+    --color-muted: #526176;
+    --color-border: #cbd5e1;
+    --color-text-accent: #1d4ed8;
+
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: var(--color-text) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.invoice-journey-document #root {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.invoice-journey-document .app-shell-sidebar,
+  body.invoice-journey-document .app-shell-topbar,
+  body.invoice-journey-document .app-shell-mobile-drawer,
+  body.invoice-journey-document .app-shell-bottom-nav,
+  body.invoice-journey-document [data-tutorial='global-help'],
+  body.invoice-journey-document .fixed {
+    display: none !important;
+  }
+
+  body.invoice-journey-document .invoice-journey-page [data-tutorial='page-content'] {
+    display: block !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  body.invoice-journey-document .invoice-journey-page main {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  body.invoice-journey-document .invoice-journey-page {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  body.invoice-journey-document .journey-summary,
+  body.invoice-journey-document .journey-metrics,
+  body.invoice-journey-document .journey-metrics > section,
+  body.invoice-journey-document .journey-event,
+  body.invoice-journey-document .journey-aside > section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.invoice-journey-document .journey-summary,
+  body.invoice-journey-document .journey-metrics > section,
+  body.invoice-journey-document .journey-timeline,
+  body.invoice-journey-document .journey-aside > section {
+    box-shadow: none !important;
+  }
+
+  body.invoice-journey-document .journey-summary {
+    margin-top: 0 !important;
+  }
+
+  body.invoice-journey-document .journey-summary > div:first-child {
+    padding: 8px 10px !important;
+  }
+
+  body.invoice-journey-document .journey-summary h1 {
+    font-size: 18px !important;
+  }
+
+  body.invoice-journey-document .journey-summary p,
+  body.invoice-journey-document .journey-summary span {
+    font-size: 9px;
+  }
+
+  body.invoice-journey-document .journey-invoice-facts {
+    gap: 4px !important;
+    padding: 7px 10px !important;
+    font-size: 8px !important;
+  }
+
+  body.invoice-journey-document .journey-invoice-facts p {
+    margin-top: 1px;
+    overflow-wrap: anywhere;
+  }
+
+  body.invoice-journey-document .journey-metrics {
+    margin-top: 6px !important;
+    gap: 5px !important;
+  }
+
+  body.invoice-journey-document .journey-metrics > section {
+    padding: 5px 6px !important;
+  }
+
+  body.invoice-journey-document .journey-metrics > section p:first-child {
+    font-size: 7px !important;
+  }
+
+  body.invoice-journey-document .journey-metrics > section p:nth-child(2) {
+    margin-top: 2px !important;
+    font-size: 13px !important;
+  }
+
+  body.invoice-journey-document .journey-metrics > section p:last-child {
+    display: none;
+  }
+
+  body.invoice-journey-document .journey-content-grid {
+    display: block !important;
+    margin-top: 7px !important;
+  }
+
+  body.invoice-journey-document .journey-timeline {
+    padding: 8px !important;
+  }
+
+  body.invoice-journey-document .journey-timeline > div:first-child {
+    padding-bottom: 5px !important;
+  }
+
+  body.invoice-journey-document .journey-timeline h2 {
+    font-size: 14px !important;
+  }
+
+  body.invoice-journey-document .journey-timeline > div:first-child p {
+    font-size: 8px !important;
+  }
+
+  body.invoice-journey-document .journey-timeline ol {
+    margin-top: 7px !important;
+  }
+
+  body.invoice-journey-document .journey-event {
+    grid-template-columns: 24px minmax(0, 1fr) !important;
+    gap: 6px !important;
+    padding-bottom: 5px !important;
+  }
+
+  body.invoice-journey-document .journey-event > span[class*='rounded-full'] {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  body.invoice-journey-document .journey-event > span[class*='rounded-full'] svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  body.invoice-journey-document .journey-event > span[class~='absolute'] {
+    left: 11px !important;
+    top: 23px !important;
+  }
+
+  body.invoice-journey-document .journey-event article {
+    background: #ffffff !important;
+    padding: 5px 7px !important;
+  }
+
+  body.invoice-journey-document .journey-event article h3 {
+    font-size: 10px !important;
+  }
+
+  body.invoice-journey-document .journey-event article p,
+  body.invoice-journey-document .journey-event article div {
+    font-size: 8px;
+  }
+
+  body.invoice-journey-document .journey-event article p,
+  body.invoice-journey-document .journey-event article div[class*='mt-'] {
+    margin-top: 2px !important;
+  }
+
+  body.invoice-journey-document .journey-event article span {
+    min-height: 0 !important;
+    padding: 1px 4px !important;
+    font-size: 7px !important;
+  }
+
+  body.invoice-journey-document .journey-aside {
+    display: none !important;
+  }
+}

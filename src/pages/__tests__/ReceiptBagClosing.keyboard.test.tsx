@@ -89,4 +89,37 @@ describe('ConferencePanel por teclado', () => {
     expect(getRecoveredReceiptOrigin(currentBag, { invoiceNumber: '123456' })).toEqual(recoveredItem.origin_bag);
     expect(getRecoveredReceiptOrigin({ ...currentBag, trip_id: 1903 }, { itemId: recoveredItem.id })).toBeNull();
   });
+
+  it('permite corrigir uma reentrega para presente quando o canhoto chegou no malote', async () => {
+    const redeliveryItem = { ...item, status: 'redelivery' } as ReceiptBagItem;
+    const onMutate = jest.fn().mockResolvedValue(true);
+
+    render(
+      <ConferencePanel
+        bag={{ ...bag, items: [redeliveryItem, item] }}
+        items={[redeliveryItem]}
+        selectedItem={redeliveryItem}
+        itemFilter="all"
+        itemSearch=""
+        extraInvoice=""
+        error=""
+        feedback=""
+        mutating={false}
+        onClose={jest.fn()}
+        onSelect={jest.fn()}
+        onFilter={jest.fn()}
+        onSearch={jest.fn()}
+        onExtraChange={jest.fn()}
+        onExtra={jest.fn()}
+        onMutate={onMutate}
+        onMarkRemaining={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    const confirmButton = screen.getByRole('button', { name: 'Presente' });
+    expect(confirmButton).toBeEnabled();
+    await userEvent.click(confirmButton);
+    expect(onMutate).toHaveBeenCalledWith(redeliveryItem, 'confirm');
+  });
 });

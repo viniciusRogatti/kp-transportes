@@ -77,6 +77,9 @@ const ITEM_STATUS: Record<ReceiptBagItemStatus, { label: string; badge: string; 
 };
 const CLOSED_STATUSES = ['confirmed', 'recovered', 'resolved_elsewhere'];
 const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled'];
+// Uma reentrega pode ter sido registrada por engano. Se o canhoto fisico
+// chegou no malote, a conferencia precisa conseguir corrigir o item para presente.
+const NON_CONFIRMABLE_STATUSES = ['returned', 'retained', 'cancelled'];
 const DELIVERY_STATUSES = ['delivered', 'completed'];
 
 const errorPayload = (error: unknown): ReceiptBagApiError => (
@@ -960,7 +963,7 @@ export function ConferencePanel(props: ConferenceProps) {
       return;
     }
 
-    if (EXEMPT_STATUSES.includes(item.status)) return;
+    if (NON_CONFIRMABLE_STATUSES.includes(item.status)) return;
     setKeyboardCandidateId(null);
     const confirmed = await props.onMutate(item, 'confirm');
     if (!confirmed) return;
@@ -1035,7 +1038,7 @@ export function ConferencePanel(props: ConferenceProps) {
             </div>
           </div>
           <div className="scrollbar-ui min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5 pr-1.5">
-            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id && !item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !EXEMPT_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
+            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id && !item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !NON_CONFIRMABLE_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
             {!items.length ? <EmptyState text="Nenhuma NF encontrada neste filtro." /> : null}
           </div>
         </section>
@@ -1083,7 +1086,7 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
       ) : null}
       {selected ? (
         <div className="mt-2 flex flex-wrap gap-1.5 border-t border-current/15 pt-2" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-          <CompactActionButton disabled={mutating || EXEMPT_STATUSES.includes(item.status)} className="bg-emerald-600 text-white" onClick={() => onMutate(item, 'confirm')} icon={<Check className="h-3.5 w-3.5" />} label="Presente" />
+          <CompactActionButton disabled={mutating || NON_CONFIRMABLE_STATUSES.includes(item.status)} className="bg-emerald-600 text-white" onClick={() => onMutate(item, 'confirm')} icon={<Check className="h-3.5 w-3.5" />} label="Presente" />
           <CompactActionButton disabled={mutating || !allowAbsent || EXEMPT_STATUSES.includes(item.status)} className="border border-red-400 bg-red-100 text-red-900 dark:border-red-700 dark:bg-red-950 dark:text-red-100" onClick={() => onMutate(item, 'absent')} icon={<AlertCircle className="h-3.5 w-3.5" />} label="Ausente" />
           <CompactActionButton disabled={mutating || item.status === 'returned'} className="border border-orange-400 bg-orange-100 text-orange-900 dark:border-orange-700 dark:bg-orange-950 dark:text-orange-100" onClick={() => onMutate(item, 'returned')} icon={<RotateCcw className="h-3.5 w-3.5" />} label="Devolução" />
         </div>

@@ -825,7 +825,7 @@ function OperationalPendencies() {
     <div>
       <Header />
       <Container>
-        <div className="w-full max-w-[1250px] space-y-3">
+        <div className="w-full max-w-[var(--content-max-width)] space-y-3">
           <section className="rounded-md border border-border bg-surface p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -844,7 +844,7 @@ function OperationalPendencies() {
                 <button
                   type="button"
                   onClick={handleSearch}
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2"
+                  className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-text transition hover:bg-surface-2"
                 >
                   <RefreshCcw className="h-4 w-4" /> Atualizar
                 </button>
@@ -858,7 +858,7 @@ function OperationalPendencies() {
                   value={nfFilter}
                   onChange={(event) => setNfFilter(event.target.value)}
                   placeholder="Buscar por NF"
-                  className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  className="mt-1 h-9 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                 />
               </label>
 
@@ -867,7 +867,7 @@ function OperationalPendencies() {
                 <select
                   value={motoristaFilter}
                   onChange={(event) => setMotoristaFilter(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  className="mt-1 h-9 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
                 >
                   <option value="">Todos</option>
                   {drivers.map((driver) => (
@@ -884,7 +884,7 @@ function OperationalPendencies() {
                   value={startDate}
                   onChange={(event) => setStartDate(event.target.value)}
                   onClick={() => openNativeDatePicker(startDateInputRef.current)}
-                  className="mt-1 h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  className="mt-1 h-9 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
                 />
               </label>
 
@@ -896,14 +896,14 @@ function OperationalPendencies() {
                   value={endDate}
                   onChange={(event) => setEndDate(event.target.value)}
                   onClick={() => openNativeDatePicker(endDateInputRef.current)}
-                  className="mt-1 h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
+                  className="mt-1 h-9 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text"
                 />
               </label>
 
               <button
                 type="button"
                 onClick={handleSearch}
-                className="h-10 self-end rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2"
+                className="h-9 self-end rounded-md border border-accent/50 bg-accent/10 px-3 text-sm font-semibold text-text-accent transition hover:bg-accent/20"
               >
                 <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Buscar</span>
               </button>
@@ -911,7 +911,7 @@ function OperationalPendencies() {
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="h-10 self-end rounded-md border border-border bg-card px-3 text-sm text-text transition hover:bg-surface-2"
+                className="h-9 self-end rounded-md border border-border bg-card px-3 text-sm text-text transition hover:bg-surface-2"
               >
                 Limpar
               </button>
@@ -994,7 +994,7 @@ function OperationalPendencies() {
                           <button
                             type="button"
                             onClick={() => navigate(`/returns-occurrences?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}
-                            className="mt-auto inline-flex h-9 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"
+                            className="mt-auto inline-flex h-8 self-end items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-3 text-xs font-semibold text-text-accent hover:bg-accent/20"
                           >
                             Abrir tratativa <ArrowRight className="h-4 w-4" />
                           </button>

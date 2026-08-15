@@ -24,7 +24,6 @@ import {
   IAlertHistoryResponse,
   IAlertHistoryRow,
 } from '../types/types';
-import { getAlertSeverityTone, getSemanticToneClassName } from '../utils/statusStyles';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import { formatDateTimeBR } from '../utils/dateDisplay';
 
@@ -124,7 +123,7 @@ function AlertsPage() {
     <div>
       <Header />
       <Container>
-        <div className="w-full max-w-[1280px] space-y-3">
+        <div className="w-full max-w-[var(--content-max-width)] space-y-3">
           <section className="rounded-md border border-border bg-surface p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -137,7 +136,7 @@ function AlertsPage() {
                 type="button"
                 onClick={refreshHistory}
                 disabled={loading}
-                className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text transition hover:bg-surface-2 disabled:opacity-60"
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-text transition hover:bg-surface-2 disabled:opacity-60"
               >
                 <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
               </button>
@@ -161,7 +160,7 @@ function AlertsPage() {
           </section>
 
           <section className="rounded-md border border-border bg-surface p-3">
-            <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(4,minmax(130px,auto))]">
+            <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(260px,1.5fr)_165px_180px_174px_174px_auto]">
               <label className="relative">
                 <span className="sr-only">Pesquisar</span>
                 <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted" />
@@ -169,14 +168,14 @@ function AlertsPage() {
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
                   placeholder="NF, título, descrição ou código"
-                  className="h-10 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm text-text"
+                  className="h-9 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm text-text"
                 />
               </label>
               <select
                 aria-label="Situação"
                 value={filters.status}
                 onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as AlertHistoryFilters['status'] }))}
-                className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
               >
                 <option value="ALL">Todas as situações</option>
                 <option value="OPEN">Pendentes</option>
@@ -186,7 +185,7 @@ function AlertsPage() {
                 aria-label="Severidade"
                 value={filters.severity}
                 onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value as AlertHistoryFilters['severity'] }))}
-                className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
               >
                 <option value="ALL">Todas as severidades</option>
                 <option value="CRITICAL">Crítico</option>
@@ -199,7 +198,7 @@ function AlertsPage() {
                 title="Data inicial"
                 value={filters.from}
                 onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
-                className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
               <input
                 type="date"
@@ -207,9 +206,9 @@ function AlertsPage() {
                 title="Data final"
                 value={filters.to}
                 onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
-                className="h-10 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
-              <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm text-text lg:col-start-5">
+              <button type="submit" className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-3 text-sm font-semibold text-text-accent hover:bg-accent/20">
                 <Search className="h-4 w-4" /> Pesquisar
               </button>
             </form>
@@ -227,7 +226,11 @@ function AlertsPage() {
             ) : (
               <ul className="space-y-2">
                 {rows.map((row) => {
-                  const severityClass = getSemanticToneClassName(getAlertSeverityTone(row.severity), 'panel');
+                  const severityAccentClass = row.severity === 'CRITICAL'
+                    ? 'border-l-danger'
+                    : row.severity === 'WARNING'
+                      ? 'border-l-warning'
+                      : 'border-l-info';
                   const resolved = row.status === 'RESOLVED';
                   const typeLabel = TYPE_LABELS[row.code] || (row.source === 'ALERT' ? 'Alerta técnico' : 'Pendência operacional');
                   const responsible = row.resolved_by_user?.name
@@ -235,8 +238,8 @@ function AlertsPage() {
                     || (resolved && row.resolution_mode === 'automatic' ? 'Sistema' : null);
 
                   return (
-                    <li key={row.id} className={`rounded-md border p-3 ${severityClass} ${resolved ? 'opacity-75' : ''}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
+                    <li key={row.id} className={`rounded-md border border-l-4 border-border bg-card p-3 ${severityAccentClass} ${resolved ? 'opacity-75' : ''}`}>
+                      <div>
                         <div className="min-w-0 flex-1 space-y-1 text-sm">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${resolved ? 'semantic-solid-success' : 'semantic-solid-warning'}`}>
@@ -261,7 +264,7 @@ function AlertsPage() {
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border/70 pt-2">
                           {row.action_url ? (
                             <button
                               type="button"

@@ -1023,8 +1023,8 @@ export function ConferencePanel(props: ConferenceProps) {
                 />
                 <div className="flex min-w-0 gap-1.5">
                   <label className="sr-only" htmlFor="extra-receipt-invoice">NF não listada</label>
-                  <input id="extra-receipt-invoice" value={props.extraInvoice} onChange={(event) => props.onExtraChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && props.onExtra()} placeholder="Número da NF não listada" inputMode="numeric" className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold outline-none focus:border-violet-500" />
-                  <button type="button" disabled={props.mutating || !props.extraInvoice.trim()} onClick={props.onExtra} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700 disabled:opacity-40"><FilePlus2 className="h-3.5 w-3.5" />Adicionar NF</button>
+                  <input id="extra-receipt-invoice" value={props.extraInvoice} onChange={(event) => props.onExtraChange(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && props.onExtra()} placeholder="Número da NF não listada" inputMode="numeric" className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold outline-none focus:border-accent" />
+                  <button type="button" disabled={props.mutating || !props.extraInvoice.trim()} onClick={props.onExtra} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-black text-white hover:bg-accent-strong disabled:opacity-40"><FilePlus2 className="h-3.5 w-3.5" />Adicionar NF</button>
                 </div>
               </div>
               <div className="flex flex-col gap-2 xl:items-end">

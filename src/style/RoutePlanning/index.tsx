@@ -150,7 +150,7 @@ export function BoxDriverVehicle({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-10 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-border [&_select]:bg-card [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:border-accent [&_select:focus]:ring-2 [&_select:focus]:ring-accent/20 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-sm [&_select]:border [&_select]:border-border [&_select]:bg-card [&_select]:px-3 [&_select]:text-sm [&_select]:text-text [&_select]:outline-none [&_select:focus]:border-accent [&_select:focus]:ring-2 [&_select:focus]:ring-accent/20 [&_input]:h-9 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         className,
       )}
       {...props}
@@ -162,7 +162,7 @@ export function BoxSelectDanfe({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-10 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
+        'flex w-full flex-col items-start justify-center gap-s2 [&_input]:h-9 [&_input]:w-full [&_input]:rounded-sm [&_input]:border [&_input]:border-border [&_input]:bg-card [&_input]:px-3 [&_input]:text-sm [&_input]:text-text [&_input]:placeholder:text-muted [&_input]:outline-none [&_input:focus]:border-accent [&_input:focus]:ring-2 [&_input:focus]:ring-accent/20',
         className,
       )}
       {...props}

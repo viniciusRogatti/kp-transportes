@@ -1404,7 +1404,7 @@ function DeliveryMonitoring() {
     <div className="min-h-screen">
       <Header />
       <Container>
-        <section className="w-full rounded-lg border border-border bg-card p-4 shadow-elevated">
+        <section className="w-full rounded-lg border border-border bg-card p-3 shadow-soft sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -1447,7 +1447,7 @@ function DeliveryMonitoring() {
               }
               title="Abrir alertas"
             >
-              <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-current/40 bg-card">
+              <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-current/40 bg-card">
                 <AlertTriangle className="h-5 w-5" />
                 {unreadAlertsCount > 0 ? (
                   <span className="absolute -right-1 -top-1 inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
@@ -1506,7 +1506,7 @@ function DeliveryMonitoring() {
               <select
                 value={companyFilter}
                 onChange={(event) => setCompanyFilter(event.target.value)}
-                className={`h-10 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
+                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
               >
                 <option value="all">Todas</option>
                 {availableCompanies.map((company) => (
@@ -1519,7 +1519,7 @@ function DeliveryMonitoring() {
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className={`h-10 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
+                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
               >
                 <option value="all">Todos</option>
                 {STAGE_ORDER.map((stage) => (
@@ -1531,7 +1531,7 @@ function DeliveryMonitoring() {
               <button
                 type="button"
                 onClick={fetchOverview}
-                className={`h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text ${isMobileView ? 'flex-1' : ''}`}
+                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text ${isMobileView ? 'flex-1' : ''}`}
               >
                 Atualizar
               </button>
@@ -1540,21 +1540,21 @@ function DeliveryMonitoring() {
                   <button
                     type="button"
                     onClick={() => setShowRoutes((current) => !current)}
-                    className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+                    className="h-9 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
                   >
                     {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatusFilter('assigned')}
-                    className="h-10 rounded-md border semantic-solid-info px-4 text-sm font-semibold transition hover:brightness-95"
+                    className="h-9 rounded-md border border-accent/50 bg-accent/15 px-3 text-sm font-semibold text-accent-text transition hover:bg-accent/25"
                   >
                     Ver atribuídas
                   </button>
                   <button
                     type="button"
                     onClick={() => setStatusFilter('all')}
-                    className="h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-text"
+                    className="h-9 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
                   >
                     Ver todas
                   </button>

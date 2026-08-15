@@ -614,20 +614,20 @@
 }
 
 :root {
-  --color-bg: #0b1120;
-  --color-surface: #111827;
-  --color-surface-2: #182235;
-  --color-card: #151f30;
-  --color-text: #f1f5f9;
-  --color-muted: #9aa7b8;
-  --color-accent: #2563eb;
-  --color-accent-strong: #1d4ed8;
-  --color-border: #2b374a;
-  --color-text-accent: #7fb0ff;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
-  --color-info: #0284c7;
+  --color-bg: #09111f;
+  --color-surface: #111b2b;
+  --color-surface-2: #182438;
+  --color-card: #142033;
+  --color-text: #eef3f9;
+  --color-muted: #9eacbf;
+  --color-accent: #3b82f6;
+  --color-accent-strong: #2563eb;
+  --color-border: #2c3b50;
+  --color-text-accent: #93c5fd;
+  --color-success: #169b62;
+  --color-warning: #c47a16;
+  --color-danger: #c94a5a;
+  --color-info: #2587b8;
 
   --login-background: #07111f;
   --login-surface: #101b2b;
@@ -652,12 +652,12 @@
   --semantic-success-bg: #102c20;
   --semantic-success-border: #2f7d53;
   --semantic-success-text: #d9f8e4;
-  --semantic-warning-bg: #30240e;
-  --semantic-warning-border: #a06c16;
-  --semantic-warning-text: #ffebae;
-  --semantic-danger-bg: #32181d;
-  --semantic-danger-border: #a33b48;
-  --semantic-danger-text: #ffdce0;
+  --semantic-warning-bg: #282318;
+  --semantic-warning-border: #8f6728;
+  --semantic-warning-text: #f5ddb0;
+  --semantic-danger-bg: #2b1c24;
+  --semantic-danger-border: #914655;
+  --semantic-danger-text: #f5d5dc;
   --semantic-redelivery-bg: #17284a;
   --semantic-redelivery-border: #3b6dc4;
   --semantic-redelivery-text: #dce9ff;
@@ -708,8 +708,8 @@
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
   --space-7: 2.5rem;
   --space-8: 3rem;
 
@@ -722,7 +722,9 @@
   --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 24px rgba(0, 0, 0, 0.16);
   --shadow-3: 0 4px 8px rgba(0, 0, 0, 0.32), 0 18px 40px rgba(0, 0, 0, 0.2);
 
-  --header-height: 68px;
+  --header-height: 64px;
+  --control-height: 2.25rem;
+  --content-max-width: 1440px;
   --mobile-bottom-nav-height: 72px;
   --app-sidebar-width: 280px;
   --app-sidebar-width-collapsed: 96px;
@@ -1073,6 +1075,23 @@ input,
 select,
 textarea {
   font-family: "Inter", sans-serif;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-text-accent);
+  outline-offset: 2px;
+}
+
+button,
+input,
+select,
+textarea {
+  accent-color: var(--color-accent);
 }
 
 input,

@@ -398,8 +398,7 @@ function TodayInvoices() {
             ))}
           </select>
           <div className="route-filter">
-            Rotas:
-            <select value={filters.route} onChange={(event) => updateFilter('route', event.target.value)}>
+            <select aria-label="Filtrar por rota" value={filters.route} onChange={(event) => updateFilter('route', event.target.value)}>
               {routes.map((route, index) => (
                 <option value={route} key={`rota-${index}`}>
                   {route}
@@ -407,7 +406,7 @@ function TodayInvoices() {
               ))}
             </select>
           </div>
-          <button onClick={resetFilters}>Limpar filtros</button>
+          <button className="!border-border !bg-surface-2 !text-text hover:!bg-card" onClick={resetFilters}>Limpar filtros</button>
           { filteredDanfes.length > 0 && <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button>}
           {loadOptions.length > 0 ? (
             <select

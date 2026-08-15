@@ -5,11 +5,11 @@ type DivProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement
 type UlProps = DetailedHTMLProps<HTMLAttributes<HTMLUListElement>, HTMLUListElement>;
 
 export function ContainerCards({ className, ...props }: DivProps) {
-  return <div className={cn('mx-auto flex w-full max-w-[1200px] flex-wrap justify-center gap-s5', className)} {...props} />;
+  return <div className={cn('mx-auto grid w-full max-w-[var(--content-max-width)] grid-cols-1 gap-s4 min-[720px]:grid-cols-2 min-[1050px]:grid-cols-3', className)} {...props} />;
 }
 
 export function CardsDanfe({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card px-s3 py-s3 text-text shadow-elevated', className)} {...props} />;
+  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card px-s3 py-s3 text-text shadow-soft', className)} {...props} />;
 }
 
 export function DescriptionColumns({ className, ...props }: DivProps) {

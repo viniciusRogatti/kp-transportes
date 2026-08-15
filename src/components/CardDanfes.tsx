@@ -457,7 +457,7 @@ function CardDanfes({
               window.location.hash = `#/invoices/${encodeURIComponent(invoiceNumber)}/journey${query ? `?${query}` : ''}`;
             };
             return (
-              <div key={key} className="h-[350px] w-full max-w-[360px] [perspective:1200px]">
+              <div key={key} className="h-[338px] min-w-0 w-full [perspective:1200px]">
                 <div
                   className="relative h-full w-full transition-transform duration-500"
                   style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none' }}

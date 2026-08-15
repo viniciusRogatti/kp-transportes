@@ -360,7 +360,7 @@ function Invoices() {
         <section
           data-tutorial="page-filters"
           aria-labelledby="invoice-search-title"
-          className="mb-4 w-full max-w-[1100px] rounded-xl border border-border bg-card p-4 shadow-soft"
+          className="mb-3 w-full max-w-[var(--content-max-width)] rounded-lg border border-border bg-card p-3 shadow-soft [&_input]:h-9 [&_button]:h-9"
         >
           <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <h1 id="invoice-search-title" className="text-lg font-semibold text-text">Buscar notas</h1>
@@ -469,7 +469,7 @@ function Invoices() {
 
         <section
           aria-labelledby="invoice-filter-title"
-          className="mb-4 w-full max-w-[1100px] rounded-xl border border-border bg-surface p-4"
+          className="mb-3 w-full max-w-[var(--content-max-width)] rounded-lg border border-border bg-surface p-3 [&_input]:h-9 [&_select]:h-9"
         >
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">

@@ -10,7 +10,7 @@ export function HomeStyle({ className, ...props }: DivProps) {
 }
 
 export function HomeContent({ className, ...props }: DivProps) {
-  return <div className={cn('w-full max-w-[1100px] px-s5 pb-s7 pt-[calc(var(--header-height)+var(--space-5))]', className)} {...props} />;
+  return <div className={cn('w-full max-w-[var(--content-max-width)] px-s4 pb-s7 pt-[calc(var(--header-height)+var(--space-4))] max-[768px]:px-s3', className)} {...props} />;
 }
 
 export function OccurrenceCard({ className, ...props }: SectionProps) {

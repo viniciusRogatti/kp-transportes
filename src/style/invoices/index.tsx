@@ -16,7 +16,7 @@ export function Container({ className, ...props }: DivProps) {
     <div
       data-tutorial="page-content"
       className={cn(
-        'relative flex min-h-screen w-full flex-col items-center bg-transparent px-s5 pb-s8 pt-[calc(var(--header-height)+var(--space-5))] text-text max-[768px]:px-s4 max-[768px]:pb-s6 max-[768px]:pt-[calc(var(--header-height)+var(--space-4))]',
+        'relative flex min-h-screen w-full flex-col items-center bg-transparent px-s4 pb-s7 pt-[calc(var(--header-height)+var(--space-4))] text-text max-[768px]:px-s3 max-[768px]:pb-s6 max-[768px]:pt-[calc(var(--header-height)+var(--space-3))]',
         '[&_table]:w-full [&_table]:max-w-[1200px] [&_table]:border-collapse [&_table]:text-[clamp(0.78rem,1.2vw,0.95rem)]',
         '[&_th]:border-b [&_th]:border-border [&_th]:bg-surface-2 [&_th]:px-s3 [&_th]:py-s3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted',
         '[&_td]:border-b [&_td]:border-border [&_td]:px-s3 [&_td]:py-s3',
@@ -28,11 +28,11 @@ export function Container({ className, ...props }: DivProps) {
 }
 
 export function FilterBar({ className, ...props }: DivProps) {
-  return <div data-tutorial="page-filters" className={cn('mb-s5 grid w-full max-w-[900px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-s3 max-[768px]:gap-s2', className)} {...props} />;
+  return <div data-tutorial="page-filters" className={cn('mb-s4 grid w-full max-w-[var(--content-max-width)] grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5 max-[768px]:gap-s2', className)} {...props} />;
 }
 
 export function FilterInput({ className, ...props }: InputProps) {
-  return <input className={cn('h-10 w-full rounded-sm border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20', className)} {...props} />;
+  return <input className={cn('h-9 w-full rounded-sm border border-border bg-card px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20', className)} {...props} />;
 }
 
 export function SearchBar({ className, ...props }: DivProps) {

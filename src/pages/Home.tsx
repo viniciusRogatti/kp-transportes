@@ -1593,7 +1593,7 @@ function Home() {
             <button className="secondary" onClick={refreshHomePanel} type="button">Atualizar radar</button>
           </CardHeaderRow>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {treatmentReminderCards.map((reminder) => {
               const ReminderIcon = reminder.icon;
               return (

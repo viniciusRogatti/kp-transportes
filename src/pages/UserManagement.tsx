@@ -290,10 +290,10 @@ function UserManagement() {
     <div>
       <Header />
       <Container>
-        <div className="w-full max-w-[1200px] space-y-4">
-          <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface p-2 shadow-soft">
+        <div className="w-full max-w-[var(--content-max-width)] space-y-3">
+          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1.5 shadow-soft">
             {([['users', 'Usuários'], ['drivers', 'Motoristas'], ['cars', 'Veículos']] as const).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setActiveTab(value)} className={`rounded-md px-4 py-2 text-sm font-semibold ${activeTab === value ? 'bg-accent text-white' : 'text-muted hover:bg-surface-2'}`}>{label}</button>
+              <button key={value} type="button" onClick={() => setActiveTab(value)} className={`rounded-md px-4 py-1.5 text-sm font-semibold ${activeTab === value ? 'bg-accent text-white' : 'text-muted hover:bg-surface-2'}`}>{label}</button>
             ))}
           </div>
 
@@ -302,29 +302,29 @@ function UserManagement() {
 
           {activeTab === 'users' ? (
             <>
-              <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
+              <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
                 <h2 className="text-[1.05rem] font-semibold text-text">{editingUserId ? 'Editar usuário' : 'Cadastrar usuário'}</h2>
                 <p className="mt-1 text-sm text-muted">Ao criar um perfil Motorista, selecione um cadastro antigo ou deixe sem seleção para criar o motorista operacional junto com a conta.</p>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
-                  <input type="text" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} placeholder="Usuário de acesso" autoComplete="new-username" className="h-10 rounded-sm border border-border bg-card px-3 text-text" />
-                  <input type="text" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nome" autoComplete="off" className="h-10 rounded-sm border border-border bg-card px-3 text-text" />
-                  <select value={form.permission} onChange={(event) => setForm((current) => ({ ...current, permission: event.target.value, driverId: event.target.value === 'driver' ? current.driverId : '' }))} className="h-10 rounded-sm border border-border bg-card px-3 text-text">
+                  <input type="text" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} placeholder="Usuário de acesso" autoComplete="new-username" className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" />
+                  <input type="text" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nome" autoComplete="off" className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" />
+                  <select value={form.permission} onChange={(event) => setForm((current) => ({ ...current, permission: event.target.value, driverId: event.target.value === 'driver' ? current.driverId : '' }))} className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text">
                     {form.permission === 'master' ? <option value="master">Administrador geral</option> : null}
                     {PERMISSION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                   {form.permission === 'driver' ? (
-                    <select value={form.driverId} onChange={(event) => setForm((current) => ({ ...current, driverId: event.target.value }))} className="h-10 rounded-sm border border-border bg-card px-3 text-text">
+                    <select value={form.driverId} onChange={(event) => setForm((current) => ({ ...current, driverId: event.target.value }))} className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text">
                       <option value="">Criar novo motorista com este nome</option>
                       {availableDrivers.map((driver) => <option key={driver.id} value={driver.id}>Vincular: {driver.name}</option>)}
                     </select>
                   ) : null}
-                  <input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId ? 'Nova senha (opcional)' : 'Senha do novo usuário'} autoComplete="new-password" className="h-10 rounded-sm border border-border bg-card px-3 text-text" />
-                  <input type="password" value={form.passwordConfirmation} onChange={(event) => setForm((current) => ({ ...current, passwordConfirmation: event.target.value }))} placeholder="Confirme a senha" autoComplete="new-password" className="h-10 rounded-sm border border-border bg-card px-3 text-text" />
-                  {!editingUserId ? <input type="password" value={form.actorPassword} onChange={(event) => setForm((current) => ({ ...current, actorPassword: event.target.value }))} placeholder="Sua senha para confirmar" autoComplete="off" className="h-10 rounded-sm border border-border bg-card px-3 text-text" /> : null}
+                  <input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} placeholder={editingUserId ? 'Nova senha (opcional)' : 'Senha do novo usuário'} autoComplete="new-password" className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" />
+                  <input type="password" value={form.passwordConfirmation} onChange={(event) => setForm((current) => ({ ...current, passwordConfirmation: event.target.value }))} placeholder="Confirme a senha" autoComplete="new-password" className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" />
+                  {!editingUserId ? <input type="password" value={form.actorPassword} onChange={(event) => setForm((current) => ({ ...current, actorPassword: event.target.value }))} placeholder="Sua senha para confirmar" autoComplete="off" className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" /> : null}
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={() => void saveUser()} disabled={saving} className="h-10 rounded-md bg-accent px-4 font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : editingUserId ? 'Salvar alterações' : 'Criar usuário'}</button>
-                  {editingUserId ? <button type="button" onClick={resetForm} className="h-10 rounded-md border border-border px-4 font-semibold">Cancelar</button> : null}
+                  <button type="button" onClick={() => void saveUser()} disabled={saving} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">{saving ? 'Salvando...' : editingUserId ? 'Salvar alterações' : 'Criar usuário'}</button>
+                  {editingUserId ? <button type="button" onClick={resetForm} className="h-9 rounded-md border border-border px-4 text-sm font-semibold">Cancelar</button> : null}
                 </div>
               </div>
 
@@ -345,11 +345,11 @@ function UserManagement() {
                           <td><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.is_active ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>{user.is_active ? 'Ativo' : 'Inativo'}</span></td>
                           <td><span className="font-semibold">{TUTORIAL_STATUS_LABELS[status] || status}</span><span className="block text-xs text-muted">{completedCount}/{totalModules} módulos</span></td>
                           <td>{formatDateTimeBR(user.created_at)}</td>
-                          <td><div className="flex flex-wrap gap-2">
-                            <button type="button" disabled={user.permission === 'master' && actorPermission !== 'master'} onClick={() => startEditingUser(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold disabled:opacity-40">Editar</button>
-                            <button type="button" disabled={saving || (user.permission === 'master' && actorPermission !== 'master')} onClick={() => void toggleUser(user)} className="rounded-md border border-rose-400 px-2 py-1 text-xs font-semibold text-rose-500 disabled:opacity-40">{user.is_active ? 'Desativar' : 'Reativar'}</button>
-                            <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold disabled:opacity-50">Reiniciar tutorial</button>
-                            <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="rounded-md border border-amber-400 px-2 py-1 text-xs font-semibold text-amber-600 disabled:opacity-50">Dispensar</button>
+                          <td><div className="grid min-w-[190px] grid-cols-2 gap-1.5">
+                            <button type="button" disabled={user.permission === 'master' && actorPermission !== 'master'} onClick={() => startEditingUser(user)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold disabled:opacity-40">Editar</button>
+                            <button type="button" disabled={saving || (user.permission === 'master' && actorPermission !== 'master')} onClick={() => void toggleUser(user)} className="h-8 rounded-md border border-danger/70 px-2 text-xs font-semibold text-rose-400 disabled:opacity-40">{user.is_active ? 'Desativar' : 'Reativar'}</button>
+                            <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold disabled:opacity-50">Reiniciar</button>
+                            <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="h-8 rounded-md border border-warning/70 px-2 text-xs font-semibold text-amber-400 disabled:opacity-50">Dispensar</button>
                           </div></td>
                         </tr>
                       );

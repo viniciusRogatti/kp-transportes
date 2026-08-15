@@ -155,25 +155,25 @@ export default function FleetManagement({ tab, drivers, cars, reload, setError, 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {tab === 'cars' ? (
-        <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
+        <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
           <h2 className="text-[1.05rem] font-semibold text-text">Cadastrar veículo</h2>
           <p className="mt-1 text-sm text-muted">Veículos ativos aparecem para seleção na roteirização.</p>
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_220px_auto]">
-            <input className="h-10 rounded-sm border border-border bg-card px-3 text-text" placeholder="Modelo do veículo" value={carForm.model} onChange={(event) => setCarForm((current) => ({ ...current, model: event.target.value }))} />
-            <input className="h-10 rounded-sm border border-border bg-card px-3 text-text uppercase" placeholder="Placa" value={carForm.licensePlate} onChange={(event) => setCarForm((current) => ({ ...current, licensePlate: event.target.value.toUpperCase() }))} />
-            <button type="button" disabled={saving} onClick={() => void createCar()} className="h-10 rounded-md bg-accent px-4 font-semibold text-white disabled:opacity-60">Cadastrar veículo</button>
+            <input className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text" placeholder="Modelo do veículo" value={carForm.model} onChange={(event) => setCarForm((current) => ({ ...current, model: event.target.value }))} />
+            <input className="h-9 rounded-sm border border-border bg-card px-3 text-sm text-text uppercase" placeholder="Placa" value={carForm.licensePlate} onChange={(event) => setCarForm((current) => ({ ...current, licensePlate: event.target.value.toUpperCase() }))} />
+            <button type="button" disabled={saving} onClick={() => void createCar()} className="h-9 rounded-md bg-accent px-4 text-sm font-semibold text-white disabled:opacity-60">Cadastrar veículo</button>
           </div>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
+        <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
           <h2 className="text-[1.05rem] font-semibold text-text">Motoristas operacionais</h2>
           <p className="mt-1 text-sm text-muted">Novos motoristas são criados junto com um usuário de perfil Motorista. Cadastros antigos podem ser ligados ao editar ou criar um usuário.</p>
         </div>
       )}
 
-      <input className="h-10 w-full rounded-sm border border-border bg-card px-3 text-text" placeholder={tab === 'drivers' ? 'Filtrar motorista ou usuário vinculado' : 'Filtrar modelo ou placa'} value={filter} onChange={(event) => setFilter(event.target.value)} />
+      <input className="h-9 w-full rounded-sm border border-border bg-card px-3 text-sm text-text" placeholder={tab === 'drivers' ? 'Filtrar motorista ou usuário vinculado' : 'Filtrar modelo ou placa'} value={filter} onChange={(event) => setFilter(event.target.value)} />
 
       <div className="w-full overflow-x-auto rounded-md border border-border shadow-soft">
         <table className="min-w-[760px]">
@@ -184,12 +184,12 @@ export default function FleetManagement({ tab, drivers, cars, reload, setError, 
                 <td>{driver.name}</td>
                 <td>{driver.user ? <><span className="font-semibold">{driver.user.name}</span><span className="block text-xs text-muted">{driver.user.username}</span></> : <span className="text-amber-500">Sem usuário — disponível para vínculo</span>}</td>
                 <td>{statusBadge(driver.is_active)}</td>
-                <td><div className="flex gap-2"><button disabled={saving} onClick={() => void editDriver(driver)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold">Editar</button><button disabled={saving} onClick={() => void toggleDriver(driver)} className="rounded-md border border-rose-400 px-2 py-1 text-xs font-semibold text-rose-500">{driver.is_active ? 'Desativar' : 'Reativar'}</button></div></td>
+                <td><div className="flex gap-2"><button disabled={saving} onClick={() => void editDriver(driver)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold">Editar</button><button disabled={saving} onClick={() => void toggleDriver(driver)} className="h-8 rounded-md border border-danger/70 px-2 text-xs font-semibold text-danger">{driver.is_active ? 'Desativar' : 'Reativar'}</button></div></td>
               </tr>
             )) : filteredCars.map((car) => (
               <tr key={car.id}>
                 <td>{car.model}</td><td className="font-semibold">{car.license_plate}</td><td>{statusBadge(car.is_active)}</td>
-                <td><div className="flex gap-2"><button disabled={saving} onClick={() => void editCar(car)} className="rounded-md border border-border px-2 py-1 text-xs font-semibold">Editar</button><button disabled={saving} onClick={() => void toggleCar(car)} className="rounded-md border border-rose-400 px-2 py-1 text-xs font-semibold text-rose-500">{car.is_active ? 'Desativar' : 'Reativar'}</button></div></td>
+                <td><div className="flex gap-2"><button disabled={saving} onClick={() => void editCar(car)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold">Editar</button><button disabled={saving} onClick={() => void toggleCar(car)} className="h-8 rounded-md border border-danger/70 px-2 text-xs font-semibold text-danger">{car.is_active ? 'Desativar' : 'Reativar'}</button></div></td>
               </tr>
             ))}
             {(tab === 'drivers' ? !filteredDrivers.length : !filteredCars.length) ? <tr><td colSpan={4}>Nenhum registro encontrado.</td></tr> : null}

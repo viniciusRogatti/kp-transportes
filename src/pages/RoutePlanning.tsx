@@ -5,7 +5,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { format, subDays } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
-import { ArrowDown, ArrowUp, CarFront, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck, UserPlus } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useSearchParams } from 'react-router-dom';
 
@@ -22,7 +22,6 @@ import {
 import { Container } from '../style/invoices';
 import { TruckLoader } from '../style/Loaders';
 import Header from '../components/Header';
-import Popup from '../components/Popup';
 import ProductListPDF from '../components/ProductListPDF';
 import SalmonLoadListPDF from '../components/SalmonLoadListPDF';
 import IconButton from '../components/ui/IconButton';
@@ -339,8 +338,6 @@ function RoutePlanning() {
   const [tripIdSearch, setTripIdSearch] = useState<string>('');
   const [tripDriverSearch, setTripDriverSearch] = useState<string>('');
   const [tripPlateSearch, setTripPlateSearch] = useState<string>('');
-  const [showPopup, setShowPopup] = useState<boolean>(false);
-  const [titlePopup, setTitlePopup] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isTripsLoading, setIsTripsLoading] = useState<boolean>(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
@@ -2078,16 +2075,6 @@ function RoutePlanning() {
     }
   };
 
-  const addDriverOrCar = (type: 'driver' | 'car') => {
-    setShowPopup(true);
-    setTitlePopup(type === 'driver' ? 'Adicionar Motorista' : 'Adicionar Veículo');
-  };
-
-  const handleAddNewDriverOrCar = (data: any) => {
-    if (titlePopup === 'Adicionar Motorista') setDrivers((prev) => [...prev, data]);
-    else setCars((prev) => [...prev, data]);
-  };
-
   const fetchAvailableForTrip = async (tripDate: string, ignoreTripId?: number | null) => {
     try {
       const [danfes, trips] = await Promise.all([
@@ -2545,8 +2532,6 @@ function RoutePlanning() {
             {activeTab === 'routing' ? (
               <>
                 <div className="hidden items-center gap-1 md:flex">
-                  <button type="button" onClick={() => addDriverOrCar('driver')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><UserPlus className="h-4 w-4" />Motorista</button>
-                  <button type="button" onClick={() => addDriverOrCar('car')} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs text-text"><CarFront className="h-4 w-4" />Veículo</button>
                   <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-warning px-2.5 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
                   <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
@@ -2557,8 +2542,6 @@ function RoutePlanning() {
                   </button>
                   {isMobileToolbarOpen ? (
                     <div className="absolute right-0 top-10 z-20 w-52 rounded-md border border-border bg-surface p-2 shadow-[var(--shadow-3)]">
-                      <button type="button" onClick={() => { addDriverOrCar('driver'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><UserPlus className="h-4 w-4" />Adicionar motorista</button>
-                      <button type="button" onClick={() => { addDriverOrCar('car'); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-border bg-card px-2 text-xs text-text"><CarFront className="h-4 w-4" />Adicionar veículo</button>
                       <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-warning px-2 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
                       <button type="button" onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-accent-strong bg-accent px-2 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
                     </div>
@@ -3273,16 +3256,6 @@ function RoutePlanning() {
             </div>
           </div>
         ) : null}
-
-        {showPopup && (
-          <Popup
-            title={titlePopup}
-            closePopup={() => setShowPopup(false)}
-            onAdd={handleAddNewDriverOrCar}
-            existingDrivers={drivers}
-            existingCars={cars}
-          />
-        )}
 
         {routeSubmissionPrompt ? (
           <>

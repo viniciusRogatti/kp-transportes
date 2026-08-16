@@ -38,6 +38,7 @@ export const DELIVERY_STAGE_ICONS: Record<DeliveryStage, LucideIcon> = {
   assigned: Package,
   on_the_way: Navigation,
   on_site: MapPin,
+  pending_receipt: Check,
   completed: Check,
 };
 
@@ -122,6 +123,13 @@ export const getDeliveryMarkerStyleByStatus = (
     };
   }
 
+  if (delivery.status === 'pending_receipt') {
+    return {
+      backgroundColor: '#bbf7d0', borderColor: '#16a34a', iconColor: '#166534', iconFill: 'transparent',
+      opacity: 0.62, shadowColor: 'rgba(34, 197, 94, 0.18)',
+    };
+  }
+
   if (delivery.status === 'assigned' && delivery.driverId) {
     return {
       backgroundColor: delivery.driverColor || MARKER_COLOR.gray,
@@ -180,7 +188,7 @@ export const getLegendMarkerVisual = (stage: DeliveryStage): MapMarkerPinTone =>
     status: stage,
     driverId: stage === 'assigned' || stage === 'on_the_way' ? 1 : null,
     driverColor: stage === 'assigned' ? '#0f766e' : '#0f766e',
-    stopStatus: stage === 'completed' ? 'delivered' : null,
+    stopStatus: stage === 'completed' ? 'delivered' : stage === 'pending_receipt' ? 'delivered_pending_receipt' : null,
     danfeStatus: stage === 'completed' ? 'delivered' : null,
   });
 };

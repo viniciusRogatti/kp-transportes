@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import axios from 'axios';
 import { format, parseISO } from 'date-fns';
 import {
   AlertTriangle,
   Check,
+  MessageCircle,
+  Send,
+  X,
 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import ptBR from 'date-fns/locale/pt-BR';
@@ -29,6 +32,8 @@ import {
 } from './deliveryMonitoring/googleMapAdapter';
 import {
   DELIVERY_STAGE_ICONS,
+  DRIVER_MARKER_ICON,
+  getDriverMarkerStyle,
   getLegendMarkerVisual,
 } from './deliveryMonitoring/googleMarkerVisuals';
 import {
@@ -142,6 +147,7 @@ type MonitoringSummary = {
   assigned: number;
   on_the_way: number;
   on_site: number;
+  pending_receipt: number;
   completed: number;
   geolocated: number;
   missing_geolocation: number;
@@ -194,7 +200,7 @@ type AddressDiagnosticsResponse = {
   };
 };
 
-type DriverStopVisual = 'pending' | 'assigned' | 'on_the_way' | 'on_site' | 'completed' | 'retained' | 'returned' | 'redelivery';
+type DriverStopVisual = 'pending' | 'assigned' | 'on_the_way' | 'on_site' | 'pending_receipt' | 'completed' | 'retained' | 'returned' | 'redelivery';
 type SelectedDriverStop = {
   companyScopeKey: string;
   tripId: number;
@@ -307,6 +313,10 @@ const resolveDriverStopVisual = (row: DeliveryRow): DriverStopVisual => {
     return 'completed';
   }
 
+  if (stopStatus === 'delivered_pending_receipt' || row.stage === 'pending_receipt') {
+    return 'pending_receipt';
+  }
+
   if (stopStatus === 'arrived' || row.stage === 'on_site') {
     return 'on_site';
   }
@@ -341,6 +351,8 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
     return 'completed';
   }
 
+  if (normalized === 'delivered_pending_receipt') return 'pending_receipt';
+
   if (normalized === 'arrived') {
     return 'on_site';
   }
@@ -358,6 +370,7 @@ const resolveDriverStopVisualFromStatus = (status?: string | null): DriverStopVi
 
 const getDriverStopLabel = (visual: DriverStopVisual) => {
   if (visual === 'completed') return 'entrega concluida';
+  if (visual === 'pending_receipt') return 'entregue, foto pendente';
   if (visual === 'assigned') return 'entrega atribuida';
   if (visual === 'retained') return 'canhoto retido';
   if (visual === 'on_the_way') return 'motorista a caminho';
@@ -369,6 +382,7 @@ const getDriverStopLabel = (visual: DriverStopVisual) => {
 
 const getDriverStopTone = (visual: DriverStopVisual): SemanticTone => {
   if (visual === 'completed') return 'success';
+  if (visual === 'pending_receipt') return 'success';
   if (visual === 'retained') return 'warning';
   if (visual === 'redelivery') return 'info';
   if (visual === 'on_the_way' || visual === 'on_site') return 'info';
@@ -389,6 +403,7 @@ const getDriverStopSegmentClassName = (visual: DriverStopVisual, isSelected = fa
     on_the_way: 'border-sky-700 bg-sky-600 text-white',
     on_site: 'border-cyan-700 bg-cyan-600 text-white',
     completed: 'border-emerald-700 bg-emerald-600 text-white',
+    pending_receipt: 'border-emerald-500 bg-emerald-100 text-emerald-800 opacity-70',
     retained: 'border-amber-700 bg-amber-500 text-white',
     returned: 'border-red-700 bg-red-600 text-white',
     redelivery: 'border-blue-700 bg-blue-600 text-white',
@@ -626,6 +641,11 @@ function DeliveryMonitoring() {
     if (typeof window === 'undefined') return false;
     return window.innerWidth < MOBILE_MONITORING_BREAKPOINT;
   });
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [alertWidgetPosition, setAlertWidgetPosition] = useState({ x: 20, y: 90 });
+  const [pushSending, setPushSending] = useState<string | null>(null);
+  const previousAlertIdsRef = useRef<Set<number>>(new Set());
+  const alertWidgetDraggedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const overviewRequestIdRef = useRef(0);
@@ -841,6 +861,52 @@ function DeliveryMonitoring() {
     [alerts, readAlertIds],
   );
   const totalOpenAlerts = alertSummary?.total ?? alerts.length;
+  useEffect(() => {
+    const previous = previousAlertIdsRef.current;
+    const hasNewAlert = alerts.some((alert) => alert.status === 'OPEN' && !previous.has(alert.id));
+    if (hasNewAlert && previous.size > 0) setAlertsOpen(true);
+    previousAlertIdsRef.current = new Set(alerts.map((alert) => alert.id));
+  }, [alerts]);
+
+  const sendDriverPreset = useCallback(async (driver: DriverSummary, preset: 'pending_receipts' | 'start_next_delivery') => {
+    if (!driver.driver_id) return;
+    const requestKey = `${driver.trip_id}:${preset}`;
+    setPushSending(requestKey);
+    try {
+      await axios.post(`${API_URL}/api/delivery-monitoring/drivers/${driver.driver_id}/notifications`, {
+        tripId: driver.trip_id,
+        preset,
+      });
+    } catch (error) {
+      window.alert(axios.isAxiosError(error)
+        ? String(error.response?.data?.message || error.message)
+        : 'Nao foi possivel enviar a notificacao.');
+    } finally {
+      setPushSending(null);
+    }
+  }, []);
+
+  const beginAlertWidgetDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const initial = alertWidgetPosition;
+    alertWidgetDraggedRef.current = false;
+    const move = (moveEvent: PointerEvent) => {
+      if (Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY) > 5) {
+        alertWidgetDraggedRef.current = true;
+      }
+      setAlertWidgetPosition({
+        x: Math.max(8, Math.min(window.innerWidth - 64, initial.x - (moveEvent.clientX - startX))),
+        y: Math.max(8, Math.min(window.innerHeight - 64, initial.y - (moveEvent.clientY - startY))),
+      });
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+  }, [alertWidgetPosition]);
   const availableCompanies = useMemo(() => {
     const companyMap = new Map<string, string>();
 
@@ -890,6 +956,7 @@ function DeliveryMonitoring() {
       assigned: 0,
       on_the_way: 0,
       on_site: 0,
+      pending_receipt: 0,
       completed: 0,
       geolocated: 0,
       missing_geolocation: 0,
@@ -1404,7 +1471,7 @@ function DeliveryMonitoring() {
     <div className="min-h-screen">
       <Header />
       <Container>
-        <section className="w-full rounded-lg border border-border bg-card p-3 shadow-soft sm:p-4">
+        <section className="order-1 w-full rounded-lg border border-border bg-card p-3 shadow-soft sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -1583,6 +1650,7 @@ function DeliveryMonitoring() {
                 <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {filteredSummary.assigned || 0}</span>
                 <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {filteredSummary.on_the_way || 0}</span>
                 <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {filteredSummary.on_site || 0}</span>
+                <span className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-emerald-800">Foto pendente: {filteredSummary.pending_receipt || 0}</span>
                 <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {filteredSummary.completed || 0}</span>
                 <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {filteredSummary.geolocated || 0}</span>
               </div>
@@ -1602,7 +1670,7 @@ function DeliveryMonitoring() {
             <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
         </section>
-        <section className="mt-3 w-full rounded-lg border border-border bg-card p-3">
+        <section className="order-3 mt-3 w-full rounded-lg border border-border bg-card p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
             <button
@@ -1622,7 +1690,7 @@ function DeliveryMonitoring() {
               ? 'Toque nas paradas para ver NF e cliente da rota selecionada.'
               : 'Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.'}
           </p>
-          <div className="space-y-1">
+          <div className="max-h-[460px] space-y-1 overflow-y-auto pr-1">
             {groupedDrivers.map((group) => (
               <div key={group.code} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface-2 px-3 py-2">
@@ -1763,6 +1831,8 @@ function DeliveryMonitoring() {
                           >
                             {stop.visual === 'completed' ? (
                               <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                            ) : stop.visual === 'pending_receipt' ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-700 opacity-60" strokeWidth={2.5} />
                             ) : stop.visual === 'retained' ? (
                               <AlertTriangle className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
                             ) : (
@@ -1772,6 +1842,30 @@ function DeliveryMonitoring() {
                           );
                         })}
                       </div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-1 px-2 lg:px-0">
+                      {visualStops.some((stop) => stop.visual === 'pending_receipt') ? (
+                        <button
+                          type="button"
+                          disabled={pushSending === `${driver.trip_id}:pending_receipts`}
+                          onClick={() => void sendDriverPreset(driver, 'pending_receipts')}
+                          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-800 disabled:opacity-60"
+                        >
+                          <Send className="h-3 w-3" />
+                          {pushSending === `${driver.trip_id}:pending_receipts` ? 'Enviando...' : 'Lembrar fotos'}
+                        </button>
+                      ) : null}
+                      {driver.next_stop_required_by ? (
+                        <button
+                          type="button"
+                          disabled={pushSending === `${driver.trip_id}:start_next_delivery`}
+                          onClick={() => void sendDriverPreset(driver, 'start_next_delivery')}
+                          className="inline-flex items-center gap-1 rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-800 disabled:opacity-60"
+                        >
+                          <Send className="h-3 w-3" />
+                          {pushSending === `${driver.trip_id}:start_next_delivery` ? 'Enviando...' : 'Lembrar proxima parada'}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1856,13 +1950,19 @@ function DeliveryMonitoring() {
           </div>
         </section>
 
-        <section className="mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
-          <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted">
-            <span>Visualizacao operacional no Google Maps (POIs e nomes de lugares).</span>
-            <span>{`Pontos no mapa: ${mapDeliveries.length} entregas • ${mapDriverLocations.length} motoristas • ${companyFilter === 'all' ? availableCompanies.length : 1} empresa${companyFilter === 'all' ? 's' : ''}`}</span>
+        <section className="order-2 mt-3 w-full rounded-lg border border-border bg-card p-2.5 sm:p-3">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
+              <p className="text-xs text-muted">Notas, motoristas em tempo real e rotas do dia.</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-xs">
+              <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDeliveries.length} notas`}</span>
+              <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDriverLocations.length} motoristas localizados`}</span>
+            </div>
           </div>
 
-          <div className="relative h-[calc(100vh-360px)] min-h-[380px] overflow-hidden rounded-md border border-border">
+          <div className="relative h-[62vh] min-h-[390px] overflow-hidden rounded-lg border border-border md:h-[calc(100vh-280px)] md:min-h-[520px]">
             <GoogleDeliveriesMap
               apiKey={googleMapsApiKey}
               center={mapInitialCenter}
@@ -1880,6 +1980,11 @@ function DeliveryMonitoring() {
                 if (delivery?.driver_id) {
                   setSelectedDriverId(Number(delivery.driver_id));
                 }
+              }}
+              onDriverMarkerClick={(driverId) => {
+                if (!driverId) return;
+                setSelectedDriverId(Number(driverId));
+                setSelectedDeliveryInvoice(null);
               }}
               onMapBoundsChange={setMapViewport}
             />
@@ -1966,10 +2071,20 @@ function DeliveryMonitoring() {
                 </span>
               );
             })}
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
+              <MapMarkerPin
+                icon={DRIVER_MARKER_ICON}
+                tone={getDriverMarkerStyle({ color: '#2563eb', attentionLevel: null })}
+                size={20}
+                iconSize={11}
+                iconStrokeWidth={1.5}
+              />
+              Motorista ao vivo
+            </span>
           </div>
 
           <p className="mt-1 text-xs text-muted">
-            O pin recebe a cor do status. Em entregas atribuídas e em rota, a borda ou o fundo usam a cor do motorista quando isso ajuda a leitura operacional.
+            Clique em uma nota para ver o endereço. Clique em um motorista para ver quando a posição foi recebida e focar sua rota.
           </p>
 
           <div className="mt-2 text-xs text-muted">
@@ -1981,7 +2096,7 @@ function DeliveryMonitoring() {
           ) : null}
         </section>
 
-        <section className="mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
+        <section className="order-4 mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Lista de entregas</h3>
             <span className="text-xs text-muted">
@@ -2030,6 +2145,56 @@ function DeliveryMonitoring() {
             </table>
           </div>
         </section>
+
+        <div
+          className="fixed z-[1100]"
+          style={{ right: alertWidgetPosition.x, bottom: alertWidgetPosition.y }}
+        >
+          {alertsOpen ? (
+            <div className="mb-2 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+              <div
+                className="flex cursor-move touch-none items-center justify-between gap-2 border-b border-border bg-slate-900 px-3 py-2 text-white"
+                onPointerDown={beginAlertWidgetDrag}
+              >
+                <span className="inline-flex items-center gap-2 text-sm font-semibold"><MessageCircle className="h-4 w-4" />Alertas da operacao</span>
+                <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => setAlertsOpen(false)} className="rounded p-1 hover:bg-white/15" aria-label="Minimizar alertas"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="max-h-[330px] space-y-2 overflow-y-auto p-2">
+                {alerts.slice(0, 12).map((alert) => (
+                  <button
+                    type="button"
+                    key={`floating-alert-${alert.id}`}
+                    onClick={() => {
+                      if (alert.driver_id) setSelectedDriverId(alert.driver_id);
+                      if (alert.nf_number) setSelectedDeliveryInvoice(alert.nf_number);
+                    }}
+                    className={`block w-full rounded-lg border px-3 py-2 text-left ${alert.severity === 'CRITICAL' ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
+                  >
+                    <span className="block text-xs font-bold">{alert.title}</span>
+                    <span className="mt-1 block text-xs leading-4 opacity-90">{alert.message}</span>
+                  </button>
+                ))}
+                {!alerts.length ? <p className="px-2 py-4 text-center text-xs text-muted">Nenhum alerta operacional aberto.</p> : null}
+              </div>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onPointerDown={beginAlertWidgetDrag}
+            onClick={() => {
+              if (alertWidgetDraggedRef.current) {
+                alertWidgetDraggedRef.current = false;
+                return;
+              }
+              setAlertsOpen((current) => !current);
+            }}
+            className="relative ml-auto flex h-14 w-14 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-white shadow-xl transition hover:scale-105"
+            aria-label={alertsOpen ? 'Minimizar alertas' : 'Abrir alertas'}
+          >
+            <MessageCircle className="h-6 w-6" />
+            {unreadAlertsCount > 0 ? <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-5">{unreadAlertsCount > 99 ? '99+' : unreadAlertsCount}</span> : null}
+          </button>
+        </div>
 
         {cancelledReplacementDraft ? (
           <div className="fixed inset-0 z-[1200] flex items-center justify-center p-3">

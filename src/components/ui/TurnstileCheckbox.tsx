@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { useTheme } from '../../context/ThemeContext';
 
 interface TurnstileCheckboxProps {
   siteKey: string;
@@ -113,6 +114,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
   },
   ref,
 ) {
+  const { isLightTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const onTokenRef = useRef(onTokenChange);
@@ -159,6 +161,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
         sitekey: siteKey,
         size: 'normal',
         appearance: 'always',
+        theme: isLightTheme ? 'light' : 'dark',
         callback: (token: string) => {
           onErrorRef.current?.('');
           onTokenRef.current(token);
@@ -191,7 +194,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
       }
       widgetIdRef.current = null;
     };
-  }, [siteKey, resetWidget]);
+  }, [siteKey, resetWidget, isLightTheme]);
 
   useImperativeHandle(ref, () => ({
     reset: () => {

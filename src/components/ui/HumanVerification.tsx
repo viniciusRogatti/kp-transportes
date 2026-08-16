@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import TurnstileCheckbox, { TurnstileCheckboxHandle } from './TurnstileCheckbox';
+import { useTheme } from '../../context/ThemeContext';
 
 export type HumanVerificationProvider = 'turnstile' | 'recaptcha' | 'none';
 
@@ -58,6 +59,7 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
   },
   ref,
 ) {
+  const { isLightTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(provider !== 'none');
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
   const recaptchaWidgetIdRef = useRef<number | null>(null);
@@ -81,6 +83,7 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
     }
 
     let cancelled = false;
+    const recaptchaContainer = recaptchaContainerRef.current;
     setIsLoading(true);
 
     if (!siteKey) {
@@ -103,6 +106,7 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
         recaptchaWidgetIdRef.current = window.grecaptcha.render(recaptchaContainerRef.current, {
           sitekey: siteKey,
           size: 'normal',
+          theme: isLightTheme ? 'light' : 'dark',
           callback: (token: string) => {
             onErrorChange?.('');
             onTokenChange(token);
@@ -137,9 +141,10 @@ const HumanVerification = forwardRef<HumanVerificationHandle, HumanVerificationP
       if (typeof recaptchaWidgetIdRef.current === 'number' && window.grecaptcha) {
         window.grecaptcha.reset(recaptchaWidgetIdRef.current);
       }
+      recaptchaContainer?.replaceChildren();
       recaptchaWidgetIdRef.current = null;
     };
-  }, [provider, siteKey, onTokenChange, onErrorChange]);
+  }, [provider, siteKey, onTokenChange, onErrorChange, isLightTheme]);
 
   useEffect(() => {
     if (resetKey <= 0) return;

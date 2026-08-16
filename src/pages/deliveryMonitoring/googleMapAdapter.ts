@@ -5,6 +5,10 @@ export type MonitoringDeliveryForMap = {
   customer_name: string;
   city: string;
   neighborhood: string;
+  address?: string;
+  address_number?: string;
+  state?: string;
+  zip_code?: string;
   stage: DeliveryStage;
   danfe_status?: string | null;
   stop_status?: string | null;
@@ -32,6 +36,7 @@ export type MonitoringDriverForMap = {
   live_location?: {
     latitude: number | null;
     longitude: number | null;
+    accuracy_meters?: number | null;
     updated_at?: string | null;
   } | null;
   highlighted_stops: Array<{
@@ -54,6 +59,10 @@ export type GoogleDeliveryMapItem = {
   customerName: string;
   city: string;
   neighborhood: string;
+  address: string;
+  addressNumber: string;
+  state: string;
+  zipCode: string;
   driverName: string | null;
   lastUpdatedAt: string | null;
 };
@@ -78,6 +87,7 @@ export type GoogleDriverLocation = {
   status: string;
   attentionLevel: 'INFO' | 'WARNING' | 'CRITICAL' | null;
   updatedAt: string | null;
+  accuracyMeters: number | null;
 };
 
 const normalizeNumber = (value: unknown) => {
@@ -162,6 +172,10 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
       customerName: row.customer_name || 'Cliente sem nome',
       city: row.city || '-',
       neighborhood: row.neighborhood || '-',
+      address: row.address || '-',
+      addressNumber: row.address_number || 's/n',
+      state: row.state || '',
+      zipCode: row.zip_code || '',
       driverName: row.driver_name,
       lastUpdatedAt: row.geolocation.last_geocoded_at || null,
     }));
@@ -248,5 +262,6 @@ export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): Goog
       status: String(driver.current_status || driver.stage || 'idle'),
       attentionLevel: driver.attention_level || null,
       updatedAt: driver.live_location?.updated_at || null,
+      accuracyMeters: normalizeNumber(driver.live_location?.accuracy_meters),
     }));
 };

@@ -55,6 +55,7 @@ type GoogleDeliveriesMapProps = {
   selectedDriverId: number | null;
   selectedDeliveryId: string | null;
   onMarkerClick: (deliveryId: string) => void;
+  onDriverMarkerClick?: (driverId: number | null) => void;
   onMapBoundsChange?: (payload: GoogleMapBoundsPayload) => void;
 };
 
@@ -95,12 +96,15 @@ function GoogleDeliveriesMap({
   selectedDriverId,
   selectedDeliveryId,
   onMarkerClick,
+  onDriverMarkerClick,
   onMapBoundsChange,
 }: GoogleDeliveriesMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [openedInfoDeliveryId, setOpenedInfoDeliveryId] = useState<string | null>(null);
+  const [openedInfoDriverId, setOpenedInfoDriverId] = useState<string | null>(null);
   const hasFittedBoundsRef = useRef(false);
   const activeDatasetKeyRef = useRef<string>(datasetKey);
+  const activeSelectedDriverIdRef = useRef<number | null>(selectedDriverId);
   const fitControlContainerRef = useRef<HTMLDivElement | null>(null);
   const fitControlButtonRef = useRef<HTMLButtonElement | null>(null);
   const fitControlListenerRef = useRef<(() => void) | null>(null);
@@ -116,6 +120,11 @@ function GoogleDeliveriesMap({
     return deliveries.find((delivery) => delivery.id === openedInfoDeliveryId) || null;
   }, [deliveries, openedInfoDeliveryId]);
 
+  const openedInfoDriver = useMemo(() => {
+    if (!openedInfoDriverId) return null;
+    return driverLocations.find((driverLocation) => driverLocation.id === openedInfoDriverId) || null;
+  }, [driverLocations, openedInfoDriverId]);
+
   useEffect(() => {
     if (selectedDeliveryId) return;
     setOpenedInfoDeliveryId(null);
@@ -126,6 +135,12 @@ function GoogleDeliveriesMap({
     if (deliveries.some((delivery) => delivery.id === openedInfoDeliveryId)) return;
     setOpenedInfoDeliveryId(null);
   }, [deliveries, openedInfoDeliveryId]);
+
+  useEffect(() => {
+    if (!openedInfoDriverId) return;
+    if (driverLocations.some((driverLocation) => driverLocation.id === openedInfoDriverId)) return;
+    setOpenedInfoDriverId(null);
+  }, [driverLocations, openedInfoDriverId]);
 
   const mapOptions = useMemo<google.maps.MapOptions>(() => ({
     // Keep the base map unstyled so the custom pins sit on top of the stock Google roadmap look.
@@ -197,6 +212,12 @@ function GoogleDeliveriesMap({
     fitBoundsToMapItems();
     hasFittedBoundsRef.current = true;
   }, [deliveries, driverLocations, fitBoundsToMapItems, map]);
+
+  useEffect(() => {
+    if (!map || activeSelectedDriverIdRef.current === selectedDriverId) return;
+    activeSelectedDriverIdRef.current = selectedDriverId;
+    fitBoundsToMapItems();
+  }, [fitBoundsToMapItems, map, selectedDriverId]);
 
   const handleManualFitBounds = useCallback(() => {
     fitBoundsToMapItems();
@@ -295,7 +316,10 @@ function GoogleDeliveriesMap({
           setMap(instance);
         }}
         onUnmount={() => setMap(null)}
-        onClick={() => setOpenedInfoDeliveryId(null)}
+        onClick={() => {
+          setOpenedInfoDeliveryId(null);
+          setOpenedInfoDriverId(null);
+        }}
         onIdle={emitBoundsChange}
       >
         {routes.map((route) => (
@@ -356,12 +380,14 @@ function GoogleDeliveriesMap({
                   event.stopPropagation();
                   onMarkerClick(delivery.id);
                   setOpenedInfoDeliveryId(delivery.id);
+                  setOpenedInfoDriverId(null);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
                     onMarkerClick(delivery.id);
                     setOpenedInfoDeliveryId(delivery.id);
+                    setOpenedInfoDriverId(null);
                   }
                 }}
                 style={{
@@ -438,10 +464,25 @@ function GoogleDeliveriesMap({
                 iconSize={driverIconSize}
                 iconStrokeWidth={DRIVER_MARKER_ICON_STROKE_WIDTH}
                 label={driverLocation.driverName}
+                interactive
                 selected={isSelected}
                 dimmed={isDimmed}
-                title={driverLocation.driverName}
-                style={{ pointerEvents: 'none', zIndex: isSelected ? 980 : 760 }}
+                title={`Ver localização de ${driverLocation.driverName}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpenedInfoDeliveryId(null);
+                  setOpenedInfoDriverId(driverLocation.id);
+                  onDriverMarkerClick?.(driverLocation.driverId);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setOpenedInfoDeliveryId(null);
+                    setOpenedInfoDriverId(driverLocation.id);
+                    onDriverMarkerClick?.(driverLocation.driverId);
+                  }
+                }}
+                style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: isSelected ? 980 : 760 }}
               />
             </OverlayViewF>
           );
@@ -461,9 +502,29 @@ function GoogleDeliveriesMap({
             <div className="space-y-0.5 text-xs" style={{ color: '#000000' }}>
               <div className="font-semibold">{openedInfoDelivery.label}</div>
               <div>{openedInfoDelivery.customerName}</div>
-              <div>{`${openedInfoDelivery.city} • ${openedInfoDelivery.neighborhood}`}</div>
+              <div>{`${openedInfoDelivery.address}, ${openedInfoDelivery.addressNumber}`}</div>
+              <div>{`${openedInfoDelivery.neighborhood} • ${openedInfoDelivery.city}${openedInfoDelivery.state ? `/${openedInfoDelivery.state}` : ''}`}</div>
+              {openedInfoDelivery.zipCode ? <div>{`CEP ${openedInfoDelivery.zipCode}`}</div> : null}
               <div>{`Motorista: ${openedInfoDelivery.driverName || 'Nao atribuido'}`}</div>
               <div>{`Status: ${STAGE_LABELS[openedInfoDelivery.status]}`}</div>
+            </div>
+          </InfoWindowF>
+        ) : null}
+
+        {openedInfoDriver ? (
+          <InfoWindowF
+            position={{ lat: openedInfoDriver.lat, lng: openedInfoDriver.lng }}
+            onCloseClick={() => setOpenedInfoDriverId(null)}
+            options={{ pixelOffset: new window.google.maps.Size(0, -44) }}
+          >
+            <div className="space-y-0.5 text-xs" style={{ color: '#000000' }}>
+              <div className="font-semibold">{openedInfoDriver.driverName}</div>
+              <div>{openedInfoDriver.updatedAt
+                ? `Última posição: ${new Date(openedInfoDriver.updatedAt).toLocaleString('pt-BR')}`
+                : 'Horário da posição indisponível'}</div>
+              {openedInfoDriver.accuracyMeters !== null ? (
+                <div>{`Precisão aproximada: ${Math.round(openedInfoDriver.accuracyMeters)} m`}</div>
+              ) : null}
             </div>
           </InfoWindowF>
         ) : null}

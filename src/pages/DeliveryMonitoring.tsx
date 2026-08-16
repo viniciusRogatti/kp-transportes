@@ -44,6 +44,7 @@ import { COMPANY_LABELS, COMPANY_TAB_ORDER } from '../utils/companyTabs';
 import { normalizeDateForApi } from '../utils/dateDisplay';
 import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
 import { showConfirm } from '../utils/dialog';
+import { resolveAlert as resolveAlertById } from '../services/alertsService';
 import {
   canManuallyUpdateStopStatus,
   getManualStopStatusLabel,
@@ -644,6 +645,7 @@ function DeliveryMonitoring() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [alertWidgetPosition, setAlertWidgetPosition] = useState({ x: 20, y: 90 });
   const [pushSending, setPushSending] = useState<string | null>(null);
+  const [resolvingAlertId, setResolvingAlertId] = useState<number | null>(null);
   const previousAlertIdsRef = useRef<Set<number>>(new Set());
   const alertWidgetDraggedRef = useRef(false);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -883,6 +885,48 @@ function DeliveryMonitoring() {
         : 'Nao foi possivel enviar a notificacao.');
     } finally {
       setPushSending(null);
+    }
+  }, []);
+
+  const resolveOperationalAlert = useCallback(async (alert: MonitoringAlert) => {
+    setResolvingAlertId(alert.id);
+    try {
+      await resolveAlertById(alert.id);
+      setOverview((current) => {
+        if (!current) return current;
+        const nextAlerts = (current.alerts || []).filter((row) => row.id !== alert.id);
+        const severityKey = String(alert.severity || '').toLowerCase() as 'critical' | 'warning' | 'info';
+        const nextSummary = current.alert_summary
+          ? {
+            ...current.alert_summary,
+            total: Math.max(0, current.alert_summary.total - 1),
+            ...(severityKey in current.alert_summary
+              ? { [severityKey]: Math.max(0, current.alert_summary[severityKey] - 1) }
+              : {}),
+          }
+          : current.alert_summary;
+
+        return {
+          ...current,
+          alerts: nextAlerts,
+          alert_summary: nextSummary,
+          drivers: (current.drivers || []).map((driver) => {
+            const driverAlerts = (driver.alerts || []).filter((row) => row.id !== alert.id);
+            return {
+              ...driver,
+              alerts: driverAlerts,
+              open_alerts_count: driverAlerts.length,
+              attention_level: driverAlerts[0]?.severity || null,
+            };
+          }),
+        };
+      });
+    } catch (error) {
+      window.alert(axios.isAxiosError(error)
+        ? String(error.response?.data?.message || error.message)
+        : 'Nao foi possivel resolver o alerta agora.');
+    } finally {
+      setResolvingAlertId(null);
     }
   }, []);
 
@@ -1670,7 +1714,7 @@ function DeliveryMonitoring() {
             <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
         </section>
-        <section className="order-3 mt-3 w-full rounded-lg border border-border bg-card p-3">
+        <section className="order-2 mt-3 w-full rounded-lg border border-border bg-card p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
             <button
@@ -1950,7 +1994,7 @@ function DeliveryMonitoring() {
           </div>
         </section>
 
-        <section className="order-2 mt-3 w-full rounded-lg border border-border bg-card p-2.5 sm:p-3">
+        <section className="order-3 mt-3 w-full rounded-lg border border-border bg-card p-2.5 sm:p-3">
           <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
@@ -2161,18 +2205,34 @@ function DeliveryMonitoring() {
               </div>
               <div className="max-h-[330px] space-y-2 overflow-y-auto p-2">
                 {alerts.slice(0, 12).map((alert) => (
-                  <button
-                    type="button"
+                  <div
                     key={`floating-alert-${alert.id}`}
-                    onClick={() => {
-                      if (alert.driver_id) setSelectedDriverId(alert.driver_id);
-                      if (alert.nf_number) setSelectedDeliveryInvoice(alert.nf_number);
-                    }}
-                    className={`block w-full rounded-lg border px-3 py-2 text-left ${alert.severity === 'CRITICAL' ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
+                    className={`w-full overflow-hidden rounded-lg border text-left ${alert.severity === 'CRITICAL' ? 'border-rose-300 bg-rose-50 text-rose-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
                   >
-                    <span className="block text-xs font-bold">{alert.title}</span>
-                    <span className="mt-1 block text-xs leading-4 opacity-90">{alert.message}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (alert.driver_id) setSelectedDriverId(alert.driver_id);
+                        if (alert.nf_number) setSelectedDeliveryInvoice(alert.nf_number);
+                      }}
+                      className="block w-full px-3 py-2 text-left transition hover:bg-white/35"
+                    >
+                      <span className="block text-xs font-bold">{alert.title}</span>
+                      <span className="mt-1 block text-xs leading-4 opacity-90">{alert.message}</span>
+                    </button>
+                    <div className="flex justify-end border-t border-current/15 px-2 py-1.5">
+                      <button
+                        type="button"
+                        disabled={resolvingAlertId === alert.id}
+                        onClick={() => resolveOperationalAlert(alert)}
+                        className="inline-flex items-center gap-1 rounded-md border border-current/30 bg-white/65 px-2 py-1 text-[11px] font-semibold transition hover:bg-white disabled:cursor-wait disabled:opacity-60"
+                        aria-label={`Marcar alerta ${alert.title} como resolvido`}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {resolvingAlertId === alert.id ? 'Resolvendo...' : 'Marcar como resolvido'}
+                      </button>
+                    </div>
+                  </div>
                 ))}
                 {!alerts.length ? <p className="px-2 py-4 text-center text-xs text-muted">Nenhum alerta operacional aberto.</p> : null}
               </div>

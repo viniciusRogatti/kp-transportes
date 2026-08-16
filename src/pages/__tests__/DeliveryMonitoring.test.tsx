@@ -10,6 +10,7 @@ jest.mock('axios', () => ({
   default: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
     isAxiosError: jest.fn(),
   },
 }));
@@ -157,6 +158,7 @@ describe('DeliveryMonitoring', () => {
       currentStatus = String((payload as { status?: string })?.status || 'returned') as MonitoringStatus;
       return { data: { accepted: true } } as never;
     });
+    mockedAxios.patch.mockResolvedValue({ data: { status: 'RESOLVED' } } as never);
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -332,6 +334,45 @@ describe('DeliveryMonitoring', () => {
         expect.anything(),
         { params: { date: '2026-08-06' } },
       ]);
+    });
+  });
+
+  it('permite resolver um alerta diretamente no painel flutuante', async () => {
+    mockedAxios.get.mockImplementation((url, config) => {
+      const requestedDate = String((config as { params?: { date?: string } } | undefined)?.params?.date || '2026-03-23');
+      if (String(url).includes('/address-diagnostics')) {
+        return Promise.resolve({ data: buildDiagnostics(requestedDate) } as never);
+      }
+      const overview = buildOverview('on_the_way', requestedDate);
+      overview.alert_summary.total = 1;
+      overview.alert_summary.critical = 1;
+      overview.alerts = [{
+        id: 55,
+        code: 'NEXT_DELIVERY_NOT_STARTED',
+        title: 'Entrega finalizada sem proxima saida',
+        message: 'Motorista Teste nao iniciou a proxima parada.',
+        severity: 'CRITICAL',
+        status: 'OPEN',
+        created_at: '2026-03-23T12:00:00.000Z',
+        driver_id: 7,
+        trip_id: 11,
+        trip_note_id: 99,
+        nf_number: '123456',
+        metadata: null,
+      }];
+      return Promise.resolve({ data: overview } as never);
+    });
+
+    render(<DeliveryMonitoring />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir alertas' }));
+    fireEvent.click(await screen.findByRole('button', {
+      name: 'Marcar alerta Entrega finalizada sem proxima saida como resolvido',
+    }));
+
+    await waitFor(() => {
+      expect(mockedAxios.patch).toHaveBeenCalledWith(expect.stringContaining('/api/alerts/55/resolve'));
+      expect(screen.queryByText('Motorista Teste nao iniciou a proxima parada.')).not.toBeInTheDocument();
     });
   });
 });

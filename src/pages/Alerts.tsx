@@ -2,6 +2,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -59,10 +60,11 @@ const severityLabel = (severity: IAlertHistoryRow['severity']) => ({
 
 function AlertsPage() {
   const navigate = useNavigate();
-  const { lastReceivedAt, lastAlertUpdateAt } = useRealtimeNotifications();
+  const { lastAlertUpdateAt } = useRealtimeNotifications();
   const [rows, setRows] = useState<IAlertHistoryRow[]>([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
   const [filters, setFilters] = useState<AlertHistoryFilters>({
@@ -74,6 +76,9 @@ function AlertsPage() {
     to: '',
     limit: 500,
   });
+  const requestSequenceRef = useRef(0);
+  const realtimeRefreshTimerRef = useRef<number | null>(null);
+  const lastHandledAlertUpdateRef = useRef(lastAlertUpdateAt);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -83,26 +88,53 @@ function AlertsPage() {
     ensureToken();
   }, [navigate]);
 
-  const refreshHistory = useCallback(async () => {
-    setLoading(true);
+  const refreshHistory = useCallback(async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+    const requestSequence = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestSequence;
+
+    if (showLoading) setLoading(true);
     setError('');
     try {
       const data = await listAlertHistory(filters);
+      if (requestSequence !== requestSequenceRef.current) return;
       setRows(Array.isArray(data?.rows) ? data.rows : []);
       setSummary(data?.summary || EMPTY_SUMMARY);
     } catch (requestError) {
+      if (requestSequence !== requestSequenceRef.current) return;
       console.error(requestError);
-      setRows([]);
-      setSummary(EMPTY_SUMMARY);
       setError('Não foi possível carregar a central de alertas.');
     } finally {
-      setLoading(false);
+      if (requestSequence === requestSequenceRef.current) {
+        setHasLoaded(true);
+        setLoading(false);
+      }
     }
   }, [filters]);
 
   useEffect(() => {
-    refreshHistory();
-  }, [refreshHistory, lastReceivedAt, lastAlertUpdateAt]);
+    void refreshHistory();
+  }, [refreshHistory]);
+
+  useEffect(() => {
+    if (!lastAlertUpdateAt || lastHandledAlertUpdateRef.current === lastAlertUpdateAt) return undefined;
+
+    lastHandledAlertUpdateRef.current = lastAlertUpdateAt;
+    if (realtimeRefreshTimerRef.current !== null) {
+      window.clearTimeout(realtimeRefreshTimerRef.current);
+    }
+
+    realtimeRefreshTimerRef.current = window.setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      void refreshHistory({ showLoading: false });
+    }, 600);
+
+    return () => {
+      if (realtimeRefreshTimerRef.current !== null) {
+        window.clearTimeout(realtimeRefreshTimerRef.current);
+        realtimeRefreshTimerRef.current = null;
+      }
+    };
+  }, [lastAlertUpdateAt, refreshHistory]);
 
   function handleSearch(event: FormEvent) {
     event.preventDefault();
@@ -134,7 +166,7 @@ function AlertsPage() {
               </div>
               <button
                 type="button"
-                onClick={refreshHistory}
+                onClick={() => void refreshHistory()}
                 disabled={loading}
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm text-text transition hover:bg-surface-2 disabled:opacity-60"
               >
@@ -219,7 +251,7 @@ function AlertsPage() {
 
           <section className="rounded-md border border-border bg-surface p-3">
             {error ? <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">{error}</div> : null}
-            {loading ? (
+            {loading && !hasLoaded ? (
               <p className="text-sm text-muted">Carregando alertas...</p>
             ) : !rows.length ? (
               <p className="text-sm text-muted">Nenhum registro encontrado com estes filtros.</p>

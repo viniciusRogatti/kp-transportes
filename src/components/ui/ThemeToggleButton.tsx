@@ -8,7 +8,7 @@ interface ThemeToggleButtonProps {
   iconOnly?: boolean;
 }
 
-function ThemeToggleButton({ className }: ThemeToggleButtonProps) {
+function ThemeToggleButton({ className, iconOnly = false }: ThemeToggleButtonProps) {
   const { isLightTheme, toggleTheme } = useTheme();
   const animationTimeoutRef = useRef<number | null>(null);
   const animationRef = useRef<HTMLObjectElement>(null);
@@ -47,7 +47,8 @@ function ThemeToggleButton({ className }: ThemeToggleButtonProps) {
       role="switch"
       aria-checked={!isLightTheme}
       className={cn(
-        'inline-flex h-12 w-[110px] items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
+        'inline-flex items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
+        iconOnly ? 'h-10 w-[84px]' : 'h-12 w-[110px]',
         className,
       )}
       aria-label={isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro'}
@@ -61,7 +62,7 @@ function ThemeToggleButton({ className }: ThemeToggleButtonProps) {
         tabIndex={-1}
         onLoad={() => freezeAnimationAt(isLightTheme ? 'light' : 'dark')}
         className="pointer-events-none h-full w-full"
-      />
+      >Alternar entre tema claro e escuro</object>
       <span className="sr-only">{isLightTheme ? 'Tema claro ativo' : 'Tema escuro ativo'}</span>
     </button>
   );

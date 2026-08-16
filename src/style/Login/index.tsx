@@ -76,7 +76,7 @@ export function HeroBadge({ className, ...props }: SpanProps) {
 }
 
 export function HeroTitle({ className, children, ...props }: H1Props) {
-  return <h1 className={cn('block max-w-[690px] text-[clamp(2rem,1.15rem+2.7vw,4.75rem)] font-bold leading-[0.98] tracking-[-0.05em] text-white', className)} {...props}>{children}</h1>;
+  return <h1 className={cn('block max-w-[690px] text-[clamp(2rem,1.2rem+2.35vw,4.25rem)] font-bold leading-[0.98] tracking-[-0.05em] text-white', className)} {...props}>{children}</h1>;
 }
 
 export function HeroDescription({ className, ...props }: PProps) {

@@ -95,7 +95,7 @@
 }
 
 .login-hero-copy {
-  left: clamp(18px, 2.2vw, 38px);
+  left: clamp(24px, 4.5vw, 76px);
   width: min(48vw, 700px);
   text-shadow: 0 3px 28px rgba(0, 0, 0, 0.82);
   transform: translateZ(35px);
@@ -743,18 +743,18 @@
   --color-border: #cbd3df;
   --color-text-accent: #1d4ed8;
 
-  --login-background: #dfe6ef;
-  --login-surface: #f8fafc;
-  --login-border: #c7d1df;
+  --login-background: #eef2f6;
+  --login-surface: #ffffff;
+  --login-border: #cbd5e1;
   --login-text-primary: #152033;
   --login-text-secondary: #5b687a;
   --login-accent: #1d4ed8;
   --login-accent-hover: #173d9b;
-  --login-input-background: #ffffff;
-  --login-input-border: #b9c5d4;
+  --login-input-background: #f8fafc;
+  --login-input-border: #c1ccda;
   --login-input-focus: rgba(29, 78, 216, 0.18);
   --login-error: #991b1b;
-  --login-shadow: 0 28px 80px rgba(29, 47, 74, 0.2);
+  --login-shadow: 0 24px 64px rgba(29, 47, 74, 0.16);
   --login-overlay: linear-gradient(180deg, rgba(4, 12, 23, 0.08) 0%, rgba(4, 12, 23, 0.76) 76%, rgba(4, 12, 23, 0.94) 100%);
 
   --semantic-neutral-bg: #e8ecf2;
@@ -813,47 +813,95 @@
 }
 
 :root[data-theme='light'] .login-scene-grid {
-  opacity: 0.62;
+  opacity: 0.3;
   background-image:
-    linear-gradient(rgba(71, 85, 105, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(71, 85, 105, 0.08) 1px, transparent 1px);
+    linear-gradient(rgba(71, 85, 105, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 85, 105, 0.06) 1px, transparent 1px);
 }
 
 :root[data-theme='light'] .login-scene-glow {
   background:
-    radial-gradient(circle at 68% 42%, rgba(37, 99, 235, 0.12), transparent 30%),
-    radial-gradient(circle at 5% 98%, rgba(14, 165, 233, 0.1), transparent 30%);
+    radial-gradient(circle at 70% 40%, rgba(37, 99, 235, 0.07), transparent 32%),
+    radial-gradient(circle at 5% 98%, rgba(14, 165, 233, 0.06), transparent 32%);
+}
+
+:root[data-theme='light'] .login-photo-foreground {
+  filter: brightness(1.08) saturate(0.82);
+}
+
+:root[data-theme='light'] .login-photo-tone {
+  background:
+    linear-gradient(90deg, rgba(4, 12, 23, 0.78) 0%, rgba(4, 12, 23, 0.2) 42%, rgba(4, 12, 23, 0.04) 67%, rgba(4, 12, 23, 0.3) 100%),
+    linear-gradient(0deg, rgba(4, 12, 23, 0.72) 0%, transparent 48%, rgba(4, 12, 23, 0.12) 100%);
+}
+
+:root[data-theme='light'] .login-photo-edge {
+  opacity: 0.28;
+  transform: translate3d(7px, 7px, -20px);
 }
 
 :root[data-theme='light'] .login-brand > span:first-child {
-  color: #1e3a8a;
-  border-color: #94a3b8;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 22px rgba(30, 64, 175, 0.14);
+  color: #dbeafe;
+  border-color: rgba(191, 219, 254, 0.28);
+  background: rgba(15, 23, 42, 0.46);
+  box-shadow: none;
 }
 
 :root[data-theme='light'] .login-brand {
   padding: 0.4rem 0.65rem 0.4rem 0.4rem;
-  border: 1px solid rgba(148, 163, 184, 0.72);
+  border: 1px solid rgba(191, 219, 254, 0.22);
   border-radius: 0.8rem;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 10px 26px rgba(30, 64, 175, 0.12);
+  background: rgba(7, 17, 31, 0.64);
+  box-shadow: 0 10px 26px rgba(1, 8, 18, 0.2);
   text-shadow: none;
   backdrop-filter: blur(8px);
 }
 
 :root[data-theme='light'] .login-brand p:first-child {
-  color: #172554;
+  color: #dbeafe;
   text-shadow: none;
 }
 
 :root[data-theme='light'] .login-brand p:last-child {
-  color: #475569;
+  color: #cbd5e1;
   text-shadow: none;
 }
 
 :root[data-theme='light'] .login-hero-copy {
   text-shadow: 0 1px 2px rgba(3, 7, 18, 0.98), 0 4px 26px rgba(3, 7, 18, 0.82);
+}
+
+:root[data-theme='light'] .login-flow-signature {
+  opacity: 0.72;
+  filter: drop-shadow(0 2px 7px rgba(37, 99, 235, 0.2));
+}
+
+:root[data-theme='light'] .login-flow-active {
+  stroke: rgba(147, 197, 253, 0.72);
+}
+
+:root[data-theme='light'] .login-document {
+  box-shadow: var(--login-shadow);
+}
+
+:root[data-theme='light'] .login-document::before {
+  inset: 9px -9px -9px 9px;
+  background: #f8fafc;
+  opacity: 0.9;
+}
+
+:root[data-theme='light'] .login-document::after {
+  display: none;
+}
+
+:root[data-theme='light'] .human-verification {
+  border-color: var(--login-border);
+  background: var(--login-surface);
+}
+
+:root[data-theme='light'] .human-verification-frame {
+  border-color: #cbd5e1;
+  background: #f8fafc;
 }
 
 

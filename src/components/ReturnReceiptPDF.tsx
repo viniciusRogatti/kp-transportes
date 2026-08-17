@@ -2,6 +2,7 @@ import React from 'react';
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { IInvoiceReturnItem } from '../types/types';
 import { formatDateBR } from '../utils/dateDisplay';
+import { formatReturnQuantity } from '../utils/returnPdfFormatting';
 
 interface BatchNote {
   invoice_number: string;
@@ -25,6 +26,13 @@ type ReturnSection = {
   emptyText?: string;
 };
 
+const SUMMARY_RETURN_TYPES: BatchNote['return_type'][] = [
+  'total',
+  'partial',
+  'coleta',
+  'weight_break',
+];
+
 const RETURN_TYPE_LABELS: Record<BatchNote['return_type'], string> = {
   total: 'total',
   partial: 'parcial',
@@ -37,7 +45,7 @@ const styles = StyleSheet.create({
   page: {
     paddingTop: 20,
     paddingHorizontal: 20,
-    paddingBottom: 80,
+    paddingBottom: 32,
     fontSize: 11,
   },
   title: {
@@ -56,6 +64,14 @@ const styles = StyleSheet.create({
   },
   compactRow: {
     marginBottom: 2,
+  },
+  summarySection: {
+    marginTop: 10,
+  },
+  summaryTitle: {
+    marginBottom: 3,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   tableHeader: {
     flexDirection: 'row',
@@ -87,16 +103,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   signatureBox: {
-    position: 'absolute',
-    left: 50,
-    right: 50,
-    bottom: 20,
+    marginTop: 34,
+    marginHorizontal: 30,
   },
   signatureLine: {
     borderBottomWidth: 1,
     borderColor: '#000',
     marginBottom: 4,
     width: '70%',
+  },
+  pageNumber: {
+    position: 'absolute',
+    right: 20,
+    bottom: 10,
+    fontSize: 9,
+    color: '#555',
   },
 });
 
@@ -186,6 +207,17 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
     },
   ];
 
+  const physicalSection = sections[0];
+  const summarySections = sections.slice(1);
+  const allInvoicesByReturnType = SUMMARY_RETURN_TYPES.map((returnType) => ({
+    label: RETURN_TYPE_LABELS[returnType],
+    invoices: Array.from(new Set(
+      notes
+        .filter((note) => note.return_type === returnType)
+        .map((note) => note.invoice_number),
+    )),
+  }));
+
   const renderSection = ({ title, notes: sectionNotes, items: sectionItems, emptyText }: ReturnSection) => (
     <React.Fragment key={title}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -204,7 +236,7 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
             <View style={styles.tableRow} key={`${title}-${item.product_id}-${normalizeProductType(item.product_type)}-${index}`}>
               <Text style={styles.colCode}>{item.product_id}</Text>
               <Text style={styles.colDescription}>{truncateText(item.product_description, 62)}</Text>
-              <Text style={styles.colQty}>{item.quantity}</Text>
+              <Text style={styles.colQty}>{formatReturnQuantity(item.quantity)}</Text>
               <Text style={styles.colType}>{normalizeProductType(item.product_type) || '-'}</Text>
             </View>
           ))}
@@ -215,20 +247,61 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
     </React.Fragment>
   );
 
+  const renderInvoiceSummarySection = ({ title, notes: sectionNotes }: ReturnSection) => (
+    <View key={title} style={styles.summarySection} wrap={false}>
+      <Text style={styles.summaryTitle}>{title}</Text>
+      {sectionNotes.length ? (
+        groupInvoicesByReturnType(sectionNotes).map(({ label, invoices }) => (
+          <Text key={`${title}-${label}`} style={styles.compactRow}>{label}: {invoices.join(', ')}</Text>
+        ))
+      ) : (
+        <Text style={styles.compactRow}>Nenhuma NF.</Text>
+      )}
+    </View>
+  );
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
         <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
 
-        {sections
-          .filter((section) => section.notes.length || section.items.length || section.emptyText)
-          .map((section) => renderSection(section))}
+        {renderSection(physicalSection)}
 
-        <View fixed style={styles.signatureBox}>
-          <View style={styles.signatureLine} />
-          <Text>Assinatura do conferente (confirmo os itens fisicamente recebidos e as excecoes identificadas acima)</Text>
+        <Text
+          fixed
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`}
+        />
+      </Page>
+
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
+        <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
+
+        {summarySections.map((section) => renderInvoiceSummarySection(section))}
+
+        <View wrap={false}>
+          <View style={styles.summarySection}>
+            <Text style={styles.summaryTitle}>RELACAO DE TODAS AS NFS</Text>
+            {allInvoicesByReturnType.map(({ label, invoices }) => (
+              <Text key={`all-${label}`} style={styles.compactRow}>
+                {label}: {invoices.length ? invoices.join(', ') : '-'}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.signatureBox}>
+            <View style={styles.signatureLine} />
+            <Text>Assinatura do conferente (confirmo os itens fisicamente recebidos e as excecoes identificadas acima)</Text>
+          </View>
         </View>
+
+        <Text
+          fixed
+          style={styles.pageNumber}
+          render={({ pageNumber, totalPages }) => `Pagina ${pageNumber} de ${totalPages}`}
+        />
       </Page>
     </Document>
   );

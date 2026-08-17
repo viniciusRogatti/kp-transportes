@@ -64,6 +64,35 @@ export type ReturnDataImport = {
   warnings_count: number;
   errors_count: number;
   summary_json?: ReturnDataImportPreview | null;
+  membership_complete?: boolean;
+  reverted_at?: string | null;
+  reverted_by_username?: string | null;
+  reversal_reason?: string | null;
+};
+
+export type ReturnDataImportOccurrenceImpact = {
+  membership_id: number;
+  registry_occurrence_id: number | null;
+  source_occurrence_id: string;
+  invoice_number: string;
+  customer_name: string | null;
+  import_action: 'created' | 'updated' | 'unchanged';
+  linked_to_batch: boolean;
+};
+
+export type ReturnDataImportReversalImpact = {
+  import: ReturnDataImport;
+  is_latest: boolean;
+  membership_complete: boolean;
+  total_occurrences: number;
+  linked_occurrences: number;
+  pending_occurrences: number;
+  created_occurrences: number;
+  updated_occurrences: number;
+  unchanged_occurrences: number;
+  can_reverse_without_confirmation: boolean;
+  occurrences: ReturnDataImportOccurrenceImpact[];
+  pending: ReturnDataImportOccurrenceImpact[];
 };
 
 export type ReturnDataImportIssue = {
@@ -100,6 +129,8 @@ export type ReturnDataImportPreview = {
   formulas_count?: number;
   warnings?: ReturnDataImportIssue[];
   errors?: ReturnDataImportIssue[];
+  carrier_mismatch?: boolean;
+  expected_carrier?: string;
   sample_occurrences?: Array<{
     source_occurrence_id: string;
     invoice_number: string;
@@ -181,6 +212,24 @@ export const confirmReturnDataImport = async (file: File) => {
 
 export const listReturnDataImports = async () => {
   const { data } = await axios.get<ReturnDataImport[]>(`${API_URL}/return-data/imports`);
+  return data;
+};
+
+export const getReturnDataImportReversalImpact = async (id: number) => {
+  const { data } = await axios.get<ReturnDataImportReversalImpact>(
+    `${API_URL}/return-data/imports/${id}/reversal-impact`,
+  );
+  return data;
+};
+
+export const reverseReturnDataImport = async (
+  id: number,
+  input: { confirm_pending: boolean; reason?: string },
+) => {
+  const { data } = await axios.delete(
+    `${API_URL}/return-data/imports/${id}`,
+    { data: input },
+  );
   return data;
 };
 

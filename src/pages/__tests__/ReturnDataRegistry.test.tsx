@@ -139,6 +139,103 @@ describe('ReturnDataRegistry', () => {
     expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeInTheDocument();
   });
 
+  it('bloqueia a confirmação quando a transportadora é divergente', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        duplicate_file: false,
+        file_name: 'outra-transportadora.xlsx',
+        file_sha256: 'hash-divergente',
+        total_occurrences: 32,
+        errors_count: 1,
+        warnings_count: 0,
+        carrier_mismatch: true,
+        expected_carrier: 'KP TRANSPORTES',
+        other_carriers: ['FRIGUS TRANSPORTE E LOGISTICA LTDA'],
+      },
+    });
+
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /importações/i }));
+    fireEvent.change(screen.getByLabelText('Planilha da base de devoluções'), {
+      target: { files: [new File(['xlsx'], 'outra-transportadora.xlsx')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pré-visualizar/i }));
+
+    expect(await screen.findByText(/importação bloqueada/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeDisabled();
+  });
+
+  it('mostra ocorrências fora de lote e exige confirmação para desfazer', async () => {
+    const imported = {
+      id: 9,
+      original_file_name: 'frigus.xlsx',
+      file_sha256: 'hash',
+      file_size: 100,
+      import_status: 'confirmed',
+      imported_by_username: 'admin',
+      imported_at: '2026-08-17T12:00:00.000Z',
+      confirmed_at: '2026-08-17T12:00:00.000Z',
+      detected_start_date: null,
+      detected_end_date: null,
+      total_rows: 1,
+      total_occurrences: 1,
+      created_occurrences: 1,
+      updated_occurrences: 0,
+      unchanged_occurrences: 0,
+      invalid_occurrences: 0,
+      warnings_count: 0,
+      errors_count: 0,
+      membership_complete: true,
+    };
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/occurrences/overview')) return Promise.resolve({ data: overview });
+      if (url.endsWith('/return-data/imports')) return Promise.resolve({ data: [imported] });
+      if (url.endsWith('/imports/9/reversal-impact')) return Promise.resolve({
+        data: {
+          import: imported,
+          is_latest: true,
+          membership_complete: true,
+          total_occurrences: 1,
+          linked_occurrences: 0,
+          pending_occurrences: 1,
+          created_occurrences: 1,
+          updated_occurrences: 0,
+          unchanged_occurrences: 0,
+          can_reverse_without_confirmation: false,
+          occurrences: [],
+          pending: [{
+            membership_id: 1,
+            registry_occurrence_id: 11,
+            source_occurrence_id: 'OC-1',
+            invoice_number: '12345',
+            customer_name: 'Cliente teste',
+            import_action: 'created',
+            linked_to_batch: false,
+          }],
+        },
+      });
+      return Promise.resolve({ data: {} });
+    });
+    mockedAxios.delete.mockResolvedValue({ data: { message: 'Importação desfeita com sucesso.' } });
+
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /importações/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /analisar exclusão/i }));
+
+    expect(await screen.findByText('NF')).toBeInTheDocument();
+    expect(screen.getByText('12345')).toBeInTheDocument();
+    const reverseButton = screen.getByRole('button', { name: /desfazer importação/i });
+    expect(reverseButton).toBeDisabled();
+    fireEvent.click(screen.getByLabelText(/confirmo que desejo excluir/i));
+    expect(reverseButton).toBeEnabled();
+    fireEvent.click(reverseButton);
+
+    await waitFor(() => expect(mockedAxios.delete).toHaveBeenCalledWith(
+      expect.stringContaining('/return-data/imports/9'),
+      expect.objectContaining({ data: expect.objectContaining({ confirm_pending: true }) }),
+    ));
+  });
+
   it('corrige o tipo sem apagar a classificação importada', async () => {
     const occurrence = {
       id: 8356,

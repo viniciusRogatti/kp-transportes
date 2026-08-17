@@ -17,7 +17,9 @@ import {
   Pencil,
   RefreshCcw,
   Save,
+  Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import Header from '../components/Header';
@@ -29,6 +31,7 @@ import {
   confirmReturnDataImport,
   exportReturnRegistryOccurrences,
   getReturnDataOverview,
+  getReturnDataImportReversalImpact,
   getReturnRegistryOccurrenceHistory,
   listReturnDataImports,
   listReturnRegistryOccurrences,
@@ -36,10 +39,12 @@ import {
   ReturnDataFilters,
   ReturnDataImport,
   ReturnDataImportPreview,
+  ReturnDataImportReversalImpact,
   ReturnDataOverview,
   ReturnDataType,
   ReturnRegistryOccurrence,
   updateReturnRegistryOccurrenceType,
+  reverseReturnDataImport,
 } from '../services/returnDataService';
 
 type RegistryTab = 'overview' | 'occurrences' | 'imports';
@@ -214,6 +219,7 @@ function ReturnDataRegistry() {
   const canImport = ['admin', 'master', 'expedicao'].includes(permission);
   const canEdit = ['admin', 'master', 'expedicao'].includes(permission);
   const canExport = ['admin', 'master', 'expedicao', 'control_tower'].includes(permission);
+  const canReverseImport = ['admin', 'master'].includes(permission);
   const [activeTab, setActiveTab] = useState<RegistryTab>('overview');
   const [filters, setFilters] = useState<ReturnDataFilters>({ ...EMPTY_FILTERS });
   const [overview, setOverview] = useState<ReturnDataOverview | null>(null);
@@ -233,6 +239,11 @@ function ReturnDataRegistry() {
   const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
   const [editingReturnType, setEditingReturnType] = useState<ReturnDataType>('unclassified');
   const [savingReturnType, setSavingReturnType] = useState(false);
+  const [reversalImpact, setReversalImpact] = useState<ReturnDataImportReversalImpact | null>(null);
+  const [loadingReversalImpact, setLoadingReversalImpact] = useState(false);
+  const [reversingImport, setReversingImport] = useState(false);
+  const [confirmPendingReversal, setConfirmPendingReversal] = useState(false);
+  const [reversalReason, setReversalReason] = useState('');
 
   const updateFilter = (field: keyof ReturnDataFilters, value: string) => {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -390,6 +401,41 @@ function ReturnDataRegistry() {
     }
   };
 
+  const openReversalImpact = async (item: ReturnDataImport) => {
+    setLoadingReversalImpact(true);
+    setErrorMessage('');
+    setConfirmPendingReversal(false);
+    setReversalReason('');
+    try {
+      setReversalImpact(await getReturnDataImportReversalImpact(item.id));
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, 'Não foi possível analisar a exclusão desta importação.'));
+    } finally {
+      setLoadingReversalImpact(false);
+    }
+  };
+
+  const handleReverseImport = async () => {
+    if (!reversalImpact || reversingImport || !reversalImpact.membership_complete) return;
+    if (reversalImpact.pending_occurrences > 0 && !confirmPendingReversal) return;
+    setReversingImport(true);
+    setErrorMessage('');
+    try {
+      const result = await reverseReturnDataImport(reversalImpact.import.id, {
+        confirm_pending: confirmPendingReversal,
+        reason: reversalReason,
+      });
+      setImportFeedback(result.message || 'Importação desfeita com sucesso.');
+      setReversalImpact(null);
+      await Promise.all([loadImports(), loadOverview(filters)]);
+      if (activeTab === 'occurrences') await loadOccurrences(1, filters);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, 'Não foi possível desfazer a importação.'));
+    } finally {
+      setReversingImport(false);
+    }
+  };
+
   const downloadIssues = () => {
     if (!importPreview) return;
     const issues = [
@@ -423,6 +469,7 @@ function ReturnDataRegistry() {
     ['Clientes', overview.metrics.distinct_customers],
     ['Sem lote', overview.metrics.unlinked_occurrences],
   ] : [], [overview]);
+  const latestConfirmedImportId = imports.find((item) => item.import_status === 'confirmed')?.id ?? null;
 
   return (
     <div className="min-h-screen">
@@ -792,13 +839,13 @@ function ReturnDataRegistry() {
                           </div>
                         )}
                         {Boolean(importPreview.other_carriers?.length) ? (
-                          <div className="flex gap-2 rounded-md border semantic-panel-warning px-3 py-2 text-sm">
+                          <div className="flex gap-2 rounded-md border semantic-panel-danger px-3 py-2 text-sm">
                             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                            Transportadoras diferentes sinalizadas: {importPreview.other_carriers?.join(', ')}
+                            Importação bloqueada. Transportadoras diferentes da esperada ({importPreview.expected_carrier || 'KP TRANSPORTES'}): {importPreview.other_carriers?.join(', ')}
                           </div>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" disabled={importing || !importPreview.total_occurrences} onClick={() => void handleConfirmImport()} className="h-10 rounded-md bg-success px-4 text-sm font-semibold text-white disabled:opacity-45">
+                          <button type="button" disabled={importing || !importPreview.total_occurrences || importPreview.carrier_mismatch || Boolean(importPreview.errors_count)} onClick={() => void handleConfirmImport()} className="h-10 rounded-md bg-success px-4 text-sm font-semibold text-white disabled:opacity-45">
                             {importing ? 'Importando...' : 'Confirmar importação'}
                           </button>
                           <button type="button" disabled={importing} onClick={() => { setImportPreview(null); setSelectedFile(null); }} className="h-10 rounded-md border border-border px-4 text-sm font-semibold text-muted">
@@ -821,16 +868,119 @@ function ReturnDataRegistry() {
                       <article key={item.id} className="rounded-md border border-border bg-surface p-3 text-xs">
                         <div className="flex items-start justify-between gap-2">
                           <strong className="break-all text-sm text-text">{item.original_file_name}</strong>
-                          <span className="rounded-full semantic-panel-success px-2 py-0.5 font-semibold">Confirmada</span>
+                          <span className={`rounded-full px-2 py-0.5 font-semibold ${item.import_status === 'reverted' ? 'semantic-panel-warning' : 'semantic-panel-success'}`}>
+                            {item.import_status === 'reverted' ? 'Desfeita' : 'Confirmada'}
+                          </span>
                         </div>
                         <p className="mt-1 text-muted">{formatDateTime(item.imported_at)} · {item.imported_by_username || 'Usuário não informado'}</p>
                         <p className="mt-2 text-muted">
                           {item.total_occurrences} ocorrência(s) · {item.created_occurrences} nova(s) · {item.updated_occurrences} atualizada(s) · {item.unchanged_occurrences} ignorada(s)
                         </p>
+                        {item.import_status === 'reverted' ? (
+                          <p className="mt-2 rounded border border-border px-2 py-1 text-muted">
+                            Desfeita em {formatDateTime(item.reverted_at)} por {item.reverted_by_username || 'administrador'}
+                            {item.reversal_reason ? ` · ${item.reversal_reason}` : ''}
+                          </p>
+                        ) : null}
+                        {canReverseImport && item.id === latestConfirmedImportId ? (
+                          <button
+                            type="button"
+                            disabled={loadingReversalImpact}
+                            onClick={() => void openReversalImpact(item)}
+                            className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-danger px-3 text-xs font-semibold text-danger disabled:opacity-50"
+                          >
+                            <Trash2 size={14} /> {loadingReversalImpact ? 'Analisando...' : 'Analisar exclusão'}
+                          </button>
+                        ) : null}
                       </article>
                     ))}
                   </div>
                 )}
+              </section>
+            </div>
+          ) : null}
+          {reversalImpact ? (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" aria-labelledby="reversal-title">
+              <section className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-xl">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 id="reversal-title" className="text-lg font-bold text-text">Impacto da exclusão</h2>
+                    <p className="mt-1 break-all text-sm text-muted">{reversalImpact.import.original_file_name}</p>
+                  </div>
+                  <button type="button" onClick={() => setReversalImpact(null)} className="rounded-md border border-border p-2 text-muted" aria-label="Fechar análise de exclusão">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ['Ocorrências da planilha', reversalImpact.total_occurrences],
+                    ['Em lote', reversalImpact.linked_occurrences],
+                    ['Fora de lote', reversalImpact.pending_occurrences],
+                    ['Serão removidas', reversalImpact.created_occurrences],
+                    ['Serão restauradas', reversalImpact.updated_occurrences],
+                    ['Sem alteração', reversalImpact.unchanged_occurrences],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="rounded-md border border-border bg-surface p-3">
+                      <span className="block text-xs text-muted">{label}</span>
+                      <strong className="text-lg text-text">{numberFormatter.format(Number(value))}</strong>
+                    </div>
+                  ))}
+                </div>
+
+                {!reversalImpact.membership_complete ? (
+                  <div className="mt-4 rounded-md border semantic-panel-danger p-3 text-sm">
+                    Esta é uma importação antiga e não possui o vínculo completo das ocorrências. Por segurança, a exclusão automática está bloqueada.
+                  </div>
+                ) : reversalImpact.pending_occurrences > 0 ? (
+                  <div className="mt-4 space-y-3">
+                    <div className="rounded-md border semantic-panel-warning p-3 text-sm">
+                      <strong>{reversalImpact.pending_occurrences} ocorrência(s) ainda não entraram em um lote.</strong>
+                      <p className="mt-1">Revise a relação abaixo. É possível excluir mesmo assim, mas essas ocorrências deixarão de aparecer na validação da base.</p>
+                    </div>
+                    <div className="max-h-64 overflow-auto rounded-md border border-border">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="sticky top-0 bg-surface-2 text-muted">
+                          <tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">NF</th><th className="px-3 py-2">Cliente</th></tr>
+                        </thead>
+                        <tbody>
+                          {reversalImpact.pending.map((occurrence) => (
+                            <tr key={occurrence.membership_id} className="border-t border-border">
+                              <td className="px-3 py-2">{occurrence.source_occurrence_id}</td>
+                              <td className="px-3 py-2 font-semibold">{occurrence.invoice_number}</td>
+                              <td className="px-3 py-2">{occurrence.customer_name || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-danger p-3 text-sm text-text">
+                      <input type="checkbox" checked={confirmPendingReversal} onChange={(event) => setConfirmPendingReversal(event.target.checked)} className="mt-0.5" />
+                      Confirmo que desejo excluir a importação mesmo com ocorrências fora de um lote.
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex gap-2 rounded-md border semantic-panel-success p-3 text-sm">
+                    <CheckCircle2 className="h-5 w-5 shrink-0" /> Todas as ocorrências desta planilha já estão em lotes de devolução.
+                  </div>
+                )}
+
+                <label className="mt-4 block text-sm font-semibold text-text">
+                  Motivo da exclusão (opcional)
+                  <textarea value={reversalReason} onChange={(event) => setReversalReason(event.target.value)} maxLength={500} rows={2} className="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm font-normal" placeholder="Ex.: planilha importada para a transportadora errada" />
+                </label>
+
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <button type="button" disabled={reversingImport} onClick={() => setReversalImpact(null)} className="h-10 rounded-md border border-border px-4 text-sm font-semibold">Cancelar</button>
+                  <button
+                    type="button"
+                    disabled={reversingImport || !reversalImpact.membership_complete || (reversalImpact.pending_occurrences > 0 && !confirmPendingReversal)}
+                    onClick={() => void handleReverseImport()}
+                    className="inline-flex h-10 items-center gap-2 rounded-md bg-danger px-4 text-sm font-semibold text-white disabled:opacity-45"
+                  >
+                    <Trash2 size={16} /> {reversingImport ? 'Excluindo...' : 'Desfazer importação'}
+                  </button>
+                </div>
               </section>
             </div>
           ) : null}

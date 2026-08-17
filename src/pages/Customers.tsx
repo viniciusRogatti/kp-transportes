@@ -7,21 +7,12 @@ import axios from "axios";
 import { API_URL } from "../data";
 import { ICustomer } from "../types/types";
 import { ProductsLoader } from "../style/Loaders";
-import { resolveCustomerCompanyCode } from "../utils/companyTabs";
+import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveCustomerCompanyCode } from "../utils/companyTabs";
 
 type CustomerWithOptionalNumber = ICustomer & {
   address_number?: string | number | null;
   number?: string | number | null;
   nro?: string | number | null;
-};
-
-const COMPANY_TAB_ORDER = ['mar_e_rio', 'brazilian_fish', 'pronto'] as const;
-
-const COMPANY_LABELS: Record<string, string> = {
-  all: 'Todas',
-  mar_e_rio: 'MAR E RIO',
-  brazilian_fish: 'BRASFISH',
-  pronto: 'PRONTO',
 };
 
 function normalizeSpaces(value: string) {

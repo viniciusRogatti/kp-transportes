@@ -154,7 +154,7 @@ type MonitoringSummary = {
   missing_geolocation: number;
 };
 
-type CompanyFilterOption = 'all' | 'mar_e_rio' | 'brazilian_fish' | 'pronto' | string;
+type CompanyFilterOption = 'all' | 'mar_e_rio' | 'brazilian_fish' | 'pronto' | 'bacio_di_latte' | string;
 
 type MonitoringAlert = {
   id: number;

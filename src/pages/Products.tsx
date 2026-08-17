@@ -8,17 +8,8 @@ import { Container, FilterBar, FilterInput } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 import { ProductsLoader } from "../style/Loaders";
+import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveProductCompanyCode } from "../utils/companyTabs";
 
-const COMPANY_TAB_ORDER = ['mar_e_rio', 'brazilian_fish', 'pronto'] as const;
-
-const COMPANY_LABELS: Record<string, string> = {
-  all: 'Todas',
-  mar_e_rio: 'MAR E RIO',
-  brazilian_fish: 'BRASFISH',
-  pronto: 'PRONTO',
-};
-
-const resolveCompanyCode = (product: IProduct) => String(product.company?.code || '').trim().toLowerCase();
 
 function Products() {
   const [products, setProduct] = useState<IProduct[] | []>([]);
@@ -62,7 +53,7 @@ function Products() {
 
   const visibleProducts = useMemo(() => {
     if (activeCompanyTab === 'all') return products;
-    return products.filter((product) => resolveCompanyCode(product) === activeCompanyTab);
+    return products.filter((product) => resolveProductCompanyCode(product) === activeCompanyTab);
   }, [activeCompanyTab, products]);
 
   const filteredProducts = visibleProducts.filter((product) => {

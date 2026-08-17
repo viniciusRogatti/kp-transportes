@@ -71,6 +71,7 @@ import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { parseUnitsPerBoxFromDescription } from '../utils/productPackaging';
 import {
   getReturnDataByInvoice,
   getReturnDataOverview,
@@ -288,16 +289,6 @@ const normalizeDecimalInput = (value: string) => value.trim().replace(',', '.');
 const normalizeQtyByType = (value: number, isKg: boolean) => (
   isKg ? Math.round(value * KG_QUANTITY_PRECISION) / KG_QUANTITY_PRECISION : value
 );
-const parseUnitsPerBoxFromDescription = (description?: string | null) => {
-  const normalizedDescription = String(description || '').toUpperCase();
-  const match = normalizedDescription.match(/\bCX\s*(\d+(?:[.,]\d+)?)\s*UN\b/);
-  if (!match?.[1]) {
-    return null;
-  }
-
-  const parsed = Number(normalizeDecimalInput(match[1]));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-};
 const getDanfeProductQuantityLimitByType = (product?: IDanfe['DanfeProducts'][number] | null, selectedType?: string | null) => {
   if (!product) {
     return 0;

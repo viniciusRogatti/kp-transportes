@@ -2420,13 +2420,16 @@ function ReturnsOccurrences() {
         });
       }
 
-      await Promise.all(notesToRemove.map((note) => axios.delete(`${API_URL}/returns/notes/${note.id}`)));
-      await Promise.all(notesToAdd.map((note) => (
-        axios.post(
+      for (const note of notesToRemove) {
+        await axios.delete(`${API_URL}/returns/notes/${note.id}`);
+      }
+
+      for (const note of notesToAdd) {
+        await axios.post(
           `${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`,
           serializeReturnNotePayload(note),
-        )
-      )));
+        );
+      }
 
       alert('Lote salvo com sucesso.');
       await loadReturnBatches();

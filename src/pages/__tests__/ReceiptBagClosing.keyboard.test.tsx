@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ConferencePanel, getRecoveredReceiptOrigin } from '../ReceiptBagClosing';
-import { ReceiptBag, ReceiptBagItem } from '../../services/receiptBagClosingService';
+import { ConferencePanel, getRecoveredReceiptOrigin, matchesBagViewFilter } from '../ReceiptBagClosing';
+import { ReceiptBag, ReceiptBagItem, ReceiptBagListRow } from '../../services/receiptBagClosingService';
 
 const item = {
   id: 10,
@@ -28,6 +28,18 @@ const bag = {
 } as ReceiptBag;
 
 describe('ConferencePanel por teclado', () => {
+  it('separa malotes pendentes, atrasados e conferidos nos filtros da lista', () => {
+    const pending = { status: 'in_progress', is_overdue: false } as ReceiptBagListRow;
+    const overdue = { status: 'completed_with_pending', is_overdue: true } as ReceiptBagListRow;
+    const completed = { status: 'completed', is_overdue: false } as ReceiptBagListRow;
+    const rows = [pending, overdue, completed];
+
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'pending'))).toEqual([pending]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'overdue'))).toEqual([overdue]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'completed'))).toEqual([completed]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'all'))).toEqual(rows);
+  });
+
   it('seleciona no primeiro Enter, confirma no segundo e devolve o foco à busca limpa', async () => {
     const onSelect = jest.fn();
     const onMutate = jest.fn().mockResolvedValue(true);

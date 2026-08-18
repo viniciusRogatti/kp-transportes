@@ -44,8 +44,15 @@ import {
   updateReceiptBagItem,
 } from '../services/receiptBagClosingService';
 
-type ViewFilter = 'pending' | 'overdue' | 'completed' | 'all';
+export type ViewFilter = 'pending' | 'overdue' | 'completed' | 'all';
 type ItemFilter = 'all' | 'pending' | 'confirmed' | 'absent' | 'exceptions';
+
+export const matchesBagViewFilter = (row: ReceiptBagListRow, filter: ViewFilter) => {
+  if (filter === 'all') return true;
+  if (filter === 'completed') return row.status === 'completed';
+  if (filter === 'overdue') return row.status !== 'completed' && row.is_overdue;
+  return row.status !== 'completed' && !row.is_overdue;
+};
 
 const todayInput = () => {
   const now = new Date();
@@ -235,11 +242,7 @@ function ReceiptBagClosing() {
   const visibleRows = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
     return (data?.rows || []).filter((row) => {
-      const matchesFilter = viewFilter === 'all'
-        || (viewFilter === 'overdue' && row.is_overdue)
-        || (viewFilter === 'completed' && row.status === 'completed')
-        || (viewFilter === 'pending' && row.status !== 'completed');
-      return matchesFilter && (!term || [
+      return matchesBagViewFilter(row, viewFilter) && (!term || [
         row.trip_id, row.driver?.name, row.car?.license_plate, row.company?.name, row.company?.code,
       ].some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(term)));
     });

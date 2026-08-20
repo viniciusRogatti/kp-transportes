@@ -8,11 +8,13 @@ describe('parseUnitsPerBoxFromDescription', () => {
     ['PICOLE 70G CX C/ 18 *** 18,00 UNIDADE(S)', 18],
     ['BOMBOM DE SORVETE CX 12 BOXES 90 G', 12],
     ['BOMBOM DE SORVETE 12X90G', 12],
+    ['LEITE SEMI PIRACANJUBA A2 12X1L EDGE', 12],
   ])('extrai %s', (description, expected) => {
     expect(parseUnitsPerBoxFromDescription(description)).toBe(expected);
   });
 
   it('nao inventa embalagem para produto por peso', () => {
     expect(parseUnitsPerBoxFromDescription('SALMAO EVISCERADO KG')).toBeNull();
+    expect(parseUnitsPerBoxFromDescription('FILE DE TILAPIA S/PELE PCT 500G CX 15KG')).toBeNull();
   });
 });

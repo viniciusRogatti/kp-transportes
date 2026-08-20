@@ -19,6 +19,10 @@ interface ProductRow {
   quantity: number;
 }
 
+type NumberedProductRow = ProductRow & {
+  lineNumber: number;
+};
+
 interface ProductListPDFProps {
   products?: ProductRow[];
   driver: string;
@@ -34,6 +38,8 @@ interface ProductListPDFProps {
   salmonSeparations?: SalmonSeparationRow[];
   prontoBoxes?: ProntoBoxRow[];
 }
+
+type ProductLineSources = Pick<ProductListPDFProps, 'products' | 'salmonSeparations' | 'danfes'>;
 
 const CONTINUATION_HEADER_HEIGHT = 104;
 const FOOTER_HEIGHT = 18;
@@ -126,6 +132,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexBasis: 0,
   },
+  linesInfoCell: {
+    flexGrow: 0.7,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
   lastInfoCell: {
     marginRight: 0,
   },
@@ -202,8 +213,13 @@ const styles = StyleSheet.create({
     width: '8%',
     paddingRight: 4,
   },
+  colLineNumber: {
+    width: '6%',
+    paddingRight: 4,
+    textAlign: 'right',
+  },
   colDescription: {
-    width: '74%',
+    width: '68%',
     paddingRight: 6,
   },
   colQty: {
@@ -211,11 +227,11 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   colCustomer: {
-    width: '38%',
+    width: '35%',
     paddingRight: 6,
   },
   colSalmonProduct: {
-    width: '46%',
+    width: '43%',
     paddingRight: 6,
   },
   colInvoice: {
@@ -322,6 +338,31 @@ const normalizeProductRows = (products: ProductRow[] = []) => {
   }));
 };
 
+export const buildNumberedProductGroups = (products: ProductRow[] = [], startAt = 1) => {
+  const rowsByCompany = normalizeProductRows(products).reduce<Map<string, ProductRow[]>>((groups, product) => {
+    const companyName = String(product.company_name || 'Empresa nao identificada').trim();
+    groups.set(companyName, [...(groups.get(companyName) || []), product]);
+    return groups;
+  }, new Map());
+  let lineNumber = startAt;
+
+  return Array.from(rowsByCompany.entries()).map(([companyName, companyRows]) => [
+    companyName,
+    companyRows.map((product): NumberedProductRow => ({
+      ...product,
+      lineNumber: lineNumber++,
+    })),
+  ] as const);
+};
+
+const resolveProductLineCount = ({ products, salmonSeparations, danfes }: ProductLineSources) => {
+  if (products !== undefined || salmonSeparations !== undefined) {
+    return (products?.length || 0) + (salmonSeparations?.length || 0);
+  }
+
+  return (danfes || []).reduce((total, danfe) => total + (danfe.DanfeProducts?.length || 0), 0);
+};
+
 const formatQuantityWithUnit = (value: number | string | null | undefined, unit?: string | null) => {
   const formattedValue = formatDecimal(value);
   const normalizedUnit = String(unit || '').trim().toUpperCase();
@@ -364,6 +405,9 @@ const renderHeaderSummary = ({
   tripDate,
   tripCreatedAt,
   tripId,
+  products,
+  salmonSeparations,
+  danfes,
 }: ProductListPDFProps) => (
   <View>
     <View style={styles.topBar}>
@@ -391,9 +435,13 @@ const renderHeaderSummary = ({
         <Text style={styles.infoLabel}>Peso</Text>
         <Text style={styles.inlineInfoText}>{formatDecimal(totalWeight)}</Text>
       </View>
-      <View style={[styles.infoCell, styles.notesInfoCell, styles.lastInfoCell]}>
+      <View style={[styles.infoCell, styles.notesInfoCell]}>
         <Text style={styles.infoLabel}>Notas</Text>
         <Text style={styles.inlineInfoText}>{noteCount ?? '-'}</Text>
+      </View>
+      <View style={[styles.infoCell, styles.linesInfoCell, styles.lastInfoCell]}>
+        <Text style={styles.infoLabel}>Linhas de produtos</Text>
+        <Text style={styles.inlineInfoText}>{resolveProductLineCount({ products, salmonSeparations, danfes })}</Text>
       </View>
     </View>
   </View>
@@ -477,17 +525,9 @@ const renderFirstPageExtras = ({
   );
 };
 
-const renderFixedHeader = ({
-  driver,
-  vehiclePlate,
-  totalWeight,
-  noteCount,
-  tripDate,
-  tripCreatedAt,
-  tripId,
-}: ProductListPDFProps) => (
+const renderFixedHeader = (props: ProductListPDFProps) => (
   <View style={[styles.headerCard, styles.fixedHeader]} fixed>
-    {renderHeaderSummary({ driver, vehiclePlate, totalWeight, noteCount, tripDate, tripCreatedAt, tripId })}
+    {renderHeaderSummary(props)}
   </View>
 );
 
@@ -500,25 +540,23 @@ const renderFooter = () => (
   </View>
 );
 
-const renderProductsTable = (products: ProductRow[] = []) => {
-  const rowsByCompany = normalizeProductRows(products).reduce<Map<string, ProductRow[]>>((groups, product) => {
-    const companyName = String(product.company_name || 'Empresa nao identificada').trim();
-    groups.set(companyName, [...(groups.get(companyName) || []), product]);
-    return groups;
-  }, new Map());
+const renderProductsTable = (products: ProductRow[] = [], startAt = 1) => {
+  const numberedGroups = buildNumberedProductGroups(products, startAt);
 
   return (
     <>
-      {Array.from(rowsByCompany.entries()).map(([companyName, companyRows]) => (
+      {numberedGroups.map(([companyName, companyRows]) => (
         <View key={companyName} style={{ marginBottom: 10 }}>
           <Text style={styles.sectionTitle}>{`Produtos carregados - ${companyName}`}</Text>
           <View style={styles.tableHeader}>
+            <Text style={styles.colLineNumber}>#</Text>
             <Text style={styles.colCode}>Cod.</Text>
             <Text style={styles.colDescription}>Descricao</Text>
             <Text style={styles.colQty}>Qtd.</Text>
           </View>
           {companyRows.map((product, index) => (
             <View key={`${product.code}-${index}`} style={styles.row}>
+              <Text style={styles.colLineNumber}>{product.lineNumber}</Text>
               <Text style={styles.colCode}>{product.code}</Text>
               <Text style={styles.colDescription}>{product.description}</Text>
               <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type)}</Text>
@@ -537,6 +575,7 @@ const renderSalmonSeparations = (rows: SalmonSeparationRow[] = []) => {
     groups.set(companyName, [...(groups.get(companyName) || []), row]);
     return groups;
   }, new Map());
+  let lineNumber = 1;
 
   return (
     <>
@@ -544,12 +583,14 @@ const renderSalmonSeparations = (rows: SalmonSeparationRow[] = []) => {
         <View key={companyName} style={{ marginBottom: 10 }}>
           <Text style={styles.sectionTitle}>{`Separacao de salmao por cliente - ${companyName}`}</Text>
           <View style={styles.tableHeader}>
+            <Text style={styles.colLineNumber}>#</Text>
             <Text style={styles.colCustomer}>Cliente / CNPJ ou CPF</Text>
             <Text style={styles.colSalmonProduct}>Produto</Text>
             <Text style={styles.colQty}>Qtd.</Text>
           </View>
           {companyRows.map((row) => (
             <View key={`${row.companyId}-${row.customerDocument}-${row.code}-${row.type}`} style={styles.row}>
+              <Text style={styles.colLineNumber}>{lineNumber++}</Text>
               <Text style={styles.colCustomer}>{`${row.customerName}${row.customerDocument ? `\n${formatCustomerDocument(row.customerDocument)}` : ''}`}</Text>
               <Text style={styles.colSalmonProduct}>{row.description}</Text>
               <Text style={styles.colQty}>{formatQuantityWithUnit(row.quantity, row.type)}</Text>
@@ -598,8 +639,10 @@ const renderInvoiceList = (danfes: IDanfe[] = []) => {
   );
 };
 
-const renderDeliveryList = (danfes: IDanfe[] = []) => (
-  <>
+const renderDeliveryList = (danfes: IDanfe[] = []) => {
+  let lineNumber = 1;
+  return (
+    <>
     <Text style={styles.sectionTitle}>Lista de entregas</Text>
     {danfes.map((danfe, index) => (
       <View key={`${danfe.invoice_number}-${index}`} style={styles.deliveryBlock}>
@@ -610,12 +653,14 @@ const renderDeliveryList = (danfes: IDanfe[] = []) => (
         <Text>{danfe.Customer?.name_or_legal_entity || '-'}</Text>
         <Text style={styles.muted}>{danfe.Customer?.city || 'Cidade nao informada'}</Text>
         <View style={[styles.tableHeader, { marginTop: 5 }]}>
+          <Text style={styles.colLineNumber}>#</Text>
           <Text style={styles.colCode}>Cod.</Text>
           <Text style={styles.colDescription}>Descricao</Text>
           <Text style={styles.colQty}>Qtd.</Text>
         </View>
         {(danfe.DanfeProducts || []).map((product, productIndex) => (
           <View key={`${danfe.invoice_number}-${product.Product?.code || productIndex}`} style={styles.row}>
+            <Text style={styles.colLineNumber}>{lineNumber++}</Text>
             <Text style={styles.colCode}>{product.Product?.code || '-'}</Text>
             <Text style={styles.colDescription}>{product.Product?.description || 'Produto sem descricao'}</Text>
             <Text style={styles.colQty}>{formatQuantityWithUnit(product.quantity, product.type || product.Product?.type)}</Text>
@@ -623,8 +668,9 @@ const renderDeliveryList = (danfes: IDanfe[] = []) => (
         ))}
       </View>
     ))}
-  </>
-);
+    </>
+  );
+};
 
 const renderPageContent = ({ products, danfes, salmonSeparations, prontoBoxes }: ProductListPDFProps) => {
   if (prontoBoxes && prontoBoxes.length > 0 && !products?.length && !salmonSeparations?.length) {
@@ -637,7 +683,7 @@ const renderPageContent = ({ products, danfes, salmonSeparations, prontoBoxes }:
         {renderInvoiceList(danfes)}
         {renderProntoBoxes(prontoBoxes)}
         {renderSalmonSeparations(salmonSeparations)}
-        {renderProductsTable(products)}
+        {renderProductsTable(products, (salmonSeparations?.length || 0) + 1)}
       </>
     );
   }

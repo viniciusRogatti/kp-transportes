@@ -5,7 +5,10 @@ import { TextDecoder, TextEncoder } from 'util';
 (global as any).TextDecoder = TextDecoder;
 
 const { renderToBuffer } = require('@react-pdf/renderer');
-const ProductListPDF = require('../ProductListPDF').default;
+const {
+  default: ProductListPDF,
+  buildNumberedProductGroups,
+} = require('../ProductListPDF');
 
 const buildDanfes = (count: number) => Array.from({ length: count }, (_, index) => ({
   invoice_number: String(1000 + index),
@@ -40,8 +43,26 @@ const countPdfPages = (buffer: Buffer) => (
 );
 
 describe('ProductListPDF - paginação', () => {
+  it('numera continuamente as linhas mesmo quando existem varias empresas', () => {
+    const groups = buildNumberedProductGroups([
+      { company_name: 'EMPRESA A', code: 'A1', description: 'Produto A1', type: 'CX', quantity: 1 },
+      { company_name: 'EMPRESA B', code: 'B1', description: 'Produto B1', type: 'CX', quantity: 1 },
+      { company_name: 'EMPRESA A', code: 'A2', description: 'Produto A2', type: 'CX', quantity: 1 },
+    ]);
+
+    expect(groups.map(([companyName, rows]: [string, Array<{ lineNumber: number }>]) => ({
+      companyName,
+      lineNumbers: rows.map((row) => row.lineNumber),
+    }))).toEqual([
+      { companyName: 'EMPRESA A', lineNumbers: [1, 2] },
+      { companyName: 'EMPRESA B', lineNumbers: [3] },
+    ]);
+  });
+
   it('não cria uma folha vazia depois de remover as linhas de salmão', async () => {
-    const buffer = await renderToBuffer(
+    // O retorno e um Buffer de PDF, nao o resultado do render do Testing Library.
+    // eslint-disable-next-line testing-library/render-result-naming-convention
+    const pdfBuffer = await renderToBuffer(
       <ProductListPDF
         products={buildProducts(10)}
         salmonSeparations={[]}
@@ -56,6 +77,6 @@ describe('ProductListPDF - paginação', () => {
       />,
     );
 
-    expect(countPdfPages(buffer)).toBe(1);
+    expect(countPdfPages(pdfBuffer)).toBe(1);
   }, 30000);
 });

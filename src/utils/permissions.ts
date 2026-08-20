@@ -16,6 +16,7 @@ export const ROUTE_PERMISSIONS: Record<string, readonly string[]> = {
   '/operational-pendencies': USER_ALLOWED_PERMISSIONS,
   '/alerts': USER_ALLOWED_PERMISSIONS,
   '/delivery-monitoring': [...TRANSPORT_INTERNAL_PERMISSIONS, CONTROL_TOWER_PERMISSION],
+  '/daily-operation-closing': TRANSPORT_INTERNAL_PERMISSIONS,
   '/receipt-bag-closing': TRANSPORT_INTERNAL_PERMISSIONS,
   '/products': USER_ALLOWED_PERMISSIONS,
   '/routePlanning': TRANSPORT_INTERNAL_PERMISSIONS,

@@ -4,15 +4,17 @@ import { format, subDays } from 'date-fns';
 import {
   AlertTriangle,
   CalendarDays,
-  CheckCircle2,
   Clock3,
+  Eye,
   FileDown,
   LockKeyhole,
   PackageCheck,
+  Pencil,
   RefreshCcw,
   RotateCcw,
   Save,
   Truck,
+  X,
 } from 'lucide-react';
 import Header from '../components/Header';
 import DailyOperationClosingPDF from '../components/DailyOperationClosingPDF';
@@ -24,7 +26,7 @@ import {
   getDailyOperationReport,
   reopenDailyOperation,
   saveDailyOperationNotes,
-  saveLoadingDuration,
+  saveDailyOperationLoadings,
 } from '../services/dailyOperationClosingService';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { getApiErrorMessage } from '../utils/authErrorHandler';
@@ -39,6 +41,13 @@ const defaultDate = () => {
   return yesterday < DAILY_OPERATION_REPORT_START_DATE ? DAILY_OPERATION_REPORT_START_DATE : yesterday;
 };
 const numberFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+const formatMinutes = (minutes: number) => {
+  const value = Number(minutes || 0);
+  if (value < 60) return `${value} min`;
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  return rest ? `${hours}h ${rest}min` : `${hours}h`;
+};
 
 const statusLabel = (status: string) => ({
   pending: 'Sem rota', assigned: 'Atribuída', redelivery: 'Reentrega', retained: 'Retida',
@@ -87,6 +96,9 @@ export default function DailyOperationClosing() {
   const [error, setError] = useState('');
   const [notes, setNotes] = useState('');
   const [loadingDrafts, setLoadingDrafts] = useState<Record<number, LoadingDraft>>({});
+  const [loadingStartTime, setLoadingStartTime] = useState('');
+  const [loadingEndTime, setLoadingEndTime] = useState('');
+  const [isLoadingModalOpen, setIsLoadingModalOpen] = useState(false);
   const permission = String(localStorage.getItem('user_permission') || '').toLowerCase();
   const canClose = ['admin', 'master', 'expedicao'].includes(permission);
   const canReopen = ['admin', 'master'].includes(permission);
@@ -94,6 +106,8 @@ export default function DailyOperationClosing() {
   const applyReport = useCallback((next: DailyOperationReport) => {
     setReport(next);
     setNotes(next.notes || '');
+    setLoadingStartTime(next.loading_start_time || '');
+    setLoadingEndTime(next.loading_end_time || '');
     setLoadingDrafts(Object.fromEntries(next.routes.map((route) => [route.trip_id, {
       duration: route.duration_minutes ? String(route.duration_minutes) : '',
       notes: route.loading_notes || '',
@@ -118,19 +132,46 @@ export default function DailyOperationClosing() {
     report?.routes.filter((route) => !Number(loadingDrafts[route.trip_id]?.duration || route.duration_minutes || 0)).length || 0
   ), [loadingDrafts, report]);
 
-  const saveLoading = async (tripId: number) => {
-    const draft = loadingDrafts[tripId];
-    const duration = Number(draft?.duration || 0);
-    if (!Number.isInteger(duration) || duration <= 0) {
-      setError('Informe a duração do carregamento em minutos inteiros.');
+  const closeLoadingModal = () => {
+    if (report) applyReport(report);
+    setIsLoadingModalOpen(false);
+  };
+
+  const saveLoadings = async () => {
+    if ((loadingStartTime && !loadingEndTime) || (!loadingStartTime && loadingEndTime)) {
+      setError('Informe o horário de início e o horário de finalização da operação.');
       return;
     }
-    setSavingKey(`loading-${tripId}`);
+    const invalidDuration = report?.routes.some((route) => {
+      const value = loadingDrafts[route.trip_id]?.duration?.trim();
+      if (!value) return false;
+      const duration = Number(value);
+      return !Number.isInteger(duration) || duration <= 0 || duration > 1440;
+    });
+    if (invalidDuration) {
+      setError('As durações devem ser informadas em minutos inteiros, entre 1 e 1440.');
+      return;
+    }
+    setSavingKey('loadings');
     setError('');
     try {
-      applyReport(await saveLoadingDuration(selectedDate, tripId, duration, draft?.notes || ''));
+      const updatedReport = await saveDailyOperationLoadings(
+        selectedDate,
+        loadingStartTime,
+        loadingEndTime,
+        (report?.routes || []).map((route) => {
+          const draft = loadingDrafts[route.trip_id] || { duration: '', notes: '' };
+          return {
+            trip_id: route.trip_id,
+            duration_minutes: draft.duration.trim() ? Number(draft.duration) : null,
+            notes: draft.notes,
+          };
+        }),
+      );
+      applyReport(updatedReport);
+      setIsLoadingModalOpen(false);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError) || 'Não foi possível salvar a duração.');
+      setError(getApiErrorMessage(requestError) || 'Não foi possível salvar os horários dos carregamentos.');
     } finally {
       setSavingKey(null);
     }
@@ -150,8 +191,13 @@ export default function DailyOperationClosing() {
 
   const closeReport = async () => {
     if (!report) return;
-    const warning = missingLoadingCount
-      ? `Ainda existem ${missingLoadingCount} carregamento(s) sem duração. Deseja fechar mesmo assim?`
+    const missingLoadingWindow = !report.loading_start_time || !report.loading_end_time;
+    const pendingItems = [
+      missingLoadingCount ? `${missingLoadingCount} carregamento(s) sem duração` : '',
+      missingLoadingWindow ? 'os horários gerais da operação incompletos' : '',
+    ].filter(Boolean).join(' e ');
+    const warning = pendingItems
+      ? `Ainda existem ${pendingItems}. Deseja fechar mesmo assim?`
       : 'Confirma o fechamento? Os dados do dia ficarão congelados para consulta e PDF.';
     if (!await showConfirm(warning, { title: 'Fechar operação', confirmLabel: 'Fechar operação' })) return;
     setSavingKey('close');
@@ -268,8 +314,8 @@ export default function DailyOperationClosing() {
                     <InlineMetric label="Veículos" value={report.summary.vehicles_used} />
                     <InlineMetric label="Peso" value={`${numberFormat.format(report.summary.total_weight)} kg`} />
                     <InlineMetric label="Caixas/volumes" value={numberFormat.format(report.summary.total_boxes)} />
-                    <InlineMetric label="Durações" value={`${report.summary.loadings_informed}/${report.summary.routes}`} />
-                    <InlineMetric label="Tempo carregando" value={`${report.summary.loading_minutes} min`} />
+                    <InlineMetric label="Tempo da operação" value={formatMinutes(report.summary.loading_operation_minutes)} />
+                    <InlineMetric label="Média/veículo" value={`${numberFormat.format(report.summary.average_loading_minutes)} min`} />
                   </div>
                 </div>
 
@@ -287,33 +333,22 @@ export default function DailyOperationClosing() {
               </section>
 
               <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
                     <h2 className="flex items-center gap-2 text-base font-semibold text-text"><Clock3 className="h-5 w-5 text-accent" /> Carregamentos e rotas</h2>
-                    <p className="mt-1 text-xs text-muted">Informe somente a duração calculada entre as fotos dos carregamentos.</p>
+                    <p className="mt-1 text-xs text-muted">Horário geral da operação e duração calculada pelas fotos de cada veículo.</p>
                   </div>
-                  <div className="flex flex-wrap gap-2"><Badge tone="info">{report.summary.loading_minutes} min registrados</Badge><Badge tone={missingLoadingCount ? 'warning' : 'success'}>{report.summary.loadings_informed}/{report.summary.routes} durações informadas</Badge></div>
+                  <button className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-white hover:brightness-95" onClick={() => setIsLoadingModalOpen(true)}>
+                    {report.status === 'closed' ? <Eye className="h-4 w-4" /> : report.summary.loadings_informed ? <Pencil className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
+                    {report.status === 'closed' ? 'Visualizar horários' : report.summary.loadings_informed || report.loading_start_time ? 'Editar horários' : 'Adicionar horários'}
+                  </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table>
-                    <thead><tr><th>Motorista/rota</th><th>Veículo</th><th>Empresa</th><th>Notas</th><th>Peso</th><th>Caixas</th><th>Duração (min)</th><th>Observação</th><th>Ação</th></tr></thead>
-                    <tbody>
-                      {report.routes.map((route) => {
-                        const draft = loadingDrafts[route.trip_id] || { duration: '', notes: '' };
-                        return (
-                          <tr key={route.trip_id}>
-                            <td><strong>{route.driver_name}</strong><div className="text-xs text-muted">Rota #{route.trip_id} · viagem {route.run_number}</div></td>
-                            <td>{route.vehicle}</td><td>{route.company_name}</td><td>{route.total_notes}</td>
-                            <td>{numberFormat.format(route.total_weight)} kg</td><td>{route.total_boxes}</td>
-                            <td><input aria-label={`Duração do carregamento de ${route.driver_name}`} className="h-9 w-24 rounded-md border border-border bg-surface px-2 text-right text-sm" type="number" min="1" max="1440" disabled={report.status === 'closed'} value={draft.duration} onChange={(event) => setLoadingDrafts((current) => ({ ...current, [route.trip_id]: { ...draft, duration: event.target.value } }))} placeholder="Ex.: 32" /></td>
-                            <td><input aria-label={`Observação do carregamento de ${route.driver_name}`} className="h-9 min-w-[180px] rounded-md border border-border bg-surface px-2 text-sm" disabled={report.status === 'closed'} value={draft.notes} onChange={(event) => setLoadingDrafts((current) => ({ ...current, [route.trip_id]: { ...draft, notes: event.target.value } }))} placeholder="Opcional" /></td>
-                            <td>{report.status === 'draft' ? <button className="inline-flex h-9 items-center gap-1 rounded-md bg-accent px-3 text-xs font-semibold text-white" onClick={() => void saveLoading(route.trip_id)} disabled={savingKey === `loading-${route.trip_id}`}><Save className="h-3.5 w-3.5" /> Salvar</button> : <CheckCircle2 className="h-5 w-5 text-emerald-700" />}</td>
-                          </tr>
-                        );
-                      })}
-                      {!report.routes.length ? <tr><td colSpan={9} className="text-center text-muted">Nenhuma rota encontrada em {formatDateBR(selectedDate)}.</td></tr> : null}
-                    </tbody>
-                  </table>
+                <div className="grid grid-cols-2 border-t border-border px-3 py-2 sm:grid-cols-5 sm:divide-x sm:divide-border">
+                  <InlineMetric label="Início" value={report.loading_start_time || 'Não informado'} />
+                  <InlineMetric label="Finalização" value={report.loading_end_time || 'Não informado'} />
+                  <InlineMetric label="Tempo total" value={formatMinutes(report.summary.loading_operation_minutes)} />
+                  <InlineMetric label="Média por veículo" value={`${numberFormat.format(report.summary.average_loading_minutes)} min`} />
+                  <InlineMetric label="Durações preenchidas" value={`${report.summary.loadings_informed}/${report.summary.routes}`} />
                 </div>
               </section>
 
@@ -356,6 +391,61 @@ export default function DailyOperationClosing() {
           ) : null}
         </div>
       </Container>
+
+      {isLoadingModalOpen && report ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" aria-labelledby="loading-modal-title">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+              <div>
+                <h2 id="loading-modal-title" className="text-lg font-semibold text-text">Horários dos carregamentos</h2>
+                <p className="mt-1 text-xs text-muted">{formatDateBR(selectedDate)} · informe o período geral e a duração de cada rota calculada pelas fotos.</p>
+              </div>
+              <button aria-label="Fechar" className="rounded-md p-2 text-muted hover:bg-surface-2 hover:text-text" onClick={closeLoadingModal}><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="overflow-y-auto p-4">
+              <div className="mb-4 grid gap-3 rounded-lg border border-border bg-surface p-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-muted">Início da operação
+                  <input className="mt-1 block h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-text" type="time" disabled={report.status === 'closed'} value={loadingStartTime} onChange={(event) => setLoadingStartTime(event.target.value)} />
+                </label>
+                <label className="text-xs font-semibold text-muted">Finalização da operação
+                  <input className="mt-1 block h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-text" type="time" disabled={report.status === 'closed'} value={loadingEndTime} onChange={(event) => setLoadingEndTime(event.target.value)} />
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                {report.routes.map((route) => {
+                  const draft = loadingDrafts[route.trip_id] || { duration: '', notes: '' };
+                  return (
+                    <div key={route.trip_id} className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-[minmax(180px,1.1fr)_minmax(180px,1fr)_130px_minmax(180px,1fr)] md:items-end">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-text">{route.driver_name}</p>
+                        <p className="truncate text-xs text-muted">Rota #{route.trip_id} · viagem {route.run_number} · {route.company_name}</p>
+                      </div>
+                      <div className="min-w-0 md:pb-2"><p className="truncate text-sm text-text">{route.vehicle}</p></div>
+                      <label className="text-xs font-semibold text-muted">Duração (min)
+                        <input aria-label={`Duração do carregamento de ${route.driver_name}`} className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 text-right text-sm text-text" type="number" min="1" max="1440" disabled={report.status === 'closed'} value={draft.duration} onChange={(event) => setLoadingDrafts((current) => ({ ...current, [route.trip_id]: { ...draft, duration: event.target.value } }))} placeholder="Ex.: 32" />
+                      </label>
+                      <label className="text-xs font-semibold text-muted">Observação
+                        <input aria-label={`Observação do carregamento de ${route.driver_name}`} className="mt-1 h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-text" disabled={report.status === 'closed'} value={draft.notes} onChange={(event) => setLoadingDrafts((current) => ({ ...current, [route.trip_id]: { ...draft, notes: event.target.value } }))} placeholder="Opcional" />
+                      </label>
+                    </div>
+                  );
+                })}
+                {!report.routes.length ? <p className="rounded-lg border border-border p-6 text-center text-sm text-muted">Nenhuma rota encontrada em {formatDateBR(selectedDate)}.</p> : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface p-4">
+              <div className="flex gap-2"><Badge tone="info">{report.summary.loading_minutes} min somados</Badge><Badge tone={missingLoadingCount ? 'warning' : 'success'}>{report.summary.routes - missingLoadingCount}/{report.summary.routes} preenchidos</Badge></div>
+              <div className="flex gap-2">
+                <button className="h-10 rounded-md border border-border px-4 text-sm font-semibold text-text hover:bg-surface-2" onClick={closeLoadingModal}>{report.status === 'closed' ? 'Fechar' : 'Cancelar'}</button>
+                {report.status === 'draft' ? <button className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-white hover:brightness-95" onClick={() => void saveLoadings()} disabled={savingKey === 'loadings'}><Save className="h-4 w-4" />{savingKey === 'loadings' ? 'Salvando...' : 'Salvar horários'}</button> : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

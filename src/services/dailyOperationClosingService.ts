@@ -20,6 +20,8 @@ export type DailyOperationSummary = {
   total_boxes: number;
   loading_minutes: number;
   loadings_informed: number;
+  loading_operation_minutes: number;
+  average_loading_minutes: number;
 };
 
 export type DailyOperationRoute = {
@@ -73,6 +75,8 @@ export type DailyOperationReport = {
   notes: string;
   closed_at: string | null;
   closed_by_name: string | null;
+  loading_start_time: string | null;
+  loading_end_time: string | null;
   summary: DailyOperationSummary;
   routes: DailyOperationRoute[];
   pending_deliveries: PendingDelivery[];
@@ -87,6 +91,25 @@ export const saveLoadingDuration = async (date: string, tripId: number, duration
   await axios.put<DailyOperationReport>(`${API_URL}/api/daily-operation-closings/${date}/loadings/${tripId}`, {
     duration_minutes: durationMinutes,
     notes,
+  })
+).data;
+
+export type DailyOperationLoadingInput = {
+  trip_id: number;
+  duration_minutes: number | null;
+  notes: string;
+};
+
+export const saveDailyOperationLoadings = async (
+  date: string,
+  loadingStartTime: string,
+  loadingEndTime: string,
+  loadings: DailyOperationLoadingInput[],
+) => (
+  await axios.put<DailyOperationReport>(`${API_URL}/api/daily-operation-closings/${date}/loadings`, {
+    loading_start_time: loadingStartTime || null,
+    loading_end_time: loadingEndTime || null,
+    loadings,
   })
 ).data;
 

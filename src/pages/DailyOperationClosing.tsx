@@ -29,6 +29,7 @@ import {
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { getApiErrorMessage } from '../utils/authErrorHandler';
 import { showConfirm, showPrompt } from '../utils/dialog';
+import { getSemanticToneClassName, SemanticTone } from '../utils/statusStyles';
 
 type LoadingDraft = { duration: string; notes: string };
 
@@ -39,22 +40,37 @@ const statusLabel = (status: string) => ({
   pending: 'Sem rota', assigned: 'Atribuída', redelivery: 'Reentrega', retained: 'Retida',
 }[status] || status);
 
-function MetricCard({ label, value, detail, tone = 'neutral' }: {
+function PrimaryMetric({ label, value, detail, tone = 'neutral' }: {
   label: string;
   value: string | number;
   detail?: string;
-  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+  tone?: SemanticTone;
 }) {
-  const tones = {
-    neutral: 'border-border bg-card', success: 'border-emerald-300 bg-emerald-50/70',
-    warning: 'border-amber-300 bg-amber-50/70', danger: 'border-red-300 bg-red-50/70',
-    info: 'border-blue-300 bg-blue-50/70',
-  };
   return (
-    <div className={`rounded-lg border p-3 shadow-soft ${tones[tone]}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-text">{value}</p>
-      {detail ? <p className="mt-1 text-xs text-muted">{detail}</p> : null}
+    <div className={`min-w-0 rounded-md border px-3 py-2.5 ${getSemanticToneClassName(tone, 'panel')}`}>
+      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <p className="text-xl font-bold leading-none text-text">{value}</p>
+        {detail ? <p className="truncate text-[11px] text-muted">{detail}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function InlineMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="min-w-0 px-2 py-1.5">
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-bold text-text">{value}</p>
+    </div>
+  );
+}
+
+function ExceptionMetric({ label, value, tone }: { label: string; value: number; tone: SemanticTone }) {
+  return (
+    <div className={`flex min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 py-2 ${getSemanticToneClassName(value ? tone : 'neutral', 'panel')}`}>
+      <span className="truncate text-[11px] font-semibold text-muted">{label}</span>
+      <strong className="text-sm text-text">{value}</strong>
     </div>
   );
 }
@@ -223,27 +239,47 @@ export default function DailyOperationClosing() {
             </div>
           </section>
 
-          {error ? <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800">{error}</div> : null}
+          {error ? <div role="alert" className={`rounded-lg border p-3 text-sm font-semibold ${getSemanticToneClassName('danger', 'panel')}`}>{error}</div> : null}
           {loading ? <div className="rounded-lg border border-border bg-card p-8 text-center text-muted">Carregando fechamento...</div> : null}
 
           {!loading && report ? (
             <>
-              <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <MetricCard label="Saldo inicial pendente" value={report.summary.opening_pending} detail="Fechamento anterior" />
-                <MetricCard label="Notas recebidas" value={report.summary.received_today} detail="XML importados no dia" tone="info" />
-                <MetricCard label="Notas atribuídas" value={report.summary.total_notes_assigned} detail={`${report.summary.routes} rotas`} />
-                <MetricCard label="Entregues" value={report.summary.delivered} tone="success" />
-                <MetricCard label="Pendentes de entrega" value={report.summary.pending_delivery} detail="Sem nova rota" tone={report.summary.pending_delivery ? 'danger' : 'success'} />
-                <MetricCard label="Canhotos pendentes" value={report.summary.pending_receipts} tone={report.summary.pending_receipts ? 'warning' : 'success'} />
-                <MetricCard label="Reentregas" value={report.summary.redelivery} tone={report.summary.redelivery ? 'warning' : 'neutral'} />
-                <MetricCard label="Devolvidas" value={report.summary.returned} tone={report.summary.returned ? 'danger' : 'neutral'} />
-                <MetricCard label="Canceladas" value={report.summary.cancelled} />
-                <MetricCard label="Retidas" value={report.summary.retained} tone={report.summary.retained ? 'warning' : 'neutral'} />
-                <MetricCard label="Veículos utilizados" value={report.summary.vehicles_used} detail={`${report.summary.routes} viagens`} />
-                <MetricCard label="Peso transportado" value={`${numberFormat.format(report.summary.total_weight)} kg`} />
-                <MetricCard label="Caixas/volumes" value={numberFormat.format(report.summary.total_boxes)} />
-                <MetricCard label="Ocorrências abertas" value={report.summary.open_occurrences} tone={report.summary.open_occurrences ? 'warning' : 'neutral'} />
-                <MetricCard label="Rotas não concluídas" value={report.summary.pending_route_completion} tone={report.summary.pending_route_completion ? 'warning' : 'success'} />
+              <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
+                <div className="grid grid-cols-2 gap-2 p-3 lg:grid-cols-4">
+                  <PrimaryMetric
+                    label="Notas atribuídas"
+                    value={report.summary.total_notes_assigned}
+                    detail={`${report.summary.received_today} recebidas · saldo anterior ${report.summary.opening_pending}`}
+                    tone="info"
+                  />
+                  <PrimaryMetric label="Entregues" value={report.summary.delivered} detail={`de ${report.summary.total_notes_assigned} atribuídas`} tone="success" />
+                  <PrimaryMetric label="Pendentes de entrega" value={report.summary.pending_delivery} detail="Sem nova rota" tone={report.summary.pending_delivery ? 'danger' : 'success'} />
+                  <PrimaryMetric label="Canhotos pendentes" value={report.summary.pending_receipts} detail="Entregas sem foto válida" tone={report.summary.pending_receipts ? 'warning' : 'success'} />
+                </div>
+
+                <div className="border-t border-border px-3 py-2">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">Recursos da operação</p>
+                  <div className="grid grid-cols-2 divide-x divide-border sm:grid-cols-3 lg:grid-cols-6">
+                    <InlineMetric label="Rotas" value={report.summary.routes} />
+                    <InlineMetric label="Veículos" value={report.summary.vehicles_used} />
+                    <InlineMetric label="Peso" value={`${numberFormat.format(report.summary.total_weight)} kg`} />
+                    <InlineMetric label="Caixas/volumes" value={numberFormat.format(report.summary.total_boxes)} />
+                    <InlineMetric label="Durações" value={`${report.summary.loadings_informed}/${report.summary.routes}`} />
+                    <InlineMetric label="Tempo carregando" value={`${report.summary.loading_minutes} min`} />
+                  </div>
+                </div>
+
+                <div className="border-t border-border px-3 py-2">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">Exceções que exigem atenção</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
+                    <ExceptionMetric label="Reentregas" value={report.summary.redelivery} tone="redelivery" />
+                    <ExceptionMetric label="Devolvidas" value={report.summary.returned} tone="danger" />
+                    <ExceptionMetric label="Canceladas" value={report.summary.cancelled} tone="warning" />
+                    <ExceptionMetric label="Retidas" value={report.summary.retained} tone="warning" />
+                    <ExceptionMetric label="Ocorrências" value={report.summary.open_occurrences} tone="warning" />
+                    <ExceptionMetric label="Rotas incompletas" value={report.summary.pending_route_completion} tone="danger" />
+                  </div>
+                </div>
               </section>
 
               <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">

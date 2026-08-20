@@ -11,11 +11,13 @@ const DailyOperationClosingPDF = require('../DailyOperationClosingPDF').default;
 const report: DailyOperationReport = {
   operation_date: '2026-08-20', generated_at: '2026-08-21T08:00:00.000Z', status: 'closed',
   notes: 'Operação concluída.', closed_at: '2026-08-21T08:00:00.000Z', closed_by_name: 'Gerente',
+  loading_start_time: '06:30', loading_end_time: '07:40',
   summary: {
     opening_pending: 3, received_today: 20, total_notes_assigned: 18, delivered: 15,
     redelivery: 1, returned: 1, cancelled: 1, retained: 0, pending_route_completion: 0,
     pending_receipts: 2, pending_delivery: 3, open_occurrences: 1, routes: 2,
     vehicles_used: 2, total_weight: 1400, total_boxes: 80, loading_minutes: 70, loadings_informed: 2,
+    loading_operation_minutes: 70, average_loading_minutes: 35,
   },
   routes: [{
     trip_id: 1, run_number: 1, company_name: 'Mar e Rio', driver_name: 'Diogo',

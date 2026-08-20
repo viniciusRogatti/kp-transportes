@@ -45,6 +45,8 @@ const cards: Array<[keyof DailyOperationReport['summary'], string]> = [
   ['total_weight', 'Peso total (kg)'],
   ['total_boxes', 'Caixas/volumes'],
   ['loading_minutes', 'Minutos carregando'],
+  ['loading_operation_minutes', 'Tempo total da operação (min)'],
+  ['average_loading_minutes', 'Média por veículo (min)'],
   ['pending_route_completion', 'Rotas não concluídas'],
   ['open_occurrences', 'Ocorrências abertas'],
 ];
@@ -95,6 +97,7 @@ export default function DailyOperationClosingPDF({ report }: { report: DailyOper
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Carregamentos e rotas</Text>
+          <Text style={styles.subtitle}>{`Início: ${report.loading_start_time || 'não informado'} · Finalização: ${report.loading_end_time || 'não informada'} · Tempo total: ${report.summary.loading_operation_minutes || 0} min · Média por veículo: ${Number(report.summary.average_loading_minutes || 0).toLocaleString('pt-BR')} min`}</Text>
           <View style={[styles.row, styles.header]} fixed>
             <Text style={[styles.cell, styles.routeDriver]}>Motorista</Text>
             <Text style={[styles.cell, styles.routeVehicle]}>Veículo</Text>

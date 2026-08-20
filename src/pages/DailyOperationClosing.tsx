@@ -33,7 +33,11 @@ import { getSemanticToneClassName, SemanticTone } from '../utils/statusStyles';
 
 type LoadingDraft = { duration: string; notes: string };
 
-const defaultDate = () => format(subDays(new Date(), 1), 'yyyy-MM-dd');
+const DAILY_OPERATION_REPORT_START_DATE = '2026-08-19';
+const defaultDate = () => {
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  return yesterday < DAILY_OPERATION_REPORT_START_DATE ? DAILY_OPERATION_REPORT_START_DATE : yesterday;
+};
 const numberFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 
 const statusLabel = (status: string) => ({
@@ -209,7 +213,7 @@ export default function DailyOperationClosing() {
                     {report?.status === 'closed' ? 'Fechado' : 'Em conferência'}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted">Visão consolidada do que saiu, retornou e ficou pendente para o próximo dia.</p>
+                <p className="mt-1 text-sm text-muted">Visão consolidada do que saiu, retornou e ficou pendente para o próximo dia. Histórico disponível desde 19/08/2026.</p>
                 {report?.closed_at ? (
                   <p className="mt-1 text-xs text-muted">Fechado por {report.closed_by_name || '-'} em {formatDateTimeBR(report.closed_at)}.</p>
                 ) : null}
@@ -217,7 +221,7 @@ export default function DailyOperationClosing() {
               <div className="flex flex-wrap items-end gap-2">
                 <label className="text-xs font-semibold text-muted">
                   Data da operação
-                  <input className="mt-1 block h-10 rounded-md border border-border bg-surface px-3 text-sm text-text" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+                  <input className="mt-1 block h-10 rounded-md border border-border bg-surface px-3 text-sm text-text" type="date" min={DAILY_OPERATION_REPORT_START_DATE} value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
                 </label>
                 <button className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text hover:bg-surface-2" onClick={() => void loadReport()} disabled={loading}>
                   <RefreshCcw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar

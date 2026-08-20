@@ -98,6 +98,18 @@ describe('CardDanfes', () => {
     expect(screen.queryByText('Sem motorista')).not.toBeInTheDocument();
   });
 
+  it('diferencia falha de consulta de uma NF realmente sem motorista', () => {
+    render(
+      <CardDanfes
+        danfes={[buildDanfe('123456', 'assigned')]}
+        driverErrorByInvoice={{ '123456': true }}
+      />,
+    );
+
+    expect(screen.getAllByText('Motorista indisponível').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Sem motorista')).not.toBeInTheDocument();
+  });
+
   it('mostra o lote da devolucao, o envio finalizado e permite abrir o lote', () => {
     const onOpenReturnBatch = jest.fn();
     render(

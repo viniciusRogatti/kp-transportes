@@ -30,6 +30,7 @@ function Invoices() {
   const {
     invoiceContextByNf,
     driverLoadingByInvoice,
+    driverErrorByInvoice,
     loadInvoiceContext,
     refreshInvoiceContext,
   } = useInvoiceSearchContext();
@@ -598,6 +599,7 @@ function Invoices() {
         <CardDanfes
           danfes={danfes}
           driverLoadingByInvoice={driverLoadingByInvoice}
+          driverErrorByInvoice={driverErrorByInvoice}
           invoiceContextByNf={invoiceContextByNf}
           onDanfeUpdated={handleDanfeUpdated}
           allowStatusActions={canChangeInvoiceStatus}

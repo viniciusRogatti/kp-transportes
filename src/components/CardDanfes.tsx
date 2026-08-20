@@ -24,6 +24,7 @@ interface CardDanfesProps {
   danfes: IDanfe[];
   driverByInvoice?: Record<string, string>;
   driverLoadingByInvoice?: Record<string, boolean>;
+  driverErrorByInvoice?: Record<string, boolean>;
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   showLegend?: boolean;
   onDanfeUpdated?: (danfe: IDanfe) => void;
@@ -94,6 +95,7 @@ function CardDanfes({
   danfes,
   driverByInvoice = {},
   driverLoadingByInvoice = {},
+  driverErrorByInvoice = {},
   invoiceContextByNf = {},
   showLegend = true,
   onDanfeUpdated,
@@ -411,6 +413,7 @@ function CardDanfes({
             const invoiceNumber = String(danfe.invoice_number);
             const invoiceContext = invoiceContextByNf[invoiceNumber] || null;
             const isDriverLoading = Boolean(driverLoadingByInvoice[invoiceNumber]);
+            const hasDriverError = Boolean(driverErrorByInvoice[invoiceNumber]);
             const resolvedDriverName = driverByInvoice[invoiceNumber] || invoiceContext?.driver_name || null;
             const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity) || '-';
             const cityName = normalizeCityLabel(danfe.Customer?.city) || '-';
@@ -428,7 +431,7 @@ function CardDanfes({
             const latestOccurrenceDescription = normalizeTextValue(latestOccurrence?.description) || 'Ocorrencia registrada para esta NF';
             const latestOccurrenceTone = latestOccurrence ? getOccurrenceTone(latestOccurrence.status) : 'warning';
             const creditLetterTone = invoiceContext?.credit_letter_pending_count ? 'warning' : 'success';
-            const driverTone = isDriverLoading ? 'info' : resolvedDriverName ? 'success' : 'warning';
+            const driverTone = isDriverLoading ? 'info' : hasDriverError ? 'danger' : resolvedDriverName ? 'success' : 'warning';
             const currentCte = danfe.current_cte || null;
             const currentCteLabel = currentCte ? getCteStatusLabel(currentCte.status) : null;
             const currentCteNumber = currentCte?.number ? `${currentCte.number}/${currentCte.series || '1'}` : `rascunho ${currentCte?.id || ''}`.trim();
@@ -436,6 +439,7 @@ function CardDanfes({
               onAssignDanfeToTrip
               && assignableTrips.length
               && !isDriverLoading
+              && !hasDriverError
               && !resolvedDriverName
               && String(danfe.status || '').trim().toLowerCase() === 'pending',
             );
@@ -480,9 +484,11 @@ function CardDanfes({
                         <span className="truncate">
                           {isDriverLoading
                             ? 'Carregando motorista...'
-                            : resolvedDriverName
-                              ? `Motorista: ${resolvedDriverName}`
-                              : 'Sem motorista'}
+                            : hasDriverError
+                              ? 'Motorista indisponível'
+                              : resolvedDriverName
+                                ? `Motorista: ${resolvedDriverName}`
+                                : 'Sem motorista'}
                         </span>
                         {canAssignToTrip ? (
                           <button
@@ -663,7 +669,11 @@ function CardDanfes({
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                         <p>
                           <strong>Motorista:</strong>{' '}
-                          {isDriverLoading ? 'Carregando motorista...' : resolvedDriverName || 'Sem motorista'}
+                          {isDriverLoading
+                            ? 'Carregando motorista...'
+                            : hasDriverError
+                              ? 'Motorista indisponível'
+                              : resolvedDriverName || 'Sem motorista'}
                         </p>
                         {canOpenLastTrip ? (
                           <p>

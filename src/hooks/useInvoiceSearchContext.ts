@@ -185,15 +185,26 @@ async function fetchInvoiceContext(invoiceNumber: string, options?: { includeTri
   }
 }
 
-async function fetchTripsByInvoiceNumbers(invoiceNumbers: string[]) {
+async function fetchTripsByInvoiceNumbers(
+  invoiceNumbers: string[],
+  companyIdByInvoice: Record<string, number | null>,
+) {
   try {
     const { data } = await axios.post<ITrip[]>(`${API_URL}/trips/search/notes`, {
       invoice_numbers: invoiceNumbers,
+      invoices: invoiceNumbers.map((invoiceNumber) => ({
+        invoice_number: invoiceNumber,
+        company_id: companyIdByInvoice[invoiceNumber] || null,
+      })),
     });
-    return groupTripsByInvoice(Array.isArray(data) ? data : [], invoiceNumbers);
+    return {
+      tripsByInvoice: groupTripsByInvoice(Array.isArray(data) ? data : [], invoiceNumbers),
+      failedInvoiceNumbers: [] as string[],
+    };
   } catch (bulkError) {
     console.warn('Busca de motoristas em lote indisponivel; usando consulta compativel.', bulkError);
     const grouped = Object.fromEntries(invoiceNumbers.map((invoiceNumber) => [invoiceNumber, [] as ITrip[]]));
+    const failedInvoiceNumbers: string[] = [];
 
     for (let index = 0; index < invoiceNumbers.length; index += REQUEST_BATCH_SIZE) {
       const chunk = invoiceNumbers.slice(index, index + REQUEST_BATCH_SIZE);
@@ -201,24 +212,27 @@ async function fetchTripsByInvoiceNumbers(invoiceNumbers: string[]) {
         try {
           const { data } = await axios.get<ITrip[]>(
             `${API_URL}/trips/search/note/${encodeURIComponent(invoiceNumber)}`,
+            { params: companyIdByInvoice[invoiceNumber] ? { companyId: companyIdByInvoice[invoiceNumber] } : undefined },
           );
-          return [invoiceNumber, Array.isArray(data) ? data : []] as const;
+          return [invoiceNumber, Array.isArray(data) ? data : [], false] as const;
         } catch {
-          return [invoiceNumber, [] as ITrip[]] as const;
+          return [invoiceNumber, [] as ITrip[], true] as const;
         }
       }));
-      responses.forEach(([invoiceNumber, trips]) => {
+      responses.forEach(([invoiceNumber, trips, failed]) => {
         grouped[invoiceNumber] = trips;
+        if (failed) failedInvoiceNumbers.push(invoiceNumber);
       });
     }
 
-    return grouped;
+    return { tripsByInvoice: grouped, failedInvoiceNumbers };
   }
 }
 
 export default function useInvoiceSearchContext() {
   const [invoiceContextByNf, setInvoiceContextByNf] = useState<Record<string, IInvoiceSearchContext>>({});
   const [driverLoadingByInvoice, setDriverLoadingByInvoice] = useState<Record<string, boolean>>({});
+  const [driverErrorByInvoice, setDriverErrorByInvoice] = useState<Record<string, boolean>>({});
   const invoiceContextRef = useRef<Record<string, IInvoiceSearchContext>>({});
   const fetchedAtByInvoiceRef = useRef<Record<string, number>>({});
 
@@ -231,6 +245,10 @@ export default function useInvoiceSearchContext() {
         .filter(Boolean),
     ));
     const shouldForceReload = Boolean(options?.force);
+    const companyIdByInvoice = Object.fromEntries(danfesToProcess.map((danfe) => [
+      normalizeInvoiceNumber(danfe.invoice_number),
+      Number(danfe.company_id || 0) || null,
+    ]));
     const missingInvoiceNumbers = uniqueInvoiceNumbers.filter((invoiceNumber) => {
       if (shouldForceReload) return true;
 
@@ -253,8 +271,14 @@ export default function useInvoiceSearchContext() {
         });
         return next;
       });
+      setDriverErrorByInvoice((previous) => {
+        const next = { ...previous };
+        missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = false; });
+        return next;
+      });
 
-      tripsByInvoice = await fetchTripsByInvoiceNumbers(missingInvoiceNumbers);
+      const tripLookup = await fetchTripsByInvoiceNumbers(missingInvoiceNumbers, companyIdByInvoice);
+      tripsByInvoice = tripLookup.tripsByInvoice;
       const driverEntries = missingInvoiceNumbers.map((invoiceNumber): [string, IInvoiceSearchContext] => (
         [invoiceNumber, buildInvoiceContext(
           invoiceNumber,
@@ -286,6 +310,11 @@ export default function useInvoiceSearchContext() {
         missingInvoiceNumbers.forEach((invoiceNumber) => {
           next[invoiceNumber] = false;
         });
+        return next;
+      });
+      setDriverErrorByInvoice((previous) => {
+        const next = { ...previous };
+        tripLookup.failedInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = true; });
         return next;
       });
     }
@@ -341,6 +370,7 @@ export default function useInvoiceSearchContext() {
   return {
     invoiceContextByNf,
     driverLoadingByInvoice,
+    driverErrorByInvoice,
     loadInvoiceContext,
     refreshInvoiceContext,
   };

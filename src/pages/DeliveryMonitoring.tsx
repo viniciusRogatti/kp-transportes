@@ -1320,6 +1320,9 @@ function DeliveryMonitoring() {
       requestMetadata.replacement_invoice_number = normalizedReplacementInvoice;
       requestMetadata.replacement_reason = String(replacementReasonValue || '').trim() || 'Refaturada';
     }
+    if (nextStatus === 'cancelled' && !normalizedReplacementInvoice) {
+      throw new Error('Informe a NF substituta para concluir o cancelamento por refaturamento.');
+    }
 
     const { data: statusResult } = await axios.post(`${API_URL}/driver-app/trip-stops/${stopId}/status`, {
       status: nextStatus,
@@ -1330,22 +1333,11 @@ function DeliveryMonitoring() {
     });
 
     const resolvedInvoiceNumber = String(invoiceNumber || statusResult?.stop?.invoice_number || '').trim();
-    const resolvedCompanyId = Number(companyId || statusResult?.stop?.company_id || 0) || null;
-
     if (nextStatus === 'cancelled') {
       if (!resolvedInvoiceNumber) {
         throw new Error('Nao foi possivel identificar a NF cancelada para vincular o refaturamento.');
       }
 
-      if (!normalizedReplacementInvoice) {
-        throw new Error('Informe a NF substituta para concluir o cancelamento por refaturamento.');
-      }
-
-      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(resolvedInvoiceNumber)}/replacement`, {
-        replacementInvoiceNumber: normalizedReplacementInvoice,
-        replacementReason: String(replacementReasonValue || '').trim() || 'Refaturada',
-        companyId: resolvedCompanyId,
-      });
     }
 
     await fetchOverview();

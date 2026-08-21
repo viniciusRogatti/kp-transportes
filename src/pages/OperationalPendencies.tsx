@@ -675,6 +675,9 @@ function OperationalPendencies() {
       metadata.replacement_invoice_number = normalizedReplacementInvoice;
       metadata.replacement_reason = String(replacementReasonValue || '').trim() || 'Refaturada';
     }
+    if (nextStatus === 'cancelled' && !normalizedReplacementInvoice) {
+      throw new Error('Informe a NF substituta para concluir o cancelamento.');
+    }
 
     await axios.post(`${API_URL}/driver-app/trip-stops/${tripNoteId}/status`, {
       status: nextStatus,
@@ -684,16 +687,6 @@ function OperationalPendencies() {
       metadata,
     });
 
-    if (nextStatus === 'cancelled') {
-      if (!normalizedReplacementInvoice) {
-        throw new Error('Informe a NF substituta para concluir o cancelamento.');
-      }
-
-      await axios.patch(`${API_URL}/danfes/nf/${encodeURIComponent(row.invoice_number)}/replacement`, {
-        replacementInvoiceNumber: normalizedReplacementInvoice,
-        replacementReason: String(replacementReasonValue || '').trim() || 'Refaturada',
-      });
-    }
   }
 
   async function handleManualStatusUpdate(row: IReceiptBacklogRow, nextStatus: ManualStopStatus) {

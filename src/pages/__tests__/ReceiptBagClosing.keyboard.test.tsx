@@ -200,4 +200,63 @@ describe('ConferencePanel por teclado', () => {
     expect(finishDialog).toBeInTheDocument();
     expect(within(finishDialog).getByRole('button', { name: 'Finalizar rota' })).toBeEnabled();
   });
+
+  it('abre a finalização quando os extras de outros malotes tiveram presença confirmada', async () => {
+    const confirmedItem = {
+      ...item,
+      status: 'confirmed',
+      has_whatsapp_photo: true,
+    } as ReceiptBagItem;
+    const extras = [11, 12].map((id) => ({
+      ...item,
+      id,
+      invoice_number: String(700000 + id),
+      status: 'resolved_elsewhere',
+      origin_bag_id: id + 100,
+      confirmed_bag_id: bag.id,
+      is_extra: true,
+      is_suggested_extra: false,
+      has_receipt_photo: false,
+      has_whatsapp_photo: false,
+    } as ReceiptBagItem));
+
+    render(
+      <ConferencePanel
+        bag={{
+          ...bag,
+          items: [confirmedItem, ...extras],
+          counts: {
+            total: 3,
+            expected: 3,
+            confirmed: 3,
+            pending: 0,
+            absent: 0,
+            returned: 0,
+            recovered: 0,
+            suggested: 0,
+            extras: 2,
+          },
+        }}
+        items={[confirmedItem, ...extras]}
+        selectedItem={null}
+        itemFilter="all"
+        itemSearch=""
+        extraInvoice=""
+        error=""
+        feedback=""
+        mutating={false}
+        onClose={jest.fn()}
+        onSelect={jest.fn()}
+        onFilter={jest.fn()}
+        onSearch={jest.fn()}
+        onExtraChange={jest.fn()}
+        onExtra={jest.fn()}
+        onMutate={jest.fn().mockResolvedValue(true)}
+        onMarkRemaining={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Todos os canhotos foram conferidos' })).toBeInTheDocument();
+  });
 });

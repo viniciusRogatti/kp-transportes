@@ -931,7 +931,11 @@ export function ConferencePanel(props: ConferenceProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const canFinish = bag.items.length > 0
     && bag.items.every((item) => item.status !== 'pending' || item.is_suggested_extra)
-    && bag.items.every((item) => !CLOSED_STATUSES.includes(item.status) || item.has_whatsapp_photo)
+    && bag.items.every((item) => (
+      !CLOSED_STATUSES.includes(item.status)
+      || item.status === 'resolved_elsewhere'
+      || item.has_whatsapp_photo
+    ))
     && bag.status !== 'completed';
 
   useEffect(() => {

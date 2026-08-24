@@ -30,12 +30,13 @@ const bag = {
 describe('ConferencePanel por teclado', () => {
   it('separa malotes pendentes, atrasados e conferidos nos filtros da lista', () => {
     const pending = { status: 'in_progress', is_overdue: false } as ReceiptBagListRow;
-    const overdue = { status: 'completed_with_pending', is_overdue: true } as ReceiptBagListRow;
+    const overduePending = { status: 'in_progress', is_overdue: true } as ReceiptBagListRow;
+    const overdueDivergent = { status: 'completed_with_pending', is_overdue: true } as ReceiptBagListRow;
     const completed = { status: 'completed', is_overdue: false } as ReceiptBagListRow;
-    const rows = [pending, overdue, completed];
+    const rows = [pending, overduePending, overdueDivergent, completed];
 
-    expect(rows.filter((row) => matchesBagViewFilter(row, 'pending'))).toEqual([pending]);
-    expect(rows.filter((row) => matchesBagViewFilter(row, 'overdue'))).toEqual([overdue]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'pending'))).toEqual([pending, overduePending]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'overdue'))).toEqual([overduePending, overdueDivergent]);
     expect(rows.filter((row) => matchesBagViewFilter(row, 'completed'))).toEqual([completed]);
     expect(rows.filter((row) => matchesBagViewFilter(row, 'all'))).toEqual(rows);
   });

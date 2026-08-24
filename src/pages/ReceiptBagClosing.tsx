@@ -51,7 +51,7 @@ export const matchesBagViewFilter = (row: ReceiptBagListRow, filter: ViewFilter)
   if (filter === 'all') return true;
   if (filter === 'completed') return row.status === 'completed';
   if (filter === 'overdue') return row.status !== 'completed' && row.is_overdue;
-  return row.status !== 'completed' && !row.is_overdue;
+  return ['not_started', 'in_progress'].includes(row.status);
 };
 
 const todayInput = () => {

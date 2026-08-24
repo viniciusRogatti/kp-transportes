@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConferencePanel, getRecoveredReceiptOrigin, matchesBagViewFilter } from '../ReceiptBagClosing';
 import { ReceiptBag, ReceiptBagItem, ReceiptBagListRow } from '../../services/receiptBagClosingService';
@@ -133,5 +133,70 @@ describe('ConferencePanel por teclado', () => {
     expect(confirmButton).toBeEnabled();
     await userEvent.click(confirmButton);
     expect(onMutate).toHaveBeenCalledWith(redeliveryItem, 'confirm');
+  });
+
+  it('abre a finalização quando resta apenas um canhoto extra sugerido', async () => {
+    const confirmedItem = {
+      ...item,
+      status: 'confirmed',
+      has_whatsapp_photo: true,
+    } as ReceiptBagItem;
+    const returnedItem = {
+      ...item,
+      id: 11,
+      invoice_number: '654321',
+      status: 'returned',
+      has_whatsapp_photo: false,
+    } as ReceiptBagItem;
+    const suggestedExtraItem = {
+      ...item,
+      id: 12,
+      invoice_number: '999999',
+      status: 'pending',
+      is_extra: true,
+      is_suggested_extra: true,
+      has_whatsapp_photo: true,
+    } as ReceiptBagItem;
+
+    render(
+      <ConferencePanel
+        bag={{
+          ...bag,
+          items: [confirmedItem, returnedItem, suggestedExtraItem],
+          counts: {
+            total: 3,
+            expected: 2,
+            confirmed: 1,
+            pending: 0,
+            absent: 0,
+            returned: 1,
+            recovered: 0,
+            suggested: 1,
+            extras: 0,
+          },
+        }}
+        items={[confirmedItem, returnedItem, suggestedExtraItem]}
+        selectedItem={null}
+        itemFilter="all"
+        itemSearch=""
+        extraInvoice=""
+        error=""
+        feedback=""
+        mutating={false}
+        onClose={jest.fn()}
+        onSelect={jest.fn()}
+        onFilter={jest.fn()}
+        onSearch={jest.fn()}
+        onExtraChange={jest.fn()}
+        onExtra={jest.fn()}
+        onMutate={jest.fn().mockResolvedValue(true)}
+        onMarkRemaining={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    const finishDialog = await screen.findByRole('dialog', { name: 'Todos os canhotos foram conferidos' });
+    expect(finishDialog).toBeInTheDocument();
+    expect(within(finishDialog).getByRole('button', { name: 'Finalizar rota' })).toBeEnabled();
   });
 });

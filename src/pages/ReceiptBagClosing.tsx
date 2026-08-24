@@ -930,7 +930,7 @@ export function ConferencePanel(props: ConferenceProps) {
   const [keyboardCandidateId, setKeyboardCandidateId] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const canFinish = bag.items.length > 0
-    && bag.items.every((item) => item.status !== 'pending')
+    && bag.items.every((item) => item.status !== 'pending' || item.is_suggested_extra)
     && bag.items.every((item) => !CLOSED_STATUSES.includes(item.status) || item.has_whatsapp_photo)
     && bag.status !== 'completed';
 

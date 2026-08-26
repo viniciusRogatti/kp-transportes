@@ -67,16 +67,6 @@ export type GoogleDeliveryMapItem = {
   lastUpdatedAt: string | null;
 };
 
-export type GoogleDeliveryRoute = {
-  id: string;
-  color: string;
-  segments: Array<{
-    id: string;
-    points: Array<{ lat: number; lng: number }>;
-    completed: boolean;
-  }>;
-};
-
 export type GoogleDriverLocation = {
   id: string;
   lat: number;
@@ -95,58 +85,6 @@ const normalizeNumber = (value: unknown) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
-};
-
-const COMPLETED_ROUTE_STATUSES = new Set(['delivered', 'completed']);
-const normalizeStatus = (value: unknown) => String(value || '').trim().toLowerCase();
-const ROUTE_SEGMENT_SAMPLES = 10;
-
-type RoutePoint = {
-  lat: number;
-  lng: number;
-  completed: boolean;
-};
-
-const interpolateCatmullRom = (
-  previous: RoutePoint,
-  start: RoutePoint,
-  end: RoutePoint,
-  next: RoutePoint,
-  t: number,
-) => {
-  const t2 = t * t;
-  const t3 = t2 * t;
-
-  return {
-    lat: 0.5 * (
-      (2 * start.lat)
-      + (-previous.lat + end.lat) * t
-      + ((2 * previous.lat) - (5 * start.lat) + (4 * end.lat) - next.lat) * t2
-      + (-previous.lat + (3 * start.lat) - (3 * end.lat) + next.lat) * t3
-    ),
-    lng: 0.5 * (
-      (2 * start.lng)
-      + (-previous.lng + end.lng) * t
-      + ((2 * previous.lng) - (5 * start.lng) + (4 * end.lng) - next.lng) * t2
-      + (-previous.lng + (3 * start.lng) - (3 * end.lng) + next.lng) * t3
-    ),
-  };
-};
-
-const buildSmoothedSegmentPoints = (routePoints: RoutePoint[], index: number) => {
-  const previous = routePoints[Math.max(0, index - 1)];
-  const start = routePoints[index];
-  const end = routePoints[index + 1];
-  const next = routePoints[Math.min(routePoints.length - 1, index + 2)];
-
-  const points = Array.from({ length: ROUTE_SEGMENT_SAMPLES + 1 }, (_, sampleIndex) => (
-    interpolateCatmullRom(previous, start, end, next, sampleIndex / ROUTE_SEGMENT_SAMPLES)
-  ));
-
-  points[0] = { lat: start.lat, lng: start.lng };
-  points[points.length - 1] = { lat: end.lat, lng: end.lng };
-
-  return points;
 };
 
 export const hasDeliveryCoordinates = (row: MonitoringDeliveryForMap) => {
@@ -179,61 +117,6 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
       driverName: row.driver_name,
       lastUpdatedAt: row.geolocation.last_geocoded_at || null,
     }));
-};
-
-export const toGoogleDeliveryRoutes = (
-  rows: MonitoringDeliveryForMap[],
-  selectedDriverId: number | null,
-  showRoutes: boolean,
-  companyLocation: { lat: number; lng: number },
-): GoogleDeliveryRoute[] => {
-  if (!selectedDriverId || !showRoutes) return [];
-
-  const rowsByTrip = new Map<number, MonitoringDeliveryForMap[]>();
-
-  rows
-    .filter((row) => Number(row.driver_id || 0) === Number(selectedDriverId) && hasDeliveryCoordinates(row))
-    .forEach((row) => {
-      const tripId = Number(row.trip_id || 0);
-      if (tripId <= 0) return;
-      if (!rowsByTrip.has(tripId)) {
-        rowsByTrip.set(tripId, []);
-      }
-      rowsByTrip.get(tripId)?.push(row);
-    });
-
-  return Array.from(rowsByTrip.entries())
-    .map(([tripId, tripRows]) => {
-      const orderedStops = tripRows
-        .slice()
-        .sort((left, right) => Number(left.sequence || 0) - Number(right.sequence || 0))
-        .map((row) => ({
-          lat: Number(row.geolocation.latitude),
-          lng: Number(row.geolocation.longitude),
-          completed: COMPLETED_ROUTE_STATUSES.has(normalizeStatus(row.stop_status))
-            || COMPLETED_ROUTE_STATUSES.has(normalizeStatus(row.danfe_status))
-            || row.stage === 'completed',
-        }));
-
-      const routePoints = [
-        { lat: companyLocation.lat, lng: companyLocation.lng, completed: true },
-        ...orderedStops,
-        { lat: companyLocation.lat, lng: companyLocation.lng, completed: false },
-      ];
-
-      const segments = routePoints.slice(0, -1).map((point, index) => ({
-        id: `route-${tripId}-segment-${index}`,
-        points: buildSmoothedSegmentPoints(routePoints, index),
-        completed: routePoints[index + 1].completed,
-      }));
-
-      return {
-        id: `route-${tripId}`,
-        color: tripRows[0]?.driver_color || '#0f172a',
-        segments,
-      };
-    })
-    .filter((route) => route.segments.length > 0);
 };
 
 export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): GoogleDriverLocation[] => {

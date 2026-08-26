@@ -28,7 +28,6 @@ import {
 import {
   toGoogleDeliveryMapItems,
   toGoogleDriverLocations,
-  toGoogleDeliveryRoutes,
 } from './deliveryMonitoring/googleMapAdapter';
 import {
   DELIVERY_STAGE_ICONS,
@@ -626,7 +625,6 @@ function DeliveryMonitoring() {
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(initialQueryRef.current.invoiceNumber);
   const [selectedDriverStop, setSelectedDriverStop] = useState<SelectedDriverStop | null>(null);
-  const [showRoutes, setShowRoutes] = useState<boolean>(true);
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -1057,11 +1055,6 @@ function DeliveryMonitoring() {
 
     return toGoogleDriverLocations(driverScopedLocations);
   }, [companyFilteredTripIds, drivers, selectedDriverId]);
-
-  const selectedDriverRoutes = useMemo(
-    () => toGoogleDeliveryRoutes(companyFilteredDeliveries, selectedDriverId, showRoutes, mapInitialCenter),
-    [companyFilteredDeliveries, mapInitialCenter, selectedDriverId, showRoutes],
-  );
 
   const listRows = useMemo(() => {
     const driverScopedRows = selectedDriverId
@@ -1642,13 +1635,6 @@ function DeliveryMonitoring() {
                 <>
                   <button
                     type="button"
-                    onClick={() => setShowRoutes((current) => !current)}
-                    className="h-9 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
-                  >
-                    {showRoutes ? 'Ocultar rotas' : 'Mostrar rotas'}
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setStatusFilter('assigned')}
                     className="h-9 rounded-md border border-accent/50 bg-accent/15 px-3 text-sm font-semibold text-accent-text transition hover:bg-accent/25"
                   >
@@ -1990,7 +1976,7 @@ function DeliveryMonitoring() {
           <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
-              <p className="text-xs text-muted">Notas, motoristas em tempo real e rotas do dia.</p>
+              <p className="text-xs text-muted">Notas e motoristas em tempo real.</p>
             </div>
             <div className="flex flex-wrap gap-1.5 text-xs">
               <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDeliveries.length} notas`}</span>
@@ -2007,7 +1993,6 @@ function DeliveryMonitoring() {
               deliveries={mapDeliveries}
               driverLocations={mapDriverLocations}
               companyMarker={companyMarker}
-              routes={selectedDriverRoutes}
               selectedDriverId={selectedDriverId}
               selectedDeliveryId={selectedDeliveryInvoice}
               onMarkerClick={(deliveryId) => {

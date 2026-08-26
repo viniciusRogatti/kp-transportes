@@ -4,7 +4,6 @@ import {
   InfoWindowF,
   OverlayView,
   OverlayViewF,
-  PolylineF,
   useJsApiLoader,
 } from '@react-google-maps/api';
 import {
@@ -13,7 +12,6 @@ import {
 import {
   GoogleDeliveryMapItem,
   GoogleDriverLocation,
-  GoogleDeliveryRoute,
 } from '../../pages/deliveryMonitoring/googleMapAdapter';
 import { MapMarkerPin } from './MapMarkerPin';
 import {
@@ -51,7 +49,6 @@ type GoogleDeliveriesMapProps = {
   deliveries: GoogleDeliveryMapItem[];
   driverLocations?: GoogleDriverLocation[];
   companyMarker?: GoogleCompanyMarker | null;
-  routes?: GoogleDeliveryRoute[];
   selectedDriverId: number | null;
   selectedDeliveryId: string | null;
   onMarkerClick: (deliveryId: string) => void;
@@ -92,7 +89,6 @@ function GoogleDeliveriesMap({
   deliveries,
   driverLocations = [],
   companyMarker = null,
-  routes = [],
   selectedDriverId,
   selectedDeliveryId,
   onMarkerClick,
@@ -322,31 +318,6 @@ function GoogleDeliveriesMap({
         }}
         onIdle={emitBoundsChange}
       >
-        {routes.map((route) => (
-          route.segments.map((segment) => (
-            <PolylineF
-              key={segment.id}
-              path={segment.points}
-              options={{
-                strokeColor: route.color,
-                strokeOpacity: segment.completed ? 0.26 : 0.92,
-                strokeWeight: segment.completed ? 3 : 4,
-                geodesic: false,
-                icons: segment.completed ? [] : [{
-                  icon: {
-                    path: 'M 0,-1 0,1',
-                    strokeOpacity: 1,
-                    strokeWeight: 3,
-                    scale: 1,
-                  },
-                  offset: '0',
-                  repeat: '14px',
-                }],
-              }}
-            />
-          ))
-        ))}
-
         {deliveries.map((delivery) => {
           const zoom = map?.getZoom() || initialZoom;
           const markerSize = Math.max(MAP_MARKER_PIN_MIN_SIZE, resolveMarkerSize(zoom));

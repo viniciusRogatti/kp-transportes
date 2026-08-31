@@ -81,12 +81,13 @@ const ITEM_STATUS: Record<ReceiptBagItemStatus, { label: string; badge: string; 
   retained: { label: 'Retido no cliente', badge: 'semantic-solid-warning', row: 'semantic-panel-warning' },
   redelivery: { label: 'Reentrega', badge: 'semantic-solid-redelivery', row: 'semantic-panel-redelivery' },
   cancelled: { label: 'Cancelada', badge: 'semantic-solid-neutral', row: 'semantic-panel-neutral' },
+  waived: { label: 'Canhoto dispensado', badge: 'semantic-solid-info', row: 'semantic-panel-info' },
 };
 const CLOSED_STATUSES = ['confirmed', 'recovered', 'resolved_elsewhere'];
-const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled'];
+const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled', 'waived'];
 // Uma reentrega pode ter sido registrada por engano. Se o canhoto fisico
 // chegou no malote, a conferencia precisa conseguir corrigir o item para presente.
-const NON_CONFIRMABLE_STATUSES = ['returned', 'retained', 'cancelled'];
+const NON_CONFIRMABLE_STATUSES = ['returned', 'retained', 'cancelled', 'waived'];
 const DELIVERY_STATUSES = ['delivered', 'completed'];
 
 const errorPayload = (error: unknown): ReceiptBagApiError => (

@@ -4,7 +4,7 @@ import { API_URL } from '../data';
 export type ReceiptBagStatus = 'not_started' | 'in_progress' | 'completed' | 'completed_with_pending';
 export type ReceiptBagItemStatus =
   | 'pending' | 'confirmed' | 'absent' | 'recovered' | 'resolved_elsewhere'
-  | 'returned' | 'retained' | 'redelivery' | 'cancelled';
+  | 'returned' | 'retained' | 'redelivery' | 'cancelled' | 'waived';
 
 export type ReceiptBagCounts = {
   total: number;

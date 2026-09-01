@@ -6,6 +6,7 @@ import { AlertCircle, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Pa
 import {
   completeTutorialProgress,
   getCurrentTutorialProgress,
+  isRetryableTutorialSyncError,
   pauseTutorialProgress,
   TutorialProgress,
   updateTutorialProgress,
@@ -26,6 +27,24 @@ type TutorialContextValue = {
 };
 
 const TutorialContext = createContext<TutorialContextValue | null>(null);
+const TUTORIAL_BACKUP_KEY = 'tutorial_progress_backup';
+
+const readTutorialBackup = (): Partial<TutorialProgress> | null => {
+  try {
+    const raw = localStorage.getItem(TUTORIAL_BACKUP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    localStorage.removeItem(TUTORIAL_BACKUP_KEY);
+    return null;
+  }
+};
+
+const writeTutorialBackup = (next: Partial<TutorialProgress>) => {
+  const current = readTutorialBackup() || {};
+  localStorage.setItem(TUTORIAL_BACKUP_KEY, JSON.stringify({ ...current, ...next }));
+};
 
 const isVisibleElement = (element: HTMLElement) => {
   const rect = element.getBoundingClientRect();
@@ -123,11 +142,44 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null);
   const [targetMissing, setTargetMissing] = useState(false);
   const [syncWarning, setSyncWarning] = useState(false);
+  const [syncAttempt, setSyncAttempt] = useState(0);
   const persistQueueRef = useRef<Promise<TutorialProgress | null>>(Promise.resolve(null));
+  const syncRetryTimerRef = useRef<number | null>(null);
+  const syncFailureCountRef = useRef(0);
+  const syncWarningDismissedRef = useRef(false);
+  const progressInitializedRef = useRef(false);
 
   const module = active ? modules[active.moduleIndex] : null;
   const step = module && active ? module.steps[active.stepIndex] : null;
   const completedModules = useMemo(() => progress?.completed_modules || [], [progress?.completed_modules]);
+
+  const scheduleSyncRetry = useCallback(() => {
+    if (syncRetryTimerRef.current !== null) return;
+    const delay = Math.min(30_000, Math.max(5_000, syncFailureCountRef.current * 5_000));
+    syncRetryTimerRef.current = window.setTimeout(() => {
+      syncRetryTimerRef.current = null;
+      setSyncAttempt((current) => current + 1);
+    }, delay);
+  }, []);
+
+  const registerSyncFailure = useCallback((error: unknown) => {
+    if (!isRetryableTutorialSyncError(error)) return;
+    syncFailureCountRef.current += 1;
+    if (syncFailureCountRef.current >= 2 && !syncWarningDismissedRef.current) {
+      setSyncWarning(true);
+    }
+    scheduleSyncRetry();
+  }, [scheduleSyncRetry]);
+
+  const registerSyncSuccess = useCallback(() => {
+    syncFailureCountRef.current = 0;
+    syncWarningDismissedRef.current = false;
+    setSyncWarning(false);
+    if (syncRetryTimerRef.current !== null) {
+      window.clearTimeout(syncRetryTimerRef.current);
+      syncRetryTimerRef.current = null;
+    }
+  }, []);
 
   const persist = useCallback(async (next: Partial<TutorialProgress>) => {
     setProgress((current) => (current ? { ...current, ...next } : current));
@@ -138,12 +190,13 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = await request;
       setProgress(saved);
-      setSyncWarning(false);
-    } catch {
-      setSyncWarning(true);
-      localStorage.setItem('tutorial_progress_backup', JSON.stringify(next));
+      localStorage.removeItem(TUTORIAL_BACKUP_KEY);
+      registerSyncSuccess();
+    } catch (error) {
+      writeTutorialBackup(next);
+      registerSyncFailure(error);
     }
-  }, []);
+  }, [registerSyncFailure, registerSyncSuccess]);
 
   useEffect(() => {
     if (token) return;
@@ -151,7 +204,9 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     setHelpOpen(false);
     setResumeOpen(false);
     setProgress(null);
-  }, [token]);
+    progressInitializedRef.current = false;
+    registerSyncSuccess();
+  }, [registerSyncSuccess, token]);
 
   const resumeFromProgress = useCallback(() => {
     if (!modules.length) return;
@@ -185,19 +240,41 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!token) return;
     let activeRequest = true;
-    getCurrentTutorialProgress()
-      .then(({ progress: saved }) => {
+    const synchronize = async () => {
+      try {
+        const response = await getCurrentTutorialProgress();
+        const backup = readTutorialBackup();
+        const saved = backup ? await updateTutorialProgress(backup) : response.progress;
         if (!activeRequest) return;
+        if (backup) localStorage.removeItem(TUTORIAL_BACKUP_KEY);
         setProgress(saved);
-        if (saved.status === 'not_started') {
-          if (modules.length) setActive({ mode: 'full', moduleIndex: 0, stepIndex: 0, persist: true });
-        } else if (saved.status === 'in_progress') {
-          setResumeOpen(true);
+        registerSyncSuccess();
+        if (!progressInitializedRef.current) {
+          progressInitializedRef.current = true;
+          if (saved.status === 'not_started') {
+            if (modules.length) setActive({ mode: 'full', moduleIndex: 0, stepIndex: 0, persist: true });
+          } else if (saved.status === 'in_progress') {
+            setResumeOpen(true);
+          }
         }
-      })
-      .catch(() => setSyncWarning(true));
-    return () => { activeRequest = false; };
-  }, [modules.length, token]);
+      } catch (error) {
+        if (activeRequest) registerSyncFailure(error);
+      }
+    };
+    const retryNow = () => {
+      if (syncRetryTimerRef.current !== null) {
+        window.clearTimeout(syncRetryTimerRef.current);
+        syncRetryTimerRef.current = null;
+      }
+      setSyncAttempt((current) => current + 1);
+    };
+    void synchronize();
+    window.addEventListener('online', retryNow);
+    return () => {
+      activeRequest = false;
+      window.removeEventListener('online', retryNow);
+    };
+  }, [modules.length, registerSyncFailure, registerSyncSuccess, syncAttempt, token]);
 
   useEffect(() => {
     if (!module || !step) {
@@ -273,12 +350,14 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
         await persistQueueRef.current.catch(() => null);
         const saved = await pauseTutorialProgress({ current_module: module.id, current_step: active.stepIndex });
         setProgress(saved);
-      } catch {
-        setSyncWarning(true);
+        localStorage.removeItem(TUTORIAL_BACKUP_KEY);
+        registerSyncSuccess();
+      } catch (error) {
+        registerSyncFailure(error);
       }
     }
     closeTour();
-  }, [active, closeTour, module]);
+  }, [active, closeTour, module, registerSyncFailure, registerSyncSuccess]);
 
   const finish = useCallback(async (done: string[]) => {
     closeTour();
@@ -286,11 +365,12 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
       await persistQueueRef.current.catch(() => null);
       const saved = await completeTutorialProgress(done);
       setProgress(saved);
-      setSyncWarning(false);
-    } catch {
-      setSyncWarning(true);
+      localStorage.removeItem(TUTORIAL_BACKUP_KEY);
+      registerSyncSuccess();
+    } catch (error) {
+      registerSyncFailure(error);
     }
-  }, [closeTour]);
+  }, [closeTour, registerSyncFailure, registerSyncSuccess]);
 
   const next = useCallback(() => {
     if (!active || !module) return;
@@ -364,8 +444,17 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
       {syncWarning && token && location.pathname !== '/' && (
         <div className="fixed bottom-4 left-4 z-[2400] flex max-w-sm items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 shadow-lg" role="status">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          O sistema continua disponível, mas o progresso do tutorial será sincronizado quando a conexão voltar.
-          <button type="button" aria-label="Fechar aviso" onClick={() => setSyncWarning(false)}><X className="h-4 w-4" /></button>
+          O sistema continua disponível. Estamos tentando sincronizar o progresso do tutorial em segundo plano.
+          <button
+            type="button"
+            aria-label="Fechar aviso"
+            onClick={() => {
+              syncWarningDismissedRef.current = true;
+              setSyncWarning(false);
+            }}
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
       {active && module && step && (

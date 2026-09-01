@@ -22,6 +22,14 @@ const baseUrl = `${API_URL}/api/tutorial-progress`;
 const authConfig = () => ({
   headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
 });
+
+export const isRetryableTutorialSyncError = (error: unknown) => {
+  if (!axios.isAxiosError(error)) return false;
+  if (!error.response) return true;
+  const status = Number(error.response.status || 0);
+  return status === 408 || status === 429 || status >= 500;
+};
+
 export const getCurrentTutorialProgress = async () => {
   const { data } = await axios.get<{ current_version: string; progress: TutorialProgress }>(`${baseUrl}/current`, authConfig());
   return data;

@@ -120,6 +120,7 @@ Exemplo: se a NF possui 5 unidades de um item e já houve uma coleta confirmada 
 - Escopo multiempresa para equipes internas autorizadas.
 - Cadastro de usuários e histórico/analytics de sessões para administração.
 - Notificações em tempo real e registro das principais mudanças de status.
+- Tutorial guiado com progresso salvo no servidor, backup local e novas tentativas automáticas após indisponibilidades temporárias.
 
 ## Fluxo resumido da operação
 

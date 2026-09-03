@@ -24,6 +24,9 @@ import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
 import MissingCargoOccurrenceDetails, {
   isMissingCargoOccurrence,
 } from '../components/occurrences/MissingCargoOccurrenceDetails';
+import ReturnBatchSearchPanel, {
+  ReturnBatchLookbackValue,
+} from '../components/returns/ReturnBatchSearchPanel';
 import IconButton from '../components/ui/IconButton';
 import SearchInput from '../components/ui/SearchInput';
 import { API_URL } from '../data';
@@ -79,11 +82,6 @@ import {
 } from '../services/returnDataService';
 
 const DEFAULT_RETURN_UNIT_TYPES = ['UN', 'CX', 'FD', 'KG', 'PCT'];
-const RETURN_BATCH_LOOKBACK_OPTIONS = [
-  { value: '7', label: 'Ultimos 7 dias' },
-  { value: '30', label: 'Ultimos 30 dias' },
-] as const;
-type ReturnBatchLookbackValue = (typeof RETURN_BATCH_LOOKBACK_OPTIONS)[number]['value'];
 type VehicleSuggestionResponse = {
   suggestion: null | {
     car: ICar;
@@ -2921,115 +2919,27 @@ function ReturnsOccurrences() {
           <section className="-mt-px w-full min-w-0 rounded-b-lg rounded-tr-lg border border-border bg-surface p-3 shadow-soft">
             {activeTab === 'returns' && (
               <SingleColumn>
-                <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>
-                      <p className="text-xs text-muted">Pesquise por ID, periodo ou consulte os lotes mais recentes.</p>
-                    </div>
-                    <div className="flex flex-wrap items-start justify-end gap-2">
-                      <div className="text-left">
-                        <button
-                          type="button"
-                          onClick={() => navigate('/returns-occurrences/base')}
-                          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
-                        >
-                          <Database size={16} /> Base de devoluções
-                        </button>
-                        <p className="mt-1 text-[10px] text-muted">
-                          {returnDataLastUpdate
-                            ? `Atualizada em ${formatReturnDataUpdate(returnDataLastUpdate)}`
-                            : 'Base ainda não importada'}
-                        </p>
-                      </div>
-                      {canManageBatchTransportadora && (
-                        <button
-                          type="button"
-                          onClick={handleOpenNewReturnModal}
-                          className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
-                        >
-                          + Nova devolucao
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="grid min-w-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(280px,1fr)_190px_auto]">
-                    <div className="flex min-w-0 gap-2">
-                      <input
-                        type="search"
-                        value={batchCodeFilter}
-                        onChange={(event) => setBatchCodeFilter(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') void handleSearchBatchByCode();
-                        }}
-                        placeholder="ID do lote (ex.: RET-...)"
-                        aria-label="ID do lote de devolucao"
-                        className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSearchBatchByCode}
-                        className="h-10 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
-                      >
-                        Buscar lote
-                      </button>
-                    </div>
-                    <select
-                      value={batchLookbackDays}
-                      onChange={(event) => {
-                        const lookbackDays = event.target.value as ReturnBatchLookbackValue;
-                        setBatchLookbackDays(lookbackDays);
-                        void loadReturnBatches(lookbackDays);
-                      }}
-                      className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                      aria-label="Periodo de devolucoes"
-                    >
-                      {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
-                        <option key={`return-lookback-${option.value}`} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleLoadLatestBatches}
-                      className="h-10 rounded-md border border-border bg-card px-3 text-[0.82rem] font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
-                    >
-                      Atualizar lista
-                    </button>
-                  </div>
-                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-                    <label className="min-w-0 flex-1 sm:max-w-[220px]">
-                      <span className="mb-1 block text-xs font-semibold text-muted">Data inicial</span>
-                      <input
-                        type="date"
-                        value={batchStartDate}
-                        onClick={handleOpenDatePicker}
-                        onChange={(event) => setBatchStartDate(event.target.value)}
-                        aria-label="Data inicial dos lotes de devolucao"
-                        className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                      />
-                    </label>
-                    <label className="min-w-0 flex-1 sm:max-w-[220px]">
-                      <span className="mb-1 block text-xs font-semibold text-muted">Data final</span>
-                      <input
-                        type="date"
-                        value={batchEndDate}
-                        onClick={handleOpenDatePicker}
-                        onChange={(event) => setBatchEndDate(event.target.value)}
-                        aria-label="Data final dos lotes de devolucao"
-                        className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleSearchBatchesByPeriod}
-                      className="h-10 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
-                    >
-                      Buscar período
-                    </button>
-                  </div>
-                </div>
+                <ReturnBatchSearchPanel
+                  returnDataLastUpdate={returnDataLastUpdate}
+                  canCreateBatch={canManageBatchTransportadora}
+                  batchCode={batchCodeFilter}
+                  lookbackDays={batchLookbackDays}
+                  startDate={batchStartDate}
+                  endDate={batchEndDate}
+                  onOpenRegistry={() => navigate('/returns-occurrences/base')}
+                  onCreateBatch={handleOpenNewReturnModal}
+                  onBatchCodeChange={setBatchCodeFilter}
+                  onSearchByCode={handleSearchBatchByCode}
+                  onLookbackChange={(lookbackDays) => {
+                    setBatchLookbackDays(lookbackDays);
+                    void loadReturnBatches(lookbackDays);
+                  }}
+                  onRefresh={handleLoadLatestBatches}
+                  onStartDateChange={setBatchStartDate}
+                  onEndDateChange={setBatchEndDate}
+                  onOpenDatePicker={handleOpenDatePicker}
+                  onSearchByPeriod={handleSearchBatchesByPeriod}
+                />
                 {batchSearchFeedback ? (
                   <div className={`rounded-md border px-3 py-2 text-sm ${returnBatches.length ? 'semantic-panel-success' : 'semantic-panel-warning'}`}>
                     {batchSearchFeedback}

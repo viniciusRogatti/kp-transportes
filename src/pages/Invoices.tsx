@@ -1,11 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { IDanfe } from "../types/types";
 import axios from "axios";
-import { Search } from "lucide-react";
 import CardDanfes from "../components/CardDanfes";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
-import DatePicker, { registerLocale } from "react-datepicker";
-import ptBR from 'date-fns/locale/pt-BR';
 import { API_URL } from "../data";
 import Header from "../components/Header";
 import ScrollToTopButton from "../components/ScrollToTopButton";
@@ -23,7 +20,8 @@ import TodayProductList from "../components/TodayProductList";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import { pdf } from "@react-pdf/renderer";
 import { COMPANY_LABELS, resolveDanfeCompanyCode } from "../utils/companyTabs";
-registerLocale('ptBR', ptBR);
+import InvoiceSearchPanel, { InvoiceSearchFeedback } from "../components/InvoiceSearchPanel";
+import { withRequestReference } from "../utils/requestError";
 const INITIAL_RENDER_LIMIT = 60;
 const PERIOD_PAGE_SIZE = 120;
 
@@ -73,12 +71,7 @@ function Invoices() {
   const [periodSearch, setPeriodSearch] = useState<PeriodSearchState | null>(null);
   const [periodSearchError, setPeriodSearchError] = useState<string | null>(null);
   const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
-  const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<{
-    tone: 'danger' | 'info' | 'warning';
-    message: string;
-    actionUrl?: string;
-    actionLabel?: string;
-  } | null>(null);
+  const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<InvoiceSearchFeedback | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const periodRequestIdRef = useRef(0);
@@ -165,7 +158,10 @@ function Invoices() {
     } catch (error) {
       if (requestId !== periodRequestIdRef.current) return;
       console.error('Não foi possível encontrar notas com essas datas', error);
-      setPeriodSearchError('Não foi possível carregar as notas desse período. Tente novamente.');
+      setPeriodSearchError(withRequestReference(
+        'Não foi possível carregar as notas desse período. Tente novamente.',
+        error,
+      ));
     } finally {
       if (requestId === periodRequestIdRef.current) setIsSearchingPeriod(false);
     }
@@ -182,16 +178,14 @@ function Invoices() {
     } catch (error) {
       if (requestId !== periodRequestIdRef.current) return;
       console.error('Não foi possível carregar mais notas do período', error);
-      setPeriodSearchError('Não foi possível carregar a próxima parte do período. Tente novamente.');
+      setPeriodSearchError(withRequestReference(
+        'Não foi possível carregar a próxima parte do período. Tente novamente.',
+        error,
+      ));
     } finally {
       if (requestId === periodRequestIdRef.current) setIsLoadingMorePeriod(false);
     }
   }
-
-  function setFilter(e: React.ChangeEvent<HTMLInputElement>) {
-    const value = e.target.value;
-    setSearchNf(value)
-  };
 
   async function findMissingInvoiceReference(invoiceNumber: string) {
     const { data } = await axios.get(
@@ -272,7 +266,10 @@ function Invoices() {
         : '';
       setInvoiceSearchFeedback({
         tone: 'danger',
-        message: apiMessage || `Não foi possível consultar a NF ${normalizedNf} agora. Tente novamente.`,
+        message: withRequestReference(
+          apiMessage || `Não foi possível consultar a NF ${normalizedNf} agora. Tente novamente.`,
+          error,
+        ),
       });
     } finally {
       setIsSearchingInvoice(false);
@@ -311,7 +308,7 @@ function Invoices() {
         console.error('Algo deu errado ao tentar buscar essa nf', error);
         setInvoiceSearchFeedback({
           tone: 'danger',
-          message: `Não foi possível consultar a NF ${queryNf} agora.`,
+          message: withRequestReference(`Não foi possível consultar a NF ${queryNf} agora.`, error),
         });
       }
     };
@@ -471,120 +468,21 @@ function Invoices() {
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <section
-          data-tutorial="page-filters"
-          aria-labelledby="invoice-search-title"
-          className="mb-3 w-full max-w-[var(--content-max-width)] rounded-lg border border-border bg-card p-3 shadow-soft [&_input]:h-9 [&_button]:h-9"
-        >
-          <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h1 id="invoice-search-title" className="text-lg font-semibold text-text">Buscar notas</h1>
-            <p className="text-sm text-muted">Consulte uma NF específica ou carregue as notas emitidas em um período.</p>
-          </div>
-
-          <div className="grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <div className="self-end">
-              <label htmlFor="invoice-number-search" className="mb-1.5 block text-sm font-medium text-text">
-                Número da NF
-              </label>
-              <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
-                <input
-                  id="invoice-number-search"
-                  value={searchNf}
-                  type="text"
-                  inputMode="numeric"
-                  onChange={setFilter}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void getDanfeByNf();
-                  }}
-                  placeholder="Ex.: 123456"
-                  disabled={isSearchingInvoice}
-                  className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
-                />
-                <button
-                  type="button"
-                  onClick={() => void getDanfeByNf()}
-                  disabled={isSearchingInvoice || !searchNf.trim()}
-                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Search className="h-4 w-4" aria-hidden="true" />
-                  {isSearchingInvoice ? 'Buscando...' : 'Buscar NF'}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-sm font-medium text-text">Período de emissão</span>
-              <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                <div className="min-w-0">
-                  <label htmlFor="invoice-start-date" className="mb-1 block text-xs text-muted">Data inicial</label>
-                  <DatePicker
-                    id="invoice-start-date"
-                    selected={startDate}
-                    onChange={date => setStartDate(date)}
-                    placeholderText="Data inicial"
-                    dateFormat="dd/MM/yyyy"
-                    locale="ptBR"
-                    popperPlacement="bottom-start"
-                    className="date-picker-input h-11"
-                    wrapperClassName="w-full"
-                    withPortal
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="invoice-end-date" className="mb-1 block text-xs text-muted">Data final</label>
-                  <DatePicker
-                    id="invoice-end-date"
-                    selected={endDate}
-                    onChange={date => setEndDate(date)}
-                    placeholderText="Data final"
-                    dateFormat="dd/MM/yyyy"
-                    locale="ptBR"
-                    popperPlacement="bottom-start"
-                    className="date-picker-input h-11"
-                    wrapperClassName="w-full"
-                    withPortal
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void getDanfesByDate()}
-                  disabled={!startDate || !endDate || isSearchingPeriod}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Search className="h-4 w-4" aria-hidden="true" />
-                  {isSearchingPeriod ? 'Buscando...' : 'Buscar período'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {invoiceSearchFeedback ? (
-            <div
-              role="status"
-              className={`mt-2 rounded-md border px-3 py-2 text-sm ${invoiceSearchFeedback.tone === 'danger'
-                ? 'semantic-panel-danger'
-                : invoiceSearchFeedback.tone === 'warning'
-                  ? 'semantic-panel-warning'
-                  : 'semantic-panel-info'}`}
-            >
-              <span>{invoiceSearchFeedback.message}</span>
-              {invoiceSearchFeedback.actionUrl ? (
-                <button
-                  type="button"
-                  onClick={() => navigate(invoiceSearchFeedback.actionUrl as string)}
-                  className="ml-2 rounded-md border border-current/30 bg-card px-2 py-1 text-xs font-semibold"
-                >
-                  {invoiceSearchFeedback.actionLabel || 'Abrir referência'}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {periodSearchError ? (
-            <div role="alert" className="mt-2 rounded-md border px-3 py-2 text-sm semantic-panel-danger">
-              {periodSearchError}
-            </div>
-          ) : null}
-        </section>
+        <InvoiceSearchPanel
+          searchNf={searchNf}
+          onSearchNfChange={setSearchNf}
+          onSearchNf={getDanfeByNf}
+          isSearchingInvoice={isSearchingInvoice}
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          onSearchPeriod={getDanfesByDate}
+          isSearchingPeriod={isSearchingPeriod}
+          invoiceSearchFeedback={invoiceSearchFeedback}
+          periodSearchError={periodSearchError}
+          onNavigate={navigate}
+        />
 
         <section
           aria-labelledby="invoice-filter-title"

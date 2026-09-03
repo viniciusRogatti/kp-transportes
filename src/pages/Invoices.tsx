@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { IDanfe } from "../types/types";
 import axios from "axios";
 import { Search } from "lucide-react";
@@ -25,6 +25,32 @@ import { pdf } from "@react-pdf/renderer";
 import { COMPANY_LABELS, resolveDanfeCompanyCode } from "../utils/companyTabs";
 registerLocale('ptBR', ptBR);
 const INITIAL_RENDER_LIMIT = 60;
+const PERIOD_PAGE_SIZE = 120;
+
+type PeriodSearchState = {
+  startDate: string;
+  endDate: string;
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+};
+
+type PeriodSearchResponse = {
+  rows: IDanfe[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
+function mergeDanfes(currentRows: IDanfe[], incomingRows: IDanfe[]) {
+  const rowsByKey = new Map<string, IDanfe>();
+  [...currentRows, ...incomingRows].forEach((danfe) => {
+    rowsByKey.set(`${Number(danfe.company_id || 0)}::${String(danfe.invoice_number)}`, danfe);
+  });
+  return Array.from(rowsByKey.values());
+}
 
 function Invoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
@@ -43,6 +69,9 @@ function Invoices() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
   const [isSearchingPeriod, setIsSearchingPeriod] = useState(false);
+  const [isLoadingMorePeriod, setIsLoadingMorePeriod] = useState(false);
+  const [periodSearch, setPeriodSearch] = useState<PeriodSearchState | null>(null);
+  const [periodSearchError, setPeriodSearchError] = useState<string | null>(null);
   const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
   const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<{
     tone: 'danger' | 'info' | 'warning';
@@ -52,6 +81,7 @@ function Invoices() {
   } | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const periodRequestIdRef = useRef(0);
   const deferredFilters = useDeferredValue(filters);
   const canChangeInvoiceStatus = ['admin', 'master', 'user', 'expedicao'].includes(
     String(localStorage.getItem('user_permission') || '').trim().toLowerCase(),
@@ -73,27 +103,88 @@ function Invoices() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  async function getDanfesByDate() {
-    if (!startDate || !endDate ) {
-      alert('Selecione duas datas');
+  async function requestPeriodPage(
+    search: Pick<PeriodSearchState, 'startDate' | 'endDate'>,
+    page: number,
+    append: boolean,
+    requestId: number,
+  ) {
+    const { data } = await axios.get<PeriodSearchResponse>(`${API_URL}/danfes/date/`, {
+      params: {
+        startDate: search.startDate,
+        endDate: search.endDate,
+        paginated: true,
+        page,
+        pageSize: PERIOD_PAGE_SIZE,
+      },
+    });
+    if (requestId !== periodRequestIdRef.current) return;
+
+    const sanitizedRows = Array.isArray(data?.rows)
+      ? data.rows.map((danfe) => sanitizeDanfeTextFields(danfe))
+      : [];
+    setDataDanfes((currentRows) => append ? mergeDanfes(currentRows, sanitizedRows) : sanitizedRows);
+    setPeriodSearch({
+      ...search,
+      page: Number(data?.page) || page,
+      pageSize: Number(data?.pageSize) || PERIOD_PAGE_SIZE,
+      total: Number(data?.total) || 0,
+      hasMore: Boolean(data?.hasMore),
+    });
+    if (append) {
+      void loadInvoiceContext(sanitizedRows, { includeTripDriver: true });
     } else {
-      try {
-        setIsSearchingPeriod(true);
-        const url = `${API_URL}/danfes/date/?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}`;      
-        const { data } = await axios.get(url);
-        const sanitizedRows = Array.isArray(data)
-          ? data.map((danfe: IDanfe) => sanitizeDanfeTextFields(danfe))
-          : [];
-        setRenderLimit(INITIAL_RENDER_LIMIT);
-        setStartDate(null);
-        setEndDate(null);
-        setDataDanfes(sanitizedRows);
-        void refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
-      } catch (error) {
-        console.error('Não foi possível encontrar notas com essas datas', error);
-      } finally {
-        setIsSearchingPeriod(false);
-      }
+      setRenderLimit(INITIAL_RENDER_LIMIT);
+      void refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
+    }
+  }
+
+  async function getDanfesByDate() {
+    if (!startDate || !endDate) {
+      setPeriodSearchError('Selecione a data inicial e a data final.');
+      return;
+    }
+
+    const formattedStartDate = formatDate(startDate) as string;
+    const formattedEndDate = formatDate(endDate) as string;
+    if (formattedStartDate > formattedEndDate) {
+      setPeriodSearchError('A data inicial não pode ser posterior à data final.');
+      return;
+    }
+
+    const requestId = periodRequestIdRef.current + 1;
+    periodRequestIdRef.current = requestId;
+    setIsSearchingPeriod(true);
+    setIsLoadingMorePeriod(false);
+    setPeriodSearchError(null);
+    try {
+      await requestPeriodPage({ startDate: formattedStartDate, endDate: formattedEndDate }, 1, false, requestId);
+      if (requestId !== periodRequestIdRef.current) return;
+      setStartDate(null);
+      setEndDate(null);
+    } catch (error) {
+      if (requestId !== periodRequestIdRef.current) return;
+      console.error('Não foi possível encontrar notas com essas datas', error);
+      setPeriodSearchError('Não foi possível carregar as notas desse período. Tente novamente.');
+    } finally {
+      if (requestId === periodRequestIdRef.current) setIsSearchingPeriod(false);
+    }
+  }
+
+  async function loadMorePeriodDanfes() {
+    if (!periodSearch?.hasMore || isLoadingMorePeriod) return;
+
+    const requestId = periodRequestIdRef.current;
+    setIsLoadingMorePeriod(true);
+    setPeriodSearchError(null);
+    try {
+      await requestPeriodPage(periodSearch, periodSearch.page + 1, true, requestId);
+    } catch (error) {
+      if (requestId !== periodRequestIdRef.current) return;
+      console.error('Não foi possível carregar mais notas do período', error);
+      setPeriodSearchError('Não foi possível carregar a próxima parte do período. Tente novamente.');
+    } finally {
+      if (requestId === periodRequestIdRef.current) setIsLoadingMorePeriod(false);
     }
   }
 
@@ -129,6 +220,11 @@ function Invoices() {
     if (!normalizedNf) return;
 
     setIsSearchingInvoice(true);
+    periodRequestIdRef.current += 1;
+    setIsSearchingPeriod(false);
+    setIsLoadingMorePeriod(false);
+    setPeriodSearch(null);
+    setPeriodSearchError(null);
     setInvoiceSearchFeedback(null);
     try {
       let { data } = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(normalizedNf)}`, {
@@ -191,6 +287,11 @@ function Invoices() {
     setInvoiceSearchFeedback(null);
 
     const fetchQueryNf = async () => {
+      periodRequestIdRef.current += 1;
+      setIsSearchingPeriod(false);
+      setIsLoadingMorePeriod(false);
+      setPeriodSearch(null);
+      setPeriodSearchError(null);
       try {
         const { data } = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(queryNf)}`, {
           params: activeCompanyTab !== 'all' ? { companyCode: activeCompanyTab } : undefined,
@@ -478,6 +579,11 @@ function Invoices() {
               ) : null}
             </div>
           ) : null}
+          {periodSearchError ? (
+            <div role="alert" className="mt-2 rounded-md border px-3 py-2 text-sm semantic-panel-danger">
+              {periodSearchError}
+            </div>
+          ) : null}
         </section>
 
         <section
@@ -605,9 +711,17 @@ function Invoices() {
               {`Carga: ${load}`} ×
             </button>
           ))}
-          <span className="text-muted">Lista de produtos baseada nos filtros atuais.</span>
+          <span className="text-muted">
+            {periodSearch?.hasMore
+              ? 'Filtros e lista de produtos consideram somente as notas já carregadas.'
+              : 'Lista de produtos baseada nos filtros atuais.'}
+          </span>
         </div>
-        <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
+        <NotesFound>
+          {periodSearch
+            ? `${danfes.length} nos filtros atuais · ${dataDanfes.length} de ${periodSearch.total} notas carregadas`
+            : `${danfes.length} Notas encontradas`}
+        </NotesFound>
         <CardDanfes
           danfes={renderedDanfes}
           driverLoadingByInvoice={driverLoadingByInvoice}
@@ -628,6 +742,20 @@ function Invoices() {
               className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
             >
               {`Mostrar mais 60 (${renderedDanfes.length} de ${danfes.length})`}
+            </button>
+          </div>
+        ) : null}
+        {periodSearch?.hasMore && renderedDanfes.length >= danfes.length ? (
+          <div className="flex justify-center py-4">
+            <button
+              type="button"
+              onClick={() => void loadMorePeriodDanfes()}
+              disabled={isLoadingMorePeriod}
+              className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoadingMorePeriod
+                ? 'Carregando mais notas...'
+                : `Carregar mais notas (${dataDanfes.length} de ${periodSearch.total})`}
             </button>
           </div>
         ) : null}

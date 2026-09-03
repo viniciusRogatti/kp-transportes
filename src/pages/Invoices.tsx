@@ -24,6 +24,7 @@ import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
 import { pdf } from "@react-pdf/renderer";
 import { COMPANY_LABELS, resolveDanfeCompanyCode } from "../utils/companyTabs";
 registerLocale('ptBR', ptBR);
+const INITIAL_RENDER_LIMIT = 60;
 
 function Invoices() {
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
@@ -40,6 +41,8 @@ function Invoices() {
   const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
   const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
   const [isPrinting, setIsPrinting] = useState(false);
+  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
+  const [isSearchingPeriod, setIsSearchingPeriod] = useState(false);
   const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
   const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<{
     tone: 'danger' | 'info' | 'warning';
@@ -75,17 +78,21 @@ function Invoices() {
       alert('Selecione duas datas');
     } else {
       try {
+        setIsSearchingPeriod(true);
         const url = `${API_URL}/danfes/date/?startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}`;      
         const { data } = await axios.get(url);
         const sanitizedRows = Array.isArray(data)
           ? data.map((danfe: IDanfe) => sanitizeDanfeTextFields(danfe))
           : [];
+        setRenderLimit(INITIAL_RENDER_LIMIT);
         setStartDate(null);
         setEndDate(null);
         setDataDanfes(sanitizedRows);
-        await refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
+        void refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
       } catch (error) {
         console.error('Não foi possível encontrar notas com essas datas', error);
+      } finally {
+        setIsSearchingPeriod(false);
       }
     }
   }
@@ -322,6 +329,11 @@ function Invoices() {
     () => filterInvoiceListDanfes(visibleDanfes, deferredFilters, { invoiceContextByNf }),
     [visibleDanfes, deferredFilters, invoiceContextByNf],
   );
+  const renderedDanfes = useMemo(() => danfes.slice(0, renderLimit), [danfes, renderLimit]);
+
+  useEffect(() => {
+    setRenderLimit(INITIAL_RENDER_LIMIT);
+  }, [activeCompanyTab, deferredFilters, dataDanfes]);
 
   async function openPDFInNewTab() {
     const currentFilteredDanfes = filterInvoiceListDanfes(visibleDanfes, filters, { invoiceContextByNf });
@@ -435,11 +447,11 @@ function Invoices() {
                 <button
                   type="button"
                   onClick={() => void getDanfesByDate()}
-                  disabled={!startDate || !endDate}
+                  disabled={!startDate || !endDate || isSearchingPeriod}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Search className="h-4 w-4" aria-hidden="true" />
-                  Buscar período
+                  {isSearchingPeriod ? 'Buscando...' : 'Buscar período'}
                 </button>
               </div>
             </div>
@@ -597,7 +609,7 @@ function Invoices() {
         </div>
         <NotesFound>{`${danfes.length} Notas encontradas`}</NotesFound>
         <CardDanfes
-          danfes={danfes}
+          danfes={renderedDanfes}
           driverLoadingByInvoice={driverLoadingByInvoice}
           driverErrorByInvoice={driverErrorByInvoice}
           invoiceContextByNf={invoiceContextByNf}
@@ -608,6 +620,17 @@ function Invoices() {
           )}
           showLegend={false}
         />
+        {renderedDanfes.length < danfes.length ? (
+          <div className="flex justify-center py-4">
+            <button
+              type="button"
+              onClick={() => setRenderLimit((current) => current + INITIAL_RENDER_LIMIT)}
+              className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong"
+            >
+              {`Mostrar mais 60 (${renderedDanfes.length} de ${danfes.length})`}
+            </button>
+          </div>
+        ) : null}
         {isPrinting ? <div className="flex justify-center py-4"><span>Gerando lista de produtos...</span></div> : null}
         <ScrollToTopButton />
       </Container>

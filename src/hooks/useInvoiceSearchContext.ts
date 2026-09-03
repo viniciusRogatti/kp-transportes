@@ -5,6 +5,7 @@ import { IDanfe, IOccurrence, IReturnBatch, IInvoiceSearchContext, ITrip } from 
 
 const VALID_RETURN_TYPES = new Set(['total', 'partial', 'sobra', 'coleta', 'weight_break']);
 const REQUEST_BATCH_SIZE = 8;
+const BULK_CONTEXT_SIZE = 500;
 const CONTEXT_STALE_MS = 30000;
 const INACTIVE_TRIP_NOTE_STATUSES = new Set(['cancelled']);
 const PRIORITY_TRIP_NOTE_STATUSES = new Set(['retained', 'returned', 'cancelled', 'redelivery']);
@@ -229,6 +230,24 @@ async function fetchTripsByInvoiceNumbers(
   }
 }
 
+async function fetchInvoiceContextsInBulk(danfes: IDanfe[]) {
+  const contexts: Record<string, IInvoiceSearchContext> = {};
+  for (let index = 0; index < danfes.length; index += BULK_CONTEXT_SIZE) {
+    const chunk = danfes.slice(index, index + BULK_CONTEXT_SIZE);
+    const { data } = await axios.post<Record<string, IInvoiceSearchContext>>(
+      `${API_URL}/danfes/search-context`,
+      {
+        invoices: chunk.map((danfe) => ({
+          invoice_number: normalizeInvoiceNumber(danfe.invoice_number),
+          company_id: Number(danfe.company_id || 0) || null,
+        })),
+      },
+    );
+    Object.assign(contexts, data || {});
+  }
+  return contexts;
+}
+
 export default function useInvoiceSearchContext() {
   const [invoiceContextByNf, setInvoiceContextByNf] = useState<Record<string, IInvoiceSearchContext>>({});
   const [driverLoadingByInvoice, setDriverLoadingByInvoice] = useState<Record<string, boolean>>({});
@@ -261,6 +280,57 @@ export default function useInvoiceSearchContext() {
     });
 
     if (!missingInvoiceNumbers.length) return;
+
+    const missingInvoiceSet = new Set(missingInvoiceNumbers);
+    const missingDanfes = danfesToProcess.filter((danfe) => (
+      missingInvoiceSet.has(normalizeInvoiceNumber(danfe.invoice_number))
+    ));
+
+    if (includeTripDriver) {
+      setDriverLoadingByInvoice((previous) => {
+        const next = { ...previous };
+        missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = true; });
+        return next;
+      });
+      setDriverErrorByInvoice((previous) => {
+        const next = { ...previous };
+        missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = false; });
+        return next;
+      });
+
+      try {
+        const bulkContexts = await fetchInvoiceContextsInBulk(missingDanfes);
+        setInvoiceContextByNf((previous) => {
+          const next = { ...previous, ...bulkContexts };
+          missingInvoiceNumbers.forEach((invoiceNumber) => {
+            fetchedAtByInvoiceRef.current[invoiceNumber] = Date.now();
+          });
+          invoiceContextRef.current = next;
+          return next;
+        });
+        setDriverLoadingByInvoice((previous) => {
+          const next = { ...previous };
+          missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = false; });
+          return next;
+        });
+        return;
+      } catch (bulkContextError) {
+        console.warn('Contexto consolidado indisponivel.', bulkContextError);
+        if (missingInvoiceNumbers.length > REQUEST_BATCH_SIZE) {
+          setDriverLoadingByInvoice((previous) => {
+            const next = { ...previous };
+            missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = false; });
+            return next;
+          });
+          setDriverErrorByInvoice((previous) => {
+            const next = { ...previous };
+            missingInvoiceNumbers.forEach((invoiceNumber) => { next[invoiceNumber] = true; });
+            return next;
+          });
+          return;
+        }
+      }
+    }
 
     let tripsByInvoice: Record<string, ITrip[]> = {};
     if (includeTripDriver) {

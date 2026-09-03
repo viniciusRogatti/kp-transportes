@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import axios from 'axios';
-import DatePicker from 'react-datepicker';
 import { format, subDays } from 'date-fns';
-import ptBR from 'date-fns/locale/pt-BR';
 import { pdf } from '@react-pdf/renderer';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -25,6 +23,7 @@ import ProductListPDF from '../components/ProductListPDF';
 import SalmonLoadListPDF from '../components/SalmonLoadListPDF';
 import IconButton from '../components/ui/IconButton';
 import Skeleton from '../components/ui/Skeleton';
+import TripSearchControls from '../components/routes/TripSearchControls';
 import { cn } from '../lib/cn';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
 import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/retainedReminders';
@@ -2974,90 +2973,32 @@ function RoutePlanning() {
             </section>
           ) : (
             <section className="flex w-full min-h-0 flex-1 flex-col rounded-b-lg rounded-tr-lg border border-border bg-surface p-3 shadow-[var(--shadow-2)]">
-              <div className="mb-3 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-55"
-                      onClick={() => void openSalmonPrintModal()}
-                      disabled={isPrinting}
-                    >
-                      <Printer className="h-4 w-4" />
-                      Imprimir lista de salmão
-                    </button>
-                    <button
-                      type="button"
-                      className="h-10 rounded-md border border-border bg-surface px-3 text-sm text-text"
-                      onClick={() => {
-                        const today = new Date();
-                        setTripDateFilter(today);
-                        setTripEndDateFilter(today);
-                        setTripIdSearch('');
-                        setTripDriverSearch('');
-                        setTripPlateSearch('');
-                        void refreshTrips(todayApiDate);
-                      }}
-                    >
-                      Limpar
-                    </button>
-                    <button
-                      type="button"
-                      className="h-10 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text"
-                      onClick={() => {
-                        void refreshTripsBySelectedRange();
-                      }}
-                    >
-                      Buscar período
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-                  <DatePicker
-                    selected={tripDateFilter}
-                    onChange={(date) => setTripDateFilter(date)}
-                    dateFormat="dd/MM/yyyy"
-                    locale={ptBR}
-                    placeholderText="Data inicial"
-                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                  />
-                  <DatePicker
-                    selected={tripEndDateFilter}
-                    onChange={(date) => setTripEndDateFilter(date)}
-                    dateFormat="dd/MM/yyyy"
-                    locale={ptBR}
-                    placeholderText="Data final"
-                    className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                  />
-                  <input
-                    type="text"
-                    value={tripIdSearch}
-                    onChange={(event) => setTripIdSearch(event.target.value.replace(/[^\d]/g, ''))}
-                    placeholder="ID da rota"
-                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                  />
-                  <input
-                    type="text"
-                    value={tripPlateSearch}
-                    onChange={(event) => setTripPlateSearch(event.target.value.toUpperCase())}
-                    placeholder="Placa"
-                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                  />
-                  <input
-                    type="text"
-                    value={tripDriverSearch}
-                    onChange={(event) => setTripDriverSearch(event.target.value)}
-                    placeholder="Nome do motorista"
-                    className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-                  />
-                </div>
-
-                {isTripsLoading && filteredDisplayedTrips.length > 0 ? (
-                  <div className="text-xs text-muted">Atualizando rotas...</div>
-                ) : null}
-              </div>
+              <TripSearchControls
+                startDate={tripDateFilter}
+                endDate={tripEndDateFilter}
+                tripId={tripIdSearch}
+                plate={tripPlateSearch}
+                driverName={tripDriverSearch}
+                isPrinting={isPrinting}
+                isLoading={isTripsLoading}
+                hasDisplayedTrips={filteredDisplayedTrips.length > 0}
+                onStartDateChange={setTripDateFilter}
+                onEndDateChange={setTripEndDateFilter}
+                onTripIdChange={setTripIdSearch}
+                onPlateChange={setTripPlateSearch}
+                onDriverNameChange={setTripDriverSearch}
+                onPrint={openSalmonPrintModal}
+                onClear={() => {
+                  const today = new Date();
+                  setTripDateFilter(today);
+                  setTripEndDateFilter(today);
+                  setTripIdSearch('');
+                  setTripDriverSearch('');
+                  setTripPlateSearch('');
+                  void refreshTrips(todayApiDate);
+                }}
+                onSearch={refreshTripsBySelectedRange}
+              />
 
               {isTripsLoading && !filteredDisplayedTrips.length ? (
                 <div className="grid gap-2 md:grid-cols-2"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>

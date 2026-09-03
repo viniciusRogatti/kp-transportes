@@ -289,18 +289,11 @@ function TodayInvoices() {
         },
       });
 
-      await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: [{
-          company_id: danfe.company_id,
-          invoice_number: danfe.invoice_number,
-          status: 'assigned',
-        }],
-      });
-
       const invoiceNumber = String(danfe.invoice_number);
+      const assignedStatus = String(createdTripNote?.status || 'assigned');
       const updatedDanfe = sanitizeDanfeTextFields({
         ...danfe,
-        status: 'assigned',
+        status: assignedStatus,
       });
 
       setDataDanfes((previous) => previous.map((row) => (
@@ -327,7 +320,7 @@ function TodayInvoices() {
               ...(trip.TripNotes || []),
               {
                 ...createdTripNote,
-                status: createdTripNote?.status || 'assigned',
+                status: assignedStatus,
               },
             ],
           }

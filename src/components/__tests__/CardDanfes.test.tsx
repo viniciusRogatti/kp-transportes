@@ -110,6 +110,23 @@ describe('CardDanfes', () => {
     expect(screen.queryByText('Sem motorista')).not.toBeInTheDocument();
   });
 
+  it('isola o motorista quando duas empresas possuem o mesmo numero de NF', () => {
+    const first = { ...buildDanfe('123456', 'assigned'), company_id: 3 };
+    const second = { ...buildDanfe('123456', 'assigned'), company_id: 4, barcode: 'outro-codigo' };
+    render(
+      <CardDanfes
+        danfes={[first, second]}
+        invoiceContextByNf={{
+          '3::123456': { ...CONTEXT_FIXTURE['123456'], driver_name: 'Motorista Empresa 3' },
+          '4::123456': { ...CONTEXT_FIXTURE['123456'], driver_name: 'Motorista Empresa 4' },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Motorista: Motorista Empresa 3')).toBeInTheDocument();
+    expect(screen.getByText('Motorista: Motorista Empresa 4')).toBeInTheDocument();
+  });
+
   it('mostra o lote da devolucao, o envio finalizado e permite abrir o lote', () => {
     const onOpenReturnBatch = jest.fn();
     render(

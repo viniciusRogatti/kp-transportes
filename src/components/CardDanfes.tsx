@@ -19,6 +19,7 @@ import {
 } from '../utils/statusStyles';
 import { API_URL } from '../data';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
+import { resolveInvoiceScopedValue } from '../utils/invoiceContextKey';
 
 interface CardDanfesProps {
   danfes: IDanfe[];
@@ -411,10 +412,10 @@ function CardDanfes({
             const key = String(danfe.barcode || danfe.invoice_number);
             const isFlipped = Boolean(flippedCards[key]);
             const invoiceNumber = String(danfe.invoice_number);
-            const invoiceContext = invoiceContextByNf[invoiceNumber] || null;
-            const isDriverLoading = Boolean(driverLoadingByInvoice[invoiceNumber]);
-            const hasDriverError = Boolean(driverErrorByInvoice[invoiceNumber]);
-            const resolvedDriverName = driverByInvoice[invoiceNumber] || invoiceContext?.driver_name || null;
+            const invoiceContext = resolveInvoiceScopedValue(invoiceContextByNf, danfe) || null;
+            const isDriverLoading = Boolean(resolveInvoiceScopedValue(driverLoadingByInvoice, danfe));
+            const hasDriverError = Boolean(resolveInvoiceScopedValue(driverErrorByInvoice, danfe));
+            const resolvedDriverName = invoiceContext?.driver_name || resolveInvoiceScopedValue(driverByInvoice, danfe) || null;
             const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity) || '-';
             const cityName = normalizeCityLabel(danfe.Customer?.city) || '-';
             const customerAddress = normalizeTextValue(danfe.Customer?.address) || '-';

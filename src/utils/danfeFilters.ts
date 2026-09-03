@@ -1,6 +1,7 @@
 import { cities } from '../data/danfes';
 import { IDanfe, IInvoiceSearchContext } from '../types/types';
 import { DanfeLegendKey, matchesDanfeLegendFilter } from './statusStyles';
+import { resolveInvoiceScopedValue } from './invoiceContextKey';
 
 export type InvoiceListFilters = {
   nf: string;
@@ -37,10 +38,9 @@ function resolveDanfeDriverName(
   driverByInvoice?: Record<string, string>,
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>,
 ) {
-  const invoiceNumber = String(danfe.invoice_number || '').trim();
   return String(
-    driverByInvoice?.[invoiceNumber]
-    || invoiceContextByNf?.[invoiceNumber]?.driver_name
+    resolveInvoiceScopedValue(invoiceContextByNf, danfe)?.driver_name
+    || resolveInvoiceScopedValue(driverByInvoice, danfe)
     || '',
   ).trim();
 }

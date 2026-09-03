@@ -1766,16 +1766,6 @@ function RoutePlanning() {
     }
 
     if (notesToAdd.length > 0) {
-      if (!isConferenceOnly) {
-        await axios.put(`${API_URL}/danfes/update-status`, {
-          danfes: notesToAdd.map((note) => ({
-            company_id: note.company_id,
-            invoice_number: note.invoice_number,
-            status: 'assigned',
-          })),
-        }, authConfig);
-      }
-
       for (const note of notesToAdd) {
         await axios.put(`${API_URL}/trips/add-note/${trip.id}`, {
           noteData: {

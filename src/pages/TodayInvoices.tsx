@@ -1,7 +1,6 @@
 import React, { useCallback, useDeferredValue, useMemo, useState, useEffect } from "react";
 import CardDanfes from "../components/CardDanfes";
 import Header from "../components/Header";
-import 'react-datepicker/dist/react-datepicker.css';
 import axios from 'axios';
 import { IDanfe, ITrip } from "../types/types";
 import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "../style/TodayInvoices";

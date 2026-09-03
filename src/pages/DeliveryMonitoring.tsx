@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import ptBR from 'date-fns/locale/pt-BR';
-import 'react-datepicker/dist/react-datepicker.css';
 import { useLocation, useNavigate } from 'react-router';
 import { io, Socket } from 'socket.io-client';
 import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';

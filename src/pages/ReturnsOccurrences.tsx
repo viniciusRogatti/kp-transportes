@@ -24,6 +24,9 @@ import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
 import MissingCargoOccurrenceDetails, {
   isMissingCargoOccurrence,
 } from '../components/occurrences/MissingCargoOccurrenceDetails';
+import OccurrenceListControls, {
+  OccurrenceWorkflowFilter,
+} from '../components/occurrences/OccurrenceListControls';
 import ReturnBatchSearchPanel, {
   ReturnBatchLookbackValue,
 } from '../components/returns/ReturnBatchSearchPanel';
@@ -35,7 +38,6 @@ import {
   Actions,
   BoxDescription,
   Card,
-  CardHeaderRow,
   BatchActionsRow,
   BatchItemContent,
   Grid,
@@ -160,8 +162,6 @@ const OCCURRENCE_WORKFLOW_LABELS: Record<'pending_transportadora' | 'awaiting_co
   awaiting_control_tower: 'Aguardando finalizacao da torre',
   finalized: 'Finalizada',
 };
-
-type OccurrenceWorkflowFilter = 'all' | 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
 
 const resolveOccurrenceWorkflowStatus = (occurrence: IOccurrence): Exclude<OccurrenceWorkflowFilter, 'all'> => {
   const resolved = occurrence.status === 'resolved';
@@ -4120,72 +4120,21 @@ function ReturnsOccurrences() {
             {activeTab === 'occurrences' && (
               <SingleColumn>
                 <Card>
-                  <CardHeaderRow>
-                    <h2>Ocorrencias Cadastradas</h2>
-                    {canManageOccurrenceStatus && (
-                      <button
-                        onClick={openCreateOccurrenceBuilder}
-                        type="button"
-                        className="rounded-md border border-warning bg-warning px-4 py-[0.65rem] font-bold text-white transition hover:brightness-110"
-                      >
-                        Criar ocorrencia
-                      </button>
-                    )}
-                  </CardHeaderRow>
-                  {hasSavedOccurrenceDraft && canManageOccurrenceStatus ? (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border semantic-panel-info px-3 py-2 text-sm">
-                      <span>Existe um rascunho de ocorrência salvo neste aparelho.</span>
-                      <div className="flex gap-2">
-                        <button type="button" className="primary" onClick={openCreateOccurrenceBuilder}>Continuar</button>
-                        <button type="button" className="secondary" onClick={clearSavedOccurrenceDraft}>Descartar</button>
-                      </div>
-                    </div>
-                  ) : null}
-                  <Grid className="mt-[5px] grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <InlineText>Status</InlineText>
-                      <select
-                        value={isControlTowerUser ? 'awaiting_control_tower' : occurrenceStatusFilter}
-                        onChange={(event) => setOccurrenceStatusFilter(event.target.value as OccurrenceWorkflowFilter)}
-                        disabled={isControlTowerUser}
-                      >
-                        {isControlTowerUser ? (
-                          <option value="awaiting_control_tower">Aguardando finalizacao (Talão)</option>
-                        ) : (
-                          <>
-                            <option value="pending_transportadora">Pendentes da transportadora</option>
-                            <option value="awaiting_control_tower">Aguardando finalizacao da torre</option>
-                            <option value="finalized">Finalizadas</option>
-                            <option value="all">Todas</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                    <div>
-                      <InlineText>Filtro por NF</InlineText>
-                      <input
-                        value={occurrenceNfFilter}
-                        onChange={(event) => setOccurrenceNfFilter(event.target.value)}
-                        placeholder="Ex.: 12345"
-                      />
-                    </div>
-                    <div>
-                      <InlineText>Data inicial</InlineText>
-                      <input
-                        type="date"
-                        value={occurrenceStartDate}
-                        onChange={(event) => setOccurrenceStartDate(event.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <InlineText>Data final</InlineText>
-                      <input
-                        type="date"
-                        value={occurrenceEndDate}
-                        onChange={(event) => setOccurrenceEndDate(event.target.value)}
-                      />
-                    </div>
-                  </Grid>
+                  <OccurrenceListControls
+                    canManageStatus={canManageOccurrenceStatus}
+                    hasSavedDraft={hasSavedOccurrenceDraft}
+                    isControlTowerUser={isControlTowerUser}
+                    statusFilter={occurrenceStatusFilter}
+                    invoiceFilter={occurrenceNfFilter}
+                    startDate={occurrenceStartDate}
+                    endDate={occurrenceEndDate}
+                    onCreate={openCreateOccurrenceBuilder}
+                    onDiscardDraft={clearSavedOccurrenceDraft}
+                    onStatusFilterChange={setOccurrenceStatusFilter}
+                    onInvoiceFilterChange={setOccurrenceNfFilter}
+                    onStartDateChange={setOccurrenceStartDate}
+                    onEndDateChange={setOccurrenceEndDate}
+                  />
 
                   {!occurrences.length ? (
                     <InlineText style={{ marginTop: '12px' }}>Nenhuma ocorrencia encontrada.</InlineText>

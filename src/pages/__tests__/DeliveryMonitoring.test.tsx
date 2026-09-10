@@ -108,7 +108,7 @@ const buildOverview = (status: MonitoringStatus, date = '2026-03-23') => ({
       tracking_active: status === 'on_the_way',
       route_completed: status !== 'on_the_way',
       highlighted_stops: [],
-      alerts: [],
+      alerts: [] as Array<Omit<import('../../types/types').IAlertRow, 'company_id'>>,
       stops: [
         {
           note_id: 99,
@@ -125,7 +125,7 @@ const buildOverview = (status: MonitoringStatus, date = '2026-03-23') => ({
     warning: 0,
     info: 0,
   },
-  alerts: [],
+  alerts: [] as Array<Omit<import('../../types/types').IAlertRow, 'company_id'>>,
 });
 
 const buildDiagnostics = (date = '2026-03-23') => ({

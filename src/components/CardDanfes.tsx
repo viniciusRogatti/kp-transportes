@@ -115,6 +115,7 @@ function CardDanfes({
   const [activeStatusFilter, setActiveStatusFilter] = useState<DanfeLegendKey | null>(null);
   const [assignmentModalDanfe, setAssignmentModalDanfe] = useState<IDanfe | null>(null);
   const [selectedTripId, setSelectedTripId] = useState('');
+  const [assignmentBoxes, setAssignmentBoxes] = useState('');
   const [isAssigningDanfe, setIsAssigningDanfe] = useState(false);
   const [assignmentError, setAssignmentError] = useState('');
   const [statusModalDanfe, setStatusModalDanfe] = useState<IDanfe | null>(null);
@@ -166,6 +167,7 @@ function CardDanfes({
 
   function openAssignmentModal(danfe: IDanfe) {
     setAssignmentModalDanfe(danfe);
+    setAssignmentBoxes(danfe.box_quantity ? String(danfe.box_quantity) : '');
     setSelectedTripId('');
     setAssignmentError('');
   }
@@ -262,7 +264,10 @@ function CardDanfes({
     try {
       setIsAssigningDanfe(true);
       setAssignmentError('');
-      await onAssignDanfeToTrip(assignmentModalDanfe, tripId);
+      const requiresBoxes = assignmentModalDanfe.company?.code === 'pronto';
+      const boxes = Number(assignmentBoxes);
+      if (requiresBoxes && (!Number.isInteger(boxes) || boxes <= 0)) throw new Error('Informe a quantidade de caixas da NF da PRONTO.');
+      await onAssignDanfeToTrip(requiresBoxes ? { ...assignmentModalDanfe, box_quantity: boxes } : assignmentModalDanfe, tripId);
       closeAssignmentModal(true);
     } catch (error: any) {
       setAssignmentError(error?.response?.data?.error || error?.message || 'Nao foi possivel atribuir esta NF agora.');
@@ -1074,6 +1079,9 @@ function CardDanfes({
               })}
             </div>
 
+            {assignmentModalDanfe.company?.code === 'pronto' ? <label className="mt-3 block text-sm">Quantidade de caixas
+              <input type="number" min="1" step="1" value={assignmentBoxes} disabled={isAssigningDanfe} onChange={(event) => setAssignmentBoxes(event.target.value)} className="mt-1 w-full rounded border border-border bg-surface p-2" />
+            </label> : null}
             {assignmentError ? (
               <p className="mt-3 rounded-md border semantic-panel-danger px-2 py-2 text-xs">
                 {assignmentError}

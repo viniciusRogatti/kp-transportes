@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import axios from 'axios';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { pdf } from '@react-pdf/renderer';
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, MoreVertical, Pencil, Printer, Route, Send, Trash2, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -109,36 +109,10 @@ function toISODate(date: string) {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
-function parseSupportedDateInput(date: string) {
-  const normalized = String(date || '').trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    const [year, month, day] = normalized.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  }
-
-  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(normalized)) {
-    const [day, month, year] = normalized.split(/[/-]/).map(Number);
-    return new Date(year, month - 1, day);
-  }
-
-  return null;
-}
-
 function formatPrintTimestamp(value?: string | null) {
   return formatDateTimeBR(value, '');
 }
 
-function resolveRoutingInvoiceDateCandidates(date: string) {
-  const parsedDate = parseSupportedDateInput(date);
-  if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
-    const fallback = toISODate(date);
-    return fallback ? [fallback] : [];
-  }
-
-  const routeDate = format(parsedDate, 'yyyy-MM-dd');
-  const operationalInvoiceDate = format(subDays(parsedDate, 1), 'yyyy-MM-dd');
-  return Array.from(new Set([operationalInvoiceDate, routeDate]));
-}
 
 function isTripActive(trip: ITrip) {
   return isRoutePlanningTripActive(trip);
@@ -899,20 +873,9 @@ function RoutePlanning() {
   }, [fetchTripsByRange, tripDateFilter, tripEndDateFilter]);
 
   const fetchDanfesForTripDate = useCallback(async (tripDate: string) => {
-    const candidateDates = resolveRoutingInvoiceDateCandidates(tripDate);
-    if (!candidateDates.length) return [];
-
-    const responses = await Promise.all(
-      candidateDates.map((candidateDate) => (
-        axios.get(`${API_URL}/danfes/date`, {
-          params: {
-            startDate: candidateDate,
-            endDate: candidateDate,
-            view: 'routing',
-          },
-        })
-      )),
-    );
+    const operationDate = toISODate(tripDate);
+    if (!operationDate) return [];
+    const responses = [await axios.get(`${API_URL}/danfes`, { params: { operationDate, view: 'routing' } })];
 
     const danfesByInvoice = new Map<string, RouteLookupDanfe>();
 
@@ -2010,16 +1973,6 @@ function RoutePlanning() {
         if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
         alert(buildAssignmentConflictMessage(validation?.data?.conflicts, isSecondRunMode));
         return;
-      }
-
-      if (!isSelectedConferenceOnlyDriver) {
-        await axios.put(`${API_URL}/danfes/update-status`, {
-          danfes: sortedNotes.map((note) => ({
-            company_id: note.company_id,
-            invoice_number: note.invoice_number,
-            status: 'assigned',
-          })),
-        });
       }
 
       const createResponse = await axios.post(`${API_URL}/trips/create`, {

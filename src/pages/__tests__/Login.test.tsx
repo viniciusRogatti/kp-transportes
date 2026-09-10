@@ -113,7 +113,7 @@ describe('Login', () => {
   });
 
   it('envia pelo Enter e impede novo envio enquanto autentica', async () => {
-    let resolveLogin: ((value: any) => void) | null = null;
+    let resolveLogin: (value: any) => void = () => { throw new Error('Login não iniciado'); };
     mockedAxios.post.mockImplementation((url: string) => {
       if (url.includes('verify-turnstile')) return Promise.resolve({ data: { success: true, proof: 'proof-ok' } });
       return new Promise((resolve) => { resolveLogin = resolve; });

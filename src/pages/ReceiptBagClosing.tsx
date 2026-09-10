@@ -51,7 +51,7 @@ export const matchesBagViewFilter = (row: ReceiptBagListRow, filter: ViewFilter)
   if (filter === 'all') return true;
   if (filter === 'completed') return row.status === 'completed';
   if (filter === 'overdue') return row.status !== 'completed' && row.is_overdue;
-  return ['not_started', 'in_progress'].includes(row.status);
+  return ['not_started', 'in_progress', 'completed_with_pending'].includes(row.status);
 };
 
 const todayInput = () => {
@@ -326,10 +326,6 @@ function ReceiptBagClosing() {
     forceTransfer = false,
   ): Promise<boolean> => {
     if (!activeBag || mutating) return false;
-    if (action === 'absent' && item.is_suggested_extra) {
-      setError('Uma NF apenas sugerida para este malote não pode ser marcada como ausente aqui.');
-      return false;
-    }
     if (
       action === 'confirm'
       && !forceTransfer
@@ -931,7 +927,7 @@ export function ConferencePanel(props: ConferenceProps) {
   const [keyboardCandidateId, setKeyboardCandidateId] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const canFinish = bag.items.length > 0
-    && bag.items.every((item) => item.status !== 'pending' || item.is_suggested_extra)
+    && bag.items.every((item) => item.status !== 'pending')
     && bag.items.every((item) => (
       !CLOSED_STATUSES.includes(item.status)
       || item.status === 'resolved_elsewhere'
@@ -940,7 +936,7 @@ export function ConferencePanel(props: ConferenceProps) {
     && bag.status !== 'completed';
 
   useEffect(() => {
-    if (canFinish) setFinishPromptOpen(true);
+    setFinishPromptOpen(canFinish);
   }, [bag.id, canFinish]);
 
   useEffect(() => {
@@ -1046,13 +1042,13 @@ export function ConferencePanel(props: ConferenceProps) {
             </div>
           </div>
           <div className="scrollbar-ui min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5 pr-1.5">
-            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id && !item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !NON_CONFIRMABLE_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
+            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id || item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !NON_CONFIRMABLE_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
             {!items.length ? <EmptyState text="Nenhuma NF encontrada neste filtro." /> : null}
           </div>
         </section>
       </div>
       {summaryOpen ? <BagSummaryDialog bag={bag} onClose={() => setSummaryOpen(false)} /> : null}
-      {finishPromptOpen ? <FinishConferenceDialog bag={bag} mutating={props.mutating} onClose={() => setFinishPromptOpen(false)} onFinish={props.onFinish} /> : null}
+      {finishPromptOpen && canFinish ? <FinishConferenceDialog bag={bag} mutating={props.mutating} onClose={() => setFinishPromptOpen(false)} onFinish={props.onFinish} /> : null}
     </div>
   );
 }
@@ -1126,6 +1122,9 @@ function FinishConferenceDialog({ bag, mutating, onClose, onFinish }: {
           <div className="rounded-xl bg-red-100 p-3 text-red-900 dark:bg-red-950 dark:text-red-100"><strong className="block text-lg">{bag.counts.absent}</strong>ausentes</div>
           <div className="rounded-xl bg-orange-100 p-3 text-orange-900 dark:bg-orange-950 dark:text-orange-100"><strong className="block text-lg">{bag.counts.returned}</strong>devoluções</div>
         </div>
+        {bag.items.some((item) => item.status === 'redelivery') ? (
+          <p className="px-4 pb-4 text-sm text-muted">As reentregas não exigem canhoto neste malote. A conferência pode ser finalizada; as NFs continuam pendentes até a confirmação de presença do canhoto, mesmo que já tenham uma nova rota.</p>
+        ) : null}
         <div className="flex justify-end gap-2 border-t border-border p-4">
           <button type="button" disabled={mutating} onClick={onClose} className="h-10 rounded-lg border border-border bg-card px-4 text-sm font-bold hover:bg-muted/40 disabled:opacity-40">Continuar conferindo</button>
           <button type="button" disabled={mutating} onClick={onFinish} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />{mutating ? 'Finalizando...' : 'Finalizar rota'}</button>

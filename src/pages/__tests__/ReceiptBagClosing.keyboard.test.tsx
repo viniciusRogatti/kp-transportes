@@ -35,7 +35,7 @@ describe('ConferencePanel por teclado', () => {
     const completed = { status: 'completed', is_overdue: false } as ReceiptBagListRow;
     const rows = [pending, overduePending, overdueDivergent, completed];
 
-    expect(rows.filter((row) => matchesBagViewFilter(row, 'pending'))).toEqual([pending, overduePending]);
+    expect(rows.filter((row) => matchesBagViewFilter(row, 'pending'))).toEqual([pending, overduePending, overdueDivergent]);
     expect(rows.filter((row) => matchesBagViewFilter(row, 'overdue'))).toEqual([overduePending, overdueDivergent]);
     expect(rows.filter((row) => matchesBagViewFilter(row, 'completed'))).toEqual([completed]);
     expect(rows.filter((row) => matchesBagViewFilter(row, 'all'))).toEqual(rows);
@@ -136,7 +136,7 @@ describe('ConferencePanel por teclado', () => {
     expect(onMutate).toHaveBeenCalledWith(redeliveryItem, 'confirm');
   });
 
-  it('abre a finalização quando resta apenas um canhoto extra sugerido', async () => {
+  it.each([['pending', 'returned'], ['absent', 'returned'], ['absent', 'redelivery']] as const)('exige decisão para o extra sugerido: %s com %s', async (status, exceptionStatus) => {
     const confirmedItem = {
       ...item,
       status: 'confirmed',
@@ -146,14 +146,15 @@ describe('ConferencePanel por teclado', () => {
       ...item,
       id: 11,
       invoice_number: '654321',
-      status: 'returned',
+      status: exceptionStatus,
       has_whatsapp_photo: false,
     } as ReceiptBagItem;
     const suggestedExtraItem = {
       ...item,
       id: 12,
       invoice_number: '999999',
-      status: 'pending',
+      status,
+      origin_bag_id: 200,
       is_extra: true,
       is_suggested_extra: true,
       has_whatsapp_photo: true,
@@ -177,7 +178,7 @@ describe('ConferencePanel por teclado', () => {
           },
         }}
         items={[confirmedItem, returnedItem, suggestedExtraItem]}
-        selectedItem={null}
+        selectedItem={suggestedExtraItem}
         itemFilter="all"
         itemSearch=""
         extraInvoice=""
@@ -196,6 +197,11 @@ describe('ConferencePanel por teclado', () => {
       />,
     );
 
+    expect(screen.getByRole('button', { name: 'Ausente' })).toBeEnabled();
+    if (status === 'pending') {
+      expect(screen.queryByRole('dialog', { name: 'Todos os canhotos foram conferidos' })).not.toBeInTheDocument();
+      return;
+    }
     const finishDialog = await screen.findByRole('dialog', { name: 'Todos os canhotos foram conferidos' });
     expect(finishDialog).toBeInTheDocument();
     expect(within(finishDialog).getByRole('button', { name: 'Finalizar rota' })).toBeEnabled();

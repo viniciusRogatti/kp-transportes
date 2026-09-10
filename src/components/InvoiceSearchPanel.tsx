@@ -48,17 +48,16 @@ export default function InvoiceSearchPanel({
       aria-labelledby="invoice-search-title"
       className="mb-3 w-full max-w-[var(--content-max-width)] rounded-lg border border-border bg-card p-3 shadow-soft [&_input]:h-9 [&_button]:h-9"
     >
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h1 id="invoice-search-title" className="text-lg font-semibold text-text">Buscar notas</h1>
-        <p className="text-sm text-muted">Consulte uma NF específica ou carregue as notas emitidas em um período.</p>
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <h1 id="invoice-search-title" className="text-base font-semibold text-text">Buscar notas</h1>
       </div>
 
-      <div className="grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+      <div className="grid items-end gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="self-end">
-          <label htmlFor="invoice-number-search" className="mb-1.5 block text-sm font-medium text-text">
+          <label htmlFor="invoice-number-search" className="mb-1 block text-xs font-medium text-text">
             Número da NF
           </label>
-          <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+          <div className="flex min-w-0 gap-2">
             <input
               id="invoice-number-search"
               value={searchNf}
@@ -70,13 +69,13 @@ export default function InvoiceSearchPanel({
               }}
               placeholder="Ex.: 123456"
               disabled={isSearchingInvoice}
-              className="h-11 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
+              className="h-9 min-w-0 flex-1 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-60"
             />
             <button
               type="button"
               onClick={() => void onSearchNf()}
               disabled={isSearchingInvoice || !searchNf.trim()}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
               {isSearchingInvoice ? 'Buscando...' : 'Buscar NF'}
@@ -85,8 +84,7 @@ export default function InvoiceSearchPanel({
         </div>
 
         <div>
-          <span className="mb-1.5 block text-sm font-medium text-text">Período de emissão</span>
-          <div className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             <div className="min-w-0">
               <label htmlFor="invoice-start-date" className="mb-1 block text-xs text-muted">Data inicial</label>
               <DatePicker
@@ -97,7 +95,7 @@ export default function InvoiceSearchPanel({
                 dateFormat="dd/MM/yyyy"
                 locale="ptBR"
                 popperPlacement="bottom-start"
-                className="date-picker-input h-11"
+                className="date-picker-input h-9"
                 wrapperClassName="w-full"
                 withPortal
               />
@@ -112,7 +110,7 @@ export default function InvoiceSearchPanel({
                 dateFormat="dd/MM/yyyy"
                 locale="ptBR"
                 popperPlacement="bottom-start"
-                className="date-picker-input h-11"
+                className="date-picker-input h-9"
                 wrapperClassName="w-full"
                 withPortal
               />
@@ -121,7 +119,7 @@ export default function InvoiceSearchPanel({
               type="button"
               onClick={() => void onSearchPeriod()}
               disabled={!startDate || !endDate || isSearchingPeriod}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
+              className="col-span-2 inline-flex h-9 items-center sm:col-span-1 justify-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="h-4 w-4" aria-hidden="true" />
               {isSearchingPeriod ? 'Buscando...' : 'Buscar período'}

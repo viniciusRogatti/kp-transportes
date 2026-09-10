@@ -1,3 +1,4 @@
+import { resolveInvoiceScopedValue } from './invoiceContextKey';
 import { IDanfe } from '../types/types';
 
 export type TodayInvoiceAssignment = {
@@ -36,7 +37,7 @@ export function buildTodayInvoiceProductMatches(
 
   return danfes.flatMap((danfe) => {
     const invoiceNumber = String(danfe.invoice_number || '').trim();
-    const assignment = assignmentByInvoice[invoiceNumber];
+    const assignment = resolveInvoiceScopedValue(assignmentByInvoice, danfe);
     return (danfe.DanfeProducts || [])
       .filter((item) => (
         normalizeSearchText(item.Product?.code).includes(normalizedTerm)

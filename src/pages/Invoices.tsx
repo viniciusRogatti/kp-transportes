@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { IDanfe } from "../types/types";
+import { IDanfe, IInvoiceSearchContext, IGroupedProduct } from "../types/types";
 import axios from "axios";
 import CardDanfes from "../components/CardDanfes";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
@@ -8,8 +8,11 @@ import Header from "../components/Header";
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import CompanyTabs from "../components/CompanyTabs";
 import { Container } from "../style/invoices";
-import { NotesFound } from "../style/TodayInvoices";
-import { routes } from "../data/danfes";
+import InvoiceFilters from '../components/invoices/InvoiceFilters';
+import RouteOverview from '../components/invoices/RouteOverview';
+import useRouteCatalog from '../hooks/useRouteCatalog';
+import { normalizeRouteCity, routeByCity, RouteSummary } from '../utils/routeCatalog';
+import { buildInvoiceContextKey } from '../utils/invoiceContextKey';
 import { useNavigate } from "react-router";
 import verifyToken from "../utils/verifyToken";
 import { useSearchParams } from "react-router-dom";
@@ -35,6 +38,9 @@ type PeriodSearchState = {
 };
 
 type PeriodSearchResponse = {
+  contexts: Record<string, IInvoiceSearchContext>;
+  routeSummary: RouteSummary[];
+  filterOptions?: { cities: string[]; drivers: string[]; loads: string[] };
   rows: IDanfe[];
   total: number;
   page: number;
@@ -58,6 +64,7 @@ function Invoices() {
     driverErrorByInvoice,
     loadInvoiceContext,
     refreshInvoiceContext,
+    seedInvoiceContext,
   } = useInvoiceSearchContext();
   const [searchNf, setSearchNf] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -69,6 +76,11 @@ function Invoices() {
   const [isSearchingPeriod, setIsSearchingPeriod] = useState(false);
   const [isLoadingMorePeriod, setIsLoadingMorePeriod] = useState(false);
   const [periodSearch, setPeriodSearch] = useState<PeriodSearchState | null>(null);
+  const [periodRange, setPeriodRange] = useState<{ startDate: string; endDate: string } | null>(null);
+  const [periodSummary, setPeriodSummary] = useState<RouteSummary[]>([]);
+  const [periodOptions, setPeriodOptions] = useState({ cities: [] as string[], drivers: [] as string[], loads: [] as string[] });
+  const periodOptionsKey = useRef('');
+  const periodController = useRef<AbortController | null>(null);
   const [periodSearchError, setPeriodSearchError] = useState<string | null>(null);
   const [isSearchingInvoice, setIsSearchingInvoice] = useState(false);
   const [invoiceSearchFeedback, setInvoiceSearchFeedback] = useState<InvoiceSearchFeedback | null>(null);
@@ -76,6 +88,13 @@ function Invoices() {
   const [searchParams] = useSearchParams();
   const periodRequestIdRef = useRef(0);
   const deferredFilters = useDeferredValue(filters);
+  const routeCatalog = useRouteCatalog();
+  const routeMap = useMemo(() => routeByCity(routeCatalog.data?.routes || []), [routeCatalog.data]);
+  const localCityOptions = useMemo(() => Array.from(new Map(dataDanfes
+    .filter((danfe) => Boolean(danfe.Customer?.city))
+    .map((danfe) => [normalizeRouteCity(danfe.Customer.city), danfe.Customer.city])).values())
+    .sort((a, b) => a.localeCompare(b, 'pt-BR')), [dataDanfes]);
+  const cityOptions = periodRange ? periodOptions.cities : localCityOptions;
   const canChangeInvoiceStatus = ['admin', 'master', 'user', 'expedicao'].includes(
     String(localStorage.getItem('user_permission') || '').trim().toLowerCase(),
   );
@@ -97,91 +116,69 @@ function Invoices() {
   }, []);
   
   async function requestPeriodPage(
-    search: Pick<PeriodSearchState, 'startDate' | 'endDate'>,
-    page: number,
-    append: boolean,
-    requestId: number,
+    range: { startDate: string; endDate: string }, page: number, append: boolean, requestId: number,
+    signal?: AbortSignal,
   ) {
-    const { data } = await axios.get<PeriodSearchResponse>(`${API_URL}/danfes/date/`, {
-      params: {
-        startDate: search.startDate,
-        endDate: search.endDate,
-        paginated: true,
-        page,
-        pageSize: PERIOD_PAGE_SIZE,
-      },
-    });
+    const optionsKey = JSON.stringify([range.startDate, range.endDate, activeCompanyTab]);
+    const { data } = await axios.post<PeriodSearchResponse>(`${API_URL}/danfes/search-period`, {
+      ...range, page, pageSize: PERIOD_PAGE_SIZE,
+      filters: { ...filters, companyCode: activeCompanyTab },
+      includeOptions: periodOptionsKey.current !== optionsKey,
+    }, { signal });
     if (requestId !== periodRequestIdRef.current) return;
-
-    const sanitizedRows = Array.isArray(data?.rows)
-      ? data.rows.map((danfe) => sanitizeDanfeTextFields(danfe))
-      : [];
+    if (!Array.isArray(data?.rows) || !data.contexts || !Array.isArray(data.routeSummary)) {
+      throw new Error('A resposta do período está incompleta. Atualize o backend antes de usar esta tela.');
+    }
+    const sanitizedRows = data.rows.map((danfe) => sanitizeDanfeTextFields(danfe));
+    seedInvoiceContext(data.contexts);
     setDataDanfes((currentRows) => append ? mergeDanfes(currentRows, sanitizedRows) : sanitizedRows);
-    setPeriodSearch({
-      ...search,
-      page: Number(data?.page) || page,
-      pageSize: Number(data?.pageSize) || PERIOD_PAGE_SIZE,
-      total: Number(data?.total) || 0,
-      hasMore: Boolean(data?.hasMore),
-    });
-    if (append) {
-      void loadInvoiceContext(sanitizedRows, { includeTripDriver: true });
-    } else {
-      setRenderLimit(INITIAL_RENDER_LIMIT);
-      void refreshInvoiceContext(sanitizedRows, { includeTripDriver: true });
-    }
+    setPeriodSearch({ ...range, page: data.page, pageSize: data.pageSize, total: data.total, hasMore: data.hasMore });
+    setPeriodSummary(data.routeSummary);
+    if (data.filterOptions) { setPeriodOptions(data.filterOptions); periodOptionsKey.current = optionsKey; }
+    if (!append) setRenderLimit(INITIAL_RENDER_LIMIT);
   }
 
-  async function getDanfesByDate() {
-    if (!startDate || !endDate) {
-      setPeriodSearchError('Selecione a data inicial e a data final.');
-      return;
-    }
-
-    const formattedStartDate = formatDate(startDate) as string;
-    const formattedEndDate = formatDate(endDate) as string;
-    if (formattedStartDate > formattedEndDate) {
-      setPeriodSearchError('A data inicial não pode ser posterior à data final.');
-      return;
-    }
-
-    const requestId = periodRequestIdRef.current + 1;
-    periodRequestIdRef.current = requestId;
-    setIsSearchingPeriod(true);
-    setIsLoadingMorePeriod(false);
-    setPeriodSearchError(null);
-    try {
-      await requestPeriodPage({ startDate: formattedStartDate, endDate: formattedEndDate }, 1, false, requestId);
-      if (requestId !== periodRequestIdRef.current) return;
-      setStartDate(null);
-      setEndDate(null);
-    } catch (error) {
-      if (requestId !== periodRequestIdRef.current) return;
-      console.error('Não foi possível encontrar notas com essas datas', error);
-      setPeriodSearchError(withRequestReference(
-        'Não foi possível carregar as notas desse período. Tente novamente.',
-        error,
-      ));
-    } finally {
-      if (requestId === periodRequestIdRef.current) setIsSearchingPeriod(false);
-    }
+  function getDanfesByDate() {
+    if (!startDate || !endDate) { setPeriodSearchError('Selecione a data inicial e a data final.'); return; }
+    const from = formatDate(startDate) as string, to = formatDate(endDate) as string;
+    if (from > to) { setPeriodSearchError('A data inicial não pode ser posterior à data final.'); return; }
+    periodOptionsKey.current = '';
+    setPeriodRange({ startDate: from, endDate: to });
+    setStartDate(null); setEndDate(null);
   }
+
+  // Filter the entire period on the server, while keeping only requested pages
+  // in the browser. Cancel obsolete requests and debounce typing.
+  const periodFilterKey = JSON.stringify([filters, activeCompanyTab, routeCatalog.data?.version]);
+  useEffect(() => {
+    if (!periodRange) return;
+    const requestId = ++periodRequestIdRef.current;
+    const controller = new AbortController();
+    periodController.current = controller;
+    setIsSearchingPeriod(true); setIsLoadingMorePeriod(false); setPeriodSearchError(null);
+    setDataDanfes([]); setPeriodSummary([]); setPeriodSearch(null);
+    const timer = setTimeout(() => {
+      void requestPeriodPage(periodRange, 1, false, requestId, controller.signal).catch((error) => {
+        if (requestId !== periodRequestIdRef.current || controller.signal.aborted) return;
+        setPeriodSearchError(withRequestReference('Não foi possível carregar o período com todos os dados. Tente novamente.', error));
+      }).finally(() => {
+        if (requestId === periodRequestIdRef.current) setIsSearchingPeriod(false);
+      });
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+    // requestPeriodPage uses exactly the filter snapshot represented by this key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodRange, periodFilterKey]);
 
   async function loadMorePeriodDanfes() {
-    if (!periodSearch?.hasMore || isLoadingMorePeriod) return;
-
+    if (!periodSearch?.hasMore || isLoadingMorePeriod || isSearchingPeriod || !periodRange) return;
     const requestId = periodRequestIdRef.current;
-    setIsLoadingMorePeriod(true);
-    setPeriodSearchError(null);
+    setIsLoadingMorePeriod(true); setPeriodSearchError(null);
     try {
-      await requestPeriodPage(periodSearch, periodSearch.page + 1, true, requestId);
+      await requestPeriodPage(periodRange, periodSearch.page + 1, true, requestId, periodController.current?.signal);
     } catch (error) {
       if (requestId !== periodRequestIdRef.current) return;
-      console.error('Não foi possível carregar mais notas do período', error);
-      setPeriodSearchError(withRequestReference(
-        'Não foi possível carregar a próxima parte do período. Tente novamente.',
-        error,
-      ));
+      setPeriodSearchError(withRequestReference('Não foi possível carregar a próxima página com todos os dados. Tente novamente.', error));
     } finally {
       if (requestId === periodRequestIdRef.current) setIsLoadingMorePeriod(false);
     }
@@ -218,6 +215,7 @@ function Invoices() {
     setIsSearchingPeriod(false);
     setIsLoadingMorePeriod(false);
     setPeriodSearch(null);
+    setPeriodRange(null);
     setPeriodSearchError(null);
     setInvoiceSearchFeedback(null);
     try {
@@ -248,7 +246,7 @@ function Invoices() {
         });
         setDataDanfes((previous) => {
           const invoiceNumber = String(sanitizedDanfe.invoice_number);
-          const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
+          const nextRows = previous.filter((danfe) => buildInvoiceContextKey(danfe.company_id, danfe.invoice_number) !== buildInvoiceContextKey(sanitizedDanfe.company_id, invoiceNumber));
           return [sanitizedDanfe, ...nextRows];
         });
         setSearchNf('');
@@ -288,6 +286,7 @@ function Invoices() {
       setIsSearchingPeriod(false);
       setIsLoadingMorePeriod(false);
       setPeriodSearch(null);
+      setPeriodRange(null);
       setPeriodSearchError(null);
       try {
         const { data } = await axios.get(`${API_URL}/danfes/nf/${encodeURIComponent(queryNf)}`, {
@@ -321,7 +320,8 @@ function Invoices() {
     if (!dataDanfes.length) return undefined;
 
     const refreshVisibleInvoiceContext = () => {
-      void refreshInvoiceContext(dataDanfes, { includeTripDriver: true });
+      if (periodRange) { periodOptionsKey.current = ''; setPeriodRange((current) => current ? { ...current } : null); }
+      else void refreshInvoiceContext(dataDanfes, { includeTripDriver: true });
     };
 
     const handleWindowFocus = () => {
@@ -341,7 +341,7 @@ function Invoices() {
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [dataDanfes, refreshInvoiceContext]);
+  }, [dataDanfes, refreshInvoiceContext, periodRange]);
 
   function formatDate(date: Date | null) {
     if (date) {
@@ -356,19 +356,11 @@ function Invoices() {
     setFilters((previous) => ({ ...previous, [key]: value }));
   }
 
-  function toggleLoadFilter(load: string) {
-    setFilters((previous) => ({
-      ...previous,
-      loadNumbers: previous.loadNumbers.includes(load)
-        ? previous.loadNumbers.filter((item) => item !== load)
-        : [...previous.loadNumbers, load].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })),
-    }));
-  }
 
   function clearFilter(key: keyof typeof filters) {
     setFilters((previous) => ({
       ...previous,
-      [key]: key === 'route' ? 'Todas' : key === 'loadNumbers' ? [] : '',
+      [key]: ['route', 'city', 'driver', 'loadNumbers'].includes(key) ? [] : '',
     }));
   }
 
@@ -383,7 +375,7 @@ function Invoices() {
     setFilters(createEmptyInvoiceListFilters());
   }
 
-  const driverOptions = useMemo(
+  const localDriverOptions = useMemo(
     () => Array.from(
       new Set(
         Object.values(invoiceContextByNf)
@@ -399,7 +391,7 @@ function Invoices() {
     return dataDanfes.filter((danfe) => resolveDanfeCompanyCode(danfe) === activeCompanyTab);
   }, [activeCompanyTab, dataDanfes]);
 
-  const loadOptions = useMemo(
+  const localLoadOptions = useMemo(
     () => Array.from(
       new Set(
         visibleDanfes
@@ -410,22 +402,25 @@ function Invoices() {
     [visibleDanfes],
   );
 
+  const driverOptions = periodRange ? periodOptions.drivers : localDriverOptions;
+  const loadOptions = periodRange ? periodOptions.loads : localLoadOptions;
+
   const activeFilters = useMemo(() => {
     const entries: Array<{ key: keyof typeof filters; label: string }> = [];
     if (filters.nf.trim()) entries.push({ key: 'nf', label: `NF: ${filters.nf.trim()}` });
     if (filters.product.trim()) entries.push({ key: 'product', label: `Produto: ${filters.product.trim()}` });
     if (filters.customer.trim()) entries.push({ key: 'customer', label: `Cliente: ${filters.customer.trim()}` });
-    if (filters.city.trim()) entries.push({ key: 'city', label: `Cidade: ${filters.city.trim()}` });
-    if (filters.route !== 'Todas') entries.push({ key: 'route', label: `Rota: ${filters.route}` });
-    if (filters.driver.trim()) entries.push({ key: 'driver', label: `Motorista: ${filters.driver.trim()}` });
+    if (filters.city.join(', ')) entries.push({ key: 'city', label: `Cidade: ${filters.city.join(', ')}` });
+    if (filters.route.length > 0) entries.push({ key: 'route', label: `Rota: ${filters.route.map((id) => routeCatalog.data?.routes.find((route) => route.id === id)?.name || 'Sem rota definida').join(', ')}` });
+    if (filters.driver.join(', ')) entries.push({ key: 'driver', label: `Motorista: ${filters.driver.join(', ')}` });
     if (filters.status) entries.push({ key: 'status', label: `Status: ${filters.status}` });
     if (activeCompanyTab !== 'all') entries.push({ key: 'status', label: `Empresa: ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}` });
     return entries;
-  }, [activeCompanyTab, filters]);
+  }, [activeCompanyTab, filters, routeCatalog.data]);
 
   const danfes = useMemo(
-    () => filterInvoiceListDanfes(visibleDanfes, deferredFilters, { invoiceContextByNf }),
-    [visibleDanfes, deferredFilters, invoiceContextByNf],
+    () => periodRange ? visibleDanfes : filterInvoiceListDanfes(visibleDanfes, deferredFilters, { invoiceContextByNf, routeByCity: routeMap }),
+    [visibleDanfes, deferredFilters, invoiceContextByNf, routeMap, periodRange],
   );
   const renderedDanfes = useMemo(() => danfes.slice(0, renderLimit), [danfes, renderLimit]);
 
@@ -434,33 +429,33 @@ function Invoices() {
   }, [activeCompanyTab, deferredFilters, dataDanfes]);
 
   async function openPDFInNewTab() {
-    const currentFilteredDanfes = filterInvoiceListDanfes(visibleDanfes, filters, { invoiceContextByNf });
-    const currentFilteredGroupedProducts = groupTodayInvoiceProducts(currentFilteredDanfes);
-    if (currentFilteredGroupedProducts.length === 0) return;
-
+    if (isSearchingPeriod || isPrinting || periodSearchError) return;
     setIsPrinting(true);
-
+    const preview = window.open('', '_blank');
     try {
-      const blob = await pdf(<TodayProductList products={currentFilteredGroupedProducts} />).toBlob();
+      const products: IGroupedProduct[] = periodRange
+        ? (await axios.post(`${API_URL}/danfes/search-products`, { ...periodRange, filters: { ...filters, companyCode: activeCompanyTab } })).data
+        : groupTodayInvoiceProducts(filterInvoiceListDanfes(visibleDanfes, filters, { invoiceContextByNf, routeByCity: routeMap }));
+      if (!products.length) { preview?.close(); return; }
+      const blob = await pdf(<TodayProductList products={products} />).toBlob();
       const url = URL.createObjectURL(blob);
-
-      setTimeout(() => {
-        window.open(url);
-        setIsPrinting(false);
-      }, 3000);
+      if (preview) preview.location.href = url;
+      else window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (error) {
-      console.error('Erro ao gerar lista de produtos:', error);
-      setIsPrinting(false);
-    }
+      preview?.close();
+      setInvoiceSearchFeedback({ tone: 'danger', message: withRequestReference('Não foi possível gerar a lista completa de produtos. Tente novamente.', error) });
+    } finally { setIsPrinting(false); }
   }
 
   function handleDanfeUpdated(updatedDanfe: IDanfe) {
     setDataDanfes((previous) => {
       const invoiceNumber = String(updatedDanfe.invoice_number);
-      const nextRows = previous.filter((danfe) => String(danfe.invoice_number) !== invoiceNumber);
+      const nextRows = previous.filter((danfe) => buildInvoiceContextKey(danfe.company_id, danfe.invoice_number) !== buildInvoiceContextKey(updatedDanfe.company_id, invoiceNumber));
       return [sanitizeDanfeTextFields(updatedDanfe), ...nextRows];
     });
-    void loadInvoiceContext([updatedDanfe], { force: true, includeTripDriver: true });
+    if (periodRange) setPeriodRange((current) => current ? { ...current } : null);
+    else void loadInvoiceContext([updatedDanfe], { force: true, includeTripDriver: true });
   }
   
   return (
@@ -488,12 +483,11 @@ function Invoices() {
           aria-labelledby="invoice-filter-title"
           className="mb-3 w-full max-w-[var(--content-max-width)] rounded-lg border border-border bg-surface p-3 [&_input]:h-9 [&_select]:h-9"
         >
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <h2 id="invoice-filter-title" className="text-base font-semibold text-text">Refinar resultados</h2>
-              <p className="text-sm text-muted">Filtros aplicados às notas carregadas.</p>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={resetFilters}
@@ -505,7 +499,7 @@ function Invoices() {
                 <button
                   type="button"
                   onClick={openPDFInNewTab}
-                  disabled={isPrinting}
+                  disabled={isPrinting || isSearchingPeriod || Boolean(periodSearchError)}
                   className="rounded-md border border-accent-strong bg-accent px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isPrinting ? 'Gerando lista...' : 'Abrir lista de produtos'}
@@ -514,80 +508,20 @@ function Invoices() {
             </div>
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 min-[1100px]:grid-cols-[110px_minmax(135px,1.15fr)_minmax(120px,1fr)_minmax(120px,1fr)_130px_165px_165px]">
-            <label className="block text-sm font-medium text-text">
-              NF
-              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Número da nota" />
-            </label>
-            <label className="block text-sm font-medium text-text">
-              Produto
-              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Código ou descrição" />
-            </label>
-            <label className="block text-sm font-medium text-text">
-              Cliente
-              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Nome do cliente" />
-            </label>
-            <label className="block text-sm font-medium text-text">
-              Cidade
-              <input className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Nome da cidade" />
-            </label>
-            <label className="block text-sm font-medium text-text">
-              Rota
-              <select
-                onChange={(event) => updateFilter('route', event.target.value)}
-                className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-                value={filters.route}
-              >
-                {routes.map((route, index) => (
-                  <option value={route} key={`rota-${index}`}>{route}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-text">
-              Motorista
-              <select className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20" value={filters.driver} onChange={(event) => updateFilter('driver', event.target.value)}>
-                <option value="">Todos os motoristas</option>
-                {driverOptions.map((driver) => (
-                  <option key={driver} value={driver}>{driver}</option>
-                ))}
-              </select>
-            </label>
-            {loadOptions.length > 0 ? (
-              <label className="block text-sm font-medium text-text">
-                Cargas
-                <select
-                  className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-3 text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-                  value=""
-                  onChange={(event) => {
-                    const selectedLoad = event.target.value;
-                    if (selectedLoad) toggleLoadFilter(selectedLoad);
-                  }}
-                >
-                  <option value="">Selecionar carga(s)</option>
-                  {loadOptions.map((load) => {
-                    const isActive = filters.loadNumbers.includes(load);
-                    return <option key={load} value={load}>{isActive ? `✓ Carga ${load}` : `Carga ${load}`}</option>;
-                  })}
-                </select>
-              </label>
-            ) : null}
-          </div>
-
+          <InvoiceFilters filters={filters} setFilters={setFilters} cities={cityOptions} drivers={driverOptions} loads={loadOptions} routes={routeCatalog.data?.routes || []} />
         </section>
+        <details className="mb-2 w-full rounded-lg border border-border bg-surface [&_section]:mb-0 [&_section]:border-0">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-text">Prévia de carga por rota <span className="ml-2 text-xs font-normal text-muted">Expandir para consultar</span></summary>
+          <RouteOverview danfes={danfes} availableCities={cityOptions} catalog={routeCatalog} summary={periodRange ? periodSummary : undefined}
+          onSelectRoute={(id) => setFilters((old) => ({ ...old, route: old.route.includes(id) ? old.route.filter((value) => value !== id) : [...old.route, id] }))} />
+        </details>
         <DanfeStatusLegend
           activeStatusFilter={filters.status}
           onChange={(value) => updateFilter('status', value)}
           totalCount={visibleDanfes.length}
           filteredCount={danfes.length}
         />
-        <div className="mb-3 flex items-center gap-2 text-sm text-muted">
-          <span className="rounded-full border border-border bg-surface px-3 py-1">
-            {activeCompanyTab === 'all'
-              ? 'Exibindo notas de todas as empresas.'
-              : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
-          </span>
-        </div>
-        <div className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
+        {activeFilters.length + filters.loadNumbers.length > 0 ? <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
           </span>
@@ -609,17 +543,18 @@ function Invoices() {
               {`Carga: ${load}`} ×
             </button>
           ))}
-          <span className="text-muted">
-            {periodSearch?.hasMore
-              ? 'Filtros e lista de produtos consideram somente as notas já carregadas.'
-              : 'Lista de produtos baseada nos filtros atuais.'}
-          </span>
+        </div> : null}
+        {periodSearchError && periodRange ? <button type="button" className="mb-3 rounded border border-border px-3 py-2 text-text" onClick={() => setPeriodRange((current) => current ? { ...current } : null)}>Tentar consultar novamente</button> : null}
+        <div className="mb-2 flex w-full flex-wrap items-center justify-between gap-1 text-sm">
+          <h2 className="font-semibold text-text">
+            {periodSearch
+              ? `${periodSearch.total} notas encontradas · ${dataDanfes.length} carregadas`
+              : `${danfes.length} Notas encontradas`}
+          </h2>
+          <span className="text-muted">{activeCompanyTab === 'all'
+            ? 'Exibindo notas de todas as empresas.'
+            : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}</span>
         </div>
-        <NotesFound>
-          {periodSearch
-            ? `${danfes.length} nos filtros atuais · ${dataDanfes.length} de ${periodSearch.total} notas carregadas`
-            : `${danfes.length} Notas encontradas`}
-        </NotesFound>
         <CardDanfes
           danfes={renderedDanfes}
           driverLoadingByInvoice={driverLoadingByInvoice}
@@ -648,10 +583,10 @@ function Invoices() {
             <button
               type="button"
               onClick={() => void loadMorePeriodDanfes()}
-              disabled={isLoadingMorePeriod}
+              disabled={isLoadingMorePeriod || isSearchingPeriod}
               className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoadingMorePeriod
+              {isLoadingMorePeriod || isSearchingPeriod
                 ? 'Carregando mais notas...'
                 : `Carregar mais notas (${dataDanfes.length} de ${periodSearch.total})`}
             </button>

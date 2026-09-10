@@ -1,21 +1,25 @@
-import React, { useCallback, useDeferredValue, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useDeferredValue, useMemo, useState, useEffect, useRef } from "react";
 import CardDanfes from "../components/CardDanfes";
 import Header from "../components/Header";
 import axios from 'axios';
 import { IDanfe, ITrip } from "../types/types";
-import { ContainerDanfes, ContainerTodayInvoices, FilterBar, NotesFound } from "../style/TodayInvoices";
+import { ContainerDanfes, ContainerTodayInvoices } from "../style/TodayInvoices";
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import TodayProductList from "../components/TodayProductList";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
 import CompanyTabs from "../components/CompanyTabs";
-import { routes } from "../data/danfes";
+import InvoiceFilters from '../components/invoices/InvoiceFilters';
+import RouteOverview from '../components/invoices/RouteOverview';
+import useRouteCatalog from '../hooks/useRouteCatalog';
+import { normalizeRouteCity, routeByCity } from '../utils/routeCatalog';
+import { buildInvoiceContextKey } from '../utils/invoiceContextKey';
 import { API_URL } from "../data";
 import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 import { pdf } from "@react-pdf/renderer";
 import { LoaderPrinting } from "../style/Loaders";
-import { format } from "date-fns";
+
 import { createEmptyInvoiceListFilters, filterTodayInvoiceDanfes } from "../utils/danfeFilters";
 import { sanitizeDanfeTextFields } from "../utils/textNormalization";
 import { groupTodayInvoiceProducts } from "../utils/todayInvoiceProducts";
@@ -26,6 +30,12 @@ import { buildTodayInvoiceProductMatches, TodayInvoiceAssignment } from "../util
 import { getOperationalStatusLabel, getSemanticToneClassName } from "../utils/statusStyles";
 
 function TodayInvoices() {
+  const [operationDate, setOperationDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()));
+  const operationDateRef = useRef(operationDate);
+  operationDateRef.current = operationDate;
+  const dataRequest = useRef(0);
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
@@ -33,6 +43,7 @@ function TodayInvoices() {
   const {
     invoiceContextByNf,
     driverLoadingByInvoice,
+    driverErrorByInvoice,
     loadInvoiceContext,
     refreshInvoiceContext,
   } = useInvoiceSearchContext();
@@ -42,6 +53,12 @@ function TodayInvoices() {
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const navigate = useNavigate();
   const deferredFilters = useDeferredValue(filters);
+  const routeCatalog = useRouteCatalog();
+  const routeMap = useMemo(() => routeByCity(routeCatalog.data?.routes || []), [routeCatalog.data]);
+  const cityOptions = useMemo(() => Array.from(new Map(dataDanfes
+    .filter((danfe) => Boolean(danfe.Customer?.city))
+    .map((danfe) => [normalizeRouteCity(danfe.Customer.city), danfe.Customer.city])).values())
+    .sort((a, b) => a.localeCompare(b, 'pt-BR')), [dataDanfes]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -58,11 +75,14 @@ function TodayInvoices() {
     fetchToken();
     loadTodayData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [operationDate]);
 
   async function loadTodayData() {
+    const request = ++dataRequest.current;
+    setLoading(true); setLoadError(''); setDataDanfes([]); setTodayTrips([]); setDriverByInvoice({}); setAssignmentByInvoice({});
     try {
-      const response = await axios.get(`${API_URL}/danfes`);
+      const response = await axios.get(`${API_URL}/danfes`, { params: { operationDate } });
+      if (request !== dataRequest.current) return;
       const sanitizedRows = Array.isArray(response.data)
         ? response.data.map((danfe) => sanitizeDanfeTextFields(danfe))
         : [];
@@ -72,14 +92,15 @@ function TodayInvoices() {
         loadInvoiceContext(sanitizedRows, { includeTripDriver: true }),
       ]);
     } catch (error) {
-      console.error('Erro ao buscar notas do dia atual:', error);
-    }
+      if (request === dataRequest.current) setLoadError('Não foi possível carregar as notas da operação. Tente novamente.');
+    } finally { if (request === dataRequest.current) setLoading(false); }
   }
 
-  async function loadTodayTrips() {
+  const loadTodayTrips = useCallback(async () => {
     try {
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = operationDate;
       const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
+      if (operationDateRef.current !== today) return [];
       const map: Record<string, string> = {};
       const assignmentMap: Record<string, TodayInvoiceAssignment> = {};
       if (Array.isArray(data)) {
@@ -87,7 +108,7 @@ function TodayInvoices() {
           const driverName = trip?.Driver?.name || '';
           (trip?.TripNotes || []).forEach((note: any) => {
             if (note?.invoice_number && driverName) {
-              const invoiceNumber = String(note.invoice_number);
+              const invoiceNumber = buildInvoiceContextKey(note.company_id, note.invoice_number);
               map[invoiceNumber] = driverName;
               assignmentMap[invoiceNumber] = {
                 driverName,
@@ -102,12 +123,14 @@ function TodayInvoices() {
       setAssignmentByInvoice(assignmentMap);
       return Array.isArray(data) ? data : [];
     } catch {
+      if (operationDateRef.current !== operationDate) return [];
+      setLoadError('Notas carregadas, mas não foi possível consultar as viagens. Atualize antes de atribuir.');
       setTodayTrips([]);
       setDriverByInvoice({});
       setAssignmentByInvoice({});
       return [];
     }
-  }
+  }, [operationDate]);
 
   useEffect(() => {
     if (!dataDanfes.length) return undefined;
@@ -136,11 +159,11 @@ function TodayInvoices() {
       window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [dataDanfes, refreshInvoiceContext]);
+  }, [dataDanfes, refreshInvoiceContext, loadTodayTrips]);
 
   const driverOptions = useMemo(
-    () => Array.from(new Set(Object.values(driverByInvoice))).sort((a, b) => a.localeCompare(b)),
-    [driverByInvoice],
+    () => Array.from(new Set([...Object.values(driverByInvoice), ...Object.values(invoiceContextByNf).map((context) => context.driver_name || '')].filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [driverByInvoice, invoiceContextByNf],
   );
 
   const companyOptions = useMemo(() => {
@@ -178,18 +201,18 @@ function TodayInvoices() {
   );
 
   const filteredDanfes = useMemo(
-    () => filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf),
-    [visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf],
+    () => filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf, routeMap),
+    [visibleDanfes, driverByInvoice, deferredFilters, invoiceContextByNf, routeMap],
   );
   const quickProductMatches = useMemo(
-    () => buildTodayInvoiceProductMatches(visibleDanfes, deferredFilters.product, assignmentByInvoice),
-    [assignmentByInvoice, deferredFilters.product, visibleDanfes],
+    () => buildTodayInvoiceProductMatches(filteredDanfes, deferredFilters.product, assignmentByInvoice),
+    [assignmentByInvoice, deferredFilters.product, filteredDanfes],
   );
 
   const clearFilter = useCallback((key: keyof typeof filters) => {
     setFilters((prev) => ({
       ...prev,
-      [key]: key === 'route' ? 'Todas' : key === 'loadNumbers' ? [] : '',
+      [key]: ['route', 'city', 'driver', 'loadNumbers'].includes(key) ? [] : '',
     }));
   }, []);
 
@@ -198,9 +221,9 @@ function TodayInvoices() {
     if (filters.nf.trim()) entries.push({ id: 'nf', label: `NF: ${filters.nf.trim()}`, onClear: () => clearFilter('nf') });
     if (filters.product.trim()) entries.push({ id: 'product', label: `Produto: ${filters.product.trim()}`, onClear: () => clearFilter('product') });
     if (filters.customer.trim()) entries.push({ id: 'customer', label: `Cliente: ${filters.customer.trim()}`, onClear: () => clearFilter('customer') });
-    if (filters.city.trim()) entries.push({ id: 'city', label: `Cidade: ${filters.city.trim()}`, onClear: () => clearFilter('city') });
-    if (filters.route !== 'Todas') entries.push({ id: 'route', label: `Rota: ${filters.route}`, onClear: () => clearFilter('route') });
-    if (filters.driver.trim()) entries.push({ id: 'driver', label: `Motorista: ${filters.driver.trim()}`, onClear: () => clearFilter('driver') });
+    if (filters.city.join(', ')) entries.push({ id: 'city', label: `Cidade: ${filters.city.join(', ')}`, onClear: () => clearFilter('city') });
+    if (filters.route.length > 0) entries.push({ id: 'route', label: `Rota: ${filters.route.map((id) => routeCatalog.data?.routes.find((route) => route.id === id)?.name || 'Sem rota definida').join(', ')}`, onClear: () => clearFilter('route') });
+    if (filters.driver.join(', ')) entries.push({ id: 'driver', label: `Motorista: ${filters.driver.join(', ')}`, onClear: () => clearFilter('driver') });
     if (filters.status) entries.push({ id: 'status', label: `Status: ${filters.status}`, onClear: () => clearFilter('status') });
     if (activeCompanyTab === 'all' && allTabCompanyFilter !== 'all') {
       entries.push({
@@ -210,20 +233,12 @@ function TodayInvoices() {
       });
     }
     return entries;
-  }, [activeCompanyTab, allTabCompanyFilter, clearFilter, filters]);
+  }, [activeCompanyTab, allTabCompanyFilter, clearFilter, filters, routeCatalog.data]);
 
   function updateFilter(key: keyof typeof filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
-  function toggleLoadFilter(load: string) {
-    setFilters((prev) => ({
-      ...prev,
-      loadNumbers: prev.loadNumbers.includes(load)
-        ? prev.loadNumbers.filter((item) => item !== load)
-        : [...prev.loadNumbers, load].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })),
-    }));
-  }
 
   function clearLoadFilter(load: string) {
     setFilters((prev) => ({
@@ -238,7 +253,7 @@ function TodayInvoices() {
   }
 
   async function openPDFInNewTab() {
-    const currentFilteredDanfes = filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, filters, invoiceContextByNf);
+    const currentFilteredDanfes = filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, filters, invoiceContextByNf, routeMap);
     const currentFilteredGroupedProducts = groupTodayInvoiceProducts(currentFilteredDanfes);
     if (currentFilteredGroupedProducts.length === 0) return;
 
@@ -286,18 +301,19 @@ function TodayInvoices() {
           city: danfe.Customer?.city || 'Cidade não informada',
           gross_weight: String(danfe.gross_weight || 0),
           status: 'assigned',
+          box_quantity: danfe.box_quantity,
         },
       });
 
-      const invoiceNumber = String(danfe.invoice_number);
+      const invoiceNumber = buildInvoiceContextKey(danfe.company_id, danfe.invoice_number);
       const assignedStatus = String(createdTripNote?.status || 'assigned');
       const updatedDanfe = sanitizeDanfeTextFields({
         ...danfe,
-        status: assignedStatus,
+        status: targetTrip.is_conference_only ? danfe.status : assignedStatus,
       });
 
       setDataDanfes((previous) => previous.map((row) => (
-        String(row.invoice_number) === invoiceNumber && Number(row.company_id || 0) === Number(danfe.company_id || 0)
+        buildInvoiceContextKey(row.company_id, row.invoice_number) === invoiceNumber
           ? updatedDanfe
           : row
       )));
@@ -337,98 +353,50 @@ function TodayInvoices() {
     }
   }
 
+  function handleDanfeUpdated(updated: IDanfe) {
+    setDataDanfes((old) => old.map((row) => buildInvoiceContextKey(row.company_id, row.invoice_number) === buildInvoiceContextKey(updated.company_id, updated.invoice_number)
+      ? sanitizeDanfeTextFields(updated) : row));
+    void refreshInvoiceContext([updated], { includeTripDriver: true });
+  }
+
   return (
     <ContainerTodayInvoices>
       <Header />
       <Container>
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <div data-tutorial="today-mobile-product-search" className="sticky top-[calc(var(--header-height)+4px)] z-20 mb-3 rounded-lg border border-accent/35 bg-surface p-2 shadow-elevated backdrop-blur md:hidden">
-          <label htmlFor="mobile-product-search" className="mb-1 block text-xs font-semibold text-text">
-            Busca rápida de produto
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="mobile-product-search"
-              type="search"
-              inputMode="search"
-              autoComplete="off"
-              value={filters.product}
-              onChange={(event) => updateFilter('product', event.target.value)}
-              placeholder="Código ou descrição"
-              className="h-11 min-w-0 flex-1 rounded-md border border-accent/40 bg-surface-2 px-3 text-base text-text outline-none focus:ring-2 focus:ring-accent/60"
-            />
-            {filters.product ? (
-              <button
-                type="button"
-                onClick={() => clearFilter('product')}
-                className="h-11 rounded-md border border-border bg-card px-3 text-sm font-semibold text-text"
-              >
-                Limpar
-              </button>
-            ) : null}
+        <section data-tutorial="today-filters" className="mb-3 w-full rounded-lg border border-border bg-surface p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div><h1 className="font-semibold text-text">Notas do dia</h1></div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="rounded border border-border bg-card px-3 py-2 text-sm text-text" onClick={resetFilters}>Limpar filtros</button>
+              <button type="button" disabled={!filteredDanfes.length || isPrinting} className="rounded bg-accent px-3 py-2 text-sm text-white disabled:opacity-50" onClick={openPDFInNewTab}>{isPrinting ? 'Gerando lista…' : 'Abrir lista de produtos'}</button>
+            </div>
           </div>
-        </div>
-        <FilterBar data-tutorial="today-filters">
-          {activeCompanyTab === 'all' ? (
-            <select value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
-              <option value="all">Empresa: todas</option>
-              {companyOptions.map((companyCode) => (
-                <option key={companyCode} value={companyCode}>
-                  {COMPANY_LABELS[companyCode] || companyCode}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          <input type="text" value={filters.nf} onChange={(event) => updateFilter('nf', event.target.value)} placeholder="Filtrar por NF" />
-          <input className="max-[768px]:hidden" type="text" value={filters.product} onChange={(event) => updateFilter('product', event.target.value)} placeholder="Filtrar produto (cód. ou descrição)" />
-          <input type="text" value={filters.customer} onChange={(event) => updateFilter('customer', event.target.value)} placeholder="Filtrar por nome do cliente" />
-          <input type="text" value={filters.city} onChange={(event) => updateFilter('city', event.target.value)} placeholder="Filtrar por cidade" />
-          <select value={filters.driver} onChange={(event) => updateFilter('driver', event.target.value)}>
-            <option value="">Motorista: todos</option>
-            {driverOptions.map((driver) => (
-              <option key={driver} value={driver}>{driver}</option>
-            ))}
-          </select>
-          <div className="route-filter">
-            <select aria-label="Filtrar por rota" value={filters.route} onChange={(event) => updateFilter('route', event.target.value)}>
-              {routes.map((route, index) => (
-                <option value={route} key={`rota-${index}`}>
-                  {route}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="!border-border !bg-surface-2 !text-text hover:!bg-card" onClick={resetFilters}>Limpar filtros</button>
-          { filteredDanfes.length > 0 && <button onClick={openPDFInNewTab}>Abrir Lista de Produtos</button>}
-          {loadOptions.length > 0 ? (
-            <select
-              value=""
-              onChange={(event) => {
-                const selectedLoad = event.target.value;
-                if (selectedLoad) {
-                  toggleLoadFilter(selectedLoad);
-                }
-              }}
-            >
-              <option value="">Selecionar carga(s)</option>
-              {loadOptions.map((load) => {
-                const isActive = filters.loadNumbers.includes(load);
-                return (
-                  <option key={load} value={load}>
-                    {isActive ? `✓ Carga ${load}` : `Carga ${load}`}
-                  </option>
-                );
-              })}
-            </select>
-          ) : null}
-        </FilterBar>
+          <InvoiceFilters filters={filters} setFilters={setFilters} cities={cityOptions} drivers={driverOptions} loads={loadOptions} routes={routeCatalog.data?.routes || []}
+            leadingFields={<>
+              <label className="min-w-0 text-xs font-medium text-text">Data da operação
+                <input type="date" value={operationDate} onChange={(event) => { if (event.target.value) setOperationDate(event.target.value); }} className="mt-1 block h-9 w-full min-w-0 rounded-md border border-border bg-card px-2 text-text" />
+              </label>
+              {activeCompanyTab === 'all' ? <label className="min-w-0 text-xs font-medium text-text">Empresa
+                <select className="mt-1 block h-9 w-full rounded-md border border-border bg-card px-2 text-text" value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
+                  <option value="all">Todas</option>{companyOptions.map((code) => <option key={code} value={code}>{COMPANY_LABELS[code] || code}</option>)}
+                </select></label> : null}
+            </>} />
+        </section>
+        {loadError ? <p role="alert" className="mb-3 w-full rounded border p-3 text-sm semantic-panel-danger">{loadError} <button type="button" onClick={() => void loadTodayData()} className="underline">Atualizar operação</button></p> : null}
+        {loading ? <p role="status" className="mb-3 text-sm text-muted">Carregando operação…</p> : null}
+        <details className="mb-2 w-full rounded-lg border border-border bg-surface [&_section]:mb-0 [&_section]:border-0">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-text">Prévia de carga por rota <span className="ml-2 text-xs font-normal text-muted">Expandir para consultar</span></summary>
+        <RouteOverview danfes={filteredDanfes} availableCities={cityOptions} catalog={routeCatalog}
+          onSelectRoute={(id) => setFilters((old) => ({ ...old, route: old.route.includes(id) ? old.route.filter((value) => value !== id) : [...old.route, id] }))} />
+        </details>
         <DanfeStatusLegend
           activeStatusFilter={filters.status}
           onChange={(value) => updateFilter('status', value)}
           totalCount={visibleDanfes.length}
           filteredCount={filteredDanfes.length}
         />
-        <div data-tutorial="today-active-filters" className="mb-s3 flex flex-wrap items-center gap-2 text-xs">
+        {activeFilters.length + filters.loadNumbers.length > 0 ? <div data-tutorial="today-active-filters" className="mb-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">
             {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
           </span>
@@ -450,8 +418,7 @@ function TodayInvoices() {
               {`Carga: ${load}`} ×
             </button>
           ))}
-          <span className="text-muted">Lista de produtos baseada nos filtros atuais.</span>
-        </div>
+        </div> : null}
         {filters.product.trim() ? (
           <section className="mb-4 md:hidden" aria-live="polite">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -502,13 +469,13 @@ function TodayInvoices() {
               </div>
             ) : (
               <div className="rounded-lg border semantic-panel-warning p-4 text-center text-sm">
-                Nenhuma nota de hoje contém esse código ou descrição.
+                Nenhum produto encontrado com os filtros atuais.
               </div>
             )}
           </section>
         ) : null}
         {dataDanfes.length === 0 ? (
-          <p>Nenhuma nota lançada para hoje!</p>
+          <p>Nenhuma nota encontrada para a data operacional selecionada.</p>
         ) : filteredDanfes.length === 0 ? (
           <p>Nenhuma nota encontrada com os filtros atuais.</p>
         ) : (
@@ -517,7 +484,8 @@ function TodayInvoices() {
               <LoaderPrinting />
             ) : (
               <>
-                <NotesFound>{`${filteredDanfes.length} Notas encontradas`}</NotesFound>
+                <div className="flex w-full flex-wrap items-center justify-between gap-1 text-sm">
+                <h2 className="font-semibold text-text">{`${filteredDanfes.length} Notas encontradas`}</h2>
                 <span className="text-sm text-muted">
                   {activeCompanyTab === 'all'
                     ? allTabCompanyFilter === 'all'
@@ -525,7 +493,8 @@ function TodayInvoices() {
                       : `Exibindo apenas ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}.`
                     : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
                 </span>
-                <div className={filters.product.trim() ? 'hidden w-full md:block' : 'w-full'}>
+                </div>
+                <div className="w-full">
                   <CardDanfes
                     danfes={filteredDanfes}
                     driverByInvoice={driverByInvoice}
@@ -533,6 +502,9 @@ function TodayInvoices() {
                     invoiceContextByNf={invoiceContextByNf}
                     assignableTrips={assignableTrips}
                     onAssignDanfeToTrip={handleAssignDanfeToTrip}
+                    onDanfeUpdated={handleDanfeUpdated}
+                    allowStatusActions={['admin', 'master', 'user', 'expedicao'].includes(localStorage.getItem('user_permission') || '')}
+                    driverErrorByInvoice={driverErrorByInvoice}
                     showLegend={false}
                   />
                 </div>

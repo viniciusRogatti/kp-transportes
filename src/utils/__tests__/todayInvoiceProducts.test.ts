@@ -86,6 +86,13 @@ describe('todayInvoiceProducts', () => {
     expect(groupedProducts[1].quantity).toBe(5);
   });
 
+  it('não soma o mesmo código de embarcadores diferentes', () => {
+    const product = { quantity: 2, price: '0', total_price: '0', type: 'KG', Product: { code: '123', description: 'Peixe', price: '0', type: 'KG' } };
+    const result = groupTodayInvoiceProducts([buildDanfe({ company_id: 1, DanfeProducts: [product] }), buildDanfe({ company_id: 2, DanfeProducts: [{ ...product, quantity: 5 }] })]);
+    expect(result.map((row) => row.quantity)).toEqual([2, 5]);
+    expect(result.map((row) => row.Product.company_id)).toEqual([1, 2]);
+  });
+
   it('normaliza quantidade para nao exibir artefatos de float', () => {
     expect(formatGroupedProductQuantity(3)).toBe('3');
     expect(formatGroupedProductQuantity(1.5000000001)).toBe('1.5');

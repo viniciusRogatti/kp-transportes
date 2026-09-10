@@ -1,4 +1,4 @@
-import { cities } from '../data/danfes';
+import { normalizeRouteCity, UNASSIGNED_ROUTE } from './routeCatalog';
 import { IDanfe, IInvoiceSearchContext } from '../types/types';
 import { DanfeLegendKey, matchesDanfeLegendFilter } from './statusStyles';
 import { resolveInvoiceScopedValue } from './invoiceContextKey';
@@ -7,9 +7,9 @@ export type InvoiceListFilters = {
   nf: string;
   product: string;
   customer: string;
-  city: string;
-  route: string;
-  driver: string;
+  city: string[];
+  route: string[];
+  driver: string[];
   loadNumbers: string[];
   status: DanfeLegendKey | '';
 };
@@ -19,9 +19,9 @@ export function createEmptyInvoiceListFilters(): InvoiceListFilters {
     nf: '',
     product: '',
     customer: '',
-    city: '',
-    route: 'Todas',
-    driver: '',
+    city: [],
+    route: [],
+    driver: [],
     loadNumbers: [],
     status: '',
   };
@@ -50,14 +50,14 @@ function matchesInvoiceListFilters(
   filters: InvoiceListFilters,
   options?: {
     driverByInvoice?: Record<string, string>;
+    routeByCity?: Record<string, string>;
     invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   },
 ) {
   const nfTerm = filters.nf.trim();
   const productTerm = normalizeFilterText(filters.product);
   const customerTerm = filters.customer.trim().toLowerCase();
-  const cityTerm = filters.city.trim().toLowerCase();
-  const driverTerm = filters.driver.trim().toLowerCase();
+
 
   if (nfTerm && !String(danfe.invoice_number).includes(nfTerm)) return false;
 
@@ -71,12 +71,13 @@ function matchesInvoiceListFilters(
   }
 
   if (customerTerm && !String(danfe.Customer?.name_or_legal_entity || '').toLowerCase().includes(customerTerm)) return false;
-  if (cityTerm && !String(danfe.Customer?.city || '').toLowerCase().includes(cityTerm)) return false;
-  if (filters.route !== 'Todas' && cities[String(danfe.Customer?.city || '')] !== filters.route) return false;
+  const cityKey = normalizeRouteCity(danfe.Customer?.city);
+  if (filters.city.length && !filters.city.some((city) => normalizeRouteCity(city) === cityKey)) return false;
+  if (filters.route.length && !filters.route.includes(options?.routeByCity?.[cityKey] || UNASSIGNED_ROUTE)) return false;
 
-  if (driverTerm) {
+  if (filters.driver.length) {
     const driverName = resolveDanfeDriverName(danfe, options?.driverByInvoice, options?.invoiceContextByNf).toLowerCase();
-    if (!driverName.includes(driverTerm)) return false;
+    if (!filters.driver.some((driver) => driver.toLowerCase() === driverName)) return false;
   }
 
   if (filters.loadNumbers.length > 0) {
@@ -94,6 +95,7 @@ export function filterInvoiceListDanfes(
   filters: InvoiceListFilters,
   options?: {
     driverByInvoice?: Record<string, string>;
+    routeByCity?: Record<string, string>;
     invoiceContextByNf?: Record<string, IInvoiceSearchContext>;
   },
 ) {
@@ -105,9 +107,11 @@ export function filterTodayInvoiceDanfes(
   driverByInvoice: Record<string, string>,
   filters: InvoiceListFilters,
   invoiceContextByNf?: Record<string, IInvoiceSearchContext>,
+  routeByCity?: Record<string, string>,
 ) {
   return filterInvoiceListDanfes(dataDanfes, filters, {
     driverByInvoice,
     invoiceContextByNf,
+    routeByCity,
   });
 }

@@ -37,8 +37,8 @@ const TodayProductList: React.FC<TodayProductListProps> = ({ products }) => (
           {products.map((product, index) => (
             <View style={styles.tableRow} key={index}>
               <View style={styles.tableColCode}><Text style={styles.tableCell}>{product.Product.code}</Text></View>
-              <View style={styles.tableColDescription}><Text style={styles.tableCell}>{truncateText(product.Product.description, 50)}</Text></View>
-              <View style={styles.tableColQuantity}><Text style={styles.tableCell}>{formatGroupedProductQuantity(product.quantity)}</Text></View>
+              <View style={styles.tableColDescription}><Text style={styles.tableCell}>{truncateText([product.Product.company?.name, product.Product.description].filter(Boolean).join(' · '), 65)}</Text></View>
+              <View style={styles.tableColQuantity}><Text style={styles.tableCell}>{formatGroupedProductQuantity(product.quantity)} {product.Product.type}</Text></View>
             </View>
           ))}
         </View>

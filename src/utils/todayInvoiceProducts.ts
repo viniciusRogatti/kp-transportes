@@ -1,4 +1,4 @@
-import { IDanfe, IDanfeProduct, IGroupedProduct } from '../types/types';
+import { IDanfe, IGroupedProduct } from '../types/types';
 
 const GROUPED_PRODUCT_QUANTITY_PRECISION = 1000;
 
@@ -19,26 +19,28 @@ export function formatGroupedProductQuantity(quantity: number | string) {
 }
 
 export function groupTodayInvoiceProducts(danfes: IDanfe[]): IGroupedProduct[] {
-  const allProducts = danfes.flatMap((danfe) => danfe.DanfeProducts || []);
+  const allProducts = danfes.flatMap((danfe) => (danfe.DanfeProducts || []).map((product) => ({ product, companyId: product.company_id || danfe.company_id, company: danfe.company })));
   const groupedProductsMap = new Map<string, IGroupedProduct>();
 
-  allProducts.forEach((product: IDanfeProduct) => {
+  allProducts.forEach(({ product, companyId, company }) => {
     const productCode = String(product.Product?.code || '').trim();
-    const quantity = normalizeGroupedProductQuantity(Number(product.quantity || 0));
-    const existingProduct = groupedProductsMap.get(productCode);
+    const key = `${companyId || 0}::${productCode}::${product.Product?.type || product.type}`;
+    const quantity = Number(product.quantity || 0);
+    const existingProduct = groupedProductsMap.get(key);
 
     if (existingProduct) {
-      existingProduct.quantity = normalizeGroupedProductQuantity(existingProduct.quantity + quantity);
+      existingProduct.quantity += quantity;
       return;
     }
 
-    groupedProductsMap.set(productCode, {
+    groupedProductsMap.set(key, {
       quantity,
-      Product: product.Product,
+      Product: { ...product.Product, company_id: companyId,
+        company: companyId && company ? { id: companyId, code: company.code, name: company.name } : undefined },
     });
   });
 
-  return Array.from(groupedProductsMap.values()).sort((productA, productB) => (
+  return Array.from(groupedProductsMap.values()).map((product) => ({ ...product, quantity: normalizeGroupedProductQuantity(product.quantity) })).sort((productA, productB) => (
     String(productA.Product?.description || '').localeCompare(
       String(productB.Product?.description || ''),
       'pt-BR',

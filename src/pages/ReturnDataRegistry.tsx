@@ -162,7 +162,7 @@ function FilterFields({
   onChange: (field: keyof ReturnDataFilters, value: string) => void;
   compact?: boolean;
 }) {
-  const fieldClass = 'h-10 min-w-0 rounded-md border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60';
+  const fieldClass = 'h-9 min-w-0 rounded-md border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60';
   const openDatePicker = (event: ReactMouseEvent<HTMLInputElement>) => {
     try {
       event.currentTarget.showPicker?.();
@@ -171,7 +171,7 @@ function FilterFields({
     }
   };
   return (
-    <div className={`grid gap-2 ${compact ? 'md:grid-cols-3 xl:grid-cols-6' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
+    <div className={`grid gap-2 ${compact ? 'sm:grid-cols-3' : 'sm:grid-cols-2 xl:grid-cols-5'}`}>
       {!compact ? (
         <>
           <input className={fieldClass} value={filters.invoice_number || ''} onChange={(event) => onChange('invoice_number', event.target.value)} placeholder="NF" aria-label="Filtrar base por NF" />
@@ -194,6 +194,14 @@ function FilterFields({
         <option value="unclassified">Não classificado</option>
       </select>
       <input className={fieldClass} value={filters.customer || ''} onChange={(event) => onChange('customer', event.target.value)} placeholder="Cliente" aria-label="Filtrar por cliente" />
+      <details className="col-span-full rounded-md border border-border bg-surface-2 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-text">
+          Mais filtros · período, produtos e operação
+          {Object.entries(filters).filter(([key, value]) => ['seller', 'product', 'reason', 'carrier', 'linked', 'start_date', 'end_date'].includes(key) && Boolean(value)).length > 0 && (
+            <span className="ml-2 text-text-accent">Filtros adicionais preenchidos</span>
+          )}
+        </summary>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
       <input className={fieldClass} value={filters.seller || ''} onChange={(event) => onChange('seller', event.target.value)} placeholder="Representante" aria-label="Filtrar por representante" />
       <input className={fieldClass} value={filters.product || ''} onChange={(event) => onChange('product', event.target.value)} placeholder="Produto" aria-label="Filtrar por produto" />
       {!compact ? (
@@ -209,6 +217,8 @@ function FilterFields({
       ) : null}
       <input className={`${fieldClass} cursor-pointer`} type="date" value={filters.start_date || ''} onClick={openDatePicker} onChange={(event) => onChange('start_date', event.target.value)} aria-label="Período inicial da base" />
       <input className={`${fieldClass} cursor-pointer`} type="date" value={filters.end_date || ''} onClick={openDatePicker} onChange={(event) => onChange('end_date', event.target.value)} aria-label="Período final da base" />
+        </div>
+      </details>
     </div>
   );
 }

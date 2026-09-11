@@ -639,14 +639,13 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
 
     expect(await screen.findByText('Atenção: NF não localizada na base de devoluções')).toBeInTheDocument();
-    expect(screen.getByText(/leia este aviso e confirme abaixo/i)).toBeInTheDocument();
+    expect(screen.getByText(/leia este aviso e confirme para continuar/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Adicionar NF na lista' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ciente, continuar para tipo e produtos' }));
 
     expect(await screen.findByText('Tipo e produtos da devolucao')).toBeInTheDocument();
     expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('NF não localizada na base de devoluções');
     expect(screen.getByTestId('return-base-compact-reminder')).not.toHaveTextContent('Base atualizada em');
-    expect(screen.getByText(/Há produtos e ações abaixo/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
   });
 

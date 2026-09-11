@@ -35,19 +35,20 @@ export default function RouteOverview({ danfes, availableCities, catalog, onSele
     setTransfers([]); setError(''); setCitySearch(''); setPendingTransfer(null);
     dialog.current?.showModal();
   }
-  function addCity(city: string, confirmed = false) {
-    if (!selected || !city.trim()) return;
+  function addCity(city: string, confirmed = false, targetId = selectedId) {
+    const target = draft.find((route) => route.id === targetId);
+    if (!target || !city.trim()) return;
     const key = normalizeRouteCity(city);
     if (!key) return;
     const owner = draft.find((route) => route.cities.some((candidate) => normalizeRouteCity(candidate) === key));
-    if (owner?.id === selected.id) return;
+    if (owner?.id === target.id) return;
     if (owner && !confirmed) { setPendingTransfer({ city, fromName: owner.name }); return; }
     setPendingTransfer(null);
     const original = catalog.data?.routes.find((route) => route.cities.some((candidate) => normalizeRouteCity(candidate) === key));
     setTransfers((old) => [...old.filter((item) => normalizeRouteCity(item.city) !== key),
-      ...(original && original.id !== selected.id ? [{ city, from: original.id, to: selected.id }] : [])]);
+      ...(original && original.id !== target.id ? [{ city, from: original.id, to: target.id }] : [])]);
     setDraft((old) => old.map((route) => ({ ...route,
-      cities: [...route.cities.filter((candidate) => normalizeRouteCity(candidate) !== key), ...(route.id === selected.id ? [city.trim()] : [])],
+      cities: [...route.cities.filter((candidate) => normalizeRouteCity(candidate) !== key), ...(route.id === target.id ? [city.trim()] : [])],
     })));
     setCitySearch('');
   }
@@ -100,8 +101,18 @@ export default function RouteOverview({ danfes, availableCities, catalog, onSele
                   className="mt-1 w-full rounded border border-border bg-card p-2" /></label>
               <div className="my-3 flex flex-wrap gap-2" aria-label="Cidades da rota">
                 {selected.cities.map((city) => <span key={city} className="rounded-full border border-border bg-card px-3 py-1 text-sm">{city}
+                  {canEdit && draft.length > 1 ? <select aria-label={`Mover ${city} para outra rota`} value="" onChange={(event) => addCity(city, true, event.target.value)} className="ml-2 max-w-[180px] rounded border border-border bg-surface px-1 py-0.5 text-xs">
+                    <option value="" disabled>Mover para…</option>
+                    {draft.filter((route) => route.id !== selectedId).map((route) => <option key={route.id} value={route.id}>{route.name || 'Nova rota'}</option>)}
+                  </select> : null}
                   {canEdit ? <button type="button" aria-label={`Remover ${city}`} className="ml-2" onClick={() => setDraft((old) => old.map((route) => route.id === selectedId ? { ...route, cities: route.cities.filter((item) => item !== city) } : route))}>×</button> : null}</span>)}
-                {!selected.cities.length ? <p className="text-sm text-muted">Adicione cidades a esta rota.</p> : null}
+                {!selected.cities.length ? <div className="flex flex-wrap items-center gap-2 text-sm text-muted"><p>Esta rota não tem cidades.</p>
+                  {canEdit ? <button type="button" className="text-danger underline" onClick={() => {
+                    setDraft((old) => old.filter((route) => route.id !== selectedId));
+                    setSelectedId(draft.find((route) => route.id !== selectedId)?.id || '');
+                    setPendingTransfer(null);
+                  }}>Excluir rota vazia</button> : null}
+                </div> : null}
               </div>
               {canEdit ? <><label className="block text-sm font-medium">Buscar ou adicionar cidade
                 <input value={citySearch} maxLength={150} onChange={(event) => setCitySearch(event.target.value)} className="mt-1 w-full rounded border border-border bg-card p-2" placeholder="Ex.: Araras" /></label>

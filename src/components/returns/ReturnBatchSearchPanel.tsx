@@ -58,7 +58,7 @@ export default function ReturnBatchSearchPanel({
             <button
               type="button"
               onClick={onOpenRegistry}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-accent-strong bg-accent px-4 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold text-muted transition-colors hover:bg-surface-2"
             >
               <Database size={16} /> Base de devoluções
             </button>
@@ -72,7 +72,7 @@ export default function ReturnBatchSearchPanel({
             <button
               type="button"
               onClick={onCreateBatch}
-              className="h-10 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
+              className="h-9 shrink-0 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white shadow-soft transition-colors hover:bg-accent-strong"
             >
               + Nova devolucao
             </button>
@@ -90,12 +90,12 @@ export default function ReturnBatchSearchPanel({
             }}
             placeholder="ID do lote (ex.: RET-...)"
             aria-label="ID do lote de devolucao"
-            className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+            className="h-9 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           />
           <button
             type="button"
             onClick={() => void onSearchByCode()}
-            className="h-10 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
+            className="h-9 shrink-0 rounded-md border border-accent/60 bg-accent/15 px-4 text-[0.85rem] font-bold text-text-accent transition hover:bg-accent/25"
           >
             Buscar lote
           </button>
@@ -103,7 +103,7 @@ export default function ReturnBatchSearchPanel({
         <select
           value={lookbackDays}
           onChange={(event) => onLookbackChange(event.target.value as ReturnBatchLookbackValue)}
-          className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+          className="h-9 w-full rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           aria-label="Periodo de devolucoes"
         >
           {RETURN_BATCH_LOOKBACK_OPTIONS.map((option) => (
@@ -115,12 +115,12 @@ export default function ReturnBatchSearchPanel({
         <button
           type="button"
           onClick={() => void onRefresh()}
-          className="h-10 rounded-md border border-border bg-card px-3 text-[0.82rem] font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
+          className="h-9 rounded-md border border-border bg-card px-3 text-[0.82rem] font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
         >
           Atualizar lista
         </button>
       </div>
-      <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="grid min-w-0 grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap">
         <label className="min-w-0 flex-1 sm:max-w-[220px]">
           <span className="mb-1 block text-xs font-semibold text-muted">Data inicial</span>
           <input
@@ -129,7 +129,7 @@ export default function ReturnBatchSearchPanel({
             onClick={onOpenDatePicker}
             onChange={(event) => onStartDateChange(event.target.value)}
             aria-label="Data inicial dos lotes de devolucao"
-            className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+            className="h-9 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           />
         </label>
         <label className="min-w-0 flex-1 sm:max-w-[220px]">
@@ -140,13 +140,13 @@ export default function ReturnBatchSearchPanel({
             onClick={onOpenDatePicker}
             onChange={(event) => onEndDateChange(event.target.value)}
             aria-label="Data final dos lotes de devolucao"
-            className="h-10 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+            className="h-9 w-full cursor-pointer rounded-sm border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           />
         </label>
         <button
           type="button"
           onClick={() => void onSearchByPeriod()}
-          className="h-10 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
+          className="col-span-2 h-9 rounded-md border border-border bg-card px-4 text-[0.85rem] font-bold text-text transition hover:bg-surface-2"
         >
           Buscar período
         </button>

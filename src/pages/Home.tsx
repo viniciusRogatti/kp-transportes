@@ -22,6 +22,7 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
 import Header from '../components/Header';
+import OperationalRadar, { RadarEntry } from '../components/OperationalRadar';
 import CollectionRequestPDF from '../components/CollectionRequestPDF';
 import IconButton from '../components/ui/IconButton';
 import SearchInput from '../components/ui/SearchInput';
@@ -63,8 +64,6 @@ import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 import {
   getBacklogAgeDays,
   getOccurrenceAgeDays,
-  isTreatmentOverdue,
-  TREATMENT_OVERDUE_AFTER_DAYS,
 } from '../utils/operationalTreatments';
 
 const OCCURRENCE_REASONS = [
@@ -540,16 +539,6 @@ function Home() {
   const simpleFlowOccurrences = useMemo(
     () => pendingOccurrences.filter((occurrence) => isSimpleOccurrenceReason(occurrence.reason)),
     [pendingOccurrences],
-  );
-  const urgentOccurrences = useMemo(
-    () => pendingOccurrences.filter((occurrence) => isTreatmentOverdue(getOccurrenceAgeDays(occurrence))),
-    [pendingOccurrences],
-  );
-  const urgentBacklogRows = useMemo(
-    () => pendingReturnReminders.filter((row) => (
-      isTreatmentOverdue(getBacklogAgeDays(row))
-    )),
-    [pendingReturnReminders],
   );
   const scheduledCollectionRequests = useMemo(
     () => pendingCollectionRequests.filter((request) => isScheduledCollectionRequest(request)),
@@ -1581,150 +1570,24 @@ function Home() {
       icon: FileWarning,
     },
   ];
-  const urgentTreatmentCount = urgentOccurrences.length + urgentBacklogRows.length;
+  const radarEntries: RadarEntry[] = [
+    ...pendingOccurrences.map((row) => ({ id: `occurrence-${row.id}`, category: 'occurrences', invoice: row.invoice_number || '',
+      customer: normalizeTextValue(row.customer_name), city: normalizeTextValue(row.city), detail: row.description || '', age: getOccurrenceAgeDays(row) })),
+    ...pendingReturnReminders.map((row, index) => ({ id: `backlog-${row.queue_type}-${row.trip_note_id || row.nf_id}-${index}`,
+      category: row.queue_type, invoice: row.invoice_number || '', customer: normalizeTextValue(row.customer_name), city: normalizeTextValue(row.city),
+      detail: `${row.motorista_name || 'Sem motorista'}${row.trip_id ? ` · Viagem ${row.trip_id}` : ''}`, age: getBacklogAgeDays(row) })),
+  ];
   const radarUnavailable = !radarLoaded.occurrences || !radarLoaded.receipts || radarErrors.occurrences || radarErrors.receipts;
 
   return (
     <HomeStyle>
       <Header />
       <HomeContent>
-        <Card data-tutorial="home-radar">
-          <CardHeaderRow>
-            <div>
-              <h2>Radar operacional</h2>
-              <p className="mt-1 text-sm text-muted">
-                Veja as pendências abertas e comece pelas mais antigas.
-              </p>
-            </div>
-            <button className="secondary" onClick={refreshHomePanel} type="button">Atualizar radar</button>
-          </CardHeaderRow>
-          {radarErrors.occurrences || radarErrors.receipts ? (
-            <p role="alert" className="mt-3 rounded-md border semantic-panel-danger p-3 text-sm">Não foi possível atualizar todas as pendências. Os dados exibidos podem estar desatualizados. Use Atualizar radar para tentar novamente.</p>
-          ) : radarUnavailable ? <p className="mt-3 text-sm text-muted">Carregando pendências...</p> : null}
-
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {treatmentReminderCards.map((reminder) => {
-              const ReminderIcon = reminder.icon;
-              return (
-                <article key={`home-treatment-reminder-${reminder.key}`} data-tutorial={`home-reminder-${reminder.key}`}
-                  className="rounded-md border border-border bg-surface p-3 text-text">
-                  <div className="flex items-center gap-3"><ReminderIcon className="h-5 w-5 shrink-0 text-accent" />
-                    <h3 className="flex-1 text-sm font-semibold">{reminder.label}</h3><strong className="text-xl">{reminder.count}</strong></div>
-                  <p className="mt-2 text-xs text-muted">{reminder.description}</p>
-                  <details className="mt-3" open={reminder.count > 0}>
-                    <summary className="cursor-pointer text-xs font-semibold text-accent">Consultar pendências</summary>
-                    <ul className="mt-2 max-h-64 space-y-2 overflow-y-auto">
-                      {reminder.key === 'occurrences' ? pendingOccurrences.slice().sort((a, b) => getOccurrenceAgeDays(b) - getOccurrenceAgeDays(a)).map((row) => (
-                        <li key={row.id} className={`rounded border p-2 text-xs ${isTreatmentOverdue(getOccurrenceAgeDays(row)) ? 'semantic-panel-danger' : 'border-border bg-card'}`}>
-                          <strong>NF {row.invoice_number} · {getOccurrenceAgeDays(row)} dias</strong>
-                          <span className="block">{row.customer_name || 'Cliente não informado'} · {row.city || 'Cidade não informada'}</span>
-                          <span className="mt-1 block text-muted">{row.description}</span>
-                        </li>
-                      )) : pendingReturnReminders.filter((row) => row.queue_type === reminder.key).sort((a, b) => getBacklogAgeDays(b) - getBacklogAgeDays(a)).map((row, index) => (
-                        <li key={`${row.trip_note_id || row.nf_id}-${index}`} className={`rounded border p-2 text-xs ${isTreatmentOverdue(getBacklogAgeDays(row)) ? 'semantic-panel-danger' : 'border-border bg-card'}`}>
-                          <strong>NF {row.invoice_number} · {getBacklogAgeDays(row)} dias</strong>
-                          <span className="block">{row.customer_name || 'Cliente não informado'} · {row.city || 'Cidade não informada'}</span>
-                          <span className="mt-1 block text-muted">{row.motorista_name || 'Sem motorista'}{row.trip_id ? ` · Viagem ${row.trip_id}` : ''}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {!reminder.count ? <p className="mt-2 text-xs text-muted">Nenhuma pendência carregada neste grupo.</p> : null}
-                  </details>
-                  <button type="button" onClick={() => navigate(`/operational-pendencies?tab=${reminder.key}`)} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-accent">
-                    Tratar pendências <ArrowRight className="h-3 w-3" />
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2">
-            <p className="text-xs text-muted">
-              As pendências ganham destaque após {TREATMENT_OVERDUE_AFTER_DAYS} dias. Expanda cada grupo para consultar as notas aqui.
-            </p>
-            <button
-              type="button"
-              data-tutorial="home-treatment-center"
-              onClick={() => navigate('/operational-pendencies')}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"
-            >
-              Abrir Central de Tratativas <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </Card>
-
-        <Card data-tutorial="home-overdue-priorities">
-          <CardHeaderRow>
-            <div>
-              <h2>Prioridades vencidas</h2>
-              <p className="mt-1 text-sm text-muted">
-                Somente tratativas com mais de {TREATMENT_OVERDUE_AFTER_DAYS} dias aparecem nesta área.
-              </p>
-            </div>
-            <span className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${urgentTreatmentCount ? 'semantic-solid-danger' : 'semantic-solid-success'}`}>
-              {urgentTreatmentCount ? `${urgentTreatmentCount} urgente(s)` : radarUnavailable ? 'Consulta incompleta' : 'Sem atraso nas notas carregadas'}
-            </span>
-          </CardHeaderRow>
-
-          {!urgentTreatmentCount && radarUnavailable ? (
-            <p className="mt-4 text-sm text-muted">Aguarde uma consulta completa para conferir as prioridades.</p>
-          ) : !urgentTreatmentCount ? (
-            <div className="mt-4 flex items-center gap-3 rounded-md border semantic-panel-success p-4">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold">Nenhuma tratativa vencida nas notas carregadas</p>
-                <p className="text-xs">Consulte a Central de Tratativas para continuar o acompanhamento.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-2 lg:grid-cols-2">
-              {urgentOccurrences.map((occurrence) => {
-                const ageDays = getOccurrenceAgeDays(occurrence);
-                return (
-                  <button
-                    key={`home-urgent-occurrence-${occurrence.id}`}
-                    type="button"
-                    onClick={() => navigate(`/operational-pendencies?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}
-                    className="flex items-start gap-3 rounded-md border semantic-panel-danger p-3 text-left transition hover:brightness-95"
-                  >
-                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <strong className="block text-sm">Ocorrência · NF {occurrence.invoice_number || '-'}</strong>
-                      <span className="mt-1 block text-xs">{occurrence.customer_name || 'Cliente não informado'} · {occurrence.city || '-'}</span>
-                      <span className="mt-1 block text-xs font-semibold">{ageDays} dias em aberto</span>
-                    </span>
-                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" />
-                  </button>
-                );
-              })}
-
-              {urgentBacklogRows.map((row) => {
-                const ageDays = getBacklogAgeDays(row);
-                const queueLabel = row.queue_type === 'redelivery'
-                  ? 'Reentrega sem nova rota'
-                  : row.queue_type === 'unassigned'
-                    ? 'NF sem rota'
-                    : row.queue_type === 'retained' ? 'Canhoto retido' : row.queue_type === 'pending' ? 'NF sem foto' : 'Devolução fora de lote';
-                return (
-                  <button
-                    key={`home-urgent-backlog-${row.queue_type}-${row.invoice_number}`}
-                    type="button"
-                    onClick={() => navigate(`/operational-pendencies?tab=${row.queue_type}&nf=${encodeURIComponent(row.invoice_number)}`)}
-                    className="flex items-start gap-3 rounded-md border semantic-panel-danger p-3 text-left transition hover:brightness-95"
-                  >
-                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <strong className="block text-sm">{queueLabel} · NF {row.invoice_number}</strong>
-                      <span className="mt-1 block text-xs">{row.customer_name || 'Cliente não informado'} · {row.city || '-'}</span>
-                      <span className="mt-1 block text-xs font-semibold">{ageDays} dias em aberto</span>
-                    </span>
-                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+        <OperationalRadar categories={treatmentReminderCards} entries={radarEntries} incomplete={radarUnavailable}
+          failed={radarErrors.occurrences || radarErrors.receipts} onRefresh={refreshHomePanel}
+          onOpen={(category, invoice) => navigate(category
+            ? `/operational-pendencies?tab=${category}${invoice ? `&nf=${encodeURIComponent(invoice)}` : ''}`
+            : '/operational-pendencies')} />
 
         <Card data-tutorial="home-open-occurrences">
           <CardHeaderRow>

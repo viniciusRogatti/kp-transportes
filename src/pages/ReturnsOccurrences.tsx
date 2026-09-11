@@ -6,7 +6,6 @@ import { useSearchParams } from 'react-router-dom';
 import { pdf } from '@react-pdf/renderer';
 import {
   ArrowLeft,
-  ArrowDown,
   ArrowRight,
   CheckCircle2,
   Database,
@@ -486,7 +485,6 @@ function ReturnsOccurrences() {
   const [returnDataLookupLoading, setReturnDataLookupLoading] = useState(false);
   const [returnDataLookupError, setReturnDataLookupError] = useState('');
   const [showReturnDataDetails, setShowReturnDataDetails] = useState(false);
-  const returnLookupFeedbackRef = useRef<HTMLDivElement>(null);
   const [returnDataLastUpdate, setReturnDataLastUpdate] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<ReturnType>('total');
   const [returnTypeDivergenceAcknowledged, setReturnTypeDivergenceAcknowledged] = useState('');
@@ -646,12 +644,6 @@ function ReturnsOccurrences() {
     returnModalContentRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
   }, [isReturnWizardMode, returnModalOpen, returnWizardStep]);
 
-  useEffect(() => {
-    if (returnWizardStep !== 2 || (!returnDataLookup && !returnDataLookupError)) return;
-    window.requestAnimationFrame(() => {
-      returnLookupFeedbackRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-    });
-  }, [returnDataLookup, returnDataLookupError, returnWizardStep]);
 
   useEffect(() => {
     if (!isOccurrenceBuilderOpen || editingOccurrenceId) return;
@@ -3003,8 +2995,8 @@ function ReturnsOccurrences() {
 
                 <Card>
                   {isReturnWizardMode && (
-                    <div className="mb-5 overflow-x-auto pb-1">
-                      <ol className="grid min-w-[620px] grid-cols-4 gap-2" aria-label="Etapas da devolucao">
+                    <div className="mb-3">
+                      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Etapas da devolucao">
                         {([
                           { step: 1 as const, label: 'Transporte', icon: Truck },
                           { step: 2 as const, label: 'Nota fiscal', icon: FileSearch },
@@ -3022,6 +3014,7 @@ function ReturnsOccurrences() {
                                     setReturnWizardStep(step);
                                   }
                                 }}
+                                aria-current={isActive ? 'step' : undefined}
                                 disabled={step > returnWizardStep && !(step === 4 && returnWizardNoteCount)}
                                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
                                   isActive
@@ -3047,7 +3040,7 @@ function ReturnsOccurrences() {
                       </ol>
                     </div>
                   )}
-                  <BoxDescription className="flex-col gap-1">
+                  <BoxDescription className={isReturnWizardMode ? 'hidden' : 'flex-col gap-1'}>
                     <h2 className="leading-tight max-[768px]:text-[0.92rem]">
                       {selectedBatch ? (
                         selectedBatchWorkflowStatus === 'pending_transportadora'
@@ -3220,7 +3213,7 @@ function ReturnsOccurrences() {
                   )}
                   <div className={
                     isReturnWizardMode && (returnWizardStep === 2 || returnWizardStep === 3)
-                      ? 'contents'
+                      ? returnWizardStep === 2 ? 'mx-auto w-full max-w-[680px] space-y-3' : 'contents'
                       : 'hidden'
                   }>
                     {isReturnWizardMode && (
@@ -3249,14 +3242,11 @@ function ReturnsOccurrences() {
                     ) : null}
                     <div className={
                       isReturnWizardMode && returnWizardStep === 2
-                        ? 'mx-auto mt-2 w-full max-w-[480px] space-y-3 rounded-xl border border-border bg-card p-4 shadow-soft sm:p-5'
+                        ? 'w-full space-y-3'
                         : 'space-y-2'
                     }>
                     {isReturnWizardMode && returnWizardStep === 2 && (
-                      <div className="flex flex-col items-center text-center">
-                        <span className="grid h-9 w-9 place-items-center rounded-full bg-accent/15 text-text-accent">
-                          <FileSearch size={19} />
-                        </span>
+                      <div className="text-left">
                         <h3 className="mt-2 text-base font-bold text-text">Localizar nota fiscal</h3>
                         <p className="mt-1 max-w-[400px] text-xs leading-relaxed text-muted">
                           Informe o número da NF para carregar os produtos.
@@ -3267,7 +3257,7 @@ function ReturnsOccurrences() {
                       isReturnWizardMode && returnWizardStep === 2 ? 'justify-center' : ''
                     }`}>
                       <div className={`${isReturnWizardMode && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
-                        isReturnWizardMode && returnWizardStep === 2 ? 'w-full max-w-[320px]' : 'md:w-[320px] md:shrink-0'
+                        isReturnWizardMode && returnWizardStep === 2 ? 'w-full' : 'md:w-[320px] md:shrink-0'
                       }`}>
                         {returnType === 'sobra' ? (
                           <div className="rounded-md border border-border bg-card px-3 py-[11px] text-[0.82rem] text-muted">
@@ -3308,7 +3298,7 @@ function ReturnsOccurrences() {
                               handleChangeReturnType('sobra');
                               setReturnWizardStep(3);
                             }}
-                            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-amber-500 bg-amber-500/15 px-3 py-2.5 text-sm font-bold text-amber-800 shadow-sm transition hover:bg-amber-500/25 dark:text-amber-200"
+                            className="mt-2 inline-flex items-center gap-2 rounded-md px-1 py-1 text-xs font-semibold text-muted transition hover:text-text hover:underline"
                           >
                             <PackageCheck size={17} />
                             Registrar sobra sem NF
@@ -3370,21 +3360,23 @@ function ReturnsOccurrences() {
                           NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
                         </InfoText>
                       )}
+                      <div className={returnWizardStep === 2 ? 'flex flex-col gap-3 sm:flex-row sm:items-center' : ''}>
+                        <div className="min-w-0 flex-1">
                       {returnDanfe && returnType !== 'sobra' && returnDataLookupLoading && (
                         <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-sm text-muted">
                           Consultando NF na base acumulada de devoluções...
                         </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnDataLookupError && (
-                        <div ref={returnLookupFeedbackRef} className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
+                        <div role="status" aria-live="polite" className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
                           {returnDataLookupError}
                         </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnDataLookup && (
                         <div
-                          ref={returnLookupFeedbackRef}
+                          role="status" aria-live="polite"
                           data-testid={returnWizardStep === 3 ? 'return-base-compact-reminder' : 'return-base-lookup-result'}
-                          className={`mx-auto mt-3 max-w-[640px] rounded-lg border px-3 py-2.5 text-sm ${
+                          className={`mt-2 rounded-lg border px-3 py-2.5 text-sm ${
                           returnDataLookup.consolidated_status === 'approved'
                             ? 'semantic-panel-success'
                             : returnDataLookup.consolidated_status === 'registered_without_approval'
@@ -3431,11 +3423,35 @@ function ReturnsOccurrences() {
                           </div>
                           {returnWizardStep === 2 ? <p className="mt-1.5 text-xs">
                             {returnDataLookup.consolidated_status === 'not_found'
-                              ? 'Leia este aviso e confirme abaixo para continuar o cadastro da devolução.'
+                              ? 'Leia este aviso e confirme para continuar o cadastro da devolução.'
                               : 'Informação orientativa: esta situação não impede adicionar a NF nem concluir o lote.'}
                           </p> : null}
-                          {returnWizardStep === 2 && showReturnDataDetails ? (
-                            <div className="mt-3 space-y-2">
+
+                        </div>
+                      )}
+                        </div>
+                      {isReturnWizardMode
+                        && returnWizardStep === 2
+                        && returnDanfe
+                        && !returnDataLookupLoading
+                        && !returnNfCollectionLookupLoading
+                        && (returnDataLookup || returnDataLookupError) && (
+                        <div className="shrink-0 sm:w-[180px]">
+                          <button
+                            type="button"
+                            onClick={() => setReturnWizardStep(3)}
+                            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-3 py-2 text-sm font-bold text-white transition hover:bg-accent-strong [&_svg]:shrink-0"
+                          >
+                            {returnDataLookup?.consolidated_status === 'not_found'
+                              ? 'Ciente, continuar para tipo e produtos'
+                              : 'Continuar para tipo e produtos'}
+                            <ArrowRight size={16} />
+                          </button>
+                        </div>
+                      )}
+                      </div>
+                          {returnWizardStep === 2 && returnDataLookup && showReturnDataDetails ? (
+                            <div className="mt-3 space-y-2 rounded-lg border border-border p-3">
                               {returnDataLookup.occurrences.map((registryOccurrence) => (
                                 <article key={registryOccurrence.id} className="rounded-md border border-current/20 bg-card p-2 text-xs text-text">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -3465,33 +3481,8 @@ function ReturnsOccurrences() {
                               ))}
                             </div>
                           ) : null}
-                        </div>
-                      )}
-                      {isReturnWizardMode
-                        && returnWizardStep === 2
-                        && returnDanfe
-                        && !returnDataLookupLoading
-                        && !returnNfCollectionLookupLoading
-                        && (returnDataLookup || returnDataLookupError) && (
-                        <div className="mt-4 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setReturnWizardStep(3)}
-                            className="inline-flex h-10 items-center gap-2 rounded-md border border-accent-strong bg-accent px-5 text-sm font-bold text-white transition hover:bg-accent-strong"
-                          >
-                            {returnDataLookup?.consolidated_status === 'not_found'
-                              ? 'Ciente, continuar para tipo e produtos'
-                              : 'Continuar para tipo e produtos'}
-                            <ArrowRight size={16} />
-                          </button>
-                        </div>
-                      )}
                       {returnWizardStep === 3 && (
                       <>
-                      <div className="sticky top-0 z-20 mt-2 flex items-center justify-center gap-2 rounded-md border border-accent/40 bg-card/95 px-3 py-2 text-xs font-semibold text-text-accent shadow-sm backdrop-blur">
-                        <ArrowDown size={15} className="shrink-0" />
-                        Há produtos e ações abaixo. Role para revisar e adicionar esta NF à lista.
-                      </div>
                       {returnDanfe && returnType !== 'sobra' && returnNfCollectionLookupLoading && (
                         <InfoText style={{ marginTop: '4px' }}>
                           Validando se a NF possui coleta solicitada pela Mar e Rio...

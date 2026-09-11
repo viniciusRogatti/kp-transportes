@@ -1,17 +1,17 @@
 {
   "files": {
-    "main.css": "/kp-transportes/static/css/main.ab7b7882.css",
-    "main.js": "/kp-transportes/static/js/main.7c4737bd.js",
-    "static/js/50.59464f0a.chunk.js": "/kp-transportes/static/js/50.59464f0a.chunk.js",
+    "main.css": "/kp-transportes/static/css/main.71c68761.css",
+    "main.js": "/kp-transportes/static/js/main.65ba8275.js",
+    "static/js/25.bb518ba3.chunk.js": "/kp-transportes/static/js/25.bb518ba3.chunk.js",
     "static/js/719.b014a16c.chunk.js": "/kp-transportes/static/js/719.b014a16c.chunk.js",
     "static/js/567.88be3eae.chunk.js": "/kp-transportes/static/js/567.88be3eae.chunk.js",
     "static/js/57.b0c5ffbd.chunk.js": "/kp-transportes/static/js/57.b0c5ffbd.chunk.js",
-    "static/js/728.354ed82d.chunk.js": "/kp-transportes/static/js/728.354ed82d.chunk.js",
+    "static/js/735.ee942aaf.chunk.js": "/kp-transportes/static/js/735.ee942aaf.chunk.js",
     "static/js/242.ea7829c3.chunk.js": "/kp-transportes/static/js/242.ea7829c3.chunk.js",
     "static/js/823.da7e1431.chunk.js": "/kp-transportes/static/js/823.da7e1431.chunk.js",
     "static/js/739.eb0df224.chunk.js": "/kp-transportes/static/js/739.eb0df224.chunk.js",
-    "static/js/398.66f2ee18.chunk.js": "/kp-transportes/static/js/398.66f2ee18.chunk.js",
-    "static/js/315.9d6a13f5.chunk.js": "/kp-transportes/static/js/315.9d6a13f5.chunk.js",
+    "static/js/398.8d5ce474.chunk.js": "/kp-transportes/static/js/398.8d5ce474.chunk.js",
+    "static/js/315.c0a80442.chunk.js": "/kp-transportes/static/js/315.c0a80442.chunk.js",
     "static/js/294.54faf556.chunk.js": "/kp-transportes/static/js/294.54faf556.chunk.js",
     "static/js/748.798e2865.chunk.js": "/kp-transportes/static/js/748.798e2865.chunk.js",
     "static/js/888.f7c7fe75.chunk.js": "/kp-transportes/static/js/888.f7c7fe75.chunk.js",
@@ -41,18 +41,18 @@
     "static/media/Dark Mode Button.svg": "/kp-transportes/static/media/Dark Mode Button.94697a4f2734e930404a18607e5fa15b.svg",
     "static/media/Package Delivery.svg": "/kp-transportes/static/media/Package Delivery.5a2b0fcb52914311b7d1af20ddb9676f.svg",
     "index.html": "/kp-transportes/index.html",
-    "main.ab7b7882.css.map": "/kp-transportes/static/css/main.ab7b7882.css.map",
-    "main.7c4737bd.js.map": "/kp-transportes/static/js/main.7c4737bd.js.map",
-    "50.59464f0a.chunk.js.map": "/kp-transportes/static/js/50.59464f0a.chunk.js.map",
+    "main.71c68761.css.map": "/kp-transportes/static/css/main.71c68761.css.map",
+    "main.65ba8275.js.map": "/kp-transportes/static/js/main.65ba8275.js.map",
+    "25.bb518ba3.chunk.js.map": "/kp-transportes/static/js/25.bb518ba3.chunk.js.map",
     "719.b014a16c.chunk.js.map": "/kp-transportes/static/js/719.b014a16c.chunk.js.map",
     "567.88be3eae.chunk.js.map": "/kp-transportes/static/js/567.88be3eae.chunk.js.map",
     "57.b0c5ffbd.chunk.js.map": "/kp-transportes/static/js/57.b0c5ffbd.chunk.js.map",
-    "728.354ed82d.chunk.js.map": "/kp-transportes/static/js/728.354ed82d.chunk.js.map",
+    "735.ee942aaf.chunk.js.map": "/kp-transportes/static/js/735.ee942aaf.chunk.js.map",
     "242.ea7829c3.chunk.js.map": "/kp-transportes/static/js/242.ea7829c3.chunk.js.map",
     "823.da7e1431.chunk.js.map": "/kp-transportes/static/js/823.da7e1431.chunk.js.map",
     "739.eb0df224.chunk.js.map": "/kp-transportes/static/js/739.eb0df224.chunk.js.map",
-    "398.66f2ee18.chunk.js.map": "/kp-transportes/static/js/398.66f2ee18.chunk.js.map",
-    "315.9d6a13f5.chunk.js.map": "/kp-transportes/static/js/315.9d6a13f5.chunk.js.map",
+    "398.8d5ce474.chunk.js.map": "/kp-transportes/static/js/398.8d5ce474.chunk.js.map",
+    "315.c0a80442.chunk.js.map": "/kp-transportes/static/js/315.c0a80442.chunk.js.map",
     "294.54faf556.chunk.js.map": "/kp-transportes/static/js/294.54faf556.chunk.js.map",
     "748.798e2865.chunk.js.map": "/kp-transportes/static/js/748.798e2865.chunk.js.map",
     "888.f7c7fe75.chunk.js.map": "/kp-transportes/static/js/888.f7c7fe75.chunk.js.map",
@@ -78,7 +78,7 @@
     "467.7f168233.chunk.js.map": "/kp-transportes/static/js/467.7f168233.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.ab7b7882.css",
-    "static/js/main.7c4737bd.js"
+    "static/css/main.71c68761.css",
+    "static/js/main.65ba8275.js"
   ]
 }

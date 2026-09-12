@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
@@ -289,7 +290,8 @@ function UserManagement() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
+        <OperationalPageIntro title="Usuários e cadastros" description="Gerencie acessos, motoristas e veículos da transportadora." />
         <div className="w-full max-w-[var(--content-max-width)] space-y-3">
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1.5 shadow-soft">
             {([['users', 'Usuários'], ['drivers', 'Motoristas'], ['cars', 'Veículos']] as const).map(([value, label]) => (
@@ -297,12 +299,12 @@ function UserManagement() {
             ))}
           </div>
 
-          {successMessage ? <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">{successMessage}</div> : null}
-          {errorMessage ? <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-500">{errorMessage}</div> : null}
+          {successMessage ? <div className="rounded-md border border-emerald-500/30 semantic-panel-success px-3 py-2 text-sm text-emerald-500">{successMessage}</div> : null}
+          {errorMessage ? <div className="rounded-md border border-rose-500/30 semantic-panel-danger px-3 py-2 text-sm text-rose-500">{errorMessage}</div> : null}
 
           {activeTab === 'users' ? (
             <>
-              <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
                 <h2 className="text-[1.05rem] font-semibold text-text">{editingUserId ? 'Editar usuário' : 'Cadastrar usuário'}</h2>
                 <p className="mt-1 text-sm text-muted">Ao criar um perfil Motorista, selecione um cadastro antigo ou deixe sem seleção para criar o motorista operacional junto com a conta.</p>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -342,14 +344,14 @@ function UserManagement() {
                         <tr key={user.id}>
                           <td>{user.name || '-'}</td><td>{user.username || '-'}</td>
                           <td><span className="font-semibold">{PERMISSION_LABELS[user.permission] || user.permission}</span>{user.driver ? <span className="block text-xs text-muted">Motorista: {user.driver.name}</span> : null}</td>
-                          <td><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.is_active ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}`}>{user.is_active ? 'Ativo' : 'Inativo'}</span></td>
+                          <td><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.is_active ? 'semantic-panel-success text-emerald-500' : 'semantic-panel-danger text-rose-500'}`}>{user.is_active ? 'Ativo' : 'Inativo'}</span></td>
                           <td><span className="font-semibold">{TUTORIAL_STATUS_LABELS[status] || status}</span><span className="block text-xs text-muted">{completedCount}/{totalModules} módulos</span></td>
                           <td>{formatDateTimeBR(user.created_at)}</td>
                           <td><div className="grid min-w-[190px] grid-cols-2 gap-1.5">
                             <button type="button" disabled={user.permission === 'master' && actorPermission !== 'master'} onClick={() => startEditingUser(user)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold disabled:opacity-40">Editar</button>
-                            <button type="button" disabled={saving || (user.permission === 'master' && actorPermission !== 'master')} onClick={() => void toggleUser(user)} className="h-8 rounded-md border border-danger/70 px-2 text-xs font-semibold text-rose-400 disabled:opacity-40">{user.is_active ? 'Desativar' : 'Reativar'}</button>
+                            <button type="button" disabled={saving || (user.permission === 'master' && actorPermission !== 'master')} onClick={() => void toggleUser(user)} className="h-8 rounded-md border border-danger/70 px-2 text-xs font-semibold text-[color:var(--semantic-danger-text)] disabled:opacity-40">{user.is_active ? 'Desativar' : 'Reativar'}</button>
                             <button type="button" disabled={tutorialActionUserId === user.id} onClick={() => void resetTutorial(user)} className="h-8 rounded-md border border-border px-2 text-xs font-semibold disabled:opacity-50">Reiniciar</button>
-                            <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="h-8 rounded-md border border-warning/70 px-2 text-xs font-semibold text-amber-400 disabled:opacity-50">Dispensar</button>
+                            <button type="button" disabled={tutorialActionUserId === user.id || status === 'dismissed_by_admin'} onClick={() => void dismissTutorial(user)} className="h-8 rounded-md border border-warning/70 px-2 text-xs font-semibold text-[color:var(--semantic-warning-text)] disabled:opacity-50">Dispensar</button>
                           </div></td>
                         </tr>
                       );

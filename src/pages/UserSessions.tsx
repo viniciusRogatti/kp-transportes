@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import ReactECharts from 'echarts-for-react';
@@ -8,6 +9,7 @@ import { Container } from '../style/invoices';
 import verifyToken from '../utils/verifyToken';
 import { showConfirm } from '../utils/dialog';
 import { formatDateTimeBR } from '../utils/dateDisplay';
+import { useTheme } from '../context/ThemeContext';
 
 type UserOption = {
   id: number;
@@ -141,6 +143,9 @@ const buildDefaultAnalytics = (): SessionsAnalytics => ({
 });
 
 function UserSessions() {
+  const { isLightTheme } = useTheme();
+  const chartText = isLightTheme ? '#475569' : '#a8b8ca';
+  const chartGrid = isLightTheme ? '#d7e0ea' : '#334155';
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -381,14 +386,14 @@ function UserSessions() {
       type: 'category',
       data: analytics.loginsByWeekday.map((item) => item.label),
       axisLine: { lineStyle: { color: '#6b7685' } },
-      axisLabel: { color: '#93a1b2' },
+      axisLabel: { color: chartText },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.16)' } },
-      axisLabel: { color: '#93a1b2' },
+      splitLine: { lineStyle: { color: chartGrid } },
+      axisLabel: { color: chartText },
     },
     series: [{
       type: 'bar',
@@ -399,7 +404,7 @@ function UserSessions() {
       },
       barMaxWidth: 26,
     }],
-  }), [analytics.loginsByWeekday]);
+  }), [analytics.loginsByWeekday, chartText, chartGrid]);
 
   const hourlyPeaksOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
@@ -408,13 +413,13 @@ function UserSessions() {
       type: 'category',
       data: analytics.loginsByHour.map((item) => item.label),
       axisLine: { lineStyle: { color: '#6b7685' } },
-      axisLabel: { color: '#93a1b2' },
+      axisLabel: { color: chartText },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.16)' } },
-      axisLabel: { color: '#93a1b2' },
+      splitLine: { lineStyle: { color: chartGrid } },
+      axisLabel: { color: chartText },
     },
     series: [{
       type: 'line',
@@ -422,15 +427,14 @@ function UserSessions() {
       data: analytics.loginsByHour.map((item) => item.count),
       lineStyle: { color: '#38bdf8', width: 3 },
       itemStyle: { color: '#38bdf8' },
-      areaStyle: { color: 'rgba(56,189,248,0.18)' },
     }],
-  }), [analytics.loginsByHour]);
+  }), [analytics.loginsByHour, chartText, chartGrid]);
 
   const dailyActivityOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
     legend: {
       top: 0,
-      textStyle: { color: '#93a1b2' },
+      textStyle: { color: chartText },
       data: ['Acessos', 'Interações'],
     },
     grid: { left: 38, right: 12, top: 30, bottom: 24 },
@@ -438,13 +442,13 @@ function UserSessions() {
       type: 'category',
       data: analytics.activityByDay.map((item) => item.label),
       axisLine: { lineStyle: { color: '#6b7685' } },
-      axisLabel: { color: '#93a1b2' },
+      axisLabel: { color: chartText },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.16)' } },
-      axisLabel: { color: '#93a1b2' },
+      splitLine: { lineStyle: { color: chartGrid } },
+      axisLabel: { color: chartText },
     },
     series: [
       {
@@ -464,7 +468,7 @@ function UserSessions() {
         itemStyle: { color: '#f59e0b' },
       },
     ],
-  }), [analytics.activityByDay]);
+  }), [analytics.activityByDay, chartText, chartGrid]);
 
   const topActionsRows = useMemo(() => analytics.interactionCategories, [analytics.interactionCategories]);
 
@@ -500,13 +504,10 @@ function UserSessions() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <div className="w-full max-w-[1250px] space-y-4">
           <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
-            <h2 className="text-[1.05rem] font-semibold text-text">Horário de sessões dos usuários</h2>
-            <p className="mt-1 text-sm text-muted">
-              Visualização exclusiva para o perfil Administrador geral.
-            </p>
+            <OperationalPageIntro title="Horários e sessões" description="Acompanhe os acessos da equipe e a conexão do WhatsApp." />
             <p className="mt-1 text-xs text-muted">
               Visão ativa: {USER_GROUP_LABELS[selectedUserGroup]}. {audienceDescription}
             </p>
@@ -514,7 +515,7 @@ function UserSessions() {
               <div className="min-w-[220px] flex-1">
                 <p className="text-sm font-semibold text-text">Bot de leitura do WhatsApp</p>
                 <p className="mt-1 text-xs text-muted">
-                  Reinicia apenas o serviço do leitor do grupo no Hetzner, sem reiniciar a VPS inteira.
+                  Use se o bot parar de acompanhar as fotos no grupo. A conexão será retomada após o reinício.
                 </p>
               </div>
               <button
@@ -535,7 +536,7 @@ function UserSessions() {
               </button>
             </div>
             {botActionMessage ? (
-              <p className={`mt-2 text-sm ${botActionMessage.toLowerCase().includes('nao foi possivel') || botActionMessage.toLowerCase().includes('falha') ? 'text-rose-400' : 'text-emerald-400'}`}>
+              <p className={`mt-2 text-sm ${botActionMessage.toLowerCase().includes('nao foi possivel') || botActionMessage.toLowerCase().includes('falha') ? 'text-[color:var(--semantic-danger-text)]' : 'text-[color:var(--semantic-success-text)]'}`}>
                 {botActionMessage}
               </p>
             ) : null}
@@ -548,7 +549,7 @@ function UserSessions() {
                   setSelectedUserGroup(nextValue);
                   setSelectedUserId('');
                 }}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               >
                 <option value="kp">Operação KP</option>
                 <option value="control_tower">Torre de Controle (MAR E RIO)</option>
@@ -557,7 +558,7 @@ function UserSessions() {
               <select
                 value={selectedUserId}
                 onChange={(event) => setSelectedUserId(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               >
                 <option value="">Todos os usuários</option>
                 {users.map((user) => (
@@ -571,14 +572,14 @@ function UserSessions() {
                 type="date"
                 value={fromDate}
                 onChange={(event) => setFromDate(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
 
               <input
                 type="date"
                 value={toDate}
                 onChange={(event) => setToDate(event.target.value)}
-                className="h-10 rounded-sm border border-accent/35 bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="h-10 rounded-sm border border-border bg-surface-2 px-3 text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
               />
 
               <button
@@ -592,44 +593,44 @@ function UserSessions() {
             </div>
 
             {errorMessage ? (
-              <p className="mt-3 text-sm text-rose-400">{errorMessage}</p>
+              <p className="mt-3 text-sm text-[color:var(--semantic-danger-text)]">{errorMessage}</p>
             ) : null}
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Acessos no período</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.logins}</p>
             </div>
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Interações registradas</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.interactions}</p>
               <p className="mt-1 text-[11px] text-muted">Eventos de auditoria no período: {analytics.totals.auditEvents || 0}</p>
             </div>
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted">Sessões ativas</p>
               <p className="mt-1 text-2xl font-semibold text-text">{analytics.totals.activeSessions}</p>
             </div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <h3 className="text-sm font-semibold text-text">Picos semanais de acesso</h3>
               <ReactECharts option={weeklyLoginsOption} style={{ height: 260 }} notMerge lazyUpdate />
             </div>
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <h3 className="text-sm font-semibold text-text">Picos por horário</h3>
               <ReactECharts option={hourlyPeaksOption} style={{ height: 260 }} notMerge lazyUpdate />
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface p-3">
+          <div className="rounded-md border border-border bg-surface p-3">
             <h3 className="text-sm font-semibold text-text">Acessos x interações por dia</h3>
             <ReactECharts option={dailyActivityOption} style={{ height: 300 }} notMerge lazyUpdate />
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <h3 className="mb-2 text-sm font-semibold text-text">Ações com mais interações</h3>
               <div className="max-h-[260px] overflow-auto">
                 <table className="min-w-[420px]">
@@ -657,7 +658,7 @@ function UserSessions() {
               </div>
             </div>
 
-            <div className="rounded-md border border-white/10 bg-surface p-3">
+            <div className="rounded-md border border-border bg-surface p-3">
               <h3 className="mb-2 text-sm font-semibold text-text">Usuários com mais logins</h3>
               <div className="max-h-[260px] overflow-auto">
                 <table className="min-w-[420px]">
@@ -686,7 +687,7 @@ function UserSessions() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface p-3">
+          <div className="rounded-md border border-border bg-surface p-3">
             <h3 className="mb-2 text-sm font-semibold text-text">Usuários com mais interações de negócio</h3>
             <div className="max-h-[260px] overflow-auto">
               <table className="min-w-[420px]">
@@ -714,7 +715,7 @@ function UserSessions() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-surface p-3">
+          <div className="rounded-md border border-border bg-surface p-3">
             <h3 className="mb-2 text-sm font-semibold text-text">Para quê cada usuário usa mais o sistema</h3>
             <div className="max-h-[320px] overflow-auto">
               <table className="min-w-[720px]">
@@ -791,7 +792,7 @@ function UserSessions() {
                 type="button"
                 onClick={() => setCurrentSessionsPage((current) => Math.max(1, current - 1))}
                 disabled={loading || currentSessionsPage <= 1}
-                className="h-8 rounded-md border border-white/15 bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 rounded-md border border-border bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Anterior
               </button>
@@ -800,7 +801,7 @@ function UserSessions() {
                 type="button"
                 onClick={() => setCurrentSessionsPage((current) => Math.min(totalSessionsPages, current + 1))}
                 disabled={loading || currentSessionsPage >= totalSessionsPages}
-                className="h-8 rounded-md border border-white/15 bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-8 rounded-md border border-border bg-surface px-3 text-text disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Próxima
               </button>

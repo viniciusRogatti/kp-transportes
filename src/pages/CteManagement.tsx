@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -459,16 +460,12 @@ function CteManagement() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <div className="w-full max-w-[1180px] space-y-4">
           <section className="rounded-xl border border-border bg-card p-4 shadow-soft">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h1 className="text-xl font-semibold text-text">Gestão operacional de CT-e</h1>
-                <p className="mt-1 max-w-[780px] text-sm text-muted">
-                  Esta fase cobre configuração por empresa, certificado A1, pré-cálculo do frete e criação de rascunho.
-                  A transmissão para SEFAZ e o relatório XLSX final ainda dependem da próxima etapa e do modelo real da planilha.
-                </p>
+                <OperationalPageIntro title="Gestão de CT-e" description="Configure os dados da empresa, confira o frete e prepare os documentos." />
               </div>
               <div className="min-w-[220px]">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted">Empresa</label>
@@ -479,7 +476,7 @@ function CteManagement() {
                 >
                   {companies.map((company) => (
                     <option key={company.id} value={company.id}>
-                      {`${company.name} (${company.code})`}
+                      {company.name}
                     </option>
                   ))}
                 </select>
@@ -489,15 +486,14 @@ function CteManagement() {
             {selectedCompany ? (
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
                 <span className="rounded-full border border-border bg-surface px-3 py-1">{`CNPJ base: ${selectedCompany.tax_id || '-'}`}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1">{`Permissão: ${permission}`}</span>
                 <span className="rounded-full border border-border bg-surface px-3 py-1">
                   {isAdminManager ? 'Pode editar configuração e certificado' : 'Pode gerar prévia e rascunho'}
                 </span>
               </div>
             ) : null}
 
-            {successMessage ? <p className="mt-3 text-sm text-emerald-400">{successMessage}</p> : null}
-            {errorMessage ? <p className="mt-2 text-sm text-rose-400">{errorMessage}</p> : null}
+            {successMessage ? <p className="mt-3 text-sm text-[color:var(--semantic-success-text)]">{successMessage}</p> : null}
+            {errorMessage ? <p className="mt-2 text-sm text-[color:var(--semantic-danger-text)]">{errorMessage}</p> : null}
           </section>
 
           <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
@@ -596,7 +592,7 @@ function CteManagement() {
                   )}
                 </div>
 
-                <div className="mt-3 rounded-lg border border-border bg-surface p-3 text-sm">
+                <div className="mt-3 rounded-2xl border border-border bg-card p-4 text-sm">
                   <p><strong>Atual:</strong> {certificateInfo?.file_name || 'Nenhum certificado ativo'}</p>
                   <p><strong>Validade:</strong> {certificateInfo?.valid_until || '-'}</p>
                   <p><strong>Alerta:</strong> {certificateInfo?.expires_in_days !== null && certificateInfo?.expires_in_days !== undefined ? `${certificateInfo.expires_in_days} dia(s)` : 'Sem data informada'}</p>
@@ -683,7 +679,7 @@ function CteManagement() {
                   {!recentCtes.length ? (
                     <p className="text-sm text-muted">Nenhum CT-e encontrado para a empresa selecionada.</p>
                   ) : recentCtes.map((cte) => (
-                    <div key={cte.id} className="rounded-lg border border-border bg-surface p-3">
+                    <div key={cte.id} className="rounded-2xl border border-border bg-card p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-text">
@@ -787,9 +783,9 @@ function CteManagement() {
                   <div className="rounded-lg border border-border bg-surface p-4">
                     <h3 className="text-base font-semibold text-text">Alertas da prévia</h3>
                     {!preview.warnings.length ? (
-                      <p className="mt-2 text-sm text-emerald-400">Nenhum alerta crítico encontrado para a fase operacional.</p>
+                      <p className="mt-2 text-sm text-[color:var(--semantic-success-text)]">Nenhum alerta crítico encontrado para a fase operacional.</p>
                     ) : (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-300">
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[color:var(--semantic-warning-text)]">
                         {preview.warnings.map((warning) => (
                           <li key={warning}>{warning}</li>
                         ))}
@@ -801,15 +797,7 @@ function CteManagement() {
             )}
           </section>
 
-          <section className="rounded-xl border border-border bg-card p-4 shadow-soft">
-            <h2 className="text-lg font-semibold text-text">O que ainda não está nesta etapa</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>Assinatura do XML CT-e 4.00 com o certificado e transmissão para a SEFAZ.</li>
-              <li>Tratamento completo de rejeições, cancelamento, substituição e complementação fiscal.</li>
-              <li>Geração fiel do XLSX de canhotos com base no arquivo real `rel_globalizado_942.xlsx`.</li>
-              <li>Leitura automática da validade do PFX/P12 sem apoio de biblioteca específica.</li>
-            </ul>
-          </section>
+          <aside className="rounded-xl border semantic-panel-warning p-4 text-sm"><strong>Disponível para preparação</strong><p className="mt-1">A emissão e transmissão à SEFAZ ainda não estão disponíveis. Os documentos gerados aqui são rascunhos.</p></aside>
         </div>
       </Container>
       {loading ? <div className="fixed bottom-4 right-4 rounded-full border border-border bg-card px-4 py-2 text-xs text-muted shadow-soft">Atualizando CT-e...</div> : null}

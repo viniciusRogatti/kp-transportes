@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router';
@@ -594,11 +595,10 @@ function FileUploadPage() {
   return (
     <div>
       <Header />
-      <Container className="pb-s3 max-[768px]:pb-s3">
+      <Container className="operation-page pb-s3 max-[768px]:pb-s3">
         <div className="w-full max-w-[1200px] space-y-3">
           <div className="rounded-lg border border-border bg-surface p-4 shadow-soft">
-            <h2 className="text-[1.1rem] font-semibold text-text">Importação de XML</h2>
-            <p className="mt-1 text-sm text-muted">Arraste arquivos, acompanhe o processamento e consulte o relatório completo.</p>
+            <OperationalPageIntro title="Importação de XML" description="Envie as notas fiscais e acompanhe o resultado de cada arquivo." />
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-border bg-card p-3">
                 <p className="text-[0.72rem] uppercase tracking-wide text-muted">Selecionados</p>
@@ -706,7 +706,7 @@ function FileUploadPage() {
             )}
           </div>
 
-          <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
             <button
               type="button"
               onClick={() => setIsQueueOpen((previous) => !previous)}
@@ -738,32 +738,32 @@ function FileUploadPage() {
           </div>
 
           {report && (
-            <div className="rounded-lg border border-border bg-surface p-3 shadow-soft">
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'summary' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'summary' ? 'border-border bg-surface-2 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('summary')}
                 >
                   Resumo
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'success' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'success' ? 'border-border bg-surface-2 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('success')}
                 >
                   Sucessos
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'errors' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'errors' ? 'border-border bg-surface-2 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('errors')}
                 >
                   Erros
                 </button>
                 <button
                   type="button"
-                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'products' ? 'border-accent/60 bg-accent/20 text-text' : 'border-border bg-card text-muted'}`}
+                  className={`h-9 rounded-md border px-3 text-sm font-semibold ${activeTab === 'products' ? 'border-border bg-surface-2 text-text' : 'border-border bg-card text-muted'}`}
                   onClick={() => setActiveTab('products')}
                 >
                   Novos produtos
@@ -866,7 +866,7 @@ function FileUploadPage() {
                           setAliasSaveError('');
                           setAliasSaveSuccess('');
                         }}
-                        className={`w-full rounded-xl border px-3 py-3 text-left ${isActive ? 'border-accent/60 bg-accent/15' : 'border-border bg-card'}`}
+                        className={`w-full rounded-xl border px-3 py-3 text-left ${isActive ? 'border-border bg-surface-2' : 'border-border bg-card'}`}
                       >
                         <p className="text-sm font-semibold text-text">{candidate.issuerName}</p>
                         <p className="mt-1 text-xs text-muted">{formatTaxId(candidate.issuerDocument)}</p>
@@ -949,7 +949,7 @@ function FileUploadPage() {
                   </button>
                 </div>
 
-                <div className="rounded-lg border border-border bg-surface p-3 text-xs text-muted">
+                <div className="rounded-2xl border border-border bg-card p-4 text-xs text-muted">
                   Depois do cadastro, use o botão "Reenviar apenas com erro" para tentar novamente os XMLs que falharam.
                 </div>
               </div>

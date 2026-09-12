@@ -181,20 +181,20 @@ function AlertsPage() {
                 <span className="text-muted">Encontrados</span>
                 <strong className="ml-2 text-text">{summary.total}</strong>
               </div>
-              <div className="rounded-md border semantic-panel-warning px-3 py-2 text-sm">
+              <div className="rounded-md border border-border border-l-[3px] border-l-[color:var(--semantic-warning-border)] bg-card px-3 py-2 text-sm text-text">
                 <span>Pendentes</span><strong className="ml-2">{summary.open}</strong>
               </div>
-              <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
+              <div className="rounded-md border border-border border-l-[3px] border-l-[color:var(--semantic-danger-border)] bg-card px-3 py-2 text-sm text-text">
                 <span>Críticos</span><strong className="ml-2">{summary.critical}</strong>
               </div>
-              <div className="rounded-md border semantic-panel-success px-3 py-2 text-sm">
+              <div className="rounded-md border border-border border-l-[3px] border-l-[color:var(--semantic-success-border)] bg-card px-3 py-2 text-sm text-text">
                 <span>Resolvidos</span><strong className="ml-2">{summary.resolved}</strong>
               </div>
             </div>
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-4">
-            <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(260px,1.5fr)_165px_180px_174px_174px_auto]">
+            <form onSubmit={handleSearch} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,1fr))_auto] [&>*]:min-w-0">
               <label className="relative">
                 <span className="sr-only">Pesquisar</span>
                 <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted" />
@@ -202,14 +202,14 @@ function AlertsPage() {
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
                   placeholder="NF, título, descrição ou código"
-                  className="h-9 w-full rounded-md border border-border bg-card pl-9 pr-3 text-sm text-text"
+                  className="h-10 w-full min-w-0 rounded-md border border-border bg-card pl-9 pr-3 text-sm text-text"
                 />
               </label>
               <select
                 aria-label="Situação"
                 value={filters.status}
                 onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as AlertHistoryFilters['status'] }))}
-                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-10 w-full min-w-0 rounded-md border border-border bg-card px-2 text-sm text-text"
               >
                 <option value="ALL">Todas as situações</option>
                 <option value="OPEN">Pendentes</option>
@@ -219,7 +219,7 @@ function AlertsPage() {
                 aria-label="Severidade"
                 value={filters.severity}
                 onChange={(event) => setFilters((current) => ({ ...current, severity: event.target.value as AlertHistoryFilters['severity'] }))}
-                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-10 w-full min-w-0 rounded-md border border-border bg-card px-2 text-sm text-text"
               >
                 <option value="ALL">Todas as severidades</option>
                 <option value="CRITICAL">Crítico</option>
@@ -232,7 +232,7 @@ function AlertsPage() {
                 title="Data inicial"
                 value={filters.from}
                 onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
-                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-10 w-full min-w-0 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
               <input
                 type="date"
@@ -240,9 +240,9 @@ function AlertsPage() {
                 title="Data final"
                 value={filters.to}
                 onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
-                className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
+                className="h-10 w-full min-w-0 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
-              <button type="submit" className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-text-accent hover:bg-surface-2">
+              <button type="submit" className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-accent-strong bg-accent px-3 text-sm font-semibold text-white hover:bg-accent-strong">
                 <Search className="h-4 w-4" /> Pesquisar
               </button>
             </form>
@@ -252,7 +252,7 @@ function AlertsPage() {
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-4">
-            {error ? <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">{error}</div> : null}
+            {error ? <div className="rounded-md border border-border border-l-[3px] border-l-[color:var(--semantic-danger-border)] bg-card px-3 py-2 text-sm text-text">{error}</div> : null}
             {loading && !hasLoaded ? (
               <p className="text-sm text-muted">Carregando alertas...</p>
             ) : !rows.length ? (

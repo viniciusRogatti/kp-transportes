@@ -129,7 +129,7 @@ function App() {
   }, []);
 
   return (
-    <div className={isControlTowerRoute ? undefined : 'professional-ui'}>
+    <div className={isControlTowerRoute || isLoginRoute ? undefined : 'professional-ui'}>
       <RealtimeNotificationsProvider token={realtimeToken}>
         <TutorialProvider>
           <GlobalAlertHost />

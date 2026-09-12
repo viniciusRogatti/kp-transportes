@@ -1,41 +1,29 @@
-# Assinatura visual do login KP
+# Login KP — O próximo destino começa aqui
 
-## Conceito
+## Composição
 
-O login combina **Fluxo Logístico Vivo** e **Documento em Movimento**. A fotografia não ocupa uma coluna: ela é recortada como uma janela operacional, atravessada por uma linha contínua e parcialmente coberta por uma folha de acesso em múltiplos planos.
+O login usa a referência de cartão dividido: uma fotografia da frota à esquerda e um painel de acesso branco à direita, com cantos arredondados e moldura contínua. Um panorama gerado a partir da foto do Volvo continua o galpão à direita e preenche todo o fundo, conectando o cartão à página sem área branca externa. A fotografia original permanece dentro do cartão. O arquivo e o prompt de geração estão documentados em `login-background-generation.md`.
 
-O conjunto representa o ciclo real do sistema:
+O Volvo original é preservado, incluindo o ângulo, as cores e os detalhes da frota. O enquadramento responsivo e a sobreposição em degradê são feitos em CSS. As imagens WebP existentes são selecionadas com `srcSet`, com fallback em PNG.
 
-1. entrada do documento;
-2. organização da operação;
-3. formação da rota;
-4. confirmação da entrega;
-5. retorno do comprovante;
-6. registro auditável.
+A paleta própria do login combina branco, azul e grafite, independentemente do tema salvo para o ambiente autenticado. A preferência de tema do usuário não é alterada.
 
-## Elemento exclusivo
+## Conteúdo e comportamento
 
-A **Linha de Retorno KP** é um SVG com seis pontos ligados por avanços, retornos e mudanças de nível. Ela não representa um mapa literal. O desenho resume visualmente o movimento de ida da carga e a volta da informação até o registro final.
+- A fotografia e a mensagem “O próximo destino começa aqui.” apresentam a marca.
+- O título principal “Bom ter você de volta.” conduz ao formulário.
+- Usuário, senha, visualização da senha, CAPTCHA, erros e estados de carregamento mantêm o fluxo de autenticação existente.
+- “Precisa de ajuda para entrar?” expande uma orientação real para procurar o administrador da empresa.
+- O rodapé identifica a plataforma e a versão configurada.
 
-O índice vertical `KP 01—06`, preso à folha de acesso, conecta o formulário aos seis pontos e permite que a assinatura seja reutilizada futuramente sem depender da fotografia.
+## Responsividade e acessibilidade
 
-## Profundidade e interação
+Em telas de até 760 px, a fotografia vira uma faixa superior. Em telas baixas, essa faixa vira um cabeçalho fotográfico compacto com a marca antes do encaixe; o formulário ganha prioridade de espaço. O cartão preserva sua composição e é dimensionado proporcionalmente para caber inteiro na área disponível, sem rolagem vertical, horizontal ou interna.
 
-- plano de fundo: grade técnica e luz ambiente;
-- plano intermediário: fotografia recortada, borda deslocada e linha operacional;
-- primeiro plano: folha de acesso com duas cópias deslocadas, como documentos em processamento;
-- tráfego operacional: três caminhões vistos de cima percorrem a Linha de Retorno KP com velocidade igual e espaçamento de um terço do circuito, evitando encontros e reforçando a leitura da linha como pista;
-- controle contextual: clicar na pista ou nos caminhões mantém o tráfego pausado; aproximar o ponteiro pausa temporariamente; digitar uma credencial libera novamente a circulação;
-- foco em usuário e senha: avança a linha e destaca os pontos correspondentes;
-- validação: percorre o restante do circuito;
-- sucesso: conclui a linha em verde antes da navegação disponível no mesmo ciclo de renderização.
+Um `ResizeObserver` mede a zona disponível e as dimensões naturais do cartão, ajustando a escala quando o CAPTCHA, um erro ou a ajuda alteram sua altura. A viewport visual também é acompanhada para mudanças de tamanho, orientação, zoom e abertura do teclado. A trava de rolagem é removida ao sair do login.
 
-## Acessibilidade e fallback
+O CAPTCHA usa tema claro e alterna entre tamanho normal e compacto conforme a largura natural disponível, mantendo validação e reset de tokens. Campos usam 16 px no layout mobile; em espaços muito pequenos o cartão inteiro é reduzido para cumprir o requisito de permanecer sem rolagem.
 
-A narrativa visual é decorativa e não interfere na ordem de leitura. O SVG fica oculto para tecnologias assistivas e possui uma descrição textual equivalente. Campos, erros, botão de senha e envio preservam rótulos e estados acessíveis.
+Os campos têm rótulos, autocomplete, estados inválidos e descrição dos erros. Controles têm foco visível e os elementos decorativos ficam ocultos de tecnologias assistivas. A página tem um único h1, e o hero usa h2. Animações respeitam `prefers-reduced-motion`.
 
-Com `prefers-reduced-motion`, os caminhões móveis são ocultados e a pista permanece estática. O comando da pista possui rótulo acessível e também aceita teclado. Sem suporte a recorte, mistura de cores ou filtros, a fotografia e a folha continuam legíveis em planos retangulares. Nenhuma biblioteca gráfica, canvas ou WebGL é utilizada.
-
-## Mobile
-
-No celular, o recorte vira uma janela vertical. A folha invade a borda inferior da cena e mantém o índice `01—06`, formando uma única composição. Os caminhões recebem compensação de escala para continuarem reconhecíveis na pista comprimida e podem ser pausados por toque. O formulário permanece em fluxo normal para permitir rolagem e acomodar CAPTCHA, teclado virtual e mensagens de erro.
+Os estilos estão isolados em `src/style/Login/login.css`; os estilos da composição anterior foram removidos do CSS global.

@@ -50,22 +50,11 @@ describe('Login', () => {
 
   it('renderiza a identidade logística e os campos acessíveis', () => {
     renderLogin();
-    expect(screen.getByRole('heading', { name: 'Controle, rastreabilidade e eficiência em cada operação.' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Bem-vindo à operação' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'O próximo destino começa aqui.' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Bom ter você de volta.' })).toBeInTheDocument();
     expect(screen.getByLabelText('Usuário')).toHaveAttribute('autocomplete', 'username');
     expect(screen.getByLabelText('Senha')).toHaveAttribute('autocomplete', 'current-password');
     expect(screen.getByAltText('Caminhão Volvo da frota em ambiente operacional')).toBeInTheDocument();
-  });
-
-  it('pausa a rota ao clicar e libera os caminhões ao digitar', async () => {
-    renderLogin();
-    const route = screen.getByRole('button', { name: 'Pausar caminhões da rota' });
-    const scene = route.closest('section');
-    expect(scene).toHaveAttribute('data-traffic-paused', 'false');
-    await userEvent.click(route);
-    expect(scene).toHaveAttribute('data-traffic-paused', 'true');
-    await userEvent.type(screen.getByLabelText('Usuário'), 'o');
-    expect(scene).toHaveAttribute('data-traffic-paused', 'false');
   });
 
   it('valida os dois campos sem enviar credenciais vazias', () => {

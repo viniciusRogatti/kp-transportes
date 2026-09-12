@@ -1,0 +1,10 @@
+# Fundo panorâmico do login KP
+
+- Ferramenta: `image_gen` integrado ao Codex (skill `imagegen`).
+- Imagem de entrada: `src/assets/images/Volvo.png`.
+- Arquivo gerado: `src/assets/images/volvo-warehouse-panorama-v1.png`.
+- Uso: fundo contínuo da página, atrás do cartão de login. A fotografia original permanece dentro do cartão.
+
+## Prompt final
+
+Use case: compositing / photographic outpainting. Asset type: wide website background image, not a website mockup. Input image 1 is the edit target, an actual Volvo delivery truck photograph in an industrial warehouse. Extend this exact scene to the RIGHT into one continuous photorealistic widescreen panorama, aspect ratio 16:9, high resolution. Preserve the original recognizable gray Volvo truck, its exact three-quarter low angle, British flag on the cab, body and refrigerated box, original colors and proportions, on the LEFT HALF. Do not replace, redesign, duplicate or move the truck into the right half. The RIGHT HALF should be a credible uninterrupted continuation of the same warehouse: dark corrugated metal ceiling, overhead steel structure and long slanted skylights matching the original perspective/camera roll and warm daylight direction, industrial back wall, distant neatly placed warehouse pallets, and textured concrete floor with soft reflections. Match the source's cool graphite/navy shadows, subtle warm skylight highlights and realistic materials. No bright white void anywhere, no white backdrop, no gradient to white: fill the full canvas edge to edge with the connected warehouse interior. Keep the RIGHT HALF relatively quiet and architectural, so a white login card can sit on top; do not draw that card or any UI. The roof structures and concrete floor must connect naturally across the center with consistent vanishing point, camera tilt and exposure. Maintain the cinematic, authentic photograph quality. No extra vehicles, no people, no added text, no graphics, no watermarks. Return only the final photographic background.

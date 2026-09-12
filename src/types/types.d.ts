@@ -351,6 +351,8 @@ export interface IReceiptBacklogRouteHistoryRow {
 }
 
 export interface IReceiptBacklogRow {
+  company_id?: number;
+  company_name?: string | null;
   queue_type: ReceiptBacklogQueueType;
   nf_id: string;
   invoice_number: string;

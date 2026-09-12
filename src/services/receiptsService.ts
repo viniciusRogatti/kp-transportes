@@ -17,6 +17,7 @@ type ReceiptListFilters = {
   startDate?: string;
   endDate?: string;
   limit?: number;
+  offset?: number;
   queueType?: string;
 };
 
@@ -28,6 +29,7 @@ const toQueryParams = (filters: ReceiptListFilters = {}) => {
   if (filters.startDate) params.set('startDate', filters.startDate);
   if (filters.endDate) params.set('endDate', filters.endDate);
   if (typeof filters.limit === 'number') params.set('limit', String(filters.limit));
+  if (typeof filters.offset === 'number') params.set('offset', String(filters.offset));
   if (filters.queueType) params.set('queueType', filters.queueType);
 
   return params;

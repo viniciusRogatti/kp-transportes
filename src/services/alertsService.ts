@@ -11,6 +11,7 @@ type AlertsFilters = {
   code?: string;
   nf?: string;
   limit?: number;
+  offset?: number;
 };
 
 export async function listAlerts(filters: AlertsFilters = {}): Promise<IAlertsListResponse> {
@@ -44,6 +45,7 @@ export type AlertHistoryFilters = {
   from?: string;
   to?: string;
   limit?: number;
+  offset?: number;
 };
 
 export async function listAlertHistory(filters: AlertHistoryFilters = {}): Promise<IAlertHistoryResponse> {
@@ -56,7 +58,16 @@ export async function listAlertHistory(filters: AlertHistoryFilters = {}): Promi
 
   const suffix = params.toString();
   const { data } = await axios.get<IAlertHistoryResponse>(`${API_URL}/api/alerts/history${suffix ? `?${suffix}` : ''}`);
-  return data;
+  const rows = [...(data.rows || [])];
+  while (rows.length < Number(data.available || 0)) {
+    params.set('offset', String(rows.length));
+    const next = await axios.get<IAlertHistoryResponse>(`${API_URL}/api/alerts/history?${params.toString()}`);
+    const seen = new Set(rows.map((row) => row.id));
+    const extra = (next.data.rows || []).filter((row) => !seen.has(row.id));
+    if (!extra.length) throw new Error('A lista de alertas está incompleta. Atualize o backend e tente novamente.');
+    rows.push(...extra);
+  }
+  return { ...data, rows, total: rows.length };
 }
 
 export async function resolveAlertHistoryRow(source: 'ALERT' | 'NOTIFICATION', recordId: number): Promise<void> {

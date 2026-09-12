@@ -1,15 +1,15 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import imageCompression from 'browser-image-compression';
 import {
   ArrowRight,
   ClipboardCheck,
   RefreshCcw,
   Search,
-  UploadCloud,
   X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import CentralBotAlerts from '../components/CentralBotAlerts';
 import Badge from '../components/ui/Badge';
 import Header from '../components/Header';
 import MissingCargoOccurrenceDetails from '../components/occurrences/MissingCargoOccurrenceDetails';
@@ -19,7 +19,6 @@ import {
   listDriversForReceiptFilters,
   listReceiptBacklog,
   resolveIncorrectInvoiceReceiptNotification,
-  uploadReceipt,
 } from '../services/receiptsService';
 import {
   IDriver,
@@ -46,24 +45,21 @@ import { getOccurrenceAgeDays, isTreatmentOverdue } from '../utils/operationalTr
 import { showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 
-type UploadPreviewReport = {
-  originalSizeKb: number;
-  finalSizeKb: number;
-  usedCompression: boolean;
-};
-
 type BacklogStatusUpdateState = {
+  companyId?: number;
   invoiceNumber: string;
   nextStatus: ManualStopStatus;
 };
 
 type BacklogStatusFeedback = {
+  companyId?: number;
   invoiceNumber: string;
   tone: SemanticTone;
   message: string;
 };
 
 type CancelledReplacementDraft = {
+  companyId?: number;
   invoiceNumber: string;
   tripNoteId: number;
   tripId: number | null;
@@ -93,8 +89,8 @@ const BACKLOG_TAB_CONFIG: Record<ReceiptBacklogQueueType, BacklogTabConfig> = {
     tone: 'warning',
   },
   returned: {
-    label: 'Devoluções fora de rota',
-    summaryLabel: 'Devoluções fora de rota',
+    label: 'Devoluções fora de lote',
+    summaryLabel: 'Devoluções fora de lote',
     emptyMessage: 'Nenhuma devolução aguardando inclusão em lote.',
     tone: 'danger',
   },
@@ -139,7 +135,7 @@ const getBacklogInvoiceKey = (row: IReceiptBacklogRow) => {
 const deduplicateBacklogRows = (backlogRows: IReceiptBacklogRow[]) => {
   const seenInvoiceKeys = new Set<string>();
   return backlogRows.filter((row) => {
-    const invoiceKey = getBacklogInvoiceKey(row);
+    const invoiceKey = `${row.company_id || ''}::${getBacklogInvoiceKey(row)}`;
     if (!invoiceKey || seenInvoiceKeys.has(invoiceKey)) return false;
     seenInvoiceKeys.add(invoiceKey);
     return true;
@@ -161,46 +157,6 @@ const formatDateTime = (value: string | number | null | undefined) => {
 const formatDateOnly = (value: string | null | undefined) => {
   return formatDateBR(value);
 };
-
-const toLocalDateInput = (date: Date) => {
-  const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60 * 1000));
-  return localDate.toISOString().slice(0, 10);
-};
-
-const todayDateInput = () => toLocalDateInput(new Date());
-
-async function prepareFileForUpload(file: File): Promise<{ file: File; report: UploadPreviewReport }> {
-  let finalFile: File = file;
-  let usedCompression = false;
-
-  try {
-    const compressedFile = await imageCompression(file, {
-      maxSizeMB: 5,
-      maxWidthOrHeight: 2500,
-      useWebWorker: true,
-      initialQuality: 0.9,
-      fileType: 'image/jpeg',
-      alwaysKeepResolution: false,
-    });
-
-    if (compressedFile.size < file.size) {
-      finalFile = compressedFile;
-      usedCompression = true;
-    }
-  } catch {
-    finalFile = file;
-    usedCompression = false;
-  }
-
-  return {
-    file: finalFile,
-    report: {
-      originalSizeKb: Number((file.size / 1024).toFixed(0)),
-      finalSizeKb: Number((finalFile.size / 1024).toFixed(0)),
-      usedCompression,
-    },
-  };
-}
 
 const getBacklogTabClassName = (tab: ReceiptBacklogQueueType, active: boolean) => (
   active ? getSemanticToneClassName(BACKLOG_TAB_CONFIG[tab].tone) : 'border-border bg-card text-text'
@@ -276,14 +232,18 @@ function OperationalPendencies() {
   const endDateInputRef = useRef<HTMLInputElement | null>(null);
   const occurrenceSectionRef = useRef<HTMLElement | null>(null);
 
-  const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType>(() => {
+  const [activeTab, setActiveTab] = useState<ReceiptBacklogQueueType | 'all' | 'occurrences' | 'alerts'>(() => {
     const requestedTab = initialSearchParams.get('tab') as ReceiptBacklogQueueType | null;
-    return requestedTab && requestedTab in BACKLOG_TAB_CONFIG ? requestedTab : 'redelivery';
+    return requestedTab && requestedTab in BACKLOG_TAB_CONFIG ? requestedTab : initialSearchParams.get('tab') === 'occurrences' ? 'occurrences' : 'all';
   });
   const [drivers, setDrivers] = useState<IDriver[]>([]);
   const [rows, setRows] = useState<IReceiptBacklogRow[]>([]);
   const [summary, setSummary] = useState<IReceiptBacklogSummary>(EMPTY_BACKLOG_SUMMARY);
   const [pendingOccurrences, setPendingOccurrences] = useState<IOccurrence[]>([]);
+  const [botAlertCount, setBotAlertCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [occurrenceError, setOccurrenceError] = useState('');
+  const requestIdRef = useRef(0);
   const [cutoffDate, setCutoffDate] = useState('');
   const [nfFilter, setNfFilter] = useState(() => String(initialSearchParams.get('nf') || '').replace(/\D/g, '').slice(0, 9));
   const [motoristaFilter, setMotoristaFilter] = useState('');
@@ -299,15 +259,8 @@ function OperationalPendencies() {
   const [replacementModalError, setReplacementModalError] = useState('');
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [uploadTarget, setUploadTarget] = useState<IReceiptBacklogRow | null>(null);
   const [uploadNfId, setUploadNfId] = useState('');
-  const [uploadTripId, setUploadTripId] = useState('');
-  const [uploadMotoristaId, setUploadMotoristaId] = useState('');
-  const [uploadDeliveryDate, setUploadDeliveryDate] = useState(todayDateInput());
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedPreviewUrl, setSelectedPreviewUrl] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [uploadReport, setUploadReport] = useState<UploadPreviewReport | null>(null);
   const [uploadError, setUploadError] = useState('');
 
   const selectedMotoristaFilterId = useMemo(() => {
@@ -353,9 +306,10 @@ function OperationalPendencies() {
         if (occurrence?.id) uniqueById.set(occurrence.id, occurrence);
       });
       setPendingOccurrences(Array.from(uniqueById.values()));
+      setOccurrenceError('');
     } catch (error) {
       console.error('Erro ao carregar ocorrencias abertas:', error);
-      setPendingOccurrences([]);
+      setOccurrenceError('Não foi possível carregar as ocorrências. Tente atualizar.');
     }
   }
 
@@ -370,24 +324,7 @@ function OperationalPendencies() {
     }, 150);
   }, [initialSearchParams]);
 
-  useEffect(() => () => {
-    if (selectedPreviewUrl) {
-      URL.revokeObjectURL(selectedPreviewUrl);
-    }
-  }, [selectedPreviewUrl]);
-
-  useEffect(() => {
-    if (!receiptCorrectionNotificationId) return;
-    setUploadTarget(null);
-    setUploadNfId('');
-    setUploadTripId('');
-    setUploadMotoristaId('');
-    setUploadDeliveryDate(todayDateInput());
-    setSelectedFile(null);
-    setUploadReport(null);
-    setUploadError('');
-    setIsUploadModalOpen(true);
-  }, [receiptCorrectionNotificationId]);
+  useEffect(() => { if (receiptCorrectionNotificationId) setIsUploadModalOpen(true); }, [receiptCorrectionNotificationId]);
 
   function openNativeDatePicker(input: HTMLInputElement | null) {
     if (!input) return;
@@ -399,7 +336,7 @@ function OperationalPendencies() {
   }
 
   async function loadBacklog(
-    tab: ReceiptBacklogQueueType = activeTab,
+    tab: ReceiptBacklogQueueType | 'all' | 'occurrences' | 'alerts' = activeTab,
     overrides: {
       nf?: string;
       motoristaId?: number | null;
@@ -407,51 +344,50 @@ function OperationalPendencies() {
       endDate?: string;
     } = {},
   ) {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setPageError('');
 
     try {
-      const response = await listReceiptBacklog({
-        queueType: tab,
+      const params = {
         nf: (overrides.nf ?? nfFilter).trim() || undefined,
         motoristaId: overrides.motoristaId !== undefined ? overrides.motoristaId : selectedMotoristaFilterId,
         startDate: (overrides.startDate ?? startDate) || undefined,
         endDate: (overrides.endDate ?? endDate) || undefined,
-        limit: 200,
-      });
-
-      const responseRows = Array.isArray(response?.rows) ? response.rows : [];
-      const uniqueRows = deduplicateBacklogRows(responseRows);
-      const duplicateCount = responseRows.length - uniqueRows.length;
-      const responseSummary = response?.summary || EMPTY_BACKLOG_SUMMARY;
-
-      setRows(uniqueRows);
-      setSummary(duplicateCount > 0
-        ? {
-          ...responseSummary,
-          [tab]: uniqueRows.length,
-          total: Math.max(0, Number(responseSummary.total || 0) - duplicateCount),
-        }
-        : responseSummary);
+        limit: 300,
+      };
+      let response = await listReceiptBacklog(params);
+      let allRows = Array.isArray(response?.rows) ? response.rows : [];
+      while (allRows.length < Number(response?.total || 0)) {
+        const next = await listReceiptBacklog({ ...params, offset: allRows.length });
+        const combined = deduplicateBacklogRows([...allRows, ...(next.rows || [])]);
+        if (combined.length === allRows.length) { setPageError('Parte das pendências não pôde ser carregada. Tente atualizar a lista.'); break; }
+        allRows = combined;
+      }
+      if (requestId !== requestIdRef.current) return;
+      setRows(deduplicateBacklogRows(allRows));
+      setSummary(response?.summary || EMPTY_BACKLOG_SUMMARY);
       setCutoffDate(String(response?.cutoff_date || ''));
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       console.error(error);
       if (handleAuthenticationError(error)) return;
       const apiMessage = getApiErrorMessage(error);
-      setPageError(apiMessage || 'Nao foi possivel carregar as pendencias operacionais de canhoto.');
+      setPageError(apiMessage || (error instanceof Error ? error.message : 'Não foi possível carregar as pendências.'));
       setRows([]);
       setSummary(EMPTY_BACKLOG_SUMMARY);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     loadBacklog(activeTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, []);
 
   async function handleSearch() {
+    setRefreshKey((key) => key + 1);
     await Promise.all([loadBacklog(activeTab), loadPendingOccurrences()]);
   }
 
@@ -471,144 +407,13 @@ function OperationalPendencies() {
     ]);
   }
 
-  function openUploadModal(row: IReceiptBacklogRow) {
-    setUploadTarget(row);
-    setUploadNfId(String(row.nf_id || row.invoice_number || '').trim());
-    setUploadTripId(row.trip_id ? String(row.trip_id) : '');
-    setUploadMotoristaId(row.motorista_id ? String(row.motorista_id) : '');
-    setUploadDeliveryDate(todayDateInput());
-    setSelectedFile(null);
-    setUploadReport(null);
-    setUploadError('');
-
-    if (selectedPreviewUrl) {
-      URL.revokeObjectURL(selectedPreviewUrl);
-      setSelectedPreviewUrl('');
-    }
-
-    setIsUploadModalOpen(true);
-  }
-
   function closeReplacementModal() {
     if (statusUpdate?.nextStatus === 'cancelled') return;
-    setCancelledReplacementDraft(null);
-    setReplacementInvoiceNumber('');
-    setReplacementReason('Refaturada');
-    setReplacementModalError('');
+    setCancelledReplacementDraft(null); setReplacementInvoiceNumber('');
+    setReplacementReason('Refaturada'); setReplacementModalError('');
   }
 
-  function closeUploadModal() {
-    setIsUploadModalOpen(false);
-    setUploadTarget(null);
-    setSelectedFile(null);
-    setUploadReport(null);
-    setUploadError('');
-
-    if (selectedPreviewUrl) {
-      URL.revokeObjectURL(selectedPreviewUrl);
-      setSelectedPreviewUrl('');
-    }
-  }
-
-  async function handleSelectFile(file: File | null) {
-    setUploadError('');
-    setUploadReport(null);
-
-    if (selectedPreviewUrl) {
-      URL.revokeObjectURL(selectedPreviewUrl);
-      setSelectedPreviewUrl('');
-    }
-
-    if (!file) {
-      setSelectedFile(null);
-      return;
-    }
-
-    if (!String(file.type || '').startsWith('image/')) {
-      setUploadError('Selecione um arquivo de imagem valido (JPG, PNG ou WEBP).');
-      setSelectedFile(null);
-      return;
-    }
-
-    setSelectedFile(file);
-    setSelectedPreviewUrl(URL.createObjectURL(file));
-  }
-
-  async function handleUploadSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedFile) {
-      setUploadError('Selecione uma foto do canhoto antes de enviar.');
-      return;
-    }
-
-    setUploading(true);
-    setUploadError('');
-
-    try {
-      const prepared = await prepareFileForUpload(selectedFile);
-      setUploadReport(prepared.report);
-
-      const formData = new FormData();
-      formData.append('file', prepared.file);
-
-      if (uploadNfId.trim()) formData.append('nfNumber', uploadNfId.trim());
-      if (uploadTripId.trim()) formData.append('rotaId', uploadTripId.trim());
-      if (uploadMotoristaId.trim()) formData.append('motoristaId', uploadMotoristaId.trim());
-      if (uploadDeliveryDate.trim()) formData.append('dataEntrega', uploadDeliveryDate.trim());
-
-      await uploadReceipt(formData);
-
-      if (receiptCorrectionNotificationId) {
-        await resolveIncorrectInvoiceReceiptNotification(
-          receiptCorrectionNotificationId,
-          uploadNfId.trim(),
-        );
-      }
-
-      closeUploadModal();
-      if (receiptCorrectionNotificationId) {
-        navigate('/operational-pendencies?tab=pending', { replace: true });
-      }
-      await loadBacklog(activeTab);
-    } catch (error) {
-      console.error(error);
-
-      if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status;
-        const payload = error.response?.data;
-        const errorCode = String(payload?.error || '');
-        const errorMessage = String(payload?.message || '');
-
-        if (statusCode === 422 && errorCode === 'NF_NOT_FOUND') {
-          setUploadError('NF nao encontrada para a empresa autenticada.');
-          return;
-        }
-
-        if (statusCode === 409 && errorCode === 'RECEIPT_ALREADY_EXISTS') {
-          setUploadError('A NF ja possui canhoto postado.');
-          return;
-        }
-
-        if (statusCode === 413) {
-          setUploadError('Arquivo muito grande. Tente uma foto menor (ate 12 MB).');
-          return;
-        }
-
-        if (statusCode === 415) {
-          setUploadError('Formato nao suportado. Use JPG, PNG ou WEBP.');
-          return;
-        }
-
-        setUploadError(errorMessage || 'Falha ao enviar canhoto.');
-        return;
-      }
-
-      setUploadError(error instanceof Error ? error.message : 'Falha ao enviar canhoto.');
-    } finally {
-      setUploading(false);
-    }
-  }
+  function closeUploadModal() { setIsUploadModalOpen(false); setUploadError(''); }
 
   async function handleReceiptCorrectionSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -630,7 +435,7 @@ function OperationalPendencies() {
         correctedInvoiceNumber,
       );
       closeUploadModal();
-      window.alert(`Correção registrada. Poste novamente a foto no grupo com a legenda NF ${correctedInvoiceNumber} para confirmar a entrega.`);
+      window.alert(`Correção registrada. Poste novamente a foto no grupo com somente ${correctedInvoiceNumber} na legenda para confirmar a entrega.`);
       navigate('/home', { replace: true });
     } catch (error) {
       console.error(error);
@@ -693,7 +498,7 @@ function OperationalPendencies() {
     const currentStatus = String(row.latest_stop_status || row.source_status || '').trim().toLowerCase() || 'pending';
     if (!canCorrectBacklogStatus(currentStatus, nextStatus)) {
       setStatusFeedback({
-        invoiceNumber: row.invoice_number,
+        invoiceNumber: row.invoice_number, companyId: row.company_id,
         tone: 'warning',
         message: 'Este status atual nao permite essa correcao manual.',
       });
@@ -703,7 +508,7 @@ function OperationalPendencies() {
     if (nextStatus === 'cancelled') {
       const operationalTarget = resolveBacklogOperationalTarget(row);
       setCancelledReplacementDraft({
-        invoiceNumber: row.invoice_number,
+        invoiceNumber: row.invoice_number, companyId: row.company_id,
         tripNoteId: operationalTarget.tripNoteId,
         tripId: operationalTarget.tripId,
         motoristaId: operationalTarget.motoristaId,
@@ -723,21 +528,21 @@ function OperationalPendencies() {
 
     if (!confirmed) return;
 
-    setStatusUpdate({ invoiceNumber: row.invoice_number, nextStatus });
+    setStatusUpdate({ invoiceNumber: row.invoice_number, companyId: row.company_id, nextStatus });
     setStatusFeedback(null);
 
     try {
       await submitBacklogStatusUpdate({ row, nextStatus });
       await loadBacklog(activeTab);
       setStatusFeedback({
-        invoiceNumber: row.invoice_number,
+        invoiceNumber: row.invoice_number, companyId: row.company_id,
         tone: 'success',
         message: `NF ${row.invoice_number} atualizada com sucesso para ${getManualStopStatusLabel(nextStatus)}.`,
       });
     } catch (error) {
       if (handleAuthenticationError(error)) return;
       setStatusFeedback({
-        invoiceNumber: row.invoice_number,
+        invoiceNumber: row.invoice_number, companyId: row.company_id,
         tone: 'danger',
         message: axios.isAxiosError(error)
           ? String(error.response?.data?.message || error.response?.data?.error || 'Nao foi possivel corrigir o status desta NF.')
@@ -766,14 +571,14 @@ function OperationalPendencies() {
       return;
     }
 
-    const row = rows.find((candidate) => candidate.invoice_number === cancelledReplacementDraft.invoiceNumber);
+    const row = rows.find((candidate) => candidate.invoice_number === cancelledReplacementDraft.invoiceNumber && candidate.company_id === cancelledReplacementDraft.companyId);
     if (!row) {
       setReplacementModalError('Nao foi possivel localizar a NF na lista atual.');
       return;
     }
 
     setStatusUpdate({
-      invoiceNumber: cancelledReplacementDraft.invoiceNumber,
+      invoiceNumber: cancelledReplacementDraft.invoiceNumber, companyId: cancelledReplacementDraft.companyId,
       nextStatus: 'cancelled',
     });
     setReplacementModalError('');
@@ -787,7 +592,7 @@ function OperationalPendencies() {
       });
       await loadBacklog(activeTab);
       setStatusFeedback({
-        invoiceNumber: cancelledReplacementDraft.invoiceNumber,
+        invoiceNumber: cancelledReplacementDraft.invoiceNumber, companyId: cancelledReplacementDraft.companyId,
         tone: 'success',
         message: `NF ${cancelledReplacementDraft.invoiceNumber} cancelada e vinculada à NF ${replacementInvoice}.`,
       });
@@ -809,30 +614,31 @@ function OperationalPendencies() {
   }
 
   const summaryCards: ReceiptBacklogQueueType[] = ['redelivery', 'unassigned', 'returned', 'retained', 'pending'];
-  const activeTabConfig = BACKLOG_TAB_CONFIG[activeTab];
+  const activeTabConfig = activeTab in BACKLOG_TAB_CONFIG ? BACKLOG_TAB_CONFIG[activeTab as ReceiptBacklogQueueType] : { label: 'Pendências de entrega', emptyMessage: 'Nenhuma pendência encontrada.', tone: 'info' as SemanticTone };
+  const visibleRows = rows.filter((row) => activeTab === 'all' || row.queue_type === activeTab);
   const visiblePendingOccurrences = pendingOccurrences.filter((occurrence) => (
-    !nfFilter || String(occurrence.invoice_number || '').includes(nfFilter)
+    (!nfFilter || String(occurrence.invoice_number || '').includes(nfFilter))
+    && (!selectedMotoristaFilterId || Number(occurrence.motorista_id) === selectedMotoristaFilterId)
+    && (!startDate || String(occurrence.trip_date || occurrence.created_at || '').slice(0, 10) >= startDate)
+    && (!endDate || String(occurrence.trip_date || occurrence.created_at || '').slice(0, 10) <= endDate)
   ));
 
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <div className="w-full max-w-[var(--content-max-width)] space-y-3">
-          <section className="rounded-md border border-border bg-surface p-3">
+          <section className="rounded-2xl border border-border bg-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-text">Central de Tratativas</h2>
-                <p className="text-sm text-muted">
-                  Ponto único de acompanhamento das ocorrências, rotas, devoluções e canhotos que exigem ação da expedição.
-                </p>
+                <OperationalPageIntro title="Central de Tratativas" description="Todas as pendências da operação, reunidas por assunto. Filtre para encontrar o que precisa de atenção." />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
-                  Base operacional desde {formatDateOnly(cutoffDate) || '-'}
+                  Dados desde {formatDateOnly(cutoffDate) || '-'}
                 </span>
                 <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold ${getSemanticToneClassName('info')}`}>
-                  {`Total em tratativa: ${summary.total + pendingOccurrences.length}`}
+                  {`Total em tratativa: ${summary.total + pendingOccurrences.length + botAlertCount}`}
                 </span>
                 <button
                   type="button"
@@ -844,7 +650,7 @@ function OperationalPendencies() {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_170px_170px_auto_auto]">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_180px_150px_150px_auto_auto]">
               <label className="text-xs text-muted">
                 NF
                 <input
@@ -896,7 +702,7 @@ function OperationalPendencies() {
               <button
                 type="button"
                 onClick={handleSearch}
-                className="h-9 self-end rounded-md border border-accent/50 bg-accent/10 px-3 text-sm font-semibold text-text-accent transition hover:bg-accent/20"
+                className="h-9 self-end rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-text-accent transition hover:bg-surface-2"
               >
                 <span className="inline-flex items-center gap-2"><Search className="h-4 w-4" /> Buscar</span>
               </button>
@@ -917,16 +723,18 @@ function OperationalPendencies() {
             ) : null}
           </section>
 
-          <section className="rounded-md border border-border bg-surface p-3">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          <section className="rounded-2xl border border-border bg-card p-4">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <button type="button" onClick={() => setActiveTab('all')} aria-pressed={activeTab === 'all'} className={`rounded-xl border p-3 text-left ${activeTab === 'all' ? 'semantic-solid-info' : 'border-border bg-card'}`}><p className="text-xs font-bold uppercase">Todas as pendências</p><p className="mt-1 text-2xl font-black">{summary.total + pendingOccurrences.length + botAlertCount}</p></button>
               <button
                 type="button"
-                onClick={() => occurrenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="rounded-md border border-accent/45 bg-accent/10 px-3 py-2 text-left text-text transition hover:bg-accent/15"
+                onClick={() => setActiveTab('occurrences')}
+                className="rounded-md border border-border bg-surface-2 px-3 py-2 text-left text-text transition hover:bg-surface-2"
               >
                 <p className="text-xs uppercase tracking-[0.12em]">Ocorrências abertas</p>
                 <p className="mt-1 text-2xl font-semibold">{pendingOccurrences.length}</p>
               </button>
+              <button type="button" onClick={() => setActiveTab('alerts')} aria-pressed={activeTab === 'alerts'} className="rounded-xl border border-border bg-card p-3 text-left font-bold">Alertas do bot <span className="mt-1 block text-2xl font-black">{botAlertCount}</span></button>
               {summaryCards.map((tab) => (
                 <button
                   key={`summary-${tab}`}
@@ -941,7 +749,7 @@ function OperationalPendencies() {
               ))}
             </div>
 
-            <section ref={occurrenceSectionRef} className="mt-3 scroll-mt-24 rounded-md border border-border bg-card p-3">
+            {['all', 'occurrences'].includes(activeTab) && <section ref={occurrenceSectionRef} className="mt-3 scroll-mt-24 rounded-md border border-border bg-card p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-text">
@@ -956,7 +764,7 @@ function OperationalPendencies() {
                 </Badge>
               </div>
 
-              {!visiblePendingOccurrences.length ? (
+              {occurrenceError ? <p role="alert" className="mt-3 text-sm">{occurrenceError}</p> : !visiblePendingOccurrences.length ? (
                 <p className="mt-3 text-sm text-muted">
                   {nfFilter ? 'Nenhuma ocorrência aberta encontrada para esta NF.' : 'Nenhuma ocorrência aberta no momento.'}
                 </p>
@@ -968,7 +776,7 @@ function OperationalPendencies() {
                     return (
                       <li
                         key={`central-occurrence-${occurrence.id}`}
-                        className={`rounded-md border p-3 ${isOverdue ? 'semantic-panel-danger' : 'border-border bg-surface'}`}
+                        className={`rounded-xl border p-4 ${isOverdue ? 'semantic-panel-danger' : 'border-border bg-surface'}`}
                       >
                         <div className="flex h-full flex-col gap-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -987,7 +795,7 @@ function OperationalPendencies() {
                           <button
                             type="button"
                             onClick={() => navigate(`/returns-occurrences?tab=occurrences&nf=${encodeURIComponent(occurrence.invoice_number || '')}`)}
-                            className="mt-auto inline-flex h-8 self-end items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-3 text-xs font-semibold text-text-accent hover:bg-accent/20"
+                            className="mt-auto inline-flex h-8 self-end items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-xs font-semibold text-text-accent hover:bg-surface-2"
                           >
                             Abrir tratativa <ArrowRight className="h-4 w-4" />
                           </button>
@@ -997,14 +805,14 @@ function OperationalPendencies() {
                   })}
                 </ul>
               )}
-            </section>
+            </section>}
 
-            <div className="mt-3 rounded-md border border-border bg-card p-3">
+            {!['occurrences', 'alerts'].includes(activeTab) && <div className="mt-3 rounded-md border border-border bg-card p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-text">{activeTabConfig.label}</h3>
                   <p className="text-xs text-muted">
-                    {activeTab === 'redelivery'
+                    {activeTab === 'all' ? 'Notas que precisam de ação. Consulte o motorista, a carga e a última viagem em cada card.' : activeTab === 'redelivery'
                       ? 'Reentregas aguardando inclusão em uma NOVA rota. Ao atribuir a rota, a NF sai desta fila.'
                       : activeTab === 'unassigned'
                         ? 'NFs abertas que ainda não receberam nenhuma rota ou motorista.'
@@ -1016,17 +824,17 @@ function OperationalPendencies() {
                   </p>
                 </div>
                 <Badge tone={activeTabConfig.tone} className="h-auto px-2 py-1 text-[11px]">
-                  {`${rows.length} NF(s) exibidas`}
+                  {`${visibleRows.length} NF(s) exibidas`}
                 </Badge>
               </div>
 
               {loading ? (
                 <p className="mt-3 text-sm text-muted">Carregando pendencias operacionais...</p>
-              ) : !rows.length ? (
+              ) : !visibleRows.length ? (
                 <p className="mt-3 text-sm text-muted">{activeTabConfig.emptyMessage}</p>
               ) : (
-                <ul className="mt-3 space-y-2">
-                  {rows.map((row) => {
+                <ul className="mt-3 grid gap-3 xl:grid-cols-2">
+                  {visibleRows.map((row) => {
                     const operationalStatus = row.latest_stop_status || row.source_status || '';
                     const ageDays = Number(row.age_days || 0);
                     const ageLabel = ageDays > 0 ? `${ageDays} dia(s) em aberto` : 'Movimento do dia';
@@ -1036,11 +844,11 @@ function OperationalPendencies() {
                     const availableStatusActions = canEditStatus
                       ? MANUAL_STOP_STATUS_ACTIONS.filter((action) => canCorrectBacklogStatus(normalizedOperationalStatus, action.status))
                       : [];
-                    const currentStatusUpdate = statusUpdate?.invoiceNumber === row.invoice_number ? statusUpdate : null;
-                    const currentStatusFeedback = statusFeedback?.invoiceNumber === row.invoice_number ? statusFeedback : null;
+                    const currentStatusUpdate = statusUpdate?.invoiceNumber === row.invoice_number && statusUpdate.companyId === row.company_id ? statusUpdate : null;
+                    const currentStatusFeedback = statusFeedback?.invoiceNumber === row.invoice_number && statusFeedback.companyId === row.company_id ? statusFeedback : null;
 
                     return (
-                      <li key={`${row.queue_type}-${row.invoice_number}-${row.trip_id || 'sem-rota'}`} className="rounded-md border border-border bg-surface p-3">
+                      <li key={`${row.company_id}-${row.queue_type}-${row.invoice_number}-${row.trip_id || 'sem-rota'}`} className="rounded-2xl border border-border bg-card p-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="space-y-1 text-xs">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1061,9 +869,9 @@ function OperationalPendencies() {
                               ) : null}
                             </div>
                             <p className="text-muted">{row.customer_name || 'Cliente nao informado'} · {row.city || '-'}</p>
-                            <p className="text-muted">Motorista: {row.motorista_name || '-'}</p>
+                            <p className="text-muted">{row.company_name || ''} · Motorista: {row.motorista_name || '-'}</p>
                             <p className="text-muted">Data NF: {formatDateOnly(row.invoice_date)} · Data rota: {formatDateOnly(row.trip_date || null)}</p>
-                            <p className="text-muted">Carga: {row.load_number || '-'} · Trip: {row.trip_id || '-'} · Rota: {row.rota_id || '-'}</p>
+                            <p className="text-muted">Carga: {row.load_number || '-'} · Viagem: {row.trip_id || '-'} · Rota: {row.rota_id || '-'}</p>
                             <p className="text-muted">Ultimo canhoto: {formatDateTime(row.receipt_created_at || null)}</p>
 
                             {Array.isArray(row.route_history) && row.route_history.length ? (
@@ -1102,7 +910,7 @@ function OperationalPendencies() {
                                           )}
                                         </div>
                                         <p className="mt-1 text-muted">
-                                          Motorista: {historyRow.motorista_name || '-'} · Trip: {historyRow.trip_id || '-'}
+                                          Motorista: {historyRow.motorista_name || '-'} · Viagem: {historyRow.trip_id || '-'}
                                         </p>
                                         <p className="text-muted">
                                           Registro: {formatDateTime(historyRow.updated_at || historyRow.created_at || null)}
@@ -1116,22 +924,7 @@ function OperationalPendencies() {
                           </div>
 
                           <div className="flex min-w-[180px] flex-col items-stretch gap-2">
-                            {row.can_upload ? (
-                              <button
-                                type="button"
-                                onClick={() => openUploadModal(row)}
-                                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border semantic-solid-info px-3 text-sm font-semibold transition hover:brightness-95"
-                              >
-                                <UploadCloud className="h-4 w-4" /> Enviar canhoto
-                              </button>
-                            ) : null}
-                            <div className="rounded-md border border-border bg-card px-3 py-2 text-[11px] text-muted">
-                              {row.can_upload
-                                ? 'Ao postar a foto, a fila sera atualizada automaticamente.'
-                                : row.queue_type === 'retained'
-                                  ? 'Este canhoto retido sai da fila quando a foto for postada.'
-                                : 'Esta NF esta visivel para controle, sem acao direta de upload nesta etapa.'}
-                            </div>
+                            <p className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">Publique a foto no grupo com somente o número da NF na legenda. O sistema atualiza a entrega automaticamente.</p>
                             {availableStatusActions.length ? (
                               <div className="rounded-md border border-border bg-card px-3 py-2">
                                 <p className="text-[11px] font-semibold text-text">Corrigir status</p>
@@ -1167,149 +960,20 @@ function OperationalPendencies() {
                   })}
                 </ul>
               )}
-            </div>
+            </div>}
+            <div hidden={!['all', 'alerts'].includes(activeTab)}><CentralBotAlerts nf={nfFilter} refreshKey={refreshKey} onCount={setBotAlertCount} /></div>
           </section>
         </div>
 
-        {isUploadModalOpen ? (
+        {isUploadModalOpen && receiptCorrectionNotificationId ? (
           <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/65 p-3">
-            <div className="w-full max-w-[720px] rounded-md border border-border bg-surface p-3 shadow-[var(--shadow-3)]">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-semibold text-text">
-                    {receiptCorrectionNotificationId ? 'Corrigir NF digitada no canhoto' : 'Enviar canhoto'}
-                  </h3>
-                  <p className="text-xs text-muted">
-                    {receiptCorrectionNotificationId
-                      ? `O motorista informou a NF ${receiptCorrectionReportedNf || 'incorreta'}. Informe a NF correta e depois publique novamente a foto no grupo com a legenda corrigida.`
-                      : `NF ${uploadTarget?.invoice_number || uploadNfId || '-'} · ajuste os campos e anexe a foto.`}
-                  </p>
-                </div>
-                <button type="button" onClick={closeUploadModal} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <form
-                onSubmit={receiptCorrectionNotificationId ? handleReceiptCorrectionSubmit : handleUploadSubmit}
-                className="mt-3 space-y-3"
-              >
-                {receiptCorrectionNotificationId ? (
-                  <div className="space-y-3">
-                    <div className="rounded-md border semantic-panel-info px-3 py-2 text-sm">
-                      Esta correção não confirma a entrega. A foto precisa ser publicada novamente no grupo com a legenda da NF correta para permanecer pesquisável no WhatsApp.
-                    </div>
-                    <label className="block text-xs text-muted">
-                      NF correta
-                      <input
-                        autoFocus
-                        value={uploadNfId}
-                        onChange={(event) => setUploadNfId(event.target.value.replace(/\D/g, '').slice(0, 20))}
-                        placeholder="Ex.: 1810908"
-                        className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <label className="text-xs text-muted">
-                    NF
-                    <input
-                      value={uploadNfId}
-                      onChange={(event) => setUploadNfId(event.target.value.replace(/\D/g, '').slice(0, 20))}
-                      placeholder="Ex.: 123456789"
-                      className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
-                    />
-                  </label>
-
-                  <label className="text-xs text-muted">
-                    Rota (tripId)
-                    <input
-                      value={uploadTripId}
-                      onChange={(event) => setUploadTripId(event.target.value)}
-                      placeholder="Opcional"
-                      className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
-                    />
-                  </label>
-
-                  <label className="text-xs text-muted">
-                    Motorista
-                    <select
-                      value={uploadMotoristaId}
-                      onChange={(event) => setUploadMotoristaId(event.target.value)}
-                      className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
-                    >
-                      <option value="">Nao informado</option>
-                      {drivers.map((driver) => (
-                        <option key={`driver-upload-${driver.id}`} value={driver.id}>{driver.name}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="text-xs text-muted">
-                    Data entrega
-                    <input
-                      type="date"
-                      value={uploadDeliveryDate}
-                      onChange={(event) => setUploadDeliveryDate(event.target.value)}
-                      className="mt-1 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text"
-                    />
-                  </label>
-                </div>
-
-                <label className="text-xs text-muted">
-                  Arquivo de imagem
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => handleSelectFile(event.target.files?.[0] || null)}
-                    className="mt-1 block w-full rounded-sm border border-border bg-card p-2 text-sm text-text"
-                  />
-                </label>
-
-                {selectedPreviewUrl ? (
-                  <div className="rounded-md border border-border bg-card p-2">
-                    <p className="mb-2 text-xs text-muted">Previa</p>
-                    <div className="aspect-[4/3] overflow-hidden rounded-md border border-border bg-surface-2">
-                      <img src={selectedPreviewUrl} alt="Previa do canhoto" className="h-full w-full object-contain" />
-                    </div>
-                  </div>
-                ) : null}
-
-                {uploadReport ? (
-                  <div className="rounded-md border semantic-panel-info px-3 py-2 text-xs">
-                    {`Imagem preparada: ${uploadReport.finalSizeKb} KB${uploadReport.usedCompression ? ' (comprimida para envio)' : ''}.`}
-                  </div>
-                ) : null}
-                  </>
-                )}
-
-                {uploadError ? (
-                  <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">
-                    {uploadError}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={closeUploadModal} className="h-10 rounded-md border border-border bg-card px-4 text-sm text-text">
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={uploading}
-                    className={`inline-flex h-10 items-center gap-2 rounded-md border px-4 text-sm font-semibold ${getSemanticToneClassName('info')} ${uploading ? 'cursor-not-allowed opacity-70' : 'hover:brightness-95'}`}
-                  >
-                    <UploadCloud className="h-4 w-4" />
-                    {uploading
-                      ? 'Processando...'
-                      : receiptCorrectionNotificationId
-                        ? 'Registrar NF correta'
-                        : 'Enviar canhoto'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            <form onSubmit={handleReceiptCorrectionSubmit} className="w-full max-w-lg space-y-4 rounded-2xl border border-border bg-card p-5">
+              <h2 className="text-lg font-bold">Corrigir número informado</h2>
+              <p className="text-sm text-muted">A postagem informou {receiptCorrectionReportedNf || 'uma NF incorreta'}. Registre a correção e publique uma nova foto no grupo com somente o número correto.</p>
+              <label className="block text-sm">NF correta<input value={uploadNfId} onChange={(event) => setUploadNfId(event.target.value.replace(/\D/g, '').slice(0, 9))} className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3" /></label>
+              {uploadError && <p role="alert">{uploadError}</p>}
+              <div className="flex flex-wrap justify-end gap-2"><button type="button" onClick={closeUploadModal} className="rounded-lg border border-border px-4 py-2">Voltar</button><button type="submit" disabled={uploading} className="rounded-lg semantic-solid-info px-4 py-2">Registrar NF correta</button></div>
+            </form>
           </div>
         ) : null}
 

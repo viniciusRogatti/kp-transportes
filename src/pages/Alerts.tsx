@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import {
   FormEvent,
   useCallback,
@@ -41,6 +42,10 @@ const TYPE_LABELS: Record<string, string> = {
   WHATSAPP_INVOICE_NOT_FOUND: 'NF não encontrada',
   NF_NOT_FOUND_UPLOAD_ATTEMPT: 'NF não encontrada',
   RECEIPT_WHATSAPP_GROUP_COMPANY_MISMATCH: 'NF postada no grupo incorreto',
+  RECEIPT_WHATSAPP_DRIVER_MISMATCH: 'Conferir motorista',
+  RECEIPT_NF_NOT_DETECTED: 'Conferir legenda',
+  NF_ALREADY_HAS_RECEIPT: 'Foto repetida',
+  RECEIPT_MANUAL_REVIEW_REQUIRED: 'Conferir postagem',
   BOT_UNAVAILABLE: 'Integração indisponível',
 };
 
@@ -154,15 +159,12 @@ function AlertsPage() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <div className="w-full max-w-[var(--content-max-width)] space-y-3">
-          <section className="rounded-md border border-border bg-surface p-3">
+          <section className="rounded-2xl border border-border bg-card p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-lg font-semibold text-text">Central de Alertas</h2>
-                <p className="text-sm text-muted">
-                  Acompanhe falhas de postagem no WhatsApp e alertas técnicos, inclusive os já resolvidos.
-                </p>
+                <OperationalPageIntro title="Central de Alertas" description="Confira postagens do WhatsApp que precisam de atenção e acompanhe as correções." />
               </div>
               <button
                 type="button"
@@ -191,7 +193,7 @@ function AlertsPage() {
             </div>
           </section>
 
-          <section className="rounded-md border border-border bg-surface p-3">
+          <section className="rounded-2xl border border-border bg-card p-4">
             <form onSubmit={handleSearch} className="grid gap-2 lg:grid-cols-[minmax(260px,1.5fr)_165px_180px_174px_174px_auto]">
               <label className="relative">
                 <span className="sr-only">Pesquisar</span>
@@ -240,7 +242,7 @@ function AlertsPage() {
                 onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
                 className="h-9 rounded-md border border-border bg-card px-2 text-sm text-text"
               />
-              <button type="submit" className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-accent/50 bg-accent/10 px-3 text-sm font-semibold text-text-accent hover:bg-accent/20">
+              <button type="submit" className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-text-accent hover:bg-surface-2">
                 <Search className="h-4 w-4" /> Pesquisar
               </button>
             </form>
@@ -249,14 +251,14 @@ function AlertsPage() {
             </p>
           </section>
 
-          <section className="rounded-md border border-border bg-surface p-3">
+          <section className="rounded-2xl border border-border bg-card p-4">
             {error ? <div className="rounded-md border semantic-panel-danger px-3 py-2 text-sm">{error}</div> : null}
             {loading && !hasLoaded ? (
               <p className="text-sm text-muted">Carregando alertas...</p>
             ) : !rows.length ? (
               <p className="text-sm text-muted">Nenhum registro encontrado com estes filtros.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="grid gap-3 lg:grid-cols-2">
                 {rows.map((row) => {
                   const severityAccentClass = row.severity === 'CRITICAL'
                     ? 'border-l-danger'
@@ -264,7 +266,7 @@ function AlertsPage() {
                       ? 'border-l-warning'
                       : 'border-l-info';
                   const resolved = row.status === 'RESOLVED';
-                  const typeLabel = TYPE_LABELS[row.code] || (row.source === 'ALERT' ? 'Alerta técnico' : 'Pendência operacional');
+                  const typeLabel = TYPE_LABELS[row.code] || (row.source === 'ALERT' ? 'Postagem a conferir' : 'Pendência operacional');
                   const responsible = row.resolved_by_user?.name
                     || row.resolved_by_user?.username
                     || (resolved && row.resolution_mode === 'automatic' ? 'Sistema' : null);
@@ -291,9 +293,7 @@ function AlertsPage() {
                             {resolved ? ` · Resolvido em ${formatDateTime(row.resolved_at)}` : ''}
                             {responsible ? ` · Responsável: ${responsible}` : ''}
                           </p>
-                          <p className="text-[11px] text-muted">
-                            Origem: monitoramento/integração · Código: {row.code}
-                          </p>
+
                         </div>
 
                         <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border/70 pt-2">
@@ -328,7 +328,7 @@ function AlertsPage() {
               <div className="inline-flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
-                  Para uma NF não encontrada, exclua a foto incorreta do grupo e solicite nova postagem com a NF visível e correta. Use “Ocorrência resolvida” somente depois desse tratamento.
+                  Para uma NF não encontrada, confira o número e a importação do XML. Depois solicite uma nova foto com somente os dígitos da NF na legenda. Use “Ocorrência resolvida” somente depois desse tratamento.
                 </span>
               </div>
             </div>

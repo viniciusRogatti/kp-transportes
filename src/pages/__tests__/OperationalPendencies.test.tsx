@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { listAlertHistory } from '../../services/alertsService';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import OperationalPendencies from '../OperationalPendencies';
 import {
@@ -7,6 +8,7 @@ import {
 } from '../../services/receiptsService';
 import verifyToken from '../../utils/verifyToken';
 
+jest.mock('../../services/alertsService', () => ({ listAlertHistory: jest.fn(async () => ({ rows: [], available: 0 })) }));
 jest.mock('axios', () => ({
   __esModule: true,
   default: {
@@ -33,6 +35,7 @@ const mockedAxiosGet = axios.get as jest.MockedFunction<typeof axios.get>;
 
 describe('OperationalPendencies', () => {
   beforeEach(() => {
+    (listAlertHistory as jest.Mock).mockResolvedValue({ rows: [], available: 0 });
     localStorage.setItem('token', 'token-teste');
     mockedVerifyToken.mockResolvedValue(true as never);
     mockedAxiosGet.mockResolvedValue({ data: [] });
@@ -105,14 +108,34 @@ describe('OperationalPendencies', () => {
     jest.clearAllMocks();
   });
 
+  it('abre com todas as filas, usa as categorias como filtros e não oferece upload', async () => {
+    render(<OperationalPendencies />);
+    await screen.findByText('NF 1725001');
+    expect(screen.getByRole('button', { name: /Todas as pendências/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(mockedListReceiptBacklog).toHaveBeenCalledWith(expect.not.objectContaining({ queueType: expect.anything() }));
+    expect(screen.queryByRole('button', { name: /Enviar canhoto/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Sem rota/ }));
+    expect(screen.queryByText('NF 1725001')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Todas as pendências/ }));
+    expect(screen.getByText('NF 1725001')).toBeInTheDocument();
+  });
+
+  it('continua a consulta para não ocultar pendências após a primeira página', async () => {
+    const first = await mockedListReceiptBacklog();
+    mockedListReceiptBacklog.mockResolvedValueOnce({ ...first, total: 2 }).mockResolvedValueOnce({ ...first, rows: [{ ...first.rows[0], invoice_number: '1725002', nf_id: '1725002' }], total: 2 });
+    render(<OperationalPendencies />);
+    await screen.findByText('NF 1725002');
+    await waitFor(() => expect(mockedListReceiptBacklog).toHaveBeenCalledWith(expect.objectContaining({ offset: 1 })));
+  });
+
   it('exibe o historico de saidas da NF em reentrega sem esconder a saida atual', async () => {
     render(<OperationalPendencies />);
 
     expect(await screen.findByText('NF 1725001')).toBeInTheDocument();
     expect(screen.getByText('Historico de saidas (2)')).toBeInTheDocument();
     expect(screen.getByText('Saida atual')).toBeInTheDocument();
-    expect(screen.getByText('Motorista: Arlindo · Trip: 88')).toBeInTheDocument();
-    expect(screen.getByText('Motorista: Jonas · Trip: 77')).toBeInTheDocument();
+    expect(screen.getByText('Motorista: Arlindo · Viagem: 88')).toBeInTheDocument();
+    expect(screen.getByText('Motorista: Jonas · Viagem: 77')).toBeInTheDocument();
     expect(screen.getByText('Corrigir status')).toBeInTheDocument();
     expect(screen.getByText('Marcar canhoto retido')).toBeInTheDocument();
   });

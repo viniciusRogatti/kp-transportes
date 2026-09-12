@@ -126,7 +126,7 @@ const CONTROL_TOWER_THEME_CLASSES = {
     filterSection: 'group rounded-lg border border-border bg-surface',
     kpiSection: 'group rounded-lg border border-border bg-card',
     notificationBadge: 'border-amber-300/70 bg-amber-500 text-slate-950',
-    notificationMarkRead: 'text-sky-300 hover:text-[color:var(--color-text-accent)]',
+    notificationMarkRead: 'text-[color:var(--semantic-info-text)] hover:text-[color:var(--color-text-accent)]',
     notificationUnreadCard: 'semantic-panel-info hover:brightness-110',
     notificationUnreadPill: 'semantic-solid-info',
     register: {

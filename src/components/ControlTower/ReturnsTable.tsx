@@ -96,7 +96,7 @@ function ReturnsTable({
       header: 'NF / Referência',
       cell: ({ row }) => (
         row.original.flowOrigin === 'devolucao'
-          ? <button className="text-left text-sky-300 underline" onClick={() => onOpenDetails(row.original.id)}>{row.original.invoiceNumber}</button>
+          ? <button className="text-left text-[color:var(--semantic-info-text)] underline" onClick={() => onOpenDetails(row.original.id)}>{row.original.invoiceNumber}</button>
           : <span className="text-[color:var(--color-warning)]">{row.original.invoiceNumber}</span>
       ),
     },

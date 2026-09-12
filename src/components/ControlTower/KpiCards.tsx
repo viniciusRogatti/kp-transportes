@@ -48,7 +48,7 @@ function KpiCards({ summary }: { summary?: DashboardSummary | null }) {
                 <p className="text-xs uppercase tracking-wide text-muted">{metric.label}</p>
                 <div className="mt-1 flex items-end gap-2">
                   <strong className="text-3xl font-semibold">{numberFmt.format(metric.value)}{metricSuffix(metric)}</strong>
-                  <span className={`text-sm font-semibold ${isNegative ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  <span className={`text-sm font-semibold ${isNegative ? 'text-[color:var(--semantic-danger-text)]' : 'text-[color:var(--semantic-success-text)]'}`}>
                     {metric.variationPct > 0 ? '+' : ''}{metric.variationPct}%
                   </span>
                 </div>

@@ -107,7 +107,7 @@ function WhatsappBotConnection() {
           </p>
         ) : null}
         {statusData?.connectionState?.lastIgnoredReason ? (
-          <p className="mt-1 text-xs text-amber-400">
+          <p className="mt-1 text-xs text-[color:var(--semantic-warning-text)]">
             Última mensagem ignorada: {statusData.connectionState.lastIgnoredReason}
           </p>
         ) : null}

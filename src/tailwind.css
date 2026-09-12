@@ -123,6 +123,10 @@
 }
 
 :root[data-theme='light'] {
+  --color-success: #15803d;
+  --color-warning: #92400e;
+  --color-danger: #b91c1c;
+  --color-info: #0369a1;
   --color-bg: #eef1f5;
   --color-surface: #f8fafc;
   --color-surface-2: #e9edf3;
@@ -1239,4 +1243,21 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   body.invoice-journey-document .journey-aside {
     display: none !important;
   }
+}
+
+/* Controles das páginas operacionais: dimensões consistentes nos dois temas. */
+@layer components {
+  .operation-page input:not([type="checkbox"]):not([type="radio"]),
+  .operation-page select { min-height: 2.5rem; border-radius: 0.625rem; }
+  .operation-page button:focus-visible { outline: 2px solid var(--semantic-info-border); outline-offset: 2px; }
+  @media (max-width: 768px) {
+    .operation-page { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+  }
+}
+
+/* Campos também precisam manter a leitura no tema claro. */
+:root[data-theme='light'] input::placeholder,
+:root[data-theme='light'] textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
 }

@@ -69,6 +69,8 @@ export type CompanyOperationSummary = {
 };
 
 export type DailyOperationReport = {
+  company_scope?: string;
+  scope_recalculated?: boolean;
   operation_date: string;
   generated_at: string;
   status: 'draft' | 'closed';

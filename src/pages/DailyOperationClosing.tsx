@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Save,
   Truck,
+  Target,
   X,
 } from 'lucide-react';
 import Header from '../components/Header';
@@ -60,11 +61,11 @@ function PrimaryMetric({ label, value, detail, tone = 'neutral' }: {
   tone?: SemanticTone;
 }) {
   return (
-    <div className={`min-w-0 rounded-md border px-3 py-2.5 ${getSemanticToneClassName(tone, 'panel')}`}>
-      <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
+    <div className={`min-w-0 rounded-xl border px-3 py-3 ${getSemanticToneClassName(tone, 'panel')}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <p className="text-xl font-bold leading-none text-text">{value}</p>
-        {detail ? <p className="truncate text-[11px] text-muted">{detail}</p> : null}
+        <p className="text-3xl font-bold leading-none tabular-nums text-text">{value}</p>
+        {detail ? <p className="text-[11px] text-muted">{detail}</p> : null}
       </div>
     </div>
   );
@@ -81,8 +82,8 @@ function InlineMetric({ label, value }: { label: string; value: string | number 
 
 function ExceptionMetric({ label, value, tone }: { label: string; value: number; tone: SemanticTone }) {
   return (
-    <div className={`flex min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 py-2 ${getSemanticToneClassName(value ? tone : 'neutral', 'panel')}`}>
-      <span className="truncate text-[11px] font-semibold text-muted">{label}</span>
+    <div className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-3 py-3 ${getSemanticToneClassName(value ? tone : 'neutral', 'panel')}`}>
+      <span className="text-[11px] font-semibold text-muted">{label}</span>
       <strong className="text-sm text-text">{value}</strong>
     </div>
   );
@@ -248,18 +249,18 @@ export default function DailyOperationClosing() {
   return (
     <div className="min-h-screen">
       <Header />
-      <Container>
+      <Container className="operation-page">
         <div className="w-full max-w-[1500px] space-y-4">
-          <section className="rounded-lg border border-border bg-card p-4 shadow-soft">
+          <section className="rounded-2xl border border-border bg-gradient-to-r from-sky-500/10 via-surface to-surface p-4 shadow-soft sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl font-semibold text-text">Fechamento Diário da Operação</h1>
+                  <span className="grid h-11 w-11 place-items-center rounded-xl border border-sky-500/25 bg-surface-2 text-sky-500"><Target className="h-6 w-6" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Controle da operação</p><h1 className="text-xl font-bold tracking-tight text-text">Fechamento Diário da Operação</h1></div>
                   <Badge tone={report?.status === 'closed' ? 'success' : 'warning'}>
                     {report?.status === 'closed' ? 'Fechado' : 'Em conferência'}
                   </Badge>
                 </div>
-                <p className="mt-1 text-sm text-muted">Visão consolidada do que saiu, retornou e ficou pendente para o próximo dia. Histórico disponível desde 19/08/2026.</p>
+                <p className="mt-1 text-sm text-muted">Mar e Rio · Brazilian Fish · Pronto. Visão do que saiu, retornou e ficou para o próximo dia.</p>
                 {report?.closed_at ? (
                   <p className="mt-1 text-xs text-muted">Fechado por {report.closed_by_name || '-'} em {formatDateTimeBR(report.closed_at)}.</p>
                 ) : null}
@@ -289,12 +290,13 @@ export default function DailyOperationClosing() {
             </div>
           </section>
 
+          {report?.scope_recalculated ? <p role="status" className="rounded-xl border border-border bg-surface p-3 text-xs text-muted">Visualização recalculada com os dados atuais das três empresas ativas. O registro original deste fechamento permanece preservado.</p> : null}
           {error ? <div role="alert" className={`rounded-lg border p-3 text-sm font-semibold ${getSemanticToneClassName('danger', 'panel')}`}>{error}</div> : null}
           {loading ? <div className="rounded-lg border border-border bg-card p-8 text-center text-muted">Carregando fechamento...</div> : null}
 
           {!loading && report ? (
             <>
-              <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
+              <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
                 <div className="grid grid-cols-2 gap-2 p-3 lg:grid-cols-4">
                   <PrimaryMetric
                     label="Notas atribuídas"
@@ -303,7 +305,7 @@ export default function DailyOperationClosing() {
                     tone="info"
                   />
                   <PrimaryMetric label="Entregues" value={report.summary.delivered} detail={`de ${report.summary.total_notes_assigned} atribuídas`} tone="success" />
-                  <PrimaryMetric label="Pendentes de entrega" value={report.summary.pending_delivery} detail="Sem nova rota" tone={report.summary.pending_delivery ? 'danger' : 'success'} />
+                  <PrimaryMetric label="Saldo sem rota" value={report.summary.pending_delivery} detail="Pendências para o próximo dia" tone={report.summary.pending_delivery ? 'danger' : 'success'} />
                   <PrimaryMetric label="Canhotos pendentes" value={report.summary.pending_receipts} detail="Entregas sem foto válida" tone={report.summary.pending_receipts ? 'warning' : 'success'} />
                 </div>
 
@@ -332,7 +334,7 @@ export default function DailyOperationClosing() {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
+              <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
                 <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                   <div>
                     <h2 className="flex items-center gap-2 text-base font-semibold text-text"><Clock3 className="h-5 w-5 text-accent" /> Carregamentos e rotas</h2>
@@ -352,7 +354,7 @@ export default function DailyOperationClosing() {
                 </div>
               </section>
 
-              <section className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
+              <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
                 <div className="flex items-center justify-between gap-2 border-b border-border p-4">
                   <div>
                     <h2 className="flex items-center gap-2 text-base font-semibold text-text"><AlertTriangle className="h-5 w-5 text-amber-600" /> Pendências para o próximo dia</h2>
@@ -378,7 +380,7 @@ export default function DailyOperationClosing() {
               </section>
 
               <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="overflow-hidden rounded-lg border border-border bg-card shadow-soft">
+                <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
                   <div className="border-b border-border p-4"><h2 className="flex items-center gap-2 text-base font-semibold"><Truck className="h-5 w-5 text-accent" /> Resultado por empresa</h2></div>
                   <div className="overflow-x-auto"><table><thead><tr><th>Empresa</th><th>Atribuídas</th><th>Entregues</th><th>Reentregas</th><th>Devolvidas</th><th>Pendentes</th></tr></thead><tbody>{report.companies.map((company) => <tr key={company.company_id}><td><strong>{company.company_name}</strong></td><td>{company.total}</td><td>{Number(company.delivered || 0) + Number(company.completed || 0) + Number(company.delivered_pending_receipt || 0)}</td><td>{company.redelivery || 0}</td><td>{company.returned || 0}</td><td>{company.pending_delivery || 0}</td></tr>)}</tbody></table></div>
                 </div>

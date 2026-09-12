@@ -60,6 +60,7 @@ export default function DailyOperationClosingPDF({ report }: { report: DailyOper
     <Document title={`Fechamento Operacional ${formatDateBR(report.operation_date)}`}>
       <Page size="A4" style={styles.page} wrap>
         <Text style={styles.title}>Fechamento Diário da Operação</Text>
+        {report.scope_recalculated ? <Text style={styles.subtitle}>Visualização recalculada com dados atuais das empresas ativas. O fechamento original permanece preservado.</Text> : null}
         <Text style={styles.subtitle}>
           {`${formatDateBR(report.operation_date)} · ${report.status === 'closed' ? `Fechado por ${report.closed_by_name || '-'} em ${formatDateTimeBR(report.closed_at)}` : 'Prévia ainda não fechada'}`}
         </Text>

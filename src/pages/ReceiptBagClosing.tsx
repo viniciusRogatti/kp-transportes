@@ -132,12 +132,12 @@ function BagBadge({ status }: { status: ReceiptBagStatus }) {
 function SummaryCard({ label, value, icon, tone = '' }: {
   label: string; value: number; icon: JSX.Element; tone?: 'red' | 'amber' | 'green' | '';
 }) {
-  const toneClass = tone === 'red' ? 'semantic-panel-danger'
-    : tone === 'amber' ? 'semantic-panel-warning'
-      : tone === 'green' ? 'semantic-panel-success'
-        : 'border-border bg-card';
+  const toneClass = tone === 'red' ? 'border-l-[color:var(--semantic-danger-border)]'
+    : tone === 'amber' ? 'border-l-[color:var(--semantic-warning-border)]'
+      : tone === 'green' ? 'border-l-[color:var(--semantic-success-border)]'
+        : 'border-l-border';
   return (
-    <div className={`rounded-lg border px-2.5 py-2 shadow-sm ${toneClass}`}>
+    <div className={`rounded-lg border border-border border-l-[3px] bg-card px-3 py-2.5 shadow-sm ${toneClass}`}>
       <div className="flex items-start justify-between gap-1.5 text-muted">
         <span className="text-[10px] font-bold uppercase leading-tight tracking-[0.08em]">{label}</span>
         <span className="shrink-0 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
@@ -157,7 +157,7 @@ function FinishingBagOverlay() {
     >
       <section className="w-full max-w-md overflow-hidden rounded-3xl border border-sky-200 bg-surface text-center shadow-2xl dark:border-sky-900">
         <div className="relative overflow-hidden bg-gradient-to-br from-sky-100 via-white to-emerald-100 px-6 pt-7 dark:from-sky-950 dark:via-slate-950 dark:to-emerald-950">
-          <div className="absolute left-1/2 top-5 h-40 w-40 -translate-x-1/2 rounded-full bg-sky-300/30 blur-3xl" />
+          <div className="absolute left-1/2 top-5 h-40 w-40 -translate-x-1/2 rounded-full semantic-panel-info blur-3xl" />
           <img
             src={packageDeliveryAnimation}
             alt="Animação de uma encomenda sendo entregue"
@@ -296,13 +296,29 @@ function ReceiptBagClosing() {
     try {
       await updateReceiptBagItem(item.bag_id, item.item_id, 'confirm');
       setLooseReceiptSearch('');
-      setFeedback(`NF ${item.invoice_number} localizada. O malote aguardará a postagem da foto no grupo.`);
+      setFeedback(`NF ${item.invoice_number} localizada.${item.has_whatsapp_photo ? '' : ' O malote aguardará a postagem da foto no grupo.'}`);
       await loadList(true);
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível confirmar o canhoto avulso.'));
     } finally {
       setMutating(false);
     }
+  };
+
+  const openAbsentReceipt = async (item: ReceiptBagPendingItem) => {
+    if (mutating) return;
+    setMutating(true);
+    setError('');
+    setFeedback('');
+    try {
+      const bag = await getReceiptBagClosing(item.bag_id);
+      setActiveBag(bag);
+      setSelectedItemId(item.item_id);
+      setItemFilter('all');
+      setItemSearch('');
+    } catch (requestError) {
+      setError(errorMessage(requestError, 'Não foi possível abrir a conferência deste canhoto.'));
+    } finally { setMutating(false); }
   };
 
   const openClosing = async (row: ReceiptBagListRow) => {
@@ -582,12 +598,13 @@ function ReceiptBagClosing() {
   return (
     <>
       <Header />
-      <Container className="h-dvh min-h-0 overflow-hidden pb-0">
-        <main className="mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col px-2 py-3 sm:px-4">
-          <section data-tutorial="bag-page-intro" className="mb-3 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <Container className="operation-page min-h-dvh pb-6">
+        <main className="mx-auto flex min-h-0 w-full max-w-[1500px] flex-col px-2 py-3 sm:px-4">
+          <section data-tutorial="bag-page-intro" className="mb-4 flex shrink-0 flex-col gap-4 rounded-2xl border border-border bg-card p-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-600">Controle físico</p>
               <h1 className="text-2xl font-black text-text">Fechamento de Canhotos</h1>
+              <p className="mt-2 text-sm text-muted">Confira os documentos recebidos e acompanhe o que ainda precisa voltar.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <label data-tutorial="bag-date-filter" className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-bold">
@@ -616,7 +633,7 @@ function ReceiptBagClosing() {
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-sm font-black">Canhotos pendentes e avulsos</p>
-                <p className="text-xs text-muted">Consulte por NF ou cliente. Cada NF aparece vinculada a um único malote responsável.</p>
+                <p className="text-xs text-muted">Consulte por NF ou cliente. A associação ao malote ajuda a localizar o documento; confirme a presença física na conferência.</p>
               </div>
               <SearchBox value={looseReceiptSearch} onChange={setLooseReceiptSearch} placeholder="Digite a NF ou cliente do canhoto avulso..." />
             </div>
@@ -640,6 +657,8 @@ function ReceiptBagClosing() {
               </div>
             ) : null}
           </section>
+
+          {data ? <AbsentReceiptsPanel items={data.pending_items || []} disabled={mutating} onOpen={openAbsentReceipt} /> : null}
 
           <section data-tutorial="bag-list" className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
             <div className="flex shrink-0 flex-col gap-2 border-b border-border p-3 lg:flex-row lg:items-center lg:justify-between">
@@ -878,7 +897,6 @@ function BagTable({ rows, mutating, onOpen }: {
               <td className="px-4 py-3">
                 <p className="font-semibold">{formatDate(row.operation_date)}</p>
                 {row.is_overdue ? <p className="mt-1 text-xs font-bold text-red-600">Malote atrasado</p> : null}
-                {row.generated_by_timeout ? <p className="mt-1 max-w-56 text-xs font-bold text-amber-700 dark:text-amber-300">Rota incluída por segurança com {row.route_incomplete_stops} parada(s) sem resultado.</p> : null}
               </td>
               <td className="px-4 py-3 text-center">
                 <p className="font-black">{row.counts.confirmed}/{row.counts.expected}</p>
@@ -986,9 +1004,9 @@ export function ConferencePanel(props: ConferenceProps) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            <CountPill className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">{bag.counts.confirmed} presentes</CountPill>
+            <div className="flex flex-wrap items-center gap-1.5 border-r border-border pr-2"><CountPill className="bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">{bag.counts.confirmed} presentes</CountPill>
             <CountPill className="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100">{bag.counts.pending} aguardando</CountPill>
-            <CountPill className="bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100">{bag.counts.absent} ausentes</CountPill>
+            <CountPill className="bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100">{bag.counts.absent} ausentes</CountPill></div>
             <button type="button" onClick={() => setSummaryOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 font-bold hover:bg-muted/40"><ClipboardCheck className="h-4 w-4" />Resumo</button>
             {bag.counts.pending ? <button type="button" disabled={props.mutating} onClick={props.onMarkRemaining} className="h-9 rounded-lg border border-red-400 px-3 font-bold text-red-700 hover:bg-red-50 disabled:opacity-40 dark:text-red-200 dark:hover:bg-red-950">Ausentar restantes</button> : null}
             {canFinish ? <button type="button" disabled={props.mutating} onClick={() => setFinishPromptOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />Finalizar rota</button> : null}
@@ -1081,7 +1099,7 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
       </div>
       {suggestionDiffers ? <p className="mt-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">Provavelmente com {item.suggested_driver_name || 'outro motorista'}{item.suggestion_confidence ? ` · confiança ${item.suggestion_confidence}%` : ''}{item.suggestion_sender_name ? ` · publicação por ${item.suggestion_sender_name}` : ' · identificação pelo telefone'}</p>
         : item.suggestion_source === 'whatsapp_phone' ? <p className="mt-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300">Publicação associada ao telefone deste motorista</p> : null}
-      {item.is_suggested_extra && item.suggestion_reason ? <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{item.suggestion_reason}</p> : null}
+      {item.is_suggested_extra && item.suggestion_reason ? <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">A foto sugere este malote. O uso compartilhado do celular pode mudar onde o documento será encontrado.</p> : null}
       {item.confirmed_bag ? <p className="mt-1 text-[11px] font-bold text-violet-700 dark:text-violet-300">Encontrado com {item.confirmed_bag.driver_name || 'outro motorista'} · rota #{item.confirmed_bag.trip_id}</p> : null}
       {item.status === 'recovered' && item.origin_bag && item.origin_bag.trip_id !== item.confirmed_bag?.trip_id ? (
         <p className="mt-1 text-[11px] font-black text-red-700 dark:text-red-300">
@@ -1152,3 +1170,40 @@ function BagSummaryDialog({ bag, onClose }: { bag: ReceiptBag; onClose: () => vo
 }
 
 export default ReceiptBagClosing;
+
+export function AbsentReceiptsPanel({ items, disabled, onOpen }: {
+  items: ReceiptBagPendingItem[];
+  disabled: boolean;
+  onOpen: (item: ReceiptBagPendingItem) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const absent = items.filter((item) => item.status === 'absent' || (item.status === 'pending' && item.absence_reported_in_suggested_bag));
+  const term = search.trim().toLocaleLowerCase('pt-BR');
+  const visible = absent.filter((item) => [
+    item.invoice_number, item.customer_name, item.driver?.name, item.company?.name,
+  ].join(' ').toLocaleLowerCase('pt-BR').includes(term));
+  return (
+    <section aria-label="Canhotos ausentes" className="mt-3 rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-black"><AlertCircle className="h-5 w-5 text-amber-600" />Canhotos ausentes <span className="rounded-full semantic-panel-warning px-2 py-0.5 text-sm">{absent.length}</span></h2>
+          <p className="mt-1 text-xs text-muted">Pendências de todas as datas. Confirme com o motorista onde está o documento físico.</p>
+        </div>
+        <SearchBox value={search} onChange={setSearch} placeholder="Buscar ausente por NF, cliente ou motorista..." />
+      </div>
+      <div className="scrollbar-ui mt-2 max-h-60 overflow-auto">
+        {visible.length ? visible.map((item) => (
+          <div key={`${item.company_id}-${item.item_id}`} className="flex flex-col gap-2 border-t border-border py-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-bold">NF {item.invoice_number} · {item.customer_name || 'Cliente não identificado'}</p>
+              <p className="mt-1 text-xs text-muted">Malote associado: {item.driver?.name || 'Motorista não identificado'} · {formatDate(item.operation_date)} · {item.company?.name || 'Empresa não informada'}</p>
+              <span className="mt-1 inline-block text-xs font-semibold text-amber-700 dark:text-amber-300">{item.has_whatsapp_photo ? 'Foto registrada · documento ausente' : 'Documento ausente · foto não identificada'}</span>
+              {item.absence_reported_in_suggested_bag && <p className="mt-1 text-xs text-muted">Não encontrado em um malote sugerido. Verifique a localização a partir do malote de origem.</p>}
+            </div>
+            <button type="button" disabled={disabled} onClick={() => onOpen(item)} className="shrink-0 rounded-xl border border-border bg-surface px-2.5 py-1.5 text-xs font-bold text-text-accent disabled:opacity-50">Abrir conferência da NF {item.invoice_number}</button>
+          </div>
+        )) : <p className="py-3 text-sm text-muted">{absent.length ? 'Nenhum ausente encontrado para esta busca.' : 'Nenhum canhoto marcado como ausente nas pendências disponíveis.'}</p>}
+      </div>
+    </section>
+  );
+}

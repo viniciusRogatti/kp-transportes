@@ -46,6 +46,7 @@ export type ReceiptBagPendingItem = {
   city: string | null;
   status: ReceiptBagItemStatus;
   has_whatsapp_photo: boolean;
+  absence_reported_in_suggested_bag?: boolean;
   operation_date: string;
   driver: { id: number; name: string } | null;
   company: { id?: number; code?: string; name?: string } | null;

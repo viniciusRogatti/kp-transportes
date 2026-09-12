@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface TurnstileCheckboxProps {
   siteKey: string;
+  theme?: 'light' | 'dark';
   onTokenChange: (token: string) => void;
   onErrorChange?: (message: string) => void;
   onReadyChange?: (ready: boolean) => void;
@@ -108,6 +109,7 @@ const loadTurnstileScript = (): Promise<void> => {
 const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxProps>(function TurnstileCheckbox(
   {
     siteKey,
+    theme,
     onTokenChange,
     onErrorChange,
     onReadyChange,
@@ -115,6 +117,8 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
   ref,
 ) {
   const { isLightTheme } = useTheme();
+  const resolvedTheme = theme ?? (isLightTheme ? 'light' : 'dark');
+  const [widgetSize, setWidgetSize] = useState<'normal' | 'compact' | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const onTokenRef = useRef(onTokenChange);
@@ -133,6 +137,28 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
     onReadyRef.current = onReadyChange;
   }, [onReadyChange]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = (width: number) => {
+      if (width > 0) setWidgetSize(width < 300 ? 'compact' : 'normal');
+    };
+    const measure = () => updateSize(container.clientWidth);
+    measure();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) updateSize(entry.contentRect.width);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   const resetWidget = useCallback(() => {
     if (widgetIdRef.current && window.turnstile) {
       window.turnstile.reset(widgetIdRef.current);
@@ -144,6 +170,8 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
     onTokenRef.current('');
     onErrorRef.current?.('');
     onReadyRef.current?.(false);
+
+    if (!widgetSize) return;
 
     if (!siteKey) {
       onErrorRef.current?.('A verificação de segurança está indisponível. Contate o suporte.');
@@ -159,18 +187,21 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
-        size: 'normal',
+        size: widgetSize,
         appearance: 'always',
-        theme: isLightTheme ? 'light' : 'dark',
+        theme: resolvedTheme,
         callback: (token: string) => {
+          if (cancelled) return;
           onErrorRef.current?.('');
           onTokenRef.current(token);
         },
         'expired-callback': () => {
+          if (cancelled) return;
           onTokenRef.current('');
           resetWidget();
         },
         'error-callback': () => {
+          if (cancelled) return;
           onTokenRef.current('');
           onErrorRef.current?.('Não foi possível validar o CAPTCHA. Tente novamente.');
           resetWidget();
@@ -194,7 +225,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
       }
       widgetIdRef.current = null;
     };
-  }, [siteKey, resetWidget, isLightTheme]);
+  }, [siteKey, resetWidget, resolvedTheme, widgetSize]);
 
   useImperativeHandle(ref, () => ({
     reset: () => {
@@ -204,7 +235,7 @@ const TurnstileCheckbox = forwardRef<TurnstileCheckboxHandle, TurnstileCheckboxP
     },
   }), [resetWidget]);
 
-  return <div ref={containerRef} className="mx-auto min-h-[70px] w-full max-w-full" />;
+  return <div ref={containerRef} className="mx-auto flex min-h-[70px] w-full min-w-0 max-w-full justify-center" />;
 });
 
 export default TurnstileCheckbox;

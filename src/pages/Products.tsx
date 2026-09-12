@@ -1,3 +1,4 @@
+import OperationalPageIntro from '../components/OperationalPageIntro';
 import { useEffect, useMemo, useState } from "react";
 import { IProduct } from "../types/types";
 import CardProducts from "../components/CardProducts";
@@ -70,7 +71,8 @@ function Products() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
+        <OperationalPageIntro title="Produtos" description="Encontre rapidamente um produto pelo código ou pela descrição." />
       {isLoading ? (<ProductsLoader />) : (
         <>
           <div className="mb-s4 flex w-full justify-start">
@@ -125,7 +127,8 @@ function Products() {
                 : `${filteredProducts.length} produto(s) em ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}`}
             </span>
           </div>
-          <div className="w-full max-w-[1200px] overflow-x-auto">
+          <div className="grid w-full gap-3 md:hidden">{filteredProducts.map((product) => <article key={`${product.company_id}-${product.code}`} className="rounded-xl border border-border bg-card p-4"><p className="text-xs font-bold text-muted">Código {product.code}</p><h2 className="mt-1 break-words text-sm font-bold">{product.description}</h2><p className="mt-2 text-xs text-muted">Unidade: {product.type || 'Não informada'}</p></article>)}</div>
+          <div className="hidden w-full max-w-[1200px] overflow-x-auto md:block">
             <table className="min-w-[640px] max-[768px]:min-w-[540px] max-[768px]:[&_td:nth-child(2)]:text-[0.78rem]">
               <thead>
                 <tr>
@@ -136,7 +139,7 @@ function Products() {
                 </tr>
               </thead>
               <tbody>
-                { filteredProducts.map((product) => <CardProducts product={product} />)}
+                { filteredProducts.map((product) => <CardProducts key={`${product.company_id}-${product.code}`} product={product} />)}
               </tbody>
             </table>
           </div>

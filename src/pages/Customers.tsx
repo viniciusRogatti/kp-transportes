@@ -149,7 +149,7 @@ function Customers() {
   return (
     <div>
       <Header />
-      <Container className="max-[768px]:[&_table]:text-[0.75rem] max-[768px]:[&_th]:text-[0.7rem] max-[768px]:[&_td]:text-[0.75rem]">
+      <Container className="operation-page max-[768px]:[&_table]:text-[0.75rem] max-[768px]:[&_th]:text-[0.7rem] max-[768px]:[&_td]:text-[0.75rem]">
         {isLoading ? (
           <ProductsLoader />
         ) : (
@@ -206,7 +206,21 @@ function Customers() {
                   : `${filteredCustomers.length} cliente(s) em ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}`}
               </span>
             </div>
-            <div className="w-full max-w-[1200px] overflow-x-auto">
+            <div className="grid w-full gap-2 md:hidden" aria-label="Clientes no celular">
+              {filteredCustomers.map((customer) => (
+                <article key={`${customer.company_id || customer.company?.id}-${customer.cnpj_or_cpf}`} className="min-w-0 rounded-xl border border-border bg-card p-3 text-sm shadow-soft">
+                  <h2 className="break-words font-semibold text-text">{toTitleCase(customer.name_or_legal_entity || "-")}</h2>
+                  <p className="mt-1 break-all font-mono text-xs text-text"><span className="font-sans text-muted">CNPJ/CPF: </span>{customer.cnpj_or_cpf || "-"}</p>
+                  <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs [&_dt]:text-muted [&_dd]:break-words">
+                    <dt>Representante</dt><dd>{formatRepresentativeName(customer.representative_name)}</dd>
+                    <dt>Endereço</dt><dd>{formatAddress(customer)}</dd>
+                    <dt>Cidade</dt><dd>{[customer.city ? toTitleCase(customer.city) : "-", customer.state].filter(Boolean).join(' / ')}</dd>
+                    <dt>Telefone</dt><dd>{customer.phone || "-"}</dd>
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden w-full max-w-[1200px] overflow-x-auto md:block">
               <table className="min-w-[920px] max-[768px]:min-w-[720px] max-[768px]:[&_td]:leading-snug max-[768px]:[&_th]:leading-tight">
                 <thead>
                   <tr>

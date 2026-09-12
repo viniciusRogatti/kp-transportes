@@ -423,7 +423,18 @@ function CardDanfes({
             const resolvedDriverName = invoiceContext?.driver_name || resolveInvoiceScopedValue(driverByInvoice, danfe) || null;
             const customerName = normalizeTextValue(danfe.Customer?.name_or_legal_entity) || '-';
             const cityName = normalizeCityLabel(danfe.Customer?.city) || '-';
-            const customerAddress = normalizeTextValue(danfe.Customer?.address) || '-';
+            const customerAddress = [
+              danfe.Customer?.address,
+              danfe.Customer?.address_number,
+              danfe.Customer?.neighborhood,
+            ].map(normalizeTextValue).filter(Boolean).join(', ') || '-';
+            const representativeName = normalizeTextValue(danfe.representative_name)
+              || normalizeTextValue(danfe.Customer?.representative_name) || '-';
+            const grossWeight = String(danfe.gross_weight ?? '').trim();
+            const grossWeightValue = Number(grossWeight);
+            const grossWeightLabel = grossWeight && Number.isFinite(grossWeightValue) && grossWeightValue >= 0
+              ? `${grossWeightValue.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} kg`
+              : 'Não informado';
             const returnTypeLabels = invoiceContext?.return_types?.length
               ? invoiceContext.return_types.map((type) => RETURN_TYPE_LABELS[type] || type)
               : [];
@@ -467,7 +478,7 @@ function CardDanfes({
               window.location.hash = `#/invoices/${encodeURIComponent(invoiceNumber)}/journey${query ? `?${query}` : ''}`;
             };
             return (
-              <div key={key} className="h-[338px] min-w-0 w-full [perspective:1200px]">
+              <div key={key} className="h-[380px] min-w-0 w-full [perspective:1200px]">
                 <div
                   className="relative h-full w-full transition-transform duration-500"
                   style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none' }}
@@ -480,11 +491,11 @@ function CardDanfes({
                     )}
                     style={{ backfaceVisibility: 'hidden' }}
                   >
-                    <TitleCard className="shrink-0">
-                      <h1>{`NF ${danfe.invoice_number}`}</h1>
+                    <div className="mb-1 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-[10px] leading-tight">
+                      <h1 className="whitespace-nowrap text-[11px] font-semibold">{`NF ${danfe.invoice_number}`}</h1>
                       <Badge
                         tone={driverTone}
-                        className="absolute left-1/2 top-1.5 flex h-auto max-w-[72%] -translate-x-1/2 items-center gap-1 px-2 py-0.5 text-[10px] leading-tight"
+                        className="flex h-7 w-fit min-w-0 max-w-full justify-self-center items-center justify-center gap-1 px-1.5 py-0 text-[10px] leading-tight"
                       >
                         {isDriverLoading ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : null}
                         <span className="truncate">
@@ -500,7 +511,7 @@ function CardDanfes({
                           <button
                             type="button"
                             onClick={() => openAssignmentModal(danfe)}
-                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-current/40 bg-black/10 text-current transition hover:bg-black/20"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current bg-surface-2 text-current transition hover:brightness-110"
                             aria-label={`Atribuir NF ${danfe.invoice_number} a uma rota`}
                             title="Atribuir a uma rota"
                           >
@@ -508,13 +519,13 @@ function CardDanfes({
                           </button>
                         ) : null}
                       </Badge>
-                      <h4>{formatDateBR(danfe.invoice_date)}</h4>
-                    </TitleCard>
+                      <time className="whitespace-nowrap text-[10px] text-muted">{formatDateBR(danfe.invoice_date)}</time>
+                    </div>
                     <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
-                      <div className="mt-1 shrink-0">
+                      <div className="shrink-0">
                         <h4 className="break-words text-sm font-semibold leading-tight">{customerName}</h4>
                         <p className="break-words text-xs text-muted">{cityName}</p>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
                           <Badge tone={danfeStatusTone} className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                             {danfeStatusLabel}
                           </Badge>
@@ -522,18 +533,18 @@ function CardDanfes({
                             <button
                               type="button"
                               onClick={openLastTrip}
-                              className="inline-flex items-center gap-1 rounded-full border semantic-solid-info px-2 py-0.5 text-[10px] font-semibold transition hover:brightness-110"
+                              className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border semantic-solid-info px-2 py-0.5 text-[10px] font-semibold transition hover:brightness-110"
                               aria-label={`Abrir última rota da NF ${invoiceNumber}`}
                               title={`Abrir rota #${lastTripId} no monitoramento`}
                             >
                               <MapPinned className="h-3 w-3" />
-                              {`Última rota #${lastTripId}`}
+                              {`Rota #${lastTripId}`}
                             </button>
                           ) : null}
                           <button
                             type="button"
                             onClick={openInvoiceJourney}
-                            className="inline-flex items-center gap-1 rounded-full border border-accent/45 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-text-accent transition hover:bg-accent/20"
+                            className="inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-text-accent transition hover:bg-accent/20"
                             aria-label={`Ver jornada da NF ${invoiceNumber}`}
                             title="Ver a jornada completa da NF"
                           >
@@ -609,25 +620,18 @@ function CardDanfes({
                       </div>
 
                       <ContainerItems className="min-h-0 flex-1">
-                        {danfe.DanfeProducts.length > 4 && (
-                          <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1">
-                            <p className="text-[10px] font-medium text-muted">
-                              Lista grande de itens.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => openProductsModal(danfe)}
-                              className="inline-flex h-6 shrink-0 items-center rounded-md border border-accent/45 bg-accent/15 px-2 text-[10px] font-semibold text-text-accent transition hover:bg-accent/25"
-                              aria-label={`Abrir lista completa de produtos da NF ${danfe.invoice_number}`}
-                            >
+                        <div className="flex shrink-0 items-center justify-between gap-2">
+                          <span className="text-[10px] font-semibold text-muted">Produtos ({danfe.DanfeProducts.length})</span>
+                          {danfe.DanfeProducts.length > 4 && (
+                            <button type="button" onClick={() => openProductsModal(danfe)}
+                              className="inline-flex h-6 shrink-0 items-center rounded border border-border px-1.5 text-[10px] font-semibold text-text-accent"
+                              aria-label={`Abrir lista completa de produtos da NF ${danfe.invoice_number}`}>
                               Ver todos
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                         <DescriptionColumns className="shrink-0 pr-1">
-                          <span>Codigo</span>
-                          <span>Descricao</span>
-                          <span>Qtd</span>
+                          <span>Código</span><span>Descrição</span><span>Qtd</span>
                         </DescriptionColumns>
                         <ItemsScrollArea aria-label={`Itens da NF ${danfe.invoice_number}`}>
                           {danfe.DanfeProducts.map((item) => (
@@ -641,12 +645,13 @@ function CardDanfes({
                       </ContainerItems>
                     </div>
 
-                    <TotalQuantity className="mt-2 shrink-0 flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
+                    <TotalQuantity className="mt-1 shrink-0 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1">
+                      <p className="min-w-0">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
+                      <p>{`Peso bruto: ${grossWeightLabel}`}</p>
                       <button
                         type="button"
                         onClick={() => toggleFlip(key)}
-                        className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                        className="inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                         aria-label={`Mostrar detalhes da NF ${danfe.invoice_number}`}
                       >
                         Detalhes
@@ -669,8 +674,9 @@ function CardDanfes({
                       <div className="space-y-2 text-sm">
                         <p><strong>Cliente:</strong> {customerName}</p>
                         <p><strong>Status:</strong> {danfeStatusLabel}</p>
-                        <p><strong>Endereco:</strong> {customerAddress}</p>
+                        <p><strong>Endereço:</strong> {customerAddress}</p>
                         <p><strong>Cidade:</strong> {cityName}</p>
+                        <p><strong>Representante:</strong> {representativeName}</p>
                         <p><strong>Telefone:</strong> {normalizeTextValue(danfe.Customer.phone) || '-'}</p>
                         <p><strong>Carga:</strong> {danfe.load_number || '-'}</p>
                         <p>

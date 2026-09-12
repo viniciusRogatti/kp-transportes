@@ -362,7 +362,7 @@ function TodayInvoices() {
   return (
     <ContainerTodayInvoices>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
         <section data-tutorial="today-filters" className="mb-3 w-full rounded-lg border border-border bg-surface p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

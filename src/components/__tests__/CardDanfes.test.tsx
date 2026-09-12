@@ -86,6 +86,31 @@ describe('CardDanfes', () => {
     jest.clearAllMocks();
   });
 
+  it('exibe peso bruto, endereço completo e o representante da nota', () => {
+    const danfe = buildDanfe('123456', 'pending');
+    danfe.representative_name = 'Ana da NF';
+    danfe.Customer.representative_name = 'Pedro do cadastro';
+    render(<CardDanfes danfes={[danfe]} />);
+    expect(screen.getByText('Peso bruto: 120,5 kg')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 123456' }));
+    expect(screen.getByText('Rua A, 100, Centro')).toBeInTheDocument();
+    expect(screen.getByText('Ana da NF')).toBeInTheDocument();
+    expect(screen.queryByText('Pedro do cadastro')).not.toBeInTheDocument();
+  });
+
+  it('usa o representante do cadastro e não transforma peso ausente em zero', () => {
+    const danfe = buildDanfe('123456', 'pending');
+    danfe.gross_weight = '';
+    danfe.Customer.address_number = null;
+    danfe.Customer.neighborhood = null;
+    danfe.Customer.representative_name = 'Pedro do cadastro';
+    render(<CardDanfes danfes={[danfe]} />);
+    expect(screen.getByText('Peso bruto: Não informado')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar detalhes da NF 123456' }));
+    expect(screen.getByText('Rua A')).toBeInTheDocument();
+    expect(screen.getByText('Pedro do cadastro')).toBeInTheDocument();
+  });
+
   it('informa que o motorista ainda esta sendo carregado', () => {
     render(
       <CardDanfes

@@ -5,19 +5,19 @@ type DivProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement
 type UlProps = DetailedHTMLProps<HTMLAttributes<HTMLUListElement>, HTMLUListElement>;
 
 export function ContainerCards({ className, ...props }: DivProps) {
-  return <div className={cn('mx-auto grid w-full max-w-[var(--content-max-width)] grid-cols-1 gap-s4 min-[720px]:grid-cols-2 min-[1050px]:grid-cols-3', className)} {...props} />;
+  return <div className={cn('mx-auto grid w-full max-w-[var(--content-max-width)] grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-3', className)} {...props} />;
 }
 
 export function CardsDanfe({ className, ...props }: DivProps) {
-  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card px-s3 py-s3 text-text shadow-soft', className)} {...props} />;
+  return <div className={cn('relative flex h-full min-h-0 w-full flex-col rounded-lg border border-border bg-card p-2.5 text-text shadow-soft', className)} {...props} />;
 }
 
 export function DescriptionColumns({ className, ...props }: DivProps) {
-  return <div className={cn('flex justify-between text-xs font-semibold uppercase tracking-wide text-muted', className)} {...props} />;
+  return <div className={cn('grid grid-cols-[4rem_minmax(0,1fr)_auto] gap-1 text-[10px] font-semibold uppercase tracking-wide [&>span:last-child]:text-right text-muted', className)} {...props} />;
 }
 
 export function ContainerItems({ className, ...props }: DivProps) {
-  return <div className={cn('mt-s2 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-surface-2 p-s2', className)} {...props} />;
+  return <div className={cn('mt-1.5 flex min-h-0 flex-1 flex-col gap-1 overflow-hidden rounded-md border border-border bg-surface-2 p-1.5', className)} {...props} />;
 }
 
 export function ItemsScrollArea({ className, ...props }: DivProps) {
@@ -25,7 +25,6 @@ export function ItemsScrollArea({ className, ...props }: DivProps) {
     <div
       className={cn(
         'danfe-items-scroll scrollbar-ui min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] max-[768px]:select-none',
-        'max-h-[min(40vh,240px)] max-[768px]:max-h-[min(42dvh,270px)]',
         className,
       )}
       {...props}
@@ -34,7 +33,7 @@ export function ItemsScrollArea({ className, ...props }: DivProps) {
 }
 
 export function ListItems({ className, ...props }: UlProps) {
-  return <ul className={cn('touch-pan-y flex list-none items-center justify-between gap-1 border-b border-border/60 py-0.5 text-[12px] font-medium text-text [&>li:nth-child(1)]:min-w-[78px] [&>li:nth-child(2)]:max-w-[165px] [&>li:nth-child(2)]:overflow-hidden [&>li:nth-child(2)]:text-ellipsis [&>li:nth-child(2)]:whitespace-nowrap [&>li:nth-child(2)]:font-normal [&>li:nth-child(2)]:text-muted [&>li:nth-child(3)]:whitespace-nowrap', className)} {...props} />;
+  return <ul className={cn('touch-pan-y grid grid-cols-[4rem_minmax(0,1fr)_auto] list-none items-center gap-1 border-b border-border py-1 text-[11px] font-medium text-text [&>li]:min-w-0 [&>li:nth-child(2)]:truncate [&>li:nth-child(2)]:font-normal [&>li:nth-child(2)]:text-muted [&>li:nth-child(3)]:whitespace-nowrap [&>li:nth-child(3)]:text-right', className)} {...props} />;
 }
 
 export function TitleCard({ className, ...props }: DivProps) {
@@ -45,7 +44,7 @@ export function TotalQuantity({ className, ...props }: DivProps) {
   return (
     <div
       className={cn(
-        'mt-2 border-t border-border pt-1.5 [&_p]:text-sm [&_p]:font-semibold [&_p]:text-text',
+        'mt-2 border-t border-border pt-1.5 [&_p]:text-[10px] [&_p]:font-semibold [&_p]:text-text',
         className,
       )}
       {...props}

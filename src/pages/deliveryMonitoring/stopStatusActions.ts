@@ -1,6 +1,6 @@
 import { SemanticTone, normalizeOperationalStatus } from '../../utils/statusStyles';
 
-export type ManualStopStatus = 'returned' | 'redelivery' | 'retained' | 'cancelled';
+export type ManualStopStatus = 'returned' | 'redelivery' | 'retained' | 'cancelled' | 'assigned';
 
 export type ManualStopStatusAction = {
   status: ManualStopStatus;
@@ -16,13 +16,19 @@ const MANUAL_STOP_STATUS_TRANSITIONS: Record<string, readonly ManualStopStatus[]
   arrived: ['returned', 'redelivery', 'retained', 'cancelled'],
   delivered: ['retained'],
   completed: ['retained'],
-  returned: ['redelivery', 'retained', 'cancelled'],
-  redelivery: ['returned', 'retained', 'cancelled'],
-  retained: ['returned', 'redelivery', 'cancelled'],
-  cancelled: ['returned', 'redelivery', 'retained'],
+  returned: ['assigned', 'redelivery', 'retained', 'cancelled'],
+  redelivery: ['assigned', 'returned', 'retained', 'cancelled'],
+  retained: ['assigned', 'returned', 'redelivery', 'cancelled'],
+  cancelled: ['assigned', 'returned', 'redelivery', 'retained'],
 };
 
 export const MANUAL_STOP_STATUS_ACTIONS: readonly ManualStopStatusAction[] = [
+  {
+    status: 'assigned',
+    label: 'Voltar para atribuída',
+    confirmLabel: 'atribuída',
+    tone: 'info',
+  },
   {
     status: 'returned',
     label: 'Marcar devolucao',

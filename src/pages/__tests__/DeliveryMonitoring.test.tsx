@@ -41,7 +41,7 @@ jest.mock('../../utils/dialog', () => ({
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedShowConfirm = showConfirm as jest.MockedFunction<typeof showConfirm>;
 
-type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained';
+type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained' | 'assigned';
 
 const buildOverview = (status: MonitoringStatus, date = '2026-03-23') => ({
   date,
@@ -218,6 +218,19 @@ describe('DeliveryMonitoring', () => {
       expect.objectContaining({ title: 'Alterar status da entrega' }),
     );
     expect(await screen.findByText('NF 123456 atualizada com sucesso para devolucao.')).toBeInTheDocument();
+  });
+
+  it('mostra endereço junto da parada e reabre uma devolução marcada por engano', async () => {
+    render(<DeliveryMonitoring />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' }));
+    const details = screen.getByLabelText('Detalhes da entrega NF 123456');
+    expect(details.closest('section')).toContainElement(screen.getByText('Progresso por motorista'));
+    expect(screen.getByText('Endereço de entrega')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar devolucao da NF 123456' }));
+    await screen.findByText('NF 123456 atualizada com sucesso para devolucao.');
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar para atribuída da NF 123456' }));
+    await waitFor(() => expect(mockedAxios.post).toHaveBeenLastCalledWith(expect.stringContaining('/trip-stops/99/status'), expect.objectContaining({ status: 'assigned', source: 'delivery_monitoring_manual_update' })));
+    expect(await screen.findByText('NF 123456 atualizada com sucesso para atribuída.')).toBeInTheDocument();
   });
 
   it('permite marcar a parada selecionada como canhoto retido direto no monitoramento', async () => {

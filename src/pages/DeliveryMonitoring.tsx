@@ -3,6 +3,7 @@ import axios from 'axios';
 import { format, parseISO } from 'date-fns';
 import {
   AlertTriangle,
+  Target,
   Check,
   MessageCircle,
   Send,
@@ -1005,8 +1006,9 @@ function DeliveryMonitoring() {
   }, [companyFilteredDeliveries]);
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
-    return companyFilteredDeliveries.find((row) => row.invoice_number === selectedDeliveryInvoice) || null;
-  }, [companyFilteredDeliveries, selectedDeliveryInvoice]);
+    return companyFilteredDeliveries.find((row) => row.invoice_number === selectedDeliveryInvoice
+      && (!selectedDriverStop || (Number(row.trip_id) === selectedDriverStop.tripId && Number(row.sequence) === selectedDriverStop.sequence))) || null;
+  }, [companyFilteredDeliveries, selectedDeliveryInvoice, selectedDriverStop]);
 
   useEffect(() => {
     if (!selectedDeliveryInvoice) return;
@@ -1413,7 +1415,9 @@ function DeliveryMonitoring() {
 
     const invoiceLabel = invoiceNumber ? `NF ${invoiceNumber}` : 'esta parada';
     const confirmed = await showConfirm(
-      `Confirmar ${getManualStopStatusLabel(nextStatus)} para ${invoiceLabel}?`,
+      nextStatus === 'assigned'
+        ? `Voltar ${invoiceLabel} para atribuída? Use esta correção quando o status foi marcado por engano. A entrega será confirmada após o registro do canhoto; o histórico será preservado.`
+        : `Confirmar ${getManualStopStatusLabel(nextStatus)} para ${invoiceLabel}?`,
       { title: 'Alterar status da entrega', confirmLabel: 'Alterar status' },
     );
 
@@ -1495,15 +1499,27 @@ function DeliveryMonitoring() {
     }
   }, [cancelledReplacementDraft, replacementInvoiceNumber, replacementReason, submitStopStatusUpdate]);
 
+  const renderDeliveryDetails = (delivery: DeliveryRow) => (
+    <div aria-label={`Detalhes da entrega NF ${delivery.invoice_number}`} className="mt-3 rounded-xl border border-border semantic-panel-info p-3">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">Detalhes da entrega</p>
+      <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <div className="col-span-2"><dt className="text-muted">Endereço de entrega</dt><dd className="mt-1 break-words font-semibold text-text">{[delivery.address, delivery.address_number].filter(Boolean).join(', ') || 'Não informado'}</dd><dd className="mt-1 text-muted">{[delivery.neighborhood, [delivery.city, delivery.state].filter(Boolean).join('/')].filter(Boolean).join(' · ')}</dd></div>
+        <div className="col-span-2 sm:col-span-4"><dt className="text-muted">Situação operacional</dt><dd className="mt-1 font-semibold text-text">{STAGE_LABELS[delivery.stage]}</dd></div>
+        <div><dt className="text-muted">Motorista</dt><dd className="mt-1 font-semibold text-text">{delivery.driver_name || 'Não atribuído'}</dd></div>
+        <div><dt className="text-muted">Viagem · parada</dt><dd className="mt-1 font-semibold text-text">{delivery.trip_id || '—'} · {delivery.sequence || '—'}</dd></div>
+      </dl>
+    </div>
+  );
+
   return (
     <div className="min-h-screen">
       <Header />
-      <Container>
-        <section className="order-1 w-full rounded-lg border border-border bg-card p-3 shadow-soft sm:p-4">
+      <Container className="operation-page">
+        <section className="order-1 relative w-full overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-sky-500/10 via-surface to-surface p-4 shadow-soft sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-semibold text-text">Monitoramento de Entregas</h2>
+                <span className="grid h-11 w-11 place-items-center rounded-xl border border-sky-500/25 bg-surface-2 text-sky-500"><Target className="h-6 w-6" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Controle da operação</p><h2 className="text-xl font-bold tracking-tight text-text">Monitoramento de Entregas</h2></div>
                 {!isMobileView ? (
                   <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
                     Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
@@ -1635,7 +1651,7 @@ function DeliveryMonitoring() {
                   <button
                     type="button"
                     onClick={() => setStatusFilter('assigned')}
-                    className="h-9 rounded-md border border-accent/50 bg-accent/15 px-3 text-sm font-semibold text-accent-text transition hover:bg-accent/25"
+                    className="h-9 rounded-md border border-border bg-surface-2 px-3 text-sm font-semibold text-accent-text transition hover:bg-surface-2"
                   >
                     Ver atribuídas
                   </button>
@@ -1665,15 +1681,10 @@ function DeliveryMonitoring() {
             </div>
           ) : (
             <>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Total: {filteredSummary.total || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Sem motorista: {filteredSummary.unassigned || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Atribuidas: {filteredSummary.assigned || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">A caminho: {filteredSummary.on_the_way || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">No local: {filteredSummary.on_site || 0}</span>
-                <span className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-emerald-800">Foto pendente: {filteredSummary.pending_receipt || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Finalizadas: {filteredSummary.completed || 0}</span>
-                <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">Geolocalizadas: {filteredSummary.geolocated || 0}</span>
+              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-8">
+                {[{ label: 'Total', count: filteredSummary.total }, { label: 'Sem motorista', count: filteredSummary.unassigned }, { label: 'Atribuídas', count: filteredSummary.assigned }, { label: 'A caminho', count: filteredSummary.on_the_way }, { label: 'No local', count: filteredSummary.on_site }, { label: 'Foto pendente', count: filteredSummary.pending_receipt }, { label: 'Finalizadas', count: filteredSummary.completed }, { label: 'Geolocalizadas', count: filteredSummary.geolocated }].map((item) => (
+                  <div key={item.label} className="min-w-0 rounded-xl border border-border bg-card p-3"><strong className="block text-2xl font-bold tabular-nums text-text">{overview ? item.count || 0 : '—'}</strong><span className="mt-1 block text-xs font-semibold text-muted">{item.label}</span></div>
+                ))}
               </div>
 
               {diagnostics ? (
@@ -1691,7 +1702,7 @@ function DeliveryMonitoring() {
             <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
         </section>
-        <section className="order-2 mt-3 w-full rounded-lg border border-border bg-card p-3">
+        <section className="order-2 mt-4 w-full rounded-2xl border border-border bg-surface p-4 shadow-soft">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
             <button
@@ -1711,7 +1722,7 @@ function DeliveryMonitoring() {
               ? 'Toque nas paradas para ver NF e cliente da rota selecionada.'
               : 'Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.'}
           </p>
-          <div className="max-h-[460px] space-y-1 overflow-y-auto pr-1">
+          <div className="space-y-3">
             {groupedDrivers.map((group) => (
               <div key={group.code} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface-2 px-3 py-2">
@@ -1891,7 +1902,7 @@ function DeliveryMonitoring() {
                   </div>
 
                   {selectedStopSequence ? (
-                    <div className="mt-1.5 rounded-md border border-border/80 bg-surface px-2.5 py-2 text-xs md:px-2 md:py-1.5">
+                    <div className="mt-2 rounded-xl border border-border bg-card p-3 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 font-semibold text-text">
                           {`Parada ${selectedStopSequence}`}
@@ -1907,7 +1918,8 @@ function DeliveryMonitoring() {
                         </span>
                       </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {selectedStopDelivery ? renderDeliveryDetails(selectedStopDelivery) : <p className="mt-2 text-muted">Endereço indisponível para esta parada.</p>}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                           Acoes da parada
                         </span>
@@ -1971,11 +1983,11 @@ function DeliveryMonitoring() {
           </div>
         </section>
 
-        <section className="order-3 mt-3 w-full rounded-lg border border-border bg-card p-2.5 sm:p-3">
+        <section className="order-3 mt-4 w-full rounded-2xl border border-border bg-surface p-3 shadow-soft sm:p-4">
           <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
-              <p className="text-xs text-muted">Notas e motoristas em tempo real.</p>
+              <p className="text-xs text-muted">Endereços das entregas e posições recebidas do ASTRO.</p>
             </div>
             <div className="flex flex-wrap gap-1.5 text-xs">
               <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDeliveries.length} notas`}</span>
@@ -1983,6 +1995,8 @@ function DeliveryMonitoring() {
             </div>
           </div>
 
+          {selectedDelivery && !selectedDriverStop ? <div className="mb-3"><h4 className="text-sm font-semibold text-text">NF {selectedDelivery.invoice_number} · {selectedDelivery.customer_name}</h4>{renderDeliveryDetails(selectedDelivery)}</div> : null}
+          {!mapDriverLocations.length ? <p className="mb-3 rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">Sem localização de motoristas recebida neste recorte. Acompanhe as paradas e os status; o mapa exibirá posições quando o ASTRO enviar dados.</p> : null}
           <div className="relative h-[62vh] min-h-[390px] overflow-hidden rounded-lg border border-border md:h-[calc(100vh-280px)] md:min-h-[520px]">
             <GoogleDeliveriesMap
               apiKey={googleMapsApiKey}
@@ -1995,6 +2009,7 @@ function DeliveryMonitoring() {
               selectedDriverId={selectedDriverId}
               selectedDeliveryId={selectedDeliveryInvoice}
               onMarkerClick={(deliveryId) => {
+                setSelectedDriverStop(null);
                 setSelectedDeliveryInvoice(deliveryId);
                 const delivery = filteredDeliveries.find((row) => row.invoice_number === deliveryId) || null;
                 if (delivery?.driver_id) {
@@ -2009,64 +2024,7 @@ function DeliveryMonitoring() {
               onMapBoundsChange={setMapViewport}
             />
 
-            {selectedDelivery ? (
-              <>
-                <button
-                  type="button"
-                  className="absolute inset-0 z-[30] bg-slate-900/15 md:hidden"
-                  onClick={() => setSelectedDeliveryInvoice(null)}
-                  aria-label="Fechar painel da entrega"
-                />
-                <aside className="absolute bottom-3 right-3 top-3 z-[40] w-[min(360px,calc(100%-1.5rem))] overflow-auto rounded-md border border-border bg-card p-3 shadow-2xl max-md:top-auto max-md:h-[58%]">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted">Detalhes da entrega</p>
-                      <h4 className="text-base font-semibold text-text">{`NF ${selectedDelivery.invoice_number}`}</h4>
-                    </div>
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-text"
-                      onClick={() => setSelectedDeliveryInvoice(null)}
-                      aria-label="Fechar painel da entrega"
-                    >
-                      x
-                    </button>
-                  </div>
 
-                  <div className="mt-3 space-y-2 text-xs">
-                    <div className="rounded-md border border-border bg-surface px-2 py-2">
-                      <p className="font-semibold text-text">{selectedDelivery.customer_name || 'Cliente sem nome'}</p>
-                      <p className="mt-1 text-muted">{`${selectedDelivery.address || '-'}, ${selectedDelivery.address_number || 's/n'}`}</p>
-                      <p className="text-muted">{`${selectedDelivery.neighborhood || '-'} • ${selectedDelivery.city || '-'}${selectedDelivery.state ? `/${selectedDelivery.state}` : ''}`}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-md border border-border bg-surface px-2 py-2">
-                        <p className="text-muted">Status</p>
-                        <p className="font-semibold text-text">{STAGE_LABELS[selectedDelivery.stage]}</p>
-                      </div>
-                      <div className="rounded-md border border-border bg-surface px-2 py-2">
-                        <p className="text-muted">Motorista</p>
-                        <p className="font-semibold text-text">{selectedDelivery.driver_name || 'Nao atribuido'}</p>
-                      </div>
-                      <div className="rounded-md border border-border bg-surface px-2 py-2">
-                        <p className="text-muted">Rota</p>
-                        <p className="font-semibold text-text">{selectedDelivery.trip_id || '-'}</p>
-                      </div>
-                      <div className="rounded-md border border-border bg-surface px-2 py-2">
-                        <p className="text-muted">Sequencia</p>
-                        <p className="font-semibold text-text">{selectedDelivery.sequence || '-'}</p>
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-border bg-surface px-2 py-2">
-                      <p className="text-muted">Geocoding</p>
-                      <p className="font-semibold text-text">
-                        {`${selectedDelivery.geolocation.status}${selectedDelivery.geolocation.source ? ` • ${selectedDelivery.geolocation.source}` : ''}`}
-                      </p>
-                    </div>
-                  </div>
-                </aside>
-              </>
-            ) : null}
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2">
@@ -2116,7 +2074,7 @@ function DeliveryMonitoring() {
           ) : null}
         </section>
 
-        <section className="order-4 mt-3 hidden w-full rounded-lg border border-border bg-card p-3 md:block">
+        <section className="order-4 mt-4 hidden w-full rounded-2xl border border-border bg-surface p-4 shadow-soft md:block">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Lista de entregas</h3>
             <span className="text-xs text-muted">
@@ -2253,7 +2211,7 @@ function DeliveryMonitoring() {
                 <button
                   type="button"
                   onClick={closeReplacementModal}
-                  className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent disabled:opacity-50"
+                  className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-border hover:text-text-accent disabled:opacity-50"
                   disabled={stopStatusUpdate?.nextStatus === 'cancelled'}
                 >
                   Fechar

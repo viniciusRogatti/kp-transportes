@@ -35,6 +35,8 @@ import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
+import useRouteCatalog from '../hooks/useRouteCatalog';
+import { routeByCity, normalizeRouteCity } from '../utils/routeCatalog';
 import { listReceiptBacklog } from '../services/receiptsService';
 import { ICar, IDanfe, IDriver, IOccurrence, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
 import {
@@ -307,7 +309,11 @@ function RoutePlanning() {
   const [displayedTrips, setDisplayedTrips] = useState<ITrip[]>([]);
   const [tripDateFilter, setTripDateFilter] = useState<Date | null>(new Date());
   const [tripEndDateFilter, setTripEndDateFilter] = useState<Date | null>(new Date());
-  const [tripIdSearch, setTripIdSearch] = useState<string>('');
+  const routeCatalog = useRouteCatalog();
+  const [selectedPlannedRoute, setSelectedPlannedRoute] = useState('');
+  const [routingGroupMode, setRoutingGroupMode] = useState<'city' | 'route'>('city');
+  const [availableDanfesError, setAvailableDanfesError] = useState('');
+  const [isAvailableDanfesLoading, setIsAvailableDanfesLoading] = useState(false);
   const [tripDriverSearch, setTripDriverSearch] = useState<string>('');
   const [tripPlateSearch, setTripPlateSearch] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -508,8 +514,7 @@ function RoutePlanning() {
         return String(danfe.invoice_number).includes(term)
           || String(danfe.Customer.name_or_legal_entity || '').toLowerCase().includes(term)
           || String(danfe.Customer.city || '').toLowerCase().includes(term);
-      })
-      .slice(0, 40);
+      });
   }, [availableDanfes, editNotes, editSearch]);
 
   const availableRoutingCityOptions = useMemo(() => {
@@ -544,6 +549,17 @@ function RoutePlanning() {
     return Array.from(groupedByCity.values()).sort((a, b) => a.city.localeCompare(b.city, 'pt-BR', { sensitivity: 'base' }));
   }, [addedNotes, routingPoolDanfes]);
 
+  const availablePlannedRoutes = useMemo(() => {
+    const routes = routeCatalog.data?.routes || [];
+    const owners = routeByCity(routes);
+    return routes.map((route) => ({
+      ...route,
+      danfes: availableRoutingCityOptions.flatMap((city) => (
+        owners[normalizeRouteCity(city.city)] === route.id ? city.danfes : []
+      )),
+    })).filter((route) => route.danfes.length > 0);
+  }, [routeCatalog.data, availableRoutingCityOptions]);
+
   const availableRoutingCityNoteCount = useMemo(
     () => availableRoutingCityOptions.reduce((sum, option) => sum + option.noteCount, 0),
     [availableRoutingCityOptions],
@@ -565,22 +581,23 @@ function RoutePlanning() {
   }, [cars, selectedCar]);
 
   useEffect(() => {
-    if (selectedDriver === 'null') {
-      setDriverInput('');
-      return;
-    }
+    if (selectedDriver === 'null') return;
     const option = driverOptions.find((item) => item.id === selectedDriver);
     if (option) setDriverInput(option.value);
   }, [selectedDriver, driverOptions]);
 
   useEffect(() => {
-    if (selectedCar === 'null') {
-      setCarInput('');
-      return;
-    }
+    if (selectedCar === 'null') return;
     const option = carOptions.find((item) => item.id === selectedCar);
     if (option) setCarInput(option.value);
   }, [selectedCar, carOptions]);
+
+  useEffect(() => {
+    if (selectedDriver === 'null') setDriverInput('');
+  }, [selectedDriver]);
+  useEffect(() => {
+    if (selectedCar === 'null') setCarInput('');
+  }, [selectedCar]);
 
   useEffect(() => {
     if (selectedDriver !== 'null' && selectedCar !== 'null') {
@@ -666,24 +683,21 @@ function RoutePlanning() {
   const filterTripsLocally = useCallback((trips: ITrip[], filters: {
     startDate?: string;
     endDate?: string;
-    tripId?: string;
     driverName?: string;
     licensePlate?: string;
   }) => {
     const startDate = filters.startDate ? toISODate(filters.startDate) : '';
     const endDate = filters.endDate ? toISODate(filters.endDate) : startDate;
-    const tripId = String(filters.tripId || '').trim();
     const driverName = String(filters.driverName || '').trim().toLowerCase();
     const licensePlate = String(filters.licensePlate || '').trim().toUpperCase();
 
     return trips.filter((trip) => {
       const tripDate = toISODate(String(trip.date || ''));
       const matchesDateRange = !startDate || !endDate || (tripDate >= startDate && tripDate <= endDate);
-      const matchesTripId = !tripId || String(trip.id) === tripId;
       const matchesDriver = !driverName || String(trip.Driver?.name || '').toLowerCase().includes(driverName);
       const matchesPlate = !licensePlate || String(trip.Car?.license_plate || '').toUpperCase().includes(licensePlate);
 
-      return matchesDateRange && matchesTripId && matchesDriver && matchesPlate;
+      return matchesDateRange && matchesDriver && matchesPlate;
     });
   }, []);
 
@@ -694,7 +708,6 @@ function RoutePlanning() {
     return filterTripsLocally(sortedDisplayedTrips, {
       startDate,
       endDate,
-      tripId: tripIdSearch.trim(),
       driverName: tripDriverSearch.trim(),
       licensePlate: tripPlateSearch.trim(),
     });
@@ -702,7 +715,6 @@ function RoutePlanning() {
     sortedDisplayedTrips,
     tripDateFilter,
     tripEndDateFilter,
-    tripIdSearch,
     tripDriverSearch,
     tripPlateSearch,
     filterTripsLocally,
@@ -872,10 +884,10 @@ function RoutePlanning() {
     }
   }, [fetchTripsByRange, tripDateFilter, tripEndDateFilter]);
 
-  const fetchDanfesForTripDate = useCallback(async (tripDate: string) => {
+  const fetchDanfesForTripDate = useCallback(async (tripDate: string, includeRoutingBacklog = false) => {
     const operationDate = toISODate(tripDate);
     if (!operationDate) return [];
-    const responses = [await axios.get(`${API_URL}/danfes`, { params: { operationDate, view: 'routing' } })];
+    const responses = [await axios.get(`${API_URL}/danfes`, { params: { operationDate, view: 'routing', ...(includeRoutingBacklog ? { includeRoutingBacklog: true } : {}) } })];
 
     const danfesByInvoice = new Map<string, RouteLookupDanfe>();
 
@@ -1302,15 +1314,23 @@ function RoutePlanning() {
 
   const focusNoteLookupInput = useCallback((select = false) => {
     window.setTimeout(() => {
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
       noteLookupRef.current?.focus();
       if (select) noteLookupRef.current?.select();
     }, 0);
   }, []);
 
   const alertAndRefocusNoteLookup = useCallback((message: string, select = false) => {
-    alert(message);
-    focusNoteLookupInput(select);
+    void showAlert(message).then(() => focusNoteLookupInput(select));
   }, [focusNoteLookupInput]);
+  const alert = alertAndRefocusNoteLookup;
+
+  const hadRoutingDialog = useRef(false);
+  useEffect(() => {
+    const isOpen = Boolean(pendingConflict || routingModalState || prontoBoxPrompt || editTrip || isBatchModalOpen || isSwapModalOpen || routeSubmissionPrompt || detailsTrip || isSalmonPrintModalOpen);
+    if (hadRoutingDialog.current && !isOpen) focusNoteLookupInput(true);
+    hadRoutingDialog.current = isOpen;
+  }, [pendingConflict, routingModalState, prontoBoxPrompt, editTrip, isBatchModalOpen, isSwapModalOpen, routeSubmissionPrompt, detailsTrip, isSalmonPrintModalOpen, focusNoteLookupInput]);
 
   const closeRoutingModal = () => {
     if (isResolvingNoteConflict || isCheckingCorrectedDeliveredInvoice) return;
@@ -1671,6 +1691,26 @@ function RoutePlanning() {
     noteLookupRef.current?.focus();
   };
 
+  const handleAddPlannedRouteNotes = () => {
+    if (selectedDriver === 'null' || selectedCar === 'null') {
+      alert('Selecione um motorista e um veículo antes de adicionar uma rota.');
+      return;
+    }
+    const selected = availablePlannedRoutes.find((route) => route.id === selectedPlannedRoute);
+    if (!selected?.danfes.length) {
+      alert('Selecione uma rota com notas disponíveis.');
+      return;
+    }
+    const existing = new Set(addedNotesRef.current.map(getTripNoteKey));
+    const notes = selected.danfes.filter((danfe) => !existing.has(getDanfeRouteKey(danfe)))
+      .map((danfe, index) => buildTripNoteFromDanfe(danfe, addedNotesRef.current.length + index + 1));
+    updateAddedNotes((prev) => [...prev, ...notes]);
+    if (notes.length) setLastScannedInvoice(String(notes[notes.length - 1].invoice_number));
+    setSelectedPlannedRoute('');
+    setNoteLookup('');
+    focusNoteLookupInput();
+  };
+
   const removeNoteFromList = async (note: ITripNote) => {
     if (!isMutableTripNoteStatus(note.status)) {
       alert('Notas em andamento ou finalizadas nao podem ser removidas nesta tela.');
@@ -1802,7 +1842,7 @@ function RoutePlanning() {
     link.click();
     link.remove();
     window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-  }, []);
+  }, [alert]);
 
   const exportTripNotesTxt = useCallback((trip: ITrip) => {
     downloadTripNotesTxt({
@@ -2017,9 +2057,12 @@ function RoutePlanning() {
   };
 
   const fetchAvailableForTrip = async (tripDate: string, ignoreTripId?: number | null) => {
+    setAvailableDanfes([]);
+    setAvailableDanfesError('');
+    setIsAvailableDanfesLoading(true);
     try {
       const [danfes, trips] = await Promise.all([
-        fetchDanfesForTripDate(tripDate),
+        fetchDanfesForTripDate(tripDate, true),
         fetchTripsByDate(tripDate),
       ]);
       const filtered = buildRoutingPoolRows(danfes, trips, {
@@ -2028,6 +2071,9 @@ function RoutePlanning() {
       setAvailableDanfes(filtered);
     } catch {
       setAvailableDanfes([]);
+      setAvailableDanfesError('Não foi possível carregar as notas disponíveis. Tente novamente.');
+    } finally {
+      setIsAvailableDanfesLoading(false);
     }
   };
 
@@ -2428,13 +2474,13 @@ function RoutePlanning() {
       console.error('Erro ao excluir rota:', error);
       alert('Erro ao excluir a rota.');
     }
-  }, [authConfig, detailsTrip, fetchTripsByDate, refreshRoutingPool, refreshTrips, todayApiDate, tripDateFilter]);
+  }, [alert, authConfig, detailsTrip, fetchTripsByDate, refreshRoutingPool, refreshTrips, todayApiDate, tripDateFilter]);
 
   if (isLoading) {
     return (
       <ContainerRoutePlanning>
         <Header />
-        <Container>
+        <Container className="operation-page">
           <TruckLoader />
         </Container>
       </ContainerRoutePlanning>
@@ -2444,7 +2490,7 @@ function RoutePlanning() {
   return (
     <ContainerRoutePlanning>
       <Header />
-      <Container className="box-border h-[100dvh] min-h-[100dvh] overflow-hidden pb-0 pt-[calc(var(--header-height)+var(--space-2))]">
+      <Container className="operation-page box-border min-h-[100dvh] pb-0 pt-[calc(var(--header-height)+var(--space-2))]">
         <div className="flex h-full w-full min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
             <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
@@ -2477,6 +2523,7 @@ function RoutePlanning() {
                   <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
 
+                <button type="button" onClick={requestTripSubmission} className="inline-flex items-center gap-2 rounded-lg semantic-solid-info px-3 py-2 text-sm font-bold md:hidden"><Send className="h-4 w-4" />{isUpdating ? 'Salvar viagem' : 'Criar viagem'}</button>
                 <div className="relative md:hidden">
                   <button type="button" onClick={() => setIsMobileToolbarOpen((prev) => !prev)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text">
                     <MoreVertical className="h-4 w-4" />
@@ -2500,7 +2547,7 @@ function RoutePlanning() {
                     <span>
                       Modo edição: rota #{tripToUpdate.id} | Motorista {tripToUpdate.Driver.name} | Placa {tripToUpdate.Car.license_plate}
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         className="rounded border border-sky-950 bg-sky-950 px-2 py-1 text-white transition hover:bg-sky-900"
@@ -2510,10 +2557,10 @@ function RoutePlanning() {
                       </button>
                       <button
                         type="button"
-                        className="rounded border border-border bg-surface px-2 py-1 text-text"
+                        className="inline-flex min-h-[40px] items-center rounded-lg border border-white bg-white px-4 py-2 text-sm font-bold text-sky-950 shadow-md transition hover:bg-sky-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                         onClick={exitEditMode}
                       >
-                        Sair do modo edição
+                        Sair do modo edição · Nova roteirização
                       </button>
                     </div>
                   </div>
@@ -2549,14 +2596,17 @@ function RoutePlanning() {
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
                                   event.preventDefault();
-                                  commitDriverInput((event.target as HTMLInputElement).value, true);
+                                  if (commitDriverInput((event.target as HTMLInputElement).value, true)) {
+                                    setIsDriverSuggestionsOpen(false);
+                                    focusNoteLookupInput();
+                                  }
                                 }
                                 if (event.key === 'Tab') {
                                   commitDriverInput((event.target as HTMLInputElement).value, true);
                                   if (!event.shiftKey) {
                                     event.preventDefault();
                                     window.requestAnimationFrame(() => {
-                                      carInputRef.current?.focus();
+                                      focusNoteLookupInput();
                                     });
                                   }
                                 }
@@ -2578,7 +2628,7 @@ function RoutePlanning() {
                                       applyDriverSelection(option.id);
                                       setIsDriverSuggestionsOpen(false);
                                       window.requestAnimationFrame(() => {
-                                        carInputRef.current?.focus();
+                                        focusNoteLookupInput();
                                       });
                                     }}
                                   >
@@ -2674,7 +2724,7 @@ function RoutePlanning() {
                   <div className="mb-2 mt-1 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => setShowAssignmentFields(false)}
+                      onClick={() => { setShowAssignmentFields(false); focusNoteLookupInput(); }}
                       className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs text-text"
                     >
                       Ocultar seleção <ChevronUp className="h-3.5 w-3.5" />
@@ -2710,8 +2760,8 @@ function RoutePlanning() {
                   </div>
                 ) : null}
 
-                <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
-                  <BoxSelectDanfe>
+                <div className="mb-2 grid w-full grid-cols-2 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+                  <BoxSelectDanfe className="col-span-2 min-w-0 md:col-span-1">
                     <input
                       type="text"
                       ref={noteLookupRef}
@@ -2719,12 +2769,12 @@ function RoutePlanning() {
                       placeholder="Digite NF ou código de barras"
                       value={noteLookup}
                       onChange={(event) => setNoteLookup(event.target.value)}
-                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
+                      disabled={isBatchAdding}
                     />
                   </BoxSelectDanfe>
                   <ActionButton
                     $tone="secondary"
-                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                    className="w-full border-border bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
                     onClick={handleAddNote}
                     disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                   >
@@ -2732,7 +2782,7 @@ function RoutePlanning() {
                   </ActionButton>
                   <ActionButton
                     $tone="secondary"
-                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
+                    className="w-full border-border bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
                     onClick={() => setIsBatchModalOpen(true)}
                     disabled={selectedDriver === 'null' || selectedCar === 'null' || isBatchAdding}
                   >
@@ -2740,44 +2790,35 @@ function RoutePlanning() {
                   </ActionButton>
                 </div>
 
-                <div className="mb-2 grid w-full grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <div className="flex flex-col gap-1">
-                    <select
-                      value={selectedRoutingCity}
-                      onChange={(event) => setSelectedRoutingCity(event.target.value)}
-                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !availableRoutingCityOptions.length}
-                      className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="">
-                        {isRoutingPoolLoading
-                          ? 'Carregando cidades...'
-                          : availableRoutingCityOptions.length
-                            ? 'Selecione uma cidade para adicionar todas as notas'
-                            : 'Nenhuma cidade pendente disponível'}
-                      </option>
-                      {availableRoutingCityOptions.map((option) => (
-                        <option key={option.city} value={option.city}>
-                          {`${option.city} • ${option.noteCount} nota(s) • ${option.totalWeight.toFixed(2)} Kg`}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted">
-                      {isRoutingPoolLoading
-                        ? 'Atualizando cidades com notas ainda sem motorista...'
-                        : `${availableRoutingCityOptions.length} cidade(s) com ${availableRoutingCityNoteCount} nota(s) do dia ainda sem motorista para esta data.`}
-                    </p>
+                <div className="mb-3 min-w-0 rounded-xl border border-border bg-card p-2">
+                  <div className="mb-2 flex gap-1" aria-label="Agrupar notas para adicionar">
+                    {(['city', 'route'] as const).map((mode) => <button key={mode} type="button" aria-pressed={routingGroupMode === mode} onClick={() => setRoutingGroupMode(mode)}
+                      className={cn('rounded-lg px-3 py-1.5 text-xs font-semibold transition', routingGroupMode === mode ? 'bg-accent text-white' : 'text-muted hover:bg-surface-2')}>
+                      {mode === 'city' ? 'Por cidade' : 'Por rota'}
+                    </button>)}
                   </div>
-                  <ActionButton
-                    $tone="secondary"
-                    className="w-full border-accent/45 bg-card px-3 py-2 text-sm text-text hover:bg-surface md:w-auto"
-                    onClick={handleAddCityNotes}
-                    disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || !selectedRoutingCity}
-                  >
-                    Adicionar cidade
-                  </ActionButton>
+                  <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    {routingGroupMode === 'city' ? <select aria-label="Selecionar cidade" value={selectedRoutingCity} onChange={(event) => setSelectedRoutingCity(event.target.value)}
+                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading}
+                      className="h-10 min-w-0 w-full rounded-lg border border-border bg-surface px-2 text-sm text-text disabled:opacity-60">
+                      <option value="">{isRoutingPoolLoading ? 'Carregando cidades...' : 'Selecione uma cidade'}</option>
+                      {availableRoutingCityOptions.map((option) => <option key={option.city} value={option.city}>{option.city} · {option.noteCount} nota(s) · {option.totalWeight.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg</option>)}
+                    </select> : <select aria-label="Selecionar rota planejada" value={selectedPlannedRoute} onChange={(event) => setSelectedPlannedRoute(event.target.value)}
+                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || routeCatalog.isLoading || routeCatalog.isError}
+                      className="h-10 min-w-0 w-full rounded-lg border border-border bg-surface px-2 text-sm text-text disabled:opacity-60">
+                      <option value="">{routeCatalog.isLoading ? 'Carregando rotas...' : 'Selecione uma rota'}</option>
+                      {availablePlannedRoutes.map((route) => <option key={route.id} value={route.id}>{route.name} · {route.danfes.length} nota(s) · {route.danfes.reduce((sum, danfe) => sum + (Number(danfe.gross_weight) || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg</option>)}
+                    </select>}
+                    <ActionButton $tone="secondary" className="w-full rounded-lg px-3 py-2 text-sm font-semibold sm:w-auto" onClick={routingGroupMode === 'city' ? handleAddCityNotes : handleAddPlannedRouteNotes}
+                      disabled={selectedDriver === 'null' || selectedCar === 'null' || isRoutingPoolLoading || (routingGroupMode === 'city' ? !selectedRoutingCity : routeCatalog.isError || !availablePlannedRoutes.some((route) => route.id === selectedPlannedRoute))}>
+                      {routingGroupMode === 'city' ? 'Adicionar cidade' : 'Adicionar rota'}
+                    </ActionButton>
+                  </div>
+                  {routingGroupMode === 'route' && routeCatalog.isError ? <p role="alert" className="mt-1 text-xs text-danger">Não foi possível carregar as rotas. <button type="button" onClick={() => void routeCatalog.refetch()} className="underline">Tentar novamente</button></p> :
+                    <p className="mt-1 text-xs text-muted">{isRoutingPoolLoading ? 'Carregando notas...' : `${availableRoutingCityNoteCount} nota(s) disponível(is) nesta data.`}</p>}
                 </div>
 
-                <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-md border border-border bg-surface-2 md:min-h-0">
+                <div className="relative h-[max(420px,calc(100dvh-440px))] shrink-0 overflow-hidden rounded-xl border border-border bg-card">
                   <div className="flex h-full min-h-0 flex-col">
                     <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1 md:p-1.5">
                       <ul className="space-y-1">
@@ -2808,7 +2849,7 @@ function RoutePlanning() {
                                     onFocus={(event) => event.currentTarget.select()}
                                     disabled={noteIsLocked}
                                     aria-label={`Editar ordem da NF ${note.invoice_number}`}
-                                    className="h-9 w-14 rounded-md border border-accent/35 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
+                                    className="h-9 w-14 rounded-md border border-border bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60 disabled:cursor-not-allowed disabled:opacity-45"
                                   />
                                 </div>
 
@@ -2843,7 +2884,7 @@ function RoutePlanning() {
                                         onChange={(event) => updateAddedNoteBoxQuantity(note, event.target.value)}
                                         onFocus={(event) => event.currentTarget.select()}
                                         aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}
-                                        className="h-8 w-20 rounded border border-accent/40 bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
+                                        className="h-8 w-20 rounded border border-border bg-card px-2 text-center text-sm font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
                                         placeholder="Ex.: 3"
                                       />
                                     </label>
@@ -2865,7 +2906,7 @@ function RoutePlanning() {
                                 <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-border/80 pt-1.5 md:self-center md:border-t-0 md:pt-0">
                                   <button
                                     type="button"
-                                    onClick={() => moveNoteUp(note)}
+                                    onClick={() => { moveNoteUp(note); focusNoteLookupInput(); }}
                                     disabled={canReorderTripNote(sortedNotes, note, 'up') === false}
                                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
                                     aria-label={`Subir NF ${note.invoice_number}`}
@@ -2874,7 +2915,7 @@ function RoutePlanning() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => moveNoteDown(note)}
+                                    onClick={() => { moveNoteDown(note); focusNoteLookupInput(); }}
                                     disabled={canReorderTripNote(sortedNotes, note, 'down') === false}
                                     className="inline-flex h-8 w-8 items-center justify-center rounded border border-border bg-surface text-xs text-text disabled:opacity-45"
                                     aria-label={`Descer NF ${note.invoice_number}`}
@@ -2883,7 +2924,7 @@ function RoutePlanning() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => removeNoteFromList(note)}
+                                    onClick={() => void removeNoteFromList(note).then(() => focusNoteLookupInput())}
                                     disabled={noteIsLocked}
                                     className="rounded border border-rose-700 bg-rose-700 px-2.5 py-1.5 text-[11px] text-white transition hover:bg-rose-600 disabled:opacity-45"
                                   >
@@ -2919,7 +2960,6 @@ function RoutePlanning() {
               <TripSearchControls
                 startDate={tripDateFilter}
                 endDate={tripEndDateFilter}
-                tripId={tripIdSearch}
                 plate={tripPlateSearch}
                 driverName={tripDriverSearch}
                 isPrinting={isPrinting}
@@ -2927,7 +2967,6 @@ function RoutePlanning() {
                 hasDisplayedTrips={filteredDisplayedTrips.length > 0}
                 onStartDateChange={setTripDateFilter}
                 onEndDateChange={setTripEndDateFilter}
-                onTripIdChange={setTripIdSearch}
                 onPlateChange={setTripPlateSearch}
                 onDriverNameChange={setTripDriverSearch}
                 onPrint={openSalmonPrintModal}
@@ -2935,7 +2974,6 @@ function RoutePlanning() {
                   const today = new Date();
                   setTripDateFilter(today);
                   setTripEndDateFilter(today);
-                  setTripIdSearch('');
                   setTripDriverSearch('');
                   setTripPlateSearch('');
                   void refreshTrips(todayApiDate);
@@ -2997,7 +3035,7 @@ function RoutePlanning() {
         </div>
 
         {isSalmonPrintModalOpen ? (
-          <div className="fixed inset-0 z-[1480] flex items-center justify-center bg-black/75 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Imprimir lista de salmão" className="fixed inset-0 z-[1480] flex items-center justify-center bg-black/75 p-3">
             <div className="flex max-h-[90dvh] w-full max-w-[820px] flex-col rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-3)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -3169,7 +3207,7 @@ function RoutePlanning() {
         ) : null}
 
         {isBatchModalOpen ? (
-          <div className="fixed inset-0 z-[1470] flex items-center justify-center bg-black/70 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Adicionar notas em lote" className="fixed inset-0 z-[1470] flex items-center justify-center bg-black/70 p-3">
             <div className="w-full max-w-[720px] rounded-lg border border-border bg-surface p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-base font-semibold text-text">Adicionar notas em lote</h3>
@@ -3186,7 +3224,7 @@ function RoutePlanning() {
               </div>
 
               <textarea
-                className="scrollbar-ui min-h-[220px] w-full resize-y rounded-sm border border-accent/35 bg-card p-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
+                className="scrollbar-ui min-h-[220px] w-full resize-y rounded-sm border border-border bg-card p-2 text-sm text-text focus:outline-none focus:ring-2 focus:ring-accent/60"
                 placeholder="Cole várias NFs/códigos de barras (uma por linha)"
                 value={batchNoteLookup}
                 onChange={(event) => setBatchNoteLookup(event.target.value)}
@@ -3222,7 +3260,7 @@ function RoutePlanning() {
         ) : null}
 
         {prontoBoxPrompt ? (
-          <div className="fixed inset-0 z-[1490] flex items-center justify-center bg-black/75 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Quantidade de caixas da Pronto" className="fixed inset-0 z-[1490] flex items-center justify-center bg-black/75 p-3">
             <div className="w-full max-w-[460px] rounded-lg border border-sky-700/70 bg-surface p-4 shadow-[var(--shadow-3)]">
               <h3 className="text-base font-semibold text-text">Quantidade de caixas da PRONTO</h3>
               <p className="mt-1 text-sm text-muted">
@@ -3249,7 +3287,7 @@ function RoutePlanning() {
                       confirmProntoBoxQuantity();
                     }
                   }}
-                  className="mt-1 h-12 w-full rounded-md border border-accent/45 bg-card px-3 text-lg font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
+                  className="mt-1 h-12 w-full rounded-md border border-border bg-card px-3 text-lg font-semibold text-text outline-none focus:ring-2 focus:ring-accent/60"
                   placeholder="Ex.: 3"
                   aria-label={`Quantidade de caixas da NF ${prontoBoxPrompt.danfe.invoice_number}`}
                 />
@@ -3279,7 +3317,7 @@ function RoutePlanning() {
         ) : null}
 
         {routingModalState ? (
-          <div className="fixed inset-0 z-[1465] flex items-center justify-center bg-black/70 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Conferir situação da nota" className="fixed inset-0 z-[1465] flex items-center justify-center bg-black/70 p-3">
             <div className="w-full max-w-[620px] rounded-lg border border-border bg-surface p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -3350,7 +3388,7 @@ function RoutePlanning() {
                     disabled={isCheckingCorrectedDeliveredInvoice}
                   />
                   {correctedDeliveredInvoiceError ? (
-                    <p className="mt-2 text-xs text-rose-300">{correctedDeliveredInvoiceError}</p>
+                    <p className="mt-2 text-xs text-[color:var(--semantic-danger-text)]">{correctedDeliveredInvoiceError}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -3402,7 +3440,7 @@ function RoutePlanning() {
         ) : null}
 
         {pendingConflict ? (
-          <div className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Conflito de atribuição" className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
             <div className="w-full max-w-[560px] rounded-lg border border-border bg-surface p-4">
               <h3 className="text-base font-semibold text-text">Resolver conflito</h3>
               <p className="mt-2 text-sm text-muted">
@@ -3434,7 +3472,7 @@ function RoutePlanning() {
               </div>
               <div className="mb-2">
                 <label className="mb-1 block text-xs uppercase tracking-wide text-muted">Rota alvo</label>
-                <select value={swapTargetTripId} onChange={(event) => setSwapTargetTripId(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text">
+                <select value={swapTargetTripId} onChange={(event) => setSwapTargetTripId(event.target.value)} className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text">
                   <option value="">Selecione a rota para trocar</option>
                   {availableSwapTrips.map((trip) => (
                     <option key={trip.id} value={trip.id}>Rota #{trip.id} | {trip.Driver.name} | {trip.Car.license_plate}</option>
@@ -3457,7 +3495,7 @@ function RoutePlanning() {
               </div>
               <div className="mb-3">
                 <label className="mb-1 block text-xs uppercase tracking-wide text-muted">Motivo (opcional)</label>
-                <input value={swapReason} onChange={(event) => setSwapReason(event.target.value)} className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text" placeholder="Ex.: ajuste operacional" />
+                <input value={swapReason} onChange={(event) => setSwapReason(event.target.value)} className="h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text" placeholder="Ex.: ajuste operacional" />
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" className="rounded border border-border bg-surface-2 px-3 py-2 text-sm text-text" onClick={() => setIsSwapModalOpen(false)}>Cancelar</button>
@@ -3475,7 +3513,7 @@ function RoutePlanning() {
         ) : null}
 
         {detailsTrip ? (
-          <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-black/60 p-3">
+          <div role="dialog" aria-modal="true" aria-label="Detalhes da viagem" className="fixed inset-0 z-[1400] flex items-center justify-center bg-black/60 p-3">
             <div className="w-full max-w-[760px] rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-base font-semibold text-text">Detalhes da Rota #{detailsTrip.run_number || 1}</h3>
@@ -3498,8 +3536,8 @@ function RoutePlanning() {
         ) : null}
 
         {editTrip ? (
-          <div className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
-            <div className="w-full max-w-[980px] rounded-lg border border-border bg-surface p-4">
+          <div role="dialog" aria-modal="true" aria-label="Editar viagem" className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
+            <div className="max-h-[90dvh] w-full max-w-[980px] overflow-y-auto rounded-lg border border-border bg-surface p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="text-base font-semibold text-text">Editar rota #{editTrip.run_number || 1} | {editTrip.Driver.name}</h3>
                 <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
@@ -3528,7 +3566,7 @@ function RoutePlanning() {
                               value={note.box_quantity ?? ''}
                               onChange={(event) => updateEditNoteBoxQuantity(note, event.target.value)}
                               aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}
-                              className="h-8 w-16 rounded border border-accent/40 bg-card px-1 text-center text-sm text-text"
+                              className="h-8 w-16 rounded border border-border bg-card px-1 text-center text-sm text-text"
                             />
                           </label>
                         ) : null}
@@ -3539,12 +3577,15 @@ function RoutePlanning() {
                 </div>
 
                 <div>
-                  <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas disponíveis</p>
-                  <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text" />
+                  <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas disponíveis · dia e pendências anteriores</p>
+                  {isAvailableDanfesLoading ? <p role="status" className="mb-2 text-sm text-muted">Carregando notas disponíveis...</p> : null}
+                  {availableDanfesError ? <div role="alert" className="mb-2 text-sm text-danger">{availableDanfesError}<button type="button" onClick={() => void fetchAvailableForTrip(editTrip.date, editTrip.id)} className="ml-2 underline">Tentar novamente</button></div> : null}
+                  {!isAvailableDanfesLoading && !availableDanfesError ? <p className="mb-2 text-xs text-muted">{filteredAvailableDanfes.length} nota(s) disponível(is)</p> : null}
+                  <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text" />
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {filteredAvailableDanfes.map((danfe) => (
-                      <li key={danfe.invoice_number} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm">
-                        <span className="min-w-0 truncate text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}</span>
+                      <li key={getDanfeRouteKey(danfe)} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm">
+                        <span className="min-w-0 break-words text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}<small className="block text-muted">{danfe.status === 'redelivery' ? 'Reentrega' : 'Pendente'} · Emissão {formatDateBR(danfe.invoice_date)}</small></span>
                         <button type="button" className="rounded border border-sky-700 bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white transition hover:bg-sky-600" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
                       </li>
                     ))}

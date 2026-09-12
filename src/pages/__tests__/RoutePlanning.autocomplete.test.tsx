@@ -5,8 +5,10 @@ import axios from 'axios';
 
 import RoutePlanning from '../RoutePlanning';
 import verifyToken from '../../utils/verifyToken';
+import GlobalAlertHost from '../../components/ui/GlobalAlertHost';
 
 jest.mock('axios');
+jest.mock('../../hooks/useRouteCatalog', () => () => ({ data: { routes: [{ id: 'campinas', name: 'Campinas', cities: ['Campinas'] }] }, isLoading: false, isError: false }));
 jest.mock('../../utils/verifyToken');
 jest.mock('../../components/Header', () => () => <div data-testid="header" />);
 jest.mock('../../components/Popup', () => () => null);
@@ -24,6 +26,7 @@ const mockedVerifyToken = verifyToken as jest.Mock;
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/routePlanning']}>
+      <GlobalAlertHost />
       <RoutePlanning />
     </MemoryRouter>,
   );
@@ -77,6 +80,7 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
     fireEvent.click(driverOption);
 
     await waitFor(() => expect(driverInput).toHaveValue('João da Silva'));
+    await waitFor(() => expect(screen.getByPlaceholderText('Digite NF ou código de barras')).toHaveFocus());
 
     const carInput = screen.getByPlaceholderText('Digite placa ou veículo');
     fireEvent.change(carInput, { target: { value: '1234' } });
@@ -109,4 +113,68 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
 
     await waitFor(() => expect(carInput).toHaveValue('Volkswagen Delivery - VIN-2000'));
   });
+  it('devolve o foco à NF após confirmar o motorista com Enter e fechar um aviso', async () => {
+    renderPage();
+    const driver = await screen.findByPlaceholderText('Digite nome do motorista');
+    fireEvent.change(driver, { target: { value: 'joao' } });
+    await screen.findByRole('option', { name: 'João da Silva - Disponível' });
+    fireEvent.keyDown(driver, { key: 'Enter' });
+    const lookup = screen.getByPlaceholderText('Digite NF ou código de barras');
+    await waitFor(() => expect(lookup).toHaveFocus());
+    fireEvent.keyDown(lookup, { key: 'Enter' });
+    const ok = await screen.findByRole('button', { name: 'Entendi' });
+    fireEvent.click(ok);
+    await waitFor(() => expect(lookup).toHaveFocus());
+  });
+
+  it('adiciona somente as notas disponíveis da rota escolhida e não as duplica', async () => {
+    const originalGet = mockedAxios.get.getMockImplementation()!;
+    mockedAxios.get.mockImplementation((url: string, config?: any) => {
+      if (url.includes('/trips/search/date/')) return Promise.resolve({ data: [] });
+      if (url.endsWith('/danfes')) return Promise.resolve({ data: [
+        { invoice_number: '9001', company_id: 1, status: 'pending', gross_weight: '15', Customer: { name_or_legal_entity: 'Cliente Campinas', city: 'Campinas' }, DanfeProducts: [] },
+        { invoice_number: '9002', company_id: 1, status: 'pending', gross_weight: '20', Customer: { name_or_legal_entity: 'Cliente Santos', city: 'Santos' }, DanfeProducts: [] },
+      ] });
+      return originalGet(url, config);
+    });
+    renderPage();
+    const driver = await screen.findByPlaceholderText('Digite nome do motorista');
+    fireEvent.change(driver, { target: { value: 'joao' } });
+    await screen.findByRole('option', { name: 'João da Silva - Disponível' });
+    fireEvent.keyDown(driver, { key: 'Enter' });
+    fireEvent.change(screen.getByPlaceholderText('Digite placa ou veículo'), { target: { value: '1234' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'Volvo FH - ABC-1234 - Disponível' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Por rota' }));
+    const route = screen.getByLabelText('Selecionar rota planejada');
+    await screen.findByRole('option', { name: /Campinas · 1 nota/ });
+    fireEvent.change(route, { target: { value: 'campinas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar rota' }));
+    expect(screen.getByLabelText('Editar ordem da NF 9001')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Editar ordem da NF 9002')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adicionar rota' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByPlaceholderText('Digite NF ou código de barras')).toHaveFocus());
+  });
+
+  it('consulta pendências anteriores na edição e permite sair do modo de edição', async () => {
+    const originalGet = mockedAxios.get.getMockImplementation()!;
+    const date = new Date();
+    const dateLabel = `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+    const trip = { id: 77, date: dateLabel, driver_id: 1, car_id: 10, run_number: 1, gross_weight: '10', Driver: { id: 1, name: 'João da Silva' }, Car: { id: 10, model: 'Volvo FH', license_plate: 'ABC-1234' }, TripNotes: [] };
+    mockedAxios.get.mockImplementation((url: string, config?: any) => {
+      if (url.includes('/trips/search/date/')) return Promise.resolve({ data: [trip] });
+      if (url.endsWith('/danfes')) return Promise.resolve({ data: config?.params?.includeRoutingBacklog ? [
+        { invoice_number: '8888', company_id: 1, status: 'redelivery', invoice_date: '2026-01-01', gross_weight: '15', Customer: { name_or_legal_entity: 'Cliente antigo', city: 'Campinas' }, DanfeProducts: [] },
+      ] : [] });
+      return originalGet(url, config);
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Viagens' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar rota' }));
+    expect(await screen.findByText(/NF 8888/)).toBeInTheDocument();
+    expect(mockedAxios.get).toHaveBeenCalledWith(expect.stringMatching(/\/danfes$/), expect.objectContaining({ params: expect.objectContaining({ view: 'routing', includeRoutingBacklog: true }) }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    fireEvent.click(screen.getByRole('button', { name: /Sair do modo edição/ }));
+    expect(screen.queryByText(/Modo edição: rota/)).not.toBeInTheDocument();
+  });
+
 });

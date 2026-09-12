@@ -5,7 +5,6 @@ import { Printer } from 'lucide-react';
 type TripSearchControlsProps = {
   startDate: Date | null;
   endDate: Date | null;
-  tripId: string;
   plate: string;
   driverName: string;
   isPrinting: boolean;
@@ -13,7 +12,6 @@ type TripSearchControlsProps = {
   hasDisplayedTrips: boolean;
   onStartDateChange: (date: Date | null) => void;
   onEndDateChange: (date: Date | null) => void;
-  onTripIdChange: (value: string) => void;
   onPlateChange: (value: string) => void;
   onDriverNameChange: (value: string) => void;
   onPrint: () => void | Promise<void>;
@@ -24,7 +22,6 @@ type TripSearchControlsProps = {
 export default function TripSearchControls({
   startDate,
   endDate,
-  tripId,
   plate,
   driverName,
   isPrinting,
@@ -32,7 +29,6 @@ export default function TripSearchControls({
   hasDisplayedTrips,
   onStartDateChange,
   onEndDateChange,
-  onTripIdChange,
   onPlateChange,
   onDriverNameChange,
   onPrint,
@@ -42,8 +38,8 @@ export default function TripSearchControls({
   return (
     <div className="mb-3 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-text">Trips / Rotas</h2>
-        <div className="flex items-center gap-2">
+        <h2 className="text-base font-semibold text-text">Viagens</h2>
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="inline-flex h-10 items-center gap-2 rounded-md border border-emerald-700 bg-emerald-700 px-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-55"
@@ -70,7 +66,7 @@ export default function TripSearchControls({
         </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
         <DatePicker
           selected={startDate}
           onChange={onStartDateChange}
@@ -88,14 +84,6 @@ export default function TripSearchControls({
           placeholderText="Data final"
           aria-label="Data final das rotas"
           className="h-10 w-full rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
-        />
-        <input
-          type="text"
-          value={tripId}
-          onChange={(event) => onTripIdChange(event.target.value.replace(/[^\d]/g, ''))}
-          placeholder="ID da rota"
-          aria-label="ID da rota"
-          className="h-10 rounded-sm border border-accent/35 bg-card px-3 text-sm text-text"
         />
         <input
           type="text"

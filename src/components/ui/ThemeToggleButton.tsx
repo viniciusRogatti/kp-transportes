@@ -1,5 +1,4 @@
-import { useEffect, useRef } from 'react';
-import darkModeButtonAnimation from '../../assets/gifs/Dark Mode Button.svg';
+import { Moon, Sun } from 'lucide-react';
 import { cn } from '../../lib/cn';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -10,60 +9,46 @@ interface ThemeToggleButtonProps {
 
 function ThemeToggleButton({ className, iconOnly = false }: ThemeToggleButtonProps) {
   const { isLightTheme, toggleTheme } = useTheme();
-  const animationTimeoutRef = useRef<number | null>(null);
-  const animationRef = useRef<HTMLObjectElement>(null);
-
-  const getAnimation = () => animationRef.current?.contentDocument?.querySelector('svg') as (SVGSVGElement & {
-    pauseAnimations?: () => void;
-    unpauseAnimations?: () => void;
-    setCurrentTime?: (seconds: number) => void;
-  }) | null;
-
-  const freezeAnimationAt = (theme: 'dark' | 'light') => {
-    const animation = getAnimation();
-    if (!animation) return;
-    animation.setCurrentTime?.(theme === 'dark' ? 3 : 0);
-    animation.pauseAnimations?.();
-  };
-
-  useEffect(() => () => {
-    if (animationTimeoutRef.current) window.clearTimeout(animationTimeoutRef.current);
-  }, []);
-
-  const handleThemeToggle = () => {
-    const nextTheme = isLightTheme ? 'dark' : 'light';
-    const animation = getAnimation();
-    if (animationTimeoutRef.current) window.clearTimeout(animationTimeoutRef.current);
-    animation?.setCurrentTime?.(nextTheme === 'dark' ? 0.5 : 5);
-    animation?.unpauseAnimations?.();
-    animationTimeoutRef.current = window.setTimeout(() => freezeAnimationAt(nextTheme), 1800);
-    toggleTheme();
-  };
+  const actionLabel = isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro';
 
   return (
     <button
       type="button"
-      onClick={handleThemeToggle}
+      onClick={toggleTheme}
       role="switch"
-      aria-checked={!isLightTheme}
+      aria-checked={isLightTheme}
+      aria-label={actionLabel}
+      title={`${actionLabel} · farol ${isLightTheme ? 'aceso' : 'apagado'}`}
       className={cn(
-        'inline-flex items-center justify-center overflow-hidden rounded-full border border-border bg-card p-0 text-sm font-semibold text-text transition-colors hover:border-muted hover:bg-surface-2',
-        iconOnly ? 'h-10 w-[84px]' : 'h-12 w-[110px]',
+        'group inline-flex shrink-0 items-center justify-center gap-1 rounded-xl border border-border bg-card px-1.5 text-text transition-colors hover:border-accent hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none',
+        iconOnly ? 'h-11 w-24 sm:w-[108px]' : 'h-12 min-w-[128px]',
         className,
       )}
-      aria-label={isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro'}
-      title={isLightTheme ? 'Ativar tema escuro' : 'Ativar tema claro'}
     >
-      <object
-        ref={animationRef}
-        data={darkModeButtonAnimation}
-        type="image/svg+xml"
-        aria-hidden="true"
-        tabIndex={-1}
-        onLoad={() => freezeAnimationAt(isLightTheme ? 'light' : 'dark')}
-        className="pointer-events-none h-full w-full"
-      >Alternar entre tema claro e escuro</object>
-      <span className="sr-only">{isLightTheme ? 'Tema claro ativo' : 'Tema escuro ativo'}</span>
+      <svg viewBox="0 0 72 40" fill="none" aria-hidden="true" className="h-10 w-[60px] sm:w-[72px] shrink-0">
+        {/* A transição acompanha apenas mudanças de estado; não há animação ao montar. */}
+        <g className="transition-opacity duration-300 motion-reduce:transition-none" opacity={isLightTheme ? 1 : 0}>
+          <path d="M53 22L71 13V36L53 28Z" fill="#FBBF24" fillOpacity=".65" />
+          <path d="M57 21L67 17M58 25H70M57 29L67 33" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M54 23L66 20V30L54 27Z" fill="#FDE68A" />
+        </g>
+        <path d="M5 10A3 3 0 018 7H32A3 3 0 0135 10V29H5V10Z" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M35 15H44L52 23V29H35V15Z" fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M39 18H43L48 23H39V18Z" fill="currentColor" fillOpacity=".65" />
+        <path d="M3 29H54M10 12H29M10 16H24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="14" cy="30" r="4" fill="var(--color-card, #152235)" stroke="currentColor" strokeWidth="1.7" />
+        <circle cx="43" cy="30" r="4" fill="var(--color-card, #152235)" stroke="currentColor" strokeWidth="1.7" />
+        <circle cx="14" cy="30" r="1.3" fill="currentColor" />
+        <circle cx="43" cy="30" r="1.3" fill="currentColor" />
+        <rect x="49" y="24" width="5" height="3" rx="1" stroke="currentColor" strokeWidth=".8"
+          fill={isLightTheme ? '#FBBF24' : 'currentColor'}
+          fillOpacity={isLightTheme ? 1 : .25}
+          className="transition-colors duration-300 motion-reduce:transition-none" />
+      </svg>
+      <span className="grid h-5 w-5 shrink-0 place-items-center" aria-hidden="true">
+        {isLightTheme ? <Sun size={17} className="text-amber-700" /> : <Moon size={17} className="text-text-accent" />}
+      </span>
+      <span className="sr-only">{isLightTheme ? 'Tema claro ativo, farol aceso' : 'Tema escuro ativo, farol apagado'}</span>
     </button>
   );
 }

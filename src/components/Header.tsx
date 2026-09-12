@@ -328,25 +328,25 @@ function Header() {
         </button>
       </aside>
 
-      <header ref={topbarRef} className="app-shell-topbar fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border px-3 shadow-[var(--shadow-1)] md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-300 md:ease-out">
-        <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+      <header ref={topbarRef} className="app-shell-topbar fixed left-0 right-0 top-0 z-[1100] h-[var(--header-height)] border-b border-border px-2 shadow-[var(--shadow-1)] md:left-[var(--app-sidebar-current)] md:px-4 md:transition-[left] md:duration-300 md:ease-out">
+        <div className="mx-auto flex h-full max-w-[1600px] items-center justify-between gap-2 lg:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">
             <button
               type="button"
               data-tutorial="mobile-menu-button"
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text md:hidden"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text md:hidden"
               aria-label="Abrir menu"
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0">
-              <p className="truncate text-[11px] uppercase tracking-wide text-muted">{currentSection} / {permissionLabel}</p>
-              <h1 data-tutorial="app-page-title" className="truncate text-[1.05rem] font-semibold text-text">{currentTitle}</h1>
+              <p className="hidden truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:block">KP Transportes <span className="mx-1 text-border">/</span> {currentSection}</p>
+              <h1 data-tutorial="app-page-title" className="line-clamp-2 text-xs font-bold leading-tight text-text sm:text-base lg:text-lg">{currentTitle}</h1>
             </div>
           </div>
 
-          <div className="hidden w-full max-w-[360px] items-center gap-2 rounded-md border border-border bg-card px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 md:flex">
+          <div className="hidden w-[clamp(160px,19vw,280px)] shrink-0 items-center gap-2 rounded-xl border border-border bg-surface px-3 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 lg:flex">
             <Search className="h-4 w-4 text-muted" />
             <input
               value={quickSearch}
@@ -354,19 +354,20 @@ function Header() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') runQuickSearch();
               }}
+              aria-label="Busca rápida por NF"
               placeholder="Busca rápida por NF"
               className="h-9 w-full bg-transparent text-sm text-text placeholder:text-muted focus:outline-none"
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <TutorialHelpButton compact />
             <ThemeToggleButton iconOnly />
             <button
               ref={notificationButtonRef}
               type="button"
               onClick={() => setIsNotificationOpen((prev) => !prev)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text transition-colors hover:border-muted hover:bg-surface-2"
+              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface sm:h-10 sm:w-10 text-text transition-colors hover:border-muted hover:bg-surface-2"
               aria-label="Abrir notificações"
             >
               <Bell className="h-4 w-4" />
@@ -376,12 +377,12 @@ function Header() {
                 </span>
               ) : null}
             </button>
-            <div className="hidden items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 md:flex">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface-2">
+            <div className="hidden min-w-0 items-center gap-2 border-l border-border pl-3 md:flex">
+              <span title={`${userDisplayName} · ${permissionLabel}`} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface-2">
                 <User className="h-4 w-4" />
               </span>
-              <div className="leading-tight">
-                <p className="text-sm font-medium text-text">{userDisplayName}</p>
+              <div className="hidden max-w-[160px] leading-tight 2xl:block">
+                <p className="truncate text-sm font-semibold text-text">{userDisplayName}</p>
                 <p className="text-[10px] text-muted">
                   {permissionLabel}
                   {scopeDisplayName ? ` • ${scopeDisplayName}` : ''}

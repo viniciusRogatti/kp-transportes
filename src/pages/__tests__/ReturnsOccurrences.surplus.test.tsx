@@ -90,7 +90,7 @@ async function fillTransportStep() {
 
 async function continueAfterReturnLookup() {
   fireEvent.click(await screen.findByRole('button', { name: /continuar para tipo e produtos/i }));
-  await screen.findByText('Tipo e produtos da devolucao');
+  await screen.findByText('Selecione os produtos e adicione ao lote');
 }
 
 describe('ReturnsOccurrences - sobra com inversao', () => {
@@ -362,6 +362,14 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     expect(await screen.findByText('Notas fiscais do lote RET-20260806-EDITAVEL')).toBeInTheDocument();
     expect(screen.getByText('NF 1694432', { selector: 'strong' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Salvar lote' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '+ Adicionar outra NF' }));
+    expect(screen.getByRole('button', { name: /Etapa 1.*Editar.*Transporte/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Etapa 2.*Nota fiscal/i })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('textbox', { name: 'Número da NF da devolução' })).toHaveFocus();
+    expect(screen.getByRole('textbox', { name: 'Número da NF da devolução' })).toHaveAttribute('maxlength', '7');
+    fireEvent.click(screen.getByRole('button', { name: /Etapa 1.*Editar.*Transporte/i }));
+    expect(screen.getByRole('combobox', { name: 'Motorista da devolucao' })).toHaveValue('Motorista Teste');
+    expect(screen.getByRole('combobox', { name: 'Veiculo da devolucao' })).toHaveValue('Truck - ABC-1234');
   });
 
   it('renderiza campos condicionais de inversao e limpa ao desligar toggle', async () => {
@@ -484,10 +492,16 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     await screen.findByText('Limite da NF para o tipo selecionado: 40 | Restante para adicionar: 40');
 
     fireEvent.change(screen.getByDisplayValue('1'), { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
 
     expect(screen.getByText('PA000014', { selector: 'strong' })).toBeInTheDocument();
     expect(screen.getByText(/Tipo: UN \| Qtd: 3/)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' })).toHaveValue('');
+    expect(screen.getByText('1 item(ns) selecionado(s). A NF só entra no lote ao clicar no botão abaixo.')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), { target: { value: 'PA000014' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Há um produto em preenchimento'));
+
     expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Quantidade excede o limite da NF'));
   });
 
@@ -505,8 +519,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), {
       target: { value: 'RV001899' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar quebra de peso' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
     fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
 
     await waitFor(() => {
@@ -536,8 +550,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       target: { value: 'RV001899' },
     });
     fireEvent.click(screen.getByLabelText(/Produto faltante/));
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
     fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
 
     await waitFor(() => {
@@ -548,6 +562,38 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
         keep_in_stock: false,
       }));
     });
+  });
+
+  it('mantém faltante individual na total e devolve os demais produtos', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/danfes/nf/')) return Promise.resolve({ data: {
+        invoice_number: '1694432', Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+        DanfeProducts: [
+          { Product: { code: 'A', description: 'Produto ausente', type: 'UN' }, quantity: 1, type: 'UN' },
+          { Product: { code: 'B', description: 'Produto que retorna', type: 'UN' }, quantity: 2, type: 'UN' },
+        ],
+      } });
+      return defaultGet?.(url);
+    }) as any);
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
+    expect(screen.getByLabelText('Total')).toBeChecked();
+    fireEvent.click(screen.getAllByLabelText('Produto faltante')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+    await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/returns/batches/create'),
+      expect.objectContaining({ notes: [expect.objectContaining({ return_type: 'total', items: [
+        expect.objectContaining({ product_id: 'A', is_missing: true, keep_in_stock: false }),
+        expect.objectContaining({ product_id: 'B', is_missing: false, keep_in_stock: false }),
+      ] })] }),
+    ));
   });
 
   it('preenche pela base e confirma antes de aceitar tipo divergente', async () => {
@@ -605,8 +651,8 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.change(partialProduct, {
       target: { value: 'RV001899' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar item parcial' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar NF na lista' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
 
     expect(await screen.findByText('NF 1694432', { selector: 'strong' })).toBeInTheDocument();
     expect(mockedShowConfirm).toHaveBeenCalledTimes(2);
@@ -640,13 +686,13 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     expect(await screen.findByText('Atenção: NF não localizada na base de devoluções')).toBeInTheDocument();
     expect(screen.getByText(/leia este aviso e confirme para continuar/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Adicionar NF na lista' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ciente, continuar para tipo e produtos' }));
 
-    expect(await screen.findByText('Tipo e produtos da devolucao')).toBeInTheDocument();
+    expect(await screen.findByText('Selecione os produtos e adicione ao lote')).toBeInTheDocument();
     expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('NF não localizada na base de devoluções');
     expect(screen.getByTestId('return-base-compact-reminder')).not.toHaveTextContent('Base atualizada em');
-    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' })).toBeEnabled();
   });
 
   it('mostra a consulta orientativa da base sem bloquear a NF no lote', async () => {
@@ -711,7 +757,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver ocorrências' }));
     expect(await screen.findByText('ID OC-10')).toBeInTheDocument();
     await continueAfterReturnLookup();
-    expect(screen.getByRole('button', { name: 'Adicionar NF na lista' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' })).toBeEnabled();
     expect(screen.getByTestId('return-base-compact-reminder')).toHaveTextContent('2 ocorrências aprovadas');
   });
 });

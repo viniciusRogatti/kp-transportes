@@ -488,6 +488,7 @@ function ReturnsOccurrences() {
   const [returnDataLastUpdate, setReturnDataLastUpdate] = useState<string | null>(null);
   const [returnType, setReturnType] = useState<ReturnType>('total');
   const [returnTypeDivergenceAcknowledged, setReturnTypeDivergenceAcknowledged] = useState('');
+  const returnNfInputRef = useRef<HTMLInputElement>(null);
   const [returnWizardStep, setReturnWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [isReturnNfCollection, setIsReturnNfCollection] = useState(false);
   const [returnNfCollectionLookupLoading, setReturnNfCollectionLookupLoading] = useState(false);
@@ -641,7 +642,8 @@ function ReturnsOccurrences() {
 
   useEffect(() => {
     if (!returnModalOpen || !isReturnWizardMode) return;
-    returnModalContentRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    returnModalContentRef.current?.scrollTo?.({ top: 0, behavior: 'auto' });
+    if (returnWizardStep === 2) returnNfInputRef.current?.focus();
   }, [isReturnWizardMode, returnModalOpen, returnWizardStep]);
 
 
@@ -1866,6 +1868,8 @@ function ReturnsOccurrences() {
       ));
     });
 
+    setPartialProductCode('');
+    setPartialProductType('');
     setPartialQuantityInput(String(minAllowed));
     if (partialStockDefault !== Boolean(foundProduct.Product.return_to_stock_default)) {
       void updateProductStockDefault(foundProduct.Product.code, partialStockDefault);
@@ -1963,6 +1967,11 @@ function ReturnsOccurrences() {
     }
 
     const effectiveReturnType = isReturnNfCollection ? 'coleta' : returnType;
+
+    if (['partial', 'coleta', 'weight_break'].includes(effectiveReturnType) && partialProductCode) {
+      alert('Há um produto em preenchimento. Clique em "Selecionar produto" ou limpe o campo Produto antes de adicionar a NF ao lote.');
+      return;
+    }
 
     if (effectiveReturnType !== 'sobra' && !returnDanfe) {
       alert('Busque uma NF para adicionar na lista.');
@@ -2881,8 +2890,13 @@ function ReturnsOccurrences() {
   return (
     <div>
       <Header />
-      <Container>
+      <Container className="operation-page">
         <PageContainer className="gap-0">
+          <section className="mb-4 rounded-2xl border border-border bg-card p-5">
+            <p className="text-xs font-bold uppercase tracking-widest text-sky-600">Mar e Rio · operação de retorno</p>
+            <h1 className="mt-1 text-2xl font-black text-text">{activeTab === 'returns' ? 'Devoluções' : 'Ocorrências de carregamento'}</h1>
+            <p className="mt-2 text-sm text-muted">{activeTab === 'returns' ? 'Acompanhe os lotes, consulte a base e organize os produtos que vão retornar.' : 'Acompanhe e trate as divergências identificadas no carregamento.'}</p>
+          </section>
           <TabsRow className="items-end gap-0">
             <Tabs className="w-auto">
               <button
@@ -2943,11 +2957,12 @@ function ReturnsOccurrences() {
                     <div
                       role="dialog"
                       aria-modal="true"
+                      style={{ maxWidth: isReturnWizardMode && returnWizardStep <= 2 ? 800 : 1040 }}
                       aria-label={selectedBatch ? `Lote de devolucao ${selectedBatch.batch_code}` : 'Nova devolucao'}
-                      className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1120px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)]"
+                      className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1040px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)]"
                     >
                       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-5">
-                        <div className="min-w-0">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
                           <h2 className="truncate text-base font-bold text-text sm:text-lg">
                             {selectedBatch
                               ? `${isSelectedBatchEditableByTransportadora ? 'Editar' : 'Consultar'} lote ${selectedBatch.batch_code}`
@@ -2956,7 +2971,7 @@ function ReturnsOccurrences() {
                           <p className="text-xs text-muted">
                             {selectedBatch
                               ? RETURN_BATCH_WORKFLOW_LABELS[selectedBatchWorkflowStatus || 'pending_transportadora']
-                              : 'Monte a lista de NFs e conclua para criar o lote.'}
+                              : ({ 1: 'Selecione motorista e veículo', 2: 'Busque uma NF ou registre uma sobra', 3: 'Selecione os produtos e adicione ao lote', 4: 'Revise o lote ou adicione outra NF' })[returnWizardStep]}
                           </p>
                         </div>
                         <IconButton
@@ -3004,7 +3019,7 @@ function ReturnsOccurrences() {
                           { step: 4 as const, label: 'Revisao do lote', icon: CheckCircle2 },
                         ]).map(({ step, label, icon: StepIcon }) => {
                           const isActive = returnWizardStep === step;
-                          const isComplete = returnWizardStep > step;
+                          const isComplete = step === 1 ? Boolean(returnDriverId && selectedCarId) : returnWizardStep > step;
                           return (
                             <li key={step}>
                               <button
@@ -3018,7 +3033,7 @@ function ReturnsOccurrences() {
                                 disabled={step > returnWizardStep && !(step === 4 && returnWizardNoteCount)}
                                 className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition ${
                                   isActive
-                                    ? 'border-accent bg-accent/15 text-text-accent'
+                                    ? 'border-accent bg-surface-2 text-text-accent'
                                     : isComplete
                                       ? 'semantic-panel-success'
                                       : 'border-border bg-card text-muted'
@@ -3027,10 +3042,10 @@ function ReturnsOccurrences() {
                                 <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ${
                                   isActive ? 'bg-accent text-white' : isComplete ? 'bg-emerald-600 text-white' : 'bg-surface-2'
                                 }`}>
-                                  <StepIcon size={15} />
+                                  {isComplete && !isActive ? <CheckCircle2 size={15} /> : <StepIcon size={15} />}
                                 </span>
                                 <span>
-                                  <span className="block text-[0.68rem] font-semibold uppercase tracking-wide">Etapa {step}</span>
+                                  <span className="block text-[0.68rem] font-semibold uppercase tracking-wide">Etapa {step}{step === 1 && isComplete && !isActive ? ' · Editar' : ''}</span>
                                   <span className="block text-xs font-bold">{label}</span>
                                 </span>
                               </button>
@@ -3213,10 +3228,10 @@ function ReturnsOccurrences() {
                   )}
                   <div className={
                     isReturnWizardMode && (returnWizardStep === 2 || returnWizardStep === 3)
-                      ? returnWizardStep === 2 ? 'mx-auto w-full max-w-[680px] space-y-3' : 'contents'
+                      ? returnWizardStep === 2 ? 'w-full space-y-3' : 'contents'
                       : 'hidden'
                   }>
-                    {isReturnWizardMode && (
+                    {isReturnWizardMode && returnWizardStep === 3 && (
                       <div className="mt-2 flex items-center gap-3">
                         <button
                           type="button"
@@ -3233,13 +3248,11 @@ function ReturnsOccurrences() {
                           className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-muted transition hover:bg-surface-2 hover:text-text"
                         >
                           <ArrowLeft size={16} />
-                          Voltar
+                          Trocar NF
                         </button>
                       </div>
                     )}
-                    {returnWizardStep === 3 ? (
-                      <InlineText style={{ margin: '10px 0 6px 0' }}>Tipo e produtos da devolucao</InlineText>
-                    ) : null}
+
                     <div className={
                       isReturnWizardMode && returnWizardStep === 2
                         ? 'w-full space-y-3'
@@ -3249,12 +3262,12 @@ function ReturnsOccurrences() {
                       <div className="text-left">
                         <h3 className="mt-2 text-base font-bold text-text">Localizar nota fiscal</h3>
                         <p className="mt-1 max-w-[400px] text-xs leading-relaxed text-muted">
-                          Informe o número da NF para carregar os produtos.
+                          Informe até 7 dígitos. Depois da busca, confira a ocorrência e avance para os produtos.
                         </p>
                       </div>
                     )}
                     <div className={`flex min-w-0 flex-col gap-2 md:flex-row md:items-end md:gap-3 ${
-                      isReturnWizardMode && returnWizardStep === 2 ? 'justify-center' : ''
+                      isReturnWizardMode && returnWizardStep === 2 ? 'justify-start' : ''
                     }`}>
                       <div className={`${isReturnWizardMode && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
                         isReturnWizardMode && returnWizardStep === 2 ? 'w-full' : 'md:w-[320px] md:shrink-0'
@@ -3264,12 +3277,12 @@ function ReturnsOccurrences() {
                             Cadastro manual de sobra
                           </div>
                         ) : (
-                          <div className="flex w-full items-center justify-center gap-2">
+                          <div className="flex w-full max-w-[330px] items-center gap-2">
                             <input
                               type="text"
                               inputMode="numeric"
                               value={returnNf}
-                              onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                              onChange={(event) => setReturnNf(event.target.value.replace(/\D/g, '').slice(0, 7))}
                               onKeyDown={(event) => {
                                 if (event.key !== 'Enter') return;
                                 event.preventDefault();
@@ -3277,8 +3290,9 @@ function ReturnsOccurrences() {
                               }}
                               placeholder="Digite a NF"
                               aria-label="Número da NF da devolução"
-                              maxLength={9}
-                              className="h-10 min-w-0 flex-1 rounded-sm border border-accent/35 bg-card px-3 text-center text-base font-semibold tracking-[0.08em] text-text placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                              ref={returnNfInputRef}
+                              maxLength={7}
+                              className="h-10 min-w-0 flex-1 rounded-sm border border-border bg-card px-3 text-center text-base font-semibold tracking-[0.08em] text-text placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                             />
                             <button
                               type="button"
@@ -3298,7 +3312,7 @@ function ReturnsOccurrences() {
                               handleChangeReturnType('sobra');
                               setReturnWizardStep(3);
                             }}
-                            className="mt-2 inline-flex items-center gap-2 rounded-md px-1 py-1 text-xs font-semibold text-muted transition hover:text-text hover:underline"
+                            className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-text transition hover:border-accent hover:bg-surface-2"
                           >
                             <PackageCheck size={17} />
                             Registrar sobra sem NF
@@ -3381,7 +3395,7 @@ function ReturnsOccurrences() {
                             ? 'semantic-panel-success'
                             : returnDataLookup.consolidated_status === 'registered_without_approval'
                               ? 'semantic-panel-warning'
-                              : 'border-red-500 bg-red-500/10 text-red-800 dark:text-red-200'
+                              : 'border-red-500 semantic-panel-danger text-red-800 dark:text-red-200'
                         }`}>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -3504,6 +3518,10 @@ function ReturnsOccurrences() {
                       ) : null}
                       {(returnType === 'partial' || returnType === 'coleta' || returnType === 'weight_break') && returnDanfe && (
                         <>
+                          <div className="mt-3 rounded-xl border border-sky-500/25 bg-surface-2 p-3 text-sm">
+                            <strong>1. Selecione os produtos desta NF</strong>
+                            <p className="mt-1 text-muted">Informe produto, unidade e quantidade e clique em Selecionar produto. Repita para cada item e depois conclua a seleção abaixo.</p>
+                          </div>
                           {returnType === 'weight_break' && (
                             <div className="mt-3 rounded-lg border semantic-panel-warning px-3 py-2 text-sm">
                               Informe os produtos e as quantidades afetadas. Estes itens aparecerao no PDF como
@@ -3611,11 +3629,7 @@ function ReturnsOccurrences() {
                               disabled={!partialProductCode || !partialProductType || selectedPartialRemainingQty <= 0}
                               type="button"
                             >
-                              {returnType === 'coleta'
-                                ? 'Adicionar item de coleta'
-                                : returnType === 'weight_break'
-                                  ? 'Adicionar quebra de peso'
-                                  : 'Adicionar item parcial'}
+                              Selecionar produto
                             </button>
                           </Actions>
                         </>
@@ -3855,7 +3869,13 @@ function ReturnsOccurrences() {
                         </>
                       )}
 
-                      <Actions style={{ marginTop: '12px' }}>
+                      <div className="sticky bottom-0 z-10 mt-4 rounded-xl border border-border bg-card p-4 shadow-lg">
+                        {returnType !== 'sobra' && <div className="mb-3 text-sm">
+                          <strong>{['partial', 'coleta', 'weight_break'].includes(returnType) ? '2. Conclua a seleção' : 'Confira os produtos e adicione a NF'}</strong>
+                          <p className="mt-1 text-muted">{partialItems.length} item(ns) selecionado(s). A NF só entra no lote ao clicar no botão abaixo.</p>
+                          {partialProductCode && ['partial', 'coleta', 'weight_break'].includes(returnType) && <p className="mt-1 font-semibold text-amber-700 dark:text-amber-300">Há um produto em preenchimento. Selecione-o ou limpe o campo Produto antes de continuar.</p>}
+                        </div>}
+                      <Actions>
                         <button
                           className="primary"
                           onClick={handleAddNf}
@@ -3864,9 +3884,10 @@ function ReturnsOccurrences() {
                         >
                           {returnType === 'sobra'
                             ? (selectedBatch ? 'Adicionar sobra no lote' : 'Adicionar sobra na lista')
-                            : (selectedBatch ? 'Adicionar NF no lote' : 'Adicionar NF na lista')}
+                            : 'Concluir seleção e adicionar NF ao lote'}
                         </button>
                       </Actions>
+                      </div>
                       </>
                       )}
                     </>
@@ -4194,7 +4215,7 @@ function ReturnsOccurrences() {
                                             setResolutionType('');
                                             setResolutionNote('');
                                           }}
-                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-accent/60 !bg-accent/20 !text-text-accent hover:!bg-accent/35 md:!hidden"
+                                          className="!h-9 !w-9 !min-h-9 !min-w-9 !px-0 !py-0 !border-border !bg-surface-2 !text-text-accent hover:!bg-surface-2 md:!hidden"
                                         />
                                       </>
                                     )}

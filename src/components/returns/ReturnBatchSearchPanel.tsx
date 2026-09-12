@@ -47,7 +47,7 @@ export default function ReturnBatchSearchPanel({
   onSearchByPeriod,
 }: ReturnBatchSearchPanelProps) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3">
+    <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-bold text-text">Consultar lotes de devolucao</h2>

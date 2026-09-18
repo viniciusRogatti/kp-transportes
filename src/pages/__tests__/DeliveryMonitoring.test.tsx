@@ -183,6 +183,22 @@ describe('DeliveryMonitoring', () => {
     localStorage.clear();
   });
 
+  it('exibe o calendário completo fora do cartão de filtros', async () => {
+    render(<DeliveryMonitoring />);
+
+    const filtersCard = screen.getByRole('region', {
+      name: 'Resumo e filtros do monitoramento',
+    });
+    const dateInput = screen.getByRole('textbox', { name: 'Data' });
+
+    expect(filtersCard).toHaveClass('overflow-visible');
+    expect(filtersCard).not.toHaveClass('overflow-hidden');
+
+    fireEvent.click(dateInput);
+
+    expect(document.querySelector('.react-datepicker')).toBeInTheDocument();
+  });
+
   it('permite marcar a parada selecionada como devolucao direto no monitoramento', async () => {
     render(<DeliveryMonitoring />);
 

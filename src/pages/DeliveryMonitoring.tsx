@@ -1515,7 +1515,10 @@ function DeliveryMonitoring() {
     <div className="min-h-screen">
       <Header />
       <Container className="operation-page">
-        <section className="order-1 relative w-full overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-sky-500/10 via-surface to-surface p-4 shadow-soft sm:p-5">
+        <section
+          aria-label="Resumo e filtros do monitoramento"
+          className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-gradient-to-r from-sky-500/10 via-surface to-surface p-4 shadow-soft sm:p-5"
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

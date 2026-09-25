@@ -355,7 +355,6 @@ function RoutePlanning() {
   const [prontoBoxInput, setProntoBoxInput] = useState('');
   const [prontoBoxError, setProntoBoxError] = useState('');
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState<boolean>(false);
-  const [isNotesNearBottom, setIsNotesNearBottom] = useState<boolean>(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState<boolean>(false);
   const [manualOrderInputs, setManualOrderInputs] = useState<Record<string, string>>({});
   const [routeSubmissionPrompt, setRouteSubmissionPrompt] = useState<RouteSubmissionPromptState | null>(null);
@@ -428,6 +427,17 @@ function RoutePlanning() {
     if (tripToUpdate === null) return [] as ITrip[];
     return activeTodayTrips.filter((trip) => Number(trip.id) !== Number(tripToUpdate.id));
   }, [activeTodayTrips, tripToUpdate]);
+
+  useEffect(() => {
+    if (activeTab !== 'routing') return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [activeTab]);
 
   const routingActiveTripsExcludingCurrent = useMemo(() => {
     if (tripToUpdate === null) return activeTodayTrips;
@@ -631,15 +641,11 @@ function RoutePlanning() {
     const current = sortedNotes.length;
     const previous = previousNotesCountRef.current;
     if (current > previous && notesContainerRef.current) {
-      if (isNotesNearBottom) {
-        notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
-        setShowJumpToLatest(false);
-      } else {
-        setShowJumpToLatest(true);
-      }
+      notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
+      setShowJumpToLatest(false);
     }
     previousNotesCountRef.current = current;
-  }, [sortedNotes, isNotesNearBottom]);
+  }, [sortedNotes]);
 
   useEffect(() => {
     if (!lastScannedInvoice) return;
@@ -925,7 +931,6 @@ function RoutePlanning() {
   const jumpToLatest = () => {
     if (!notesContainerRef.current) return;
     notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
-    setIsNotesNearBottom(true);
     setShowJumpToLatest(false);
   };
 
@@ -1308,8 +1313,7 @@ function RoutePlanning() {
     const element = notesContainerRef.current;
     if (!element) return;
     const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-    setIsNotesNearBottom(nearBottom);
-    if (nearBottom) setShowJumpToLatest(false);
+    setShowJumpToLatest(!nearBottom);
   };
 
   const focusNoteLookupInput = useCallback((select = false) => {
@@ -2488,9 +2492,15 @@ function RoutePlanning() {
   }
 
   return (
-    <ContainerRoutePlanning>
+    <ContainerRoutePlanning className={activeTab === 'routing'
+      ? 'h-[calc(100dvh-var(--mobile-bottom-nav-height)-max(env(safe-area-inset-bottom),0px))] min-h-0 overflow-hidden md:h-dvh'
+      : undefined}
+    >
       <Header />
-      <Container className="operation-page box-border min-h-[100dvh] pb-0 pt-[calc(var(--header-height)+var(--space-2))]">
+      <Container className={cn(
+        'operation-page box-border pb-0 pt-[calc(var(--header-height)+var(--space-2))]',
+        activeTab === 'routing' ? 'h-full min-h-0 overflow-hidden' : 'min-h-[100dvh]',
+      )}>
         <div className="flex h-full w-full min-h-0 flex-col">
           <div className="flex items-end justify-between gap-2">
             <div className="relative inline-flex items-end rounded-t-xl border border-border bg-card px-1 pt-1 shadow-soft">
@@ -2818,9 +2828,9 @@ function RoutePlanning() {
                     <p className="mt-1 text-xs text-muted">{isRoutingPoolLoading ? 'Carregando notas...' : `${availableRoutingCityNoteCount} nota(s) disponível(is) nesta data.`}</p>}
                 </div>
 
-                <div className="relative h-[max(420px,calc(100dvh-440px))] shrink-0 overflow-hidden rounded-xl border border-border bg-card">
+                <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card">
                   <div className="flex h-full min-h-0 flex-col">
-                    <div ref={notesContainerRef} onScroll={handleNotesScroll} className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1 md:p-1.5">
+                    <div ref={notesContainerRef} onScroll={handleNotesScroll} aria-label="Notas adicionadas à viagem" className="scrollbar-ui min-h-0 flex-1 overflow-y-auto p-1 md:p-1.5">
                       <ul className="space-y-1">
                         {sortedNotes.map((note) => {
                           const orderInputValue = manualOrderInputs[getTripNoteKey(note)] ?? String(note.order);

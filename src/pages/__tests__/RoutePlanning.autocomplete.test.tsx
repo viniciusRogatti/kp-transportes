@@ -127,6 +127,17 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
     await waitFor(() => expect(lookup).toHaveFocus());
   });
 
+  it('bloqueia o scroll da página na roteirização e mantém o scroll na caixa de NFs', async () => {
+    renderPage();
+
+    await screen.findByPlaceholderText('Digite NF ou código de barras');
+    expect(document.body).toHaveStyle({ overflow: 'hidden' });
+    expect(screen.getByLabelText('Notas adicionadas à viagem')).toHaveClass('overflow-y-auto');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Viagens' }));
+    await waitFor(() => expect(document.body.style.overflow).toBe(''));
+  });
+
   it('adiciona somente as notas disponíveis da rota escolhida e não as duplica', async () => {
     const originalGet = mockedAxios.get.getMockImplementation()!;
     mockedAxios.get.mockImplementation((url: string, config?: any) => {
@@ -153,6 +164,44 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
     expect(screen.queryByLabelText('Editar ordem da NF 9002')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Adicionar rota' })).toBeDisabled();
     await waitFor(() => expect(screen.getByPlaceholderText('Digite NF ou código de barras')).toHaveFocus());
+  });
+
+  it('mantém a nota recém-bipada visível mesmo quando a lista estava longe do fim', async () => {
+    const originalGet = mockedAxios.get.getMockImplementation()!;
+    mockedAxios.get.mockImplementation((url: string, config?: any) => {
+      if (url.includes('/trips/search/date/')) return Promise.resolve({ data: [] });
+      if (url.includes('/danfes/nf/9003')) return Promise.resolve({ data: {
+        invoice_number: '9003',
+        company_id: 1,
+        status: 'pending',
+        gross_weight: '12',
+        Customer: { name_or_legal_entity: 'Cliente bipada', city: 'Campinas' },
+        DanfeProducts: [],
+      } });
+      return originalGet(url, config);
+    });
+
+    renderPage();
+    const driver = await screen.findByPlaceholderText('Digite nome do motorista');
+    fireEvent.change(driver, { target: { value: 'joao' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'João da Silva - Disponível' }));
+    const car = screen.getByPlaceholderText('Digite placa ou veículo');
+    fireEvent.change(car, { target: { value: '1234' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'Volvo FH - ABC-1234 - Disponível' }));
+
+    const notesContainer = screen.getByLabelText('Notas adicionadas à viagem');
+    Object.defineProperty(notesContainer, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(notesContainer, 'clientHeight', { configurable: true, value: 200 });
+    notesContainer.scrollTop = 0;
+    fireEvent.scroll(notesContainer);
+
+    const lookup = screen.getByPlaceholderText('Digite NF ou código de barras');
+    fireEvent.change(lookup, { target: { value: '9003' } });
+    fireEvent.keyDown(lookup, { key: 'Enter' });
+
+    expect(await screen.findByLabelText('Editar ordem da NF 9003')).toBeInTheDocument();
+    await waitFor(() => expect(notesContainer.scrollTop).toBe(600));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Ir para a última/ })).not.toBeInTheDocument());
   });
 
   it('consulta pendências anteriores na edição e permite sair do modo de edição', async () => {

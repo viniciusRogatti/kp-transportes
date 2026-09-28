@@ -596,6 +596,87 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     ));
   });
 
+  it('pergunta e envia a confirmacao para alterar NF pendente de devolucao total', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/danfes/nf/')) return Promise.resolve({ data: {
+        invoice_number: '1694432',
+        status: 'pending',
+        Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+        DanfeProducts: [
+          { Product: { code: 'A', description: 'Produto devolvido', type: 'UN' }, quantity: 1, type: 'UN' },
+        ],
+      } });
+      return defaultGet?.(url);
+    }) as any);
+    mockedShowConfirm.mockResolvedValueOnce(true);
+
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
+
+    await waitFor(() => expect(mockedShowConfirm).toHaveBeenCalledWith(
+      expect.stringContaining('status Pendente'),
+      expect.objectContaining({ confirmLabel: 'Alterar para devolvida' }),
+    ));
+    await screen.findByText('NF 1694432', { selector: 'strong' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+    await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/returns/batches/create'),
+      expect.objectContaining({ notes: [expect.objectContaining({
+        invoice_number: '1694432',
+        return_type: 'total',
+        change_status_to_returned: true,
+      })] }),
+    ));
+  });
+
+  it('mantem a NF em reentrega quando o usuario recusa a alteracao de status', async () => {
+    const defaultGet = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation(((url: string) => {
+      if (url.includes('/danfes/nf/')) return Promise.resolve({ data: {
+        invoice_number: '1694432',
+        status: 'redelivery',
+        Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+        DanfeProducts: [
+          { Product: { code: 'A', description: 'Produto devolvido', type: 'UN' }, quantity: 1, type: 'UN' },
+        ],
+      } });
+      return defaultGet?.(url);
+    }) as any);
+    mockedShowConfirm.mockResolvedValueOnce(false);
+
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
+
+    await waitFor(() => expect(mockedShowConfirm).toHaveBeenCalledWith(
+      expect.stringContaining('status Reentrega'),
+      expect.objectContaining({ cancelLabel: 'Manter status atual' }),
+    ));
+    await screen.findByText('NF 1694432', { selector: 'strong' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+    await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/returns/batches/create'),
+      expect.objectContaining({ notes: [expect.objectContaining({
+        invoice_number: '1694432',
+        change_status_to_returned: false,
+      })] }),
+    ));
+  });
+
   it('preenche pela base e confirma antes de aceitar tipo divergente', async () => {
     const defaultGet = mockedAxios.get.getMockImplementation();
     mockedAxios.get.mockImplementation(((url: string) => {

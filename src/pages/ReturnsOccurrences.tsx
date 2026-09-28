@@ -251,6 +251,7 @@ const getApprovedRegistryReturnTypes = (lookup: InvoiceReturnDataLookup | null) 
 type ReturnDraftNote = {
   invoice_number: string;
   return_type: ReturnType;
+  change_status_to_returned?: boolean;
   items: IInvoiceReturnItem[];
   load_number?: string | null;
   is_inversion?: boolean;
@@ -258,6 +259,21 @@ type ReturnDraftNote = {
 };
 
 type ReturnBatchWorkflowStatus = 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
+
+type ReturnStatusSyncResult = {
+  requested?: string[];
+  updated?: string[];
+  skipped?: string[];
+  error?: string;
+};
+
+const getReturnStatusSyncWarning = (statusSync?: ReturnStatusSyncResult | null) => {
+  if (statusSync?.error) return statusSync.error;
+  if (statusSync?.skipped?.length) {
+    return `O lote foi salvo, mas o status nao foi alterado para a(s) NF(s) ${statusSync.skipped.join(', ')} porque elas nao estavam mais como Pendente ou Reentrega.`;
+  }
+  return '';
+};
 
 const RETURN_BATCH_WORKFLOW_LABELS: Record<ReturnBatchWorkflowStatus, string> = {
   pending_transportadora: 'Pendente da transportadora',
@@ -922,6 +938,7 @@ function ReturnsOccurrences() {
   const serializeReturnNotePayload = (note: {
     invoice_number: string;
     return_type: ReturnType;
+    change_status_to_returned?: boolean;
     load_number?: string | null;
     is_inversion?: boolean;
     inversion?: { invoice_number: string | null; missing_product_code: string | null } | null;
@@ -932,12 +949,14 @@ function ReturnsOccurrences() {
     const payload = {
       invoice_number: note.invoice_number,
       return_type: note.return_type,
+      change_status_to_returned: Boolean(note.change_status_to_returned),
       load_number: note.load_number || null,
       is_inversion: Boolean(note.is_inversion),
       items: note.items,
     } as {
       invoice_number: string;
       return_type: ReturnType;
+      change_status_to_returned: boolean;
       load_number: string | null;
       is_inversion: boolean;
       items: IInvoiceReturnItem[];
@@ -2010,6 +2029,20 @@ function ReturnsOccurrences() {
       return;
     }
 
+    let changeStatusToReturned = false;
+    const currentInvoiceStatus = String(returnDanfe?.status || '').trim().toLowerCase();
+    if (effectiveReturnType === 'total' && ['pending', 'redelivery'].includes(currentInvoiceStatus)) {
+      const currentStatusLabel = currentInvoiceStatus === 'redelivery' ? 'Reentrega' : 'Pendente';
+      changeStatusToReturned = await showConfirm(
+        `A NF ${returnDanfe?.invoice_number} esta com status ${currentStatusLabel} e sera adicionada como devolucao total.\n\nDeseja alterar o status da NF para Devolvida ao salvar o lote?`,
+        {
+          title: 'Atualizar status da NF',
+          confirmLabel: 'Alterar para devolvida',
+          cancelLabel: 'Manter status atual',
+        },
+      );
+    }
+
     let notesToCreate: ReturnDraftNote[] = [];
 
     if (effectiveReturnType === 'sobra') {
@@ -2110,6 +2143,7 @@ function ReturnsOccurrences() {
         {
           invoice_number: noteInvoiceNumber,
           return_type: effectiveReturnType,
+          change_status_to_returned: changeStatusToReturned,
           items: noteItems,
         },
       ];
@@ -2139,6 +2173,7 @@ function ReturnsOccurrences() {
           id: -(Date.now() + index),
           invoice_number: note.invoice_number,
           return_type: note.return_type,
+          change_status_to_returned: note.change_status_to_returned,
           driver_id: Number(selectedBatch.driver_id),
           vehicle_plate: selectedBatch.vehicle_plate,
           return_date: selectedBatch.return_date,
@@ -2309,6 +2344,7 @@ function ReturnsOccurrences() {
     try {
       let batchCodeForPdf = `RET-${returnDate.replace(/-/g, '')}`;
       let createdWithLegacyRoute = false;
+      let statusSyncWarning = '';
       const serializedDraftNotes = draftNotes.map((note) => serializeReturnNotePayload(note));
 
       try {
@@ -2319,6 +2355,7 @@ function ReturnsOccurrences() {
           notes: serializedDraftNotes,
         });
         batchCodeForPdf = data?.batch_code || batchCodeForPdf;
+        statusSyncWarning = getReturnStatusSyncWarning(data?.status_sync);
       } catch (error: any) {
         if (error?.response?.status !== 404) {
           throw error;
@@ -2332,6 +2369,11 @@ function ReturnsOccurrences() {
             vehicle_plate: selectedCar.license_plate,
             return_date: returnDate,
           })
+        )));
+        const notesToUpdate = serializedDraftNotes.filter((note) => note.change_status_to_returned);
+        await Promise.all(notesToUpdate.map((note) => axios.patch(
+          `${API_URL}/danfes/nf/${encodeURIComponent(note.invoice_number)}/status`,
+          { status: 'returned' },
         )));
         createdWithLegacyRoute = true;
       }
@@ -2358,9 +2400,9 @@ function ReturnsOccurrences() {
       openPdfInNewTab(pdfBlob, fileName);
 
       if (createdWithLegacyRoute) {
-        alert('Devolucao concluida com sucesso. Observacao: backend em modo legado (sem lote).');
+        alert(`Devolucao concluida com sucesso. Observacao: backend em modo legado (sem lote).${statusSyncWarning ? `\n\n${statusSyncWarning}` : ''}`);
       } else {
-        alert('Devolucao concluida com sucesso.');
+        alert(`Devolucao concluida com sucesso.${statusSyncWarning ? `\n\n${statusSyncWarning}` : ''}`);
       }
       handleCreateNewBatch();
       setReturnModalOpen(false);
@@ -2403,6 +2445,7 @@ function ReturnsOccurrences() {
     }
 
     try {
+      const statusSyncWarnings: string[] = [];
       if (driverChanged || vehicleChanged) {
         await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/transport`, {
           driver_id: Number(returnDriverId),
@@ -2415,13 +2458,15 @@ function ReturnsOccurrences() {
       }
 
       for (const note of notesToAdd) {
-        await axios.post(
+        const { data } = await axios.post(
           `${API_URL}/returns/batches/${selectedBatch.batch_code}/add-note`,
           serializeReturnNotePayload(note),
         );
+        const warning = getReturnStatusSyncWarning(data?.status_sync);
+        if (warning) statusSyncWarnings.push(warning);
       }
 
-      alert('Lote salvo com sucesso.');
+      alert(`Lote salvo com sucesso.${statusSyncWarnings.length ? `\n\n${statusSyncWarnings.join('\n')}` : ''}`);
       await loadReturnBatches();
     } catch (error) {
       console.error(error);

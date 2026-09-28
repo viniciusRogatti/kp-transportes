@@ -74,6 +74,7 @@ export interface IInvoiceReturn {
   id: number;
   invoice_number: string;
   return_type: 'total' | 'partial' | 'sobra' | 'coleta' | 'weight_break';
+  change_status_to_returned?: boolean;
   load_number?: string | null;
   is_inversion?: boolean;
   inversion_invoice_number?: string | null;

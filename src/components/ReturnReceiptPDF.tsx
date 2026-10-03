@@ -15,6 +15,7 @@ interface ReturnReceiptPDFProps {
   driverName: string;
   vehiclePlate: string;
   returnDate: string;
+  observation?: string | null;
   notes: BatchNote[];
   items: IInvoiceReturnItem[];
 }
@@ -56,6 +57,20 @@ const styles = StyleSheet.create({
   row: {
     marginBottom: 2,
   },
+  batchCode: {
+    marginBottom: 5,
+    fontWeight: 'bold',
+  },
+  transportData: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 2,
+  },
+  transportField: {
+    marginRight: 16,
+    marginBottom: 2,
+    fontWeight: 'bold',
+  },
   sectionTitle: {
     marginTop: 8,
     marginBottom: 3,
@@ -72,6 +87,20 @@ const styles = StyleSheet.create({
     marginBottom: 3,
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  observationBox: {
+    marginTop: 12,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#777',
+  },
+  observationTitle: {
+    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  observationText: {
+    lineHeight: 1.35,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -161,9 +190,11 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
   driverName,
   vehiclePlate,
   returnDate,
+  observation,
   notes,
   items,
 }) => {
+  const normalizedObservation = String(observation || '').trim();
   const notesHaveItems = notes.some((note) => Array.isArray(note.items));
   const physicalNotes = notes.filter((note) => (
     note.return_type !== 'weight_break'
@@ -260,11 +291,22 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
     </View>
   );
 
+  const renderHeader = () => (
+    <>
+      <Text style={styles.title}>Checklist de Devolucao KP TRANSPORTES</Text>
+      <Text style={styles.batchCode}>Lote: {batchCode}</Text>
+      <View style={styles.transportData}>
+        <Text style={styles.transportField}>Motorista: {driverName}</Text>
+        <Text style={styles.transportField}>Placa: {vehiclePlate}</Text>
+        <Text style={styles.transportField}>Data de retorno: {formatDateBR(returnDate)}</Text>
+      </View>
+    </>
+  );
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
-        <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
+        {renderHeader()}
 
         {renderSection(physicalSection)}
 
@@ -276,21 +318,27 @@ const ReturnReceiptPDF: React.FC<ReturnReceiptPDFProps> = ({
       </Page>
 
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Checklist de Devolucao Lote: {batchCode}</Text>
-        <Text style={styles.row}>Motorista: {driverName} Placa: {vehiclePlate} Data retorno: {formatDateBR(returnDate)}</Text>
+        {renderHeader()}
 
         {summarySections.map((section) => renderInvoiceSummarySection(section))}
 
-        <View wrap={false}>
-          <View style={styles.summarySection}>
-            <Text style={styles.summaryTitle}>RELACAO DE TODAS AS NFS</Text>
-            {allInvoicesByReturnType.map(({ label, invoices }) => (
-              <Text key={`all-${label}`} style={styles.compactRow}>
-                {label}: {invoices.length ? invoices.join(', ') : '-'}
-              </Text>
-            ))}
-          </View>
+        <View style={styles.summarySection}>
+          <Text style={styles.summaryTitle}>RELACAO DE TODAS AS NFS</Text>
+          {allInvoicesByReturnType.map(({ label, invoices }) => (
+            <Text key={`all-${label}`} style={styles.compactRow}>
+              {label}: {invoices.length ? invoices.join(', ') : '-'}
+            </Text>
+          ))}
+        </View>
 
+        {normalizedObservation ? (
+          <View style={styles.observationBox} wrap={false}>
+            <Text style={styles.observationTitle}>OBSERVACAO</Text>
+            <Text style={styles.observationText}>{normalizedObservation}</Text>
+          </View>
+        ) : null}
+
+        <View wrap={false}>
           <View style={styles.signatureBox}>
             <View style={styles.signatureLine} />
             <Text>Assinatura do conferente (confirmo os itens fisicamente recebidos e as excecoes identificadas acima)</Text>

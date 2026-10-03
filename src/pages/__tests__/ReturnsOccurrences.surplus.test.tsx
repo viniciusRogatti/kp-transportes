@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
 import { pdf } from '@react-pdf/renderer';
@@ -94,12 +94,221 @@ async function continueAfterReturnLookup() {
 }
 
 describe('ReturnsOccurrences - sobra com inversao', () => {
+  const existingOccurrence = {
+    id: 91, company_id: 1, invoice_number: '1694432', status: 'pending',
+    workflow_status: 'pending_transportadora', reason: 'faltou_no_carregamento', scope: 'items',
+    edit_version: 'version-91', items: [{ product_id: 'RV001899', product_description: 'Produto Faltante', product_type: 'UN', quantity: 1 }],
+  };
+  function mockOccurrenceLookup(rows: any[] = [existingOccurrence], fail = false) {
+    const fallback = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/occurrences/search?invoice_number=')) {
+        return fail ? Promise.reject(new Error('Falha sintética na consulta')) : Promise.resolve({ data: rows });
+      }
+      if (url.includes('/danfes/nf/')) return Promise.resolve({ data: {
+        invoice_number: '1694432', company_id: 1,
+        Customer: { name_or_legal_entity: 'Cliente Teste', city: 'Santos' },
+        DanfeProducts: [
+          { Product: { code: 'RV001899', description: 'Produto Faltante', type: 'UN' }, quantity: 1, type: 'UN' },
+          { Product: { code: 'RV002000', description: 'Segundo Produto', type: 'UN' }, quantity: 5, type: 'UN' },
+        ],
+      } });
+      return fallback!(url);
+    });
+  }
+  async function searchOccurrence() {
+    renderPage(['/returns-occurrences?tab=occurrences']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar ocorrencia' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Formulário de ocorrência' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'NF da ocorrencia' }), { target: { value: '1694432' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buscar NF de ocorrencia' }));
+    return dialog;
+  }
+  it('reabre ocorrência existente, mantém o primeiro item e acrescenta outro no mesmo registro', async () => {
+    mockOccurrenceLookup();
+    const dialog = await searchOccurrence();
+    await within(dialog).findByText(/Esta NF já possui a ocorrência #91/);
+    expect(within(dialog).getByText('Editar ocorrencia #91')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByDisplayValue('RV001899 - Produto Faltante'), { target: { value: 'RV002000' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /Adicionar item/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar alteracoes' }));
+    await waitFor(() => expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringContaining('/occurrences/91'), expect.objectContaining({
+      expected_version: 'version-91', scope: 'items',
+      items: [expect.objectContaining({ product_id: 'RV001899', quantity: 1 }), expect.objectContaining({ product_id: 'RV002000', quantity: 1 })],
+    })));
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it('preserva também o item de uma ocorrência legada', async () => {
+    mockOccurrenceLookup([{ ...existingOccurrence, items: [], product_id: 'RV001899', product_description: 'Produto Faltante', product_type: 'UN', quantity: 1 }]);
+    const dialog = await searchOccurrence();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Salvar alteracoes' }));
+    await waitFor(() => expect(mockedAxios.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ scope: 'items', items: [expect.objectContaining({ product_id: 'RV001899', quantity: 1 })] })));
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it('bloqueia cadastro quando não consegue consultar ocorrências existentes', async () => {
+    mockOccurrenceLookup([], true);
+    const dialog = await searchOccurrence();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Não foi possível conferir a NF');
+    expect(within(dialog).queryByRole('button', { name: 'Registrar ocorrencia' })).not.toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it('consulta NF na empresa da sessão e recusa ocorrência de outra empresa', async () => {
+    mockOccurrenceLookup([{ ...existingOccurrence, company_id: 2 }]);
+    const dialog = await searchOccurrence();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Não foi possível conferir a NF');
+    expect(mockedAxios.get).toHaveBeenCalledWith(expect.stringContaining('/danfes/nf/1694432?companyId=1'));
+    expect(within(dialog).queryByRole('button', { name: 'Salvar alteracoes' })).not.toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it.each([
+    [[{ ...existingOccurrence, status: 'resolved', workflow_status: 'finalized' }], /já foi tratada/],
+    [[{ ...existingOccurrence, status: 'resolved', workflow_status: 'awaiting_control_tower' }], /já foi tratada/],
+    [[existingOccurrence, { ...existingOccurrence, id: 92 }], /2 ocorrências antigas: #91, #92/],
+  ])('sinaliza ocorrência tratada ou duplicatas antigas sem excluir nem criar', async (rows, message) => {
+    mockOccurrenceLookup(rows as any[]);
+    const dialog = await searchOccurrence();
+    expect(await within(dialog).findByText(message as RegExp)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Registrar ocorrencia' })).not.toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+    expect(mockedAxios.delete).not.toHaveBeenCalled();
+  });
+  it('trocar a NF invalida o registro carregado até uma nova busca', async () => {
+    mockOccurrenceLookup();
+    const dialog = await searchOccurrence();
+    await within(dialog).findByRole('button', { name: 'Salvar alteracoes' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'NF da ocorrencia' }), { target: { value: '1234567' } });
+    expect(within(dialog).queryByRole('button', { name: 'Salvar alteracoes' })).not.toBeInTheDocument();
+    expect(mockedAxios.put).not.toHaveBeenCalled();
+  });
+  it('reconfere rascunho antigo e usa os itens salvos na ocorrência existente', async () => {
+    localStorage.setItem('kp_returns_occurrence_draft_v1', JSON.stringify({
+      invoiceNumber: '1694432', reason: 'produto_avariado', productCode: 'RV002000',
+      productType: 'UN', quantityInput: '5', items: [{ product_id: 'RV002000', quantity: 5 }],
+    }));
+    mockOccurrenceLookup();
+    renderPage(['/returns-occurrences?tab=occurrences']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar ocorrencia' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Formulário de ocorrência' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Salvar alteracoes' }));
+    await waitFor(() => expect(mockedAxios.put).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      reason: 'faltou_no_carregamento', items: [expect.objectContaining({ product_id: 'RV001899', quantity: 1 })],
+    })));
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it('um conflito mantém os itens visíveis e orienta recarregar, sem novo POST', async () => {
+    mockOccurrenceLookup();
+    mockedAxios.isAxiosError.mockReturnValue(true);
+    mockedAxios.put.mockRejectedValueOnce({ response: { status: 409, data: { error: 'A ocorrência foi atualizada.' } } });
+    const dialog = await searchOccurrence();
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Salvar alteracoes' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Seu preenchimento continua visível');
+    expect(within(dialog).getByDisplayValue('RV001899 - Produto Faltante')).toBeInTheDocument();
+    expect(mockedAxios.post).not.toHaveBeenCalled();
+  });
+  it('oferece também motoristas e placas além das oito primeiras opções', async () => {
+    const fallback = mockedAxios.get.getMockImplementation();
+    mockedAxios.get.mockImplementation((url: string, ...args: any[]) => {
+      if (url.endsWith('/drivers')) return Promise.resolve({ data: Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), name: `Motorista ${i + 1}` })) });
+      if (url.endsWith('/cars')) return Promise.resolve({ data: Array.from({ length: 12 }, (_, i) => ({ id: String(i + 1), model: 'Truck', license_plate: `TEST${i + 1}` })) });
+      return fallback!(url, ...args);
+    });
+    renderPage();
+    await openNewReturnModal();
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Motorista da devolucao' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Motorista 12' }));
+    expect(screen.getByRole('combobox', { name: 'Motorista da devolucao' })).toHaveValue('Motorista 12');
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Veiculo da devolucao' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Truck - TEST12' }));
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled();
+  });
+  async function prepareSurplusReview() {
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar sobra sem NF' }));
+    fireEvent.change(screen.getByPlaceholderText('Ex.: CARGA-123'), { target: { value: 'CARGA-TESTE' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex.: RV001496'), { target: { value: 'RV001496' } });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Unidade do produto da sobra' })).toHaveValue('UN'));
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar sobra na lista' }));
+  }
+
+  it('revisa itens por nota e bloqueia gravação duplicada, preservando o rascunho após falha', async () => {
+    await prepareSurplusReview();
+    expect(screen.getByRole('region', { name: /Conferência de/ })).toHaveTextContent('1 UN');
+    let rejectSave!: (reason: Error) => void;
+    mockedAxios.post.mockImplementation(() => new Promise((_, reject) => { rejectSave = reject; }));
+    const save = screen.getByRole('button', { name: 'Concluir devolucao' });
+    fireEvent.click(save); fireEvent.click(save);
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar devolucao' }));
+    expect(screen.getByRole('dialog', { name: 'Nova devolucao' })).toBeInTheDocument();
+    await act(async () => rejectSave(new Error('Falha sintética')));
+    expect(await screen.findByText(/Não foi possível confirmar a gravação/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Conferência de/ })).toHaveTextContent('RV001496');
+    expect(screen.getByRole('button', { name: 'Concluir devolucao' })).toBeEnabled();
+  });
+
+  it('não deixa repetir o cadastro quando a gravação funciona e apenas o PDF falha', async () => {
+    (pdf as jest.Mock).mockReturnValue({ toBlob: jest.fn().mockRejectedValue(new Error('PDF indisponível')) });
+    await prepareSurplusReview();
+    fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
+    expect(await screen.findByText(/Devolução salva no lote RET-TESTE-1, mas o PDF falhou/)).toBeInTheDocument();
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Nova devolucao' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Não foi possível confirmar a gravação/)).not.toBeInTheDocument();
+  });
+
+  it('mostra erro de limite junto à quantidade, sem perder os campos', async () => {
+    renderPage();
+    await openNewReturnModal();
+    await fillTransportStep();
+    fireEvent.change(screen.getByPlaceholderText('Digite a NF'), { target: { value: '1694432' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Buscar NF de devolucao' }));
+    await screen.findByText('NF carregada: 1694432 | Cliente: Cliente Teste');
+    await continueAfterReturnLookup();
+    fireEvent.click(screen.getByLabelText('Parcial'));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), { target: { value: 'RV001899' } });
+    const quantity = screen.getByRole('textbox', { name: 'Quantidade da devolução parcial' });
+    fireEvent.change(quantity, { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    expect(quantity).toHaveAttribute('aria-invalid', 'true');
+    expect(quantity).toHaveValue('2');
+    expect(await screen.findByText('Quantidade excede o limite da NF. Disponível: 1 UN.')).toBeInTheDocument();
+    fireEvent.change(quantity, { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    expect(quantity).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('protege o envio da ocorrência e mantém NF e motivo após falha', async () => {
+    renderPage(['/?tab=occurrences']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar ocorrencia' }));
+    const dialog = screen.getByRole('dialog', { name: 'Formulário de ocorrência' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'NF da ocorrencia' }), { target: { value: '1694432' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buscar NF de ocorrencia' }));
+    await within(dialog).findByText('NF selecionada: 1694432 | Cliente: Cliente Teste');
+    let rejectSave!: (reason: Error) => void;
+    mockedAxios.post.mockImplementation(() => new Promise((_, reject) => { rejectSave = reject; }));
+    const save = within(dialog).getByRole('button', { name: 'Registrar ocorrencia' });
+    fireEvent.click(save); fireEvent.click(save);
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+    expect(save).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fechar popup' }));
+    expect(dialog).toBeInTheDocument();
+    await act(async () => rejectSave(new Error('Falha sintética')));
+    expect(await within(dialog).findByText(/Não foi possível confirmar o salvamento/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('textbox', { name: 'NF da ocorrencia' })).toHaveValue('1694432');
+    expect(within(dialog).getByDisplayValue('Faltou no carregamento')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Registrar ocorrencia' })).toBeEnabled();
+  });
+
   beforeEach(() => {
     mockedAxios.get.mockReset();
     mockedAxios.post.mockReset();
     mockedAxios.put.mockReset();
     mockedAxios.patch.mockReset();
     mockedAxios.delete.mockReset();
+    mockedAxios.isAxiosError.mockReset();
     (mockedAxios as any).defaults = { headers: { common: {} } };
 
     mockedVerifyToken.mockReset();
@@ -122,6 +331,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     localStorage.setItem('token', 'token-teste');
     localStorage.setItem('user_permission', 'admin');
+    localStorage.setItem('company_id', '1');
 
     window.alert = jest.fn();
     window.open = jest.fn(() => null) as any;
@@ -408,6 +618,10 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar sobra na lista' }));
 
+    fireEvent.change(screen.getByRole('textbox', { name: 'Observação do PDF da devolução' }), {
+      target: { value: 'Conferir duas caixas avariadas no recebimento.' },
+    });
+
     fireEvent.click(screen.getByRole('button', { name: 'Concluir devolucao' }));
 
     await waitFor(() => {
@@ -417,12 +631,18 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
       expect(payload.notes[0].is_inversion).toBe(false);
       expect(payload.notes[0]).not.toHaveProperty('inversion');
       expect(payload.notes[0].load_number).toBe('CARGA-123');
+      expect(payload.observation).toBe('Conferir duas caixas avariadas no recebimento.');
     });
 
     expect(pdf).toHaveBeenCalled();
+    const pdfDocument = (pdf as jest.Mock).mock.calls[0][0] as React.ReactElement;
+    expect(pdfDocument.props.observation).toBe('Conferir duas caixas avariadas no recebimento.');
   });
 
-  it('converte caixas em unidades ao registrar devolucao parcial em UN', async () => {
+  it.each([
+    ['UN', 'FILE CONG PCT 400GR CX 20UN', 2, 40, 3],
+    ['KG', 'FILE CONG CX 20KG', 5, 100, 30],
+  ])('converte caixas ao registrar devolucao parcial em %s', async (unit, description, boxes, limit, returned) => {
     mockedAxios.get.mockImplementation((url: string) => {
       if (url.includes('/drivers')) {
         return Promise.resolve({ data: [{ id: '1', name: 'Motorista Teste' }] });
@@ -434,7 +654,7 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
 
       if (url.includes('/products')) {
         return Promise.resolve({
-          data: [{ code: 'PA000014', description: 'FILE DE MERLUZA ARGENTINA CONG PCT 400GR CX 20UN', type: 'CX', price: '10.00' }],
+          data: [{ code: 'PA000014', description, type: 'CX', price: '10.00' }],
         });
       }
 
@@ -458,10 +678,10 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
             DanfeProducts: [{
               Product: {
                 code: 'PA000014',
-                description: 'FILE DE MERLUZA ARGENTINA CONG PCT 400GR CX 20UN',
+                description,
                 type: 'CX',
               },
-              quantity: 2,
+              quantity: boxes,
               type: 'CX',
             }],
           },
@@ -486,19 +706,23 @@ describe('ReturnsOccurrences - sobra com inversao', () => {
     });
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Unidade da devolucao parcial' }), {
-      target: { value: 'UN' },
+      target: { value: unit },
     });
 
-    await screen.findByText('Limite da NF para o tipo selecionado: 40 | Restante para adicionar: 40');
+    await screen.findByText(`Limite da NF para o tipo selecionado: ${limit} | Restante para adicionar: ${limit}`);
 
-    fireEvent.change(screen.getByDisplayValue('1'), { target: { value: '3' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Quantidade da devolução parcial' }), { target: { value: String(returned) } });
     fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
 
     expect(screen.getByText('PA000014', { selector: 'strong' })).toBeInTheDocument();
-    expect(screen.getByText(/Tipo: UN \| Qtd: 3/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Tipo: ${unit} \\| Qtd: ${returned}`))).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' })).toHaveValue('');
     expect(screen.getByText('1 item(ns) selecionado(s). A NF só entra no lote ao clicar no botão abaixo.')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('combobox', { name: 'Produto da devolucao parcial' }), { target: { value: 'PA000014' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Quantidade da devolução parcial' }), { target: { value: String(boxes) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Selecionar produto' }));
+    const remainingBoxes = (boxes - returned * boxes / limit).toLocaleString('pt-BR');
+    expect(await screen.findByText(`Quantidade excede o limite da NF. Disponível: ${remainingBoxes} CX.`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Concluir seleção e adicionar NF ao lote' }));
     expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Há um produto em preenchimento'));
 

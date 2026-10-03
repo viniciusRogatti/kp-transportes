@@ -1,4 +1,8 @@
-import { parseUnitsPerBoxFromDescription } from '../productPackaging';
+import { parseUnitsPerBoxFromDescription, parseKgPerBoxFromDescription } from '../productPackaging';
+
+test.each([["FILE PCT 500G CX 20KG",20],["CX C/ 12,5 KG",12.5],["CAIXA DE 20 QUILOS",20],["CX 4X5KG",20],["CX 20X500G",10],["PCT 500G CX 20UN",null],["SALMAO KG",null],["CX 0KG",null],["CX 10KG OU CX 20KG",null]])('peso por caixa: %s', (description, expected) => {
+  expect(parseKgPerBoxFromDescription(description as string)).toBe(expected);
+});
 
 describe('parseUnitsPerBoxFromDescription', () => {
   it.each([

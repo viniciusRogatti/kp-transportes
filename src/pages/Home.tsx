@@ -439,6 +439,7 @@ function Home() {
 
   const [isOccurrenceEditOpen, setIsOccurrenceEditOpen] = useState(false);
   const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
+  const [occurrenceEditVersion, setOccurrenceEditVersion] = useState<string | undefined>();
   const [occurrenceNf, setOccurrenceNf] = useState('');
   const [occurrenceDanfe, setOccurrenceDanfe] = useState<IDanfe | null>(null);
   const [occurrenceReason, setOccurrenceReason] = useState<OccurrenceReasonValue>('faltou_no_carregamento');
@@ -841,8 +842,8 @@ function Home() {
     ]);
   }
 
-  async function findDanfeByNf(nf: string) {
-    const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
+  async function findDanfeByNf(nf: string, companyId?: number) {
+    const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}${companyId ? `?companyId=${companyId}` : ''}`);
     return sanitizeDanfeForDisplay(data);
   }
 
@@ -1095,6 +1096,7 @@ function Home() {
 
     setIsOccurrenceEditOpen(true);
     setEditingOccurrenceId(occurrence.id);
+    setOccurrenceEditVersion(occurrence.edit_version);
     setOccurrenceNf(String(occurrence.invoice_number || ''));
     setOccurrenceReason((occurrence.reason || 'legacy_outros') as OccurrenceReasonValue);
 
@@ -1124,7 +1126,7 @@ function Home() {
     setOccurrenceQuantityInput('1');
 
     try {
-      const data = await findDanfeByNf(String(occurrence.invoice_number));
+      const data = await findDanfeByNf(String(occurrence.invoice_number), occurrence.company_id);
       if (data) {
         setOccurrenceDanfe(sanitizeDanfeForDisplay(data));
       }
@@ -1156,6 +1158,8 @@ function Home() {
 
     try {
       await axios.put(`${API_URL}/occurrences/${editingOccurrenceId}`, {
+        expected_version: occurrenceEditVersion,
+        company_id: occurrenceDanfe.company_id,
         invoice_number: String(occurrenceDanfe.invoice_number),
         reason: occurrenceReason,
         scope: occurrenceScope,

@@ -86,6 +86,7 @@ export interface IInvoiceReturn {
   driver_id: number;
   vehicle_plate: string;
   return_date: string;
+  observation?: string | null;
   batch_code?: string;
   batch_status?: 'open' | 'closed';
   workflow_status?: 'pending_transportadora' | 'awaiting_control_tower' | 'finalized';
@@ -109,6 +110,7 @@ export interface IReturnBatch {
   driver_id: number;
   vehicle_plate: string;
   return_date: string;
+  observation?: string | null;
   sent_to_control_tower_at?: string | null;
   sent_to_control_tower_by_user_id?: number | null;
   sent_to_control_tower_by_username?: string | null;
@@ -124,7 +126,9 @@ export interface IReturnBatch {
 }
 
 export interface IOccurrence {
+  edit_version?: string;
   id: number;
+  company_id?: number;
   invoice_number: string;
   customer_id?: string | null;
   customer_name?: string | null;

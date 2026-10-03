@@ -20,6 +20,8 @@ import {
 
 import Header from '../components/Header';
 import ReturnReceiptPDF from '../components/ReturnReceiptPDF';
+import ReturnNoteReview from '../components/returns/ReturnNoteReview';
+import { WorkspaceHeader } from '../components/ui/Workspace';
 import MissingCargoOccurrenceDetails, {
   isMissingCargoOccurrence,
 } from '../components/occurrences/MissingCargoOccurrenceDetails';
@@ -75,7 +77,7 @@ import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { showConfirm } from '../utils/dialog';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { sanitizeDanfeTextFields } from '../utils/textNormalization';
-import { parseUnitsPerBoxFromDescription } from '../utils/productPackaging';
+import { parseKgPerBoxFromDescription, parseUnitsPerBoxFromDescription } from '../utils/productPackaging';
 import {
   getReturnDataByInvoice,
   getReturnDataOverview,
@@ -316,6 +318,11 @@ const getDanfeProductQuantityLimitByType = (product?: IDanfe['DanfeProducts'][nu
   const normalizedProductType = normalizeProductType(product.type || product.Product.type);
   const unitsPerBox = parseUnitsPerBoxFromDescription(product.Product.description);
 
+  if (normalizedProductType.includes('CX') && normalizedSelectedType === 'KG') {
+    const kgPerBox = parseKgPerBoxFromDescription(product.Product.description);
+    return kgPerBox ? baseQuantity * kgPerBox : 0;
+  }
+
   if (
     unitsPerBox
     && normalizedProductType.includes('CX')
@@ -325,6 +332,13 @@ const getDanfeProductQuantityLimitByType = (product?: IDanfe['DanfeProducts'][nu
   }
 
   return baseQuantity;
+};
+const getAddedQuantityByType = (product: IDanfe['DanfeProducts'][number] | null, items: IInvoiceReturnItem[], selectedType: string) => {
+  const selectedLimit = getDanfeProductQuantityLimitByType(product, selectedType);
+  return items.filter(item => item.product_id === product?.Product.code).reduce((sum, item) => {
+    const itemLimit = getDanfeProductQuantityLimitByType(product, item.product_type);
+    return sum + (itemLimit > 0 ? Number(item.quantity) * selectedLimit / itemLimit : 0);
+  }, 0);
 };
 const formatKgInputValue = (value: number) => (
   normalizeQtyByType(value, true).toFixed(3).replace(/\.?0+$/, '')
@@ -511,6 +525,7 @@ function ReturnsOccurrences() {
   const [partialProductCode, setPartialProductCode] = useState('');
   const [partialProductType, setPartialProductType] = useState('');
   const [partialQuantityInput, setPartialQuantityInput] = useState('1');
+  const [partialItemError, setPartialItemError] = useState<{ field: 'product' | 'unit' | 'quantity'; message: string } | null>(null);
   const [partialItems, setPartialItems] = useState<IInvoiceReturnItem[]>([]);
   const [partialIsMissing, setPartialIsMissing] = useState(false);
   const [partialKeepInStock, setPartialKeepInStock] = useState(false);
@@ -542,6 +557,14 @@ function ReturnsOccurrences() {
   const [isReturnVehicleSuggestionLoading, setIsReturnVehicleSuggestionLoading] = useState(false);
   const returnVehicleSuggestionRequestRef = useRef(0);
   const [returnDate, setReturnDate] = useState(getTodayDate());
+  const [returnObservation, setReturnObservation] = useState('');
+  const batchWriteInFlight = useRef(false);
+  const occurrenceWriteInFlight = useRef(false);
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const [isSavingOccurrence, setIsSavingOccurrence] = useState(false);
+  const [batchWriteError, setBatchWriteError] = useState('');
+  const [occurrenceWriteError, setOccurrenceWriteError] = useState('');
+  const [writeFeedback, setWriteFeedback] = useState('');
 
   const [batchLookbackDays, setBatchLookbackDays] = useState<ReturnBatchLookbackValue>('7');
   const [batchStartDate, setBatchStartDate] = useState('');
@@ -552,6 +575,9 @@ function ReturnsOccurrences() {
   const [selectedBatchCode, setSelectedBatchCode] = useState('');
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const returnModalContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if ((batchWriteError || isSavingBatch) && returnModalContentRef.current) returnModalContentRef.current.scrollTop = 0;
+  }, [batchWriteError, isSavingBatch]);
   const [batchDraftNotes, setBatchDraftNotes] = useState<IInvoiceReturn[]>([]);
 
   const [occurrenceNf, setOccurrenceNf] = useState('');
@@ -562,6 +588,10 @@ function ReturnsOccurrences() {
   const [occurrenceQuantityInput, setOccurrenceQuantityInput] = useState('1');
   const [occurrenceItems, setOccurrenceItems] = useState<OccurrenceDraftItem[]>([]);
   const [editingOccurrenceId, setEditingOccurrenceId] = useState<number | null>(null);
+  const [occurrenceEditVersion, setOccurrenceEditVersion] = useState<string | undefined>();
+  const [occurrenceLookupNotice, setOccurrenceLookupNotice] = useState('');
+  const [isSearchingOccurrence, setIsSearchingOccurrence] = useState(false);
+  const occurrenceLookupInFlight = useRef(false);
   const [resolvingOccurrence, setResolvingOccurrence] = useState<IOccurrence | null>(null);
   const [resolutionType, setResolutionType] = useState('');
   const [resolutionNote, setResolutionNote] = useState('');
@@ -707,6 +737,7 @@ function ReturnsOccurrences() {
     setSelectedCarId(currentCar ? String(currentCar.id) : '');
     setReturnCarInput(currentCar ? `${currentCar.model} - ${currentCar.license_plate}` : selectedBatch.vehicle_plate || '');
     setReturnDate(selectedBatch.return_date);
+    setReturnObservation(selectedBatch.observation || '');
   }, [selectedBatch, cars, drivers]);
 
   useEffect(() => {
@@ -740,8 +771,12 @@ function ReturnsOccurrences() {
 
     const selectedBatchCar = cars.find((car) => String(car.id) === String(selectedCarId));
     const nextVehiclePlate = String(selectedBatchCar?.license_plate || selectedBatch.vehicle_plate || '').toUpperCase();
-    return String(selectedBatch.vehicle_plate || '').toUpperCase() !== nextVehiclePlate;
-  }, [selectedBatch, batchDraftNotes, returnDriverId, selectedCarId, cars]);
+    if (String(selectedBatch.vehicle_plate || '').toUpperCase() !== nextVehiclePlate) {
+      return true;
+    }
+
+    return String(selectedBatch.observation || '').trim() !== returnObservation.trim();
+  }, [selectedBatch, batchDraftNotes, returnDriverId, selectedCarId, cars, returnObservation]);
 
   const selectedBatchDriverName = useMemo(() => {
     if (!selectedBatch) return 'Motorista';
@@ -784,14 +819,12 @@ function ReturnsOccurrences() {
   const filteredReturnDriverOptions = useMemo(() => {
     const term = normalizeAssignmentSearch(returnDriverInput);
     return returnDriverOptions
-      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term))
-      .slice(0, 8);
+      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term));
   }, [returnDriverInput, returnDriverOptions]);
   const filteredReturnCarOptions = useMemo(() => {
     const term = normalizeAssignmentSearch(returnCarInput);
     return returnCarOptions
-      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term))
-      .slice(0, 8);
+      .filter((option) => !term || normalizeAssignmentSearch(option.value).includes(term));
   }, [returnCarInput, returnCarOptions]);
 
   const selectedPartialDanfeProduct = useMemo(() => (
@@ -813,12 +846,7 @@ function ReturnsOccurrences() {
 
   const selectedPartialMaxQty = getDanfeProductQuantityLimitByType(selectedPartialDanfeProduct, partialProductType);
   const selectedPartialAlreadyAddedQty = partialProductCode && partialProductType
-    ? partialItems
-      .filter((item) => (
-        item.product_id === partialProductCode
-        && normalizeProductType(item.product_type) === normalizeProductType(partialProductType)
-      ))
-      .reduce((sum, item) => sum + Number(item.quantity), 0)
+    ? getAddedQuantityByType(selectedPartialDanfeProduct, partialItems, partialProductType)
     : 0;
   const selectedPartialRemainingQty = Math.max(0, selectedPartialMaxQty - selectedPartialAlreadyAddedQty);
   const selectedLeftoverProduct = useMemo(() => (
@@ -1470,8 +1498,8 @@ function ReturnsOccurrences() {
     }
   }
 
-  async function findDanfeByNf(nf: string) {
-    const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}`);
+  async function findDanfeByNf(nf: string, companyId?: number) {
+    const { data } = await axios.get(`${API_URL}/danfes/nf/${nf}${companyId ? `?companyId=${companyId}` : ''}`);
     return sanitizeDanfeTextFields(data);
   }
 
@@ -1520,6 +1548,7 @@ function ReturnsOccurrences() {
   );
 
   function applyReturnType(nextType: ReturnType) {
+    setPartialItemError(null);
     setReturnType(nextType);
 
     if (nextType === 'sobra') {
@@ -1794,36 +1823,37 @@ function ReturnsOccurrences() {
   }
 
   function addPartialItem() {
+    setPartialItemError(null);
     if (!returnDanfe) {
       alert('Busque uma NF primeiro.');
       return;
     }
 
     if (!partialProductCode) {
-      alert('Selecione um produto.');
+      setPartialItemError({ field: 'product', message: 'Selecione um produto desta NF.' });
       return;
     }
 
     if (!partialProductType) {
-      alert('Selecione o tipo da devolucao (CX, PCT, KG, UN).');
+      setPartialItemError({ field: 'unit', message: 'Selecione a unidade da quantidade (CX, PCT, KG, UN).' });
       return;
     }
 
     const rawPartialQuantity = String(partialQuantityInput || '').trim();
     if (!rawPartialQuantity) {
-      alert('Digite uma quantidade valida.');
+      setPartialItemError({ field: 'quantity', message: 'Digite uma quantidade válida.' });
       return;
     }
 
     const parsedPartialQuantity = Number(normalizeDecimalInput(rawPartialQuantity));
     if (!Number.isFinite(parsedPartialQuantity) || parsedPartialQuantity <= 0) {
-      alert('Digite uma quantidade valida.');
+      setPartialItemError({ field: 'quantity', message: 'Digite uma quantidade válida, maior que zero.' });
       return;
     }
 
     const foundProduct = returnDanfe.DanfeProducts.find((item) => item.Product.code === partialProductCode);
     if (!foundProduct) {
-      alert('Produto nao encontrado na NF.');
+      setPartialItemError({ field: 'product', message: 'Produto não encontrado nesta NF.' });
       return;
     }
 
@@ -1831,28 +1861,27 @@ function ReturnsOccurrences() {
     const isKg = normalizedType.includes('KG');
     const minAllowed = isKg ? KG_QUANTITY_MIN : 1;
     const maxAllowed = getDanfeProductQuantityLimitByType(foundProduct, normalizedType);
-    const existingQty = partialItems
-      .filter((item) => (
-        item.product_id === foundProduct.Product.code
-        && normalizeProductType(item.product_type) === normalizedType
-      ))
-      .reduce((sum, item) => sum + Number(item.quantity), 0);
+    if (!maxAllowed && normalizedType === 'KG') {
+      setPartialItemError({ field: 'unit', message: 'Não foi possível identificar o peso por caixa na descrição. Confira o cadastro antes de devolver em KG.' });
+      return;
+    }
+    const existingQty = getAddedQuantityByType(foundProduct, partialItems, normalizedType);
 
     if (!isKg && !Number.isInteger(parsedPartialQuantity)) {
-      alert('Para este produto, use apenas quantidades inteiras.');
+      setPartialItemError({ field: 'quantity', message: 'Para esta unidade, use apenas quantidades inteiras.' });
       return;
     }
 
     const normalizedQuantity = normalizeQtyByType(parsedPartialQuantity, isKg);
 
     if (normalizedQuantity < minAllowed) {
-      alert(`Quantidade minima permitida para este produto: ${minAllowed}.`);
+      setPartialItemError({ field: 'quantity', message: `Quantidade mínima: ${minAllowed.toLocaleString('pt-BR')} ${normalizedType}.` });
       return;
     }
 
     if ((normalizedQuantity + existingQty) - maxAllowed > QUANTITY_EPSILON) {
       const remaining = Math.max(0, maxAllowed - existingQty);
-      alert(`Quantidade excede o limite da NF, de: ${remaining}.`);
+      setPartialItemError({ field: 'quantity', message: `Quantidade excede o limite da NF. Disponível: ${remaining.toLocaleString('pt-BR')} ${normalizedType}.` });
       return;
     }
 
@@ -2221,6 +2250,7 @@ function ReturnsOccurrences() {
   }
 
   function clearNfBuilder() {
+    setPartialItemError(null);
     setReturnNf('');
     setReturnDanfe(null);
     setReturnDataLookup(null);
@@ -2266,6 +2296,7 @@ function ReturnsOccurrences() {
   }
 
   function handleCreateNewBatch() {
+    setBatchWriteError('');
     setSelectedBatchCode('');
     setDraftNotes([]);
     setRecentlyRemovedDraft(null);
@@ -2280,6 +2311,7 @@ function ReturnsOccurrences() {
     setIsReturnVehicleSuggestionLoading(false);
     returnVehicleSuggestionRequestRef.current += 1;
     setReturnDate(getTodayDate());
+    setReturnObservation('');
     setReturnWizardStep(1);
   }
 
@@ -2289,11 +2321,13 @@ function ReturnsOccurrences() {
   }
 
   function handleOpenReturnBatchModal(batchCode: string) {
+    setBatchWriteError('');
     setSelectedBatchCode(batchCode);
     setReturnModalOpen(true);
   }
 
   async function handleCloseReturnModal() {
+    if (batchWriteInFlight.current) return;
     const hasUnsavedChanges = selectedBatch
       ? selectedBatchHasUnsavedChanges
       : draftNotes.length > 0;
@@ -2315,6 +2349,7 @@ function ReturnsOccurrences() {
   }
 
   async function handleConcludeBatch() {
+    if (batchWriteInFlight.current) return;
     if (!draftNotes.length) {
       alert('Adicione ao menos uma NF na lista para concluir.');
       return;
@@ -2341,6 +2376,10 @@ function ReturnsOccurrences() {
       return;
     }
 
+    batchWriteInFlight.current = true;
+    setIsSavingBatch(true);
+    setBatchWriteError('');
+    setWriteFeedback('');
     try {
       let batchCodeForPdf = `RET-${returnDate.replace(/-/g, '')}`;
       let createdWithLegacyRoute = false;
@@ -2352,6 +2391,7 @@ function ReturnsOccurrences() {
           driver_id: Number(returnDriverId),
           vehicle_plate: selectedCar.license_plate,
           return_date: returnDate,
+          observation: returnObservation.trim() || null,
           notes: serializedDraftNotes,
         });
         batchCodeForPdf = data?.batch_code || batchCodeForPdf;
@@ -2381,12 +2421,15 @@ function ReturnsOccurrences() {
       const driverName = drivers.find((driver) => String(driver.id) === String(returnDriverId))?.name || 'Motorista';
       const pdfItems = fillMissingTypeForPdf(draftAggregatedItems);
 
+      let pdfFailed = false;
+      try {
       const pdfBlob = await pdf(
         <ReturnReceiptPDF
           batchCode={batchCodeForPdf}
           driverName={driverName}
           vehiclePlate={selectedCar.license_plate}
           returnDate={returnDate}
+          observation={returnObservation}
           notes={draftNotes.map((note) => ({
             invoice_number: note.invoice_number,
             return_type: note.return_type,
@@ -2398,6 +2441,14 @@ function ReturnsOccurrences() {
 
       const fileName = getReturnPdfFileName(returnDate);
       openPdfInNewTab(pdfBlob, fileName);
+      } catch (error) {
+        console.error('Lote salvo; falha apenas ao gerar PDF.', error);
+        pdfFailed = true;
+      }
+
+      setWriteFeedback(pdfFailed
+        ? `Devolução salva${createdWithLegacyRoute ? ' no modo legado' : ` no lote ${batchCodeForPdf}`}, mas o PDF falhou. Não cadastre novamente. Consulte o registro e use Abrir PDF.`
+        : `Devolução salva${createdWithLegacyRoute ? ' no modo legado' : ` no lote ${batchCodeForPdf}`}. Confira o PDF e confirme o envio somente após a conferência.`);
 
       if (createdWithLegacyRoute) {
         alert(`Devolucao concluida com sucesso. Observacao: backend em modo legado (sem lote).${statusSyncWarning ? `\n\n${statusSyncWarning}` : ''}`);
@@ -2409,7 +2460,10 @@ function ReturnsOccurrences() {
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
-      alert('Erro ao concluir devolucao.');
+      setBatchWriteError('Não foi possível confirmar a gravação. Seu preenchimento foi mantido. Consulte os lotes antes de tentar novamente, pois uma falha de conexão pode ocorrer depois de salvar.');
+    } finally {
+      batchWriteInFlight.current = false;
+      setIsSavingBatch(false);
     }
   }
 
@@ -2422,6 +2476,7 @@ function ReturnsOccurrences() {
   }
 
   async function handleSaveBatch() {
+    if (batchWriteInFlight.current) return;
     if (!selectedBatch) {
       return;
     }
@@ -2435,21 +2490,26 @@ function ReturnsOccurrences() {
     const originalInvoices = new Set(originalNotes.map((note) => note.invoice_number));
     const driverChanged = String(selectedBatch.driver_id || '') !== String(returnDriverId || '');
     const vehicleChanged = String(selectedBatch.vehicle_plate || '').toUpperCase() !== String(selectedBatchVehiclePlate || '').toUpperCase();
+    const observationChanged = String(selectedBatch.observation || '').trim() !== returnObservation.trim();
 
     const notesToAdd = batchDraftNotes.filter((note) => !originalInvoices.has(note.invoice_number));
     const notesToRemove = originalNotes.filter((note) => !draftInvoices.has(note.invoice_number));
 
-    if (!notesToAdd.length && !notesToRemove.length && !driverChanged && !vehicleChanged) {
+    if (!notesToAdd.length && !notesToRemove.length && !driverChanged && !vehicleChanged && !observationChanged) {
       alert('Nenhuma alteracao para salvar no lote.');
       return;
     }
 
+    batchWriteInFlight.current = true;
+    setIsSavingBatch(true);
+    setBatchWriteError('');
     try {
       const statusSyncWarnings: string[] = [];
-      if (driverChanged || vehicleChanged) {
+      if (driverChanged || vehicleChanged || observationChanged) {
         await axios.put(`${API_URL}/returns/batches/${selectedBatch.batch_code}/transport`, {
           driver_id: Number(returnDriverId),
           vehicle_plate: selectedBatchVehiclePlate,
+          observation: returnObservation.trim() || null,
         });
       }
 
@@ -2470,7 +2530,10 @@ function ReturnsOccurrences() {
       await loadReturnBatches();
     } catch (error) {
       console.error(error);
-      alert('Erro ao salvar alteracoes do lote.');
+      setBatchWriteError('Não foi possível concluir todas as alterações. Parte delas pode ter sido salva. O preenchimento foi mantido; consulte o lote antes de tentar novamente.');
+    } finally {
+      batchWriteInFlight.current = false;
+      setIsSavingBatch(false);
     }
   }
 
@@ -2563,27 +2626,77 @@ function ReturnsOccurrences() {
       return;
     }
 
+    await loadOccurrenceInvoice(occurrenceNf.trim());
+  }
+
+  async function loadOccurrenceInvoice(nf: string, draft?: SavedOccurrenceDraft) {
+    if (occurrenceLookupInFlight.current || occurrenceWriteInFlight.current) return;
+    occurrenceLookupInFlight.current = true;
+    setIsSearchingOccurrence(true);
+    setOccurrenceDanfe(null);
+    setEditingOccurrenceId(null);
+    setOccurrenceEditVersion(undefined);
+    setOccurrenceLookupNotice('');
+    setOccurrenceWriteError('');
     try {
-      const data = await findDanfeByNf(occurrenceNf.trim());
+      const companyId = Number(localStorage.getItem('company_id'));
+      if (!Number.isInteger(companyId) || companyId <= 0) throw new Error('Recarregue a sessão para identificar a empresa.');
+      const data = await findDanfeByNf(nf, companyId);
 
       if (!data) {
         alert('NF nao encontrada.');
         return;
       }
 
+      const { data: existing } = await axios.get<IOccurrence[]>(
+        `${API_URL}/occurrences/search?invoice_number=${encodeURIComponent(String(data.invoice_number))}`,
+      );
+      if (!Array.isArray(existing)) throw new Error('Resposta de ocorrencias invalida.');
+      if ((data.company_id && Number(data.company_id) !== companyId)
+        || existing.some((row) => row.company_id && Number(row.company_id) !== companyId)) {
+        throw new Error('Empresa divergente na consulta da ocorrência.');
+      }
+      if (existing.length > 1) {
+        setOccurrenceLookupNotice(`Esta NF possui ${existing.length} ocorrências antigas: ${existing.map((row) => `#${row.id}`).join(', ')}. É necessário conferir a duplicidade antes de continuar. Nenhum registro foi removido.`);
+        return;
+      }
+      if (existing.length === 1) {
+        const occurrence = existing[0];
+        if (!isOccurrencePendingForTransportadora(occurrence)) {
+          setOccurrenceLookupNotice(`A ocorrência #${occurrence.id} desta NF já foi tratada. Consulte a ocorrência existente; não será criada outra nem reaberta automaticamente.`);
+          return;
+        }
+        populateOccurrence(occurrence);
+        setOccurrenceLookupNotice(`Esta NF já possui a ocorrência #${occurrence.id}. Os itens registrados foram carregados. Adicione os itens faltantes e salve as alterações.`);
+        setOccurrenceDanfe(data);
+        return;
+      }
       setOccurrenceDanfe(data);
+      setOccurrenceReason(draft?.reason || 'faltou_no_carregamento');
       setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
       setOccurrenceProductType('');
       setOccurrenceQuantityInput('1');
       setOccurrenceItems([]);
+      if (draft) {
+        setOccurrenceItems(draft.items);
+        setOccurrenceProductCode(draft.productCode);
+        setOccurrenceProductType(draft.productType);
+        setOccurrenceQuantityInput(draft.quantityInput);
+      }
     } catch (error) {
       console.error(error);
-      alert('Erro ao buscar NF para ocorrencia.');
+      setOccurrenceWriteError('Não foi possível conferir a NF e suas ocorrências. Faça a busca novamente antes de salvar.');
+    } finally {
+      occurrenceLookupInFlight.current = false;
+      setIsSearchingOccurrence(false);
     }
   }
 
   function resetOccurrenceBuilder() {
+    setOccurrenceWriteError('');
     setEditingOccurrenceId(null);
+    setOccurrenceEditVersion(undefined);
+    setOccurrenceLookupNotice('');
     setOccurrenceReason('faltou_no_carregamento');
     setOccurrenceProductCode(OCCURRENCE_TOTAL_OPTION);
     setOccurrenceProductType('');
@@ -2600,20 +2713,12 @@ function ReturnsOccurrences() {
     if (!draft) return;
 
     setOccurrenceNf(draft.invoiceNumber);
-    setOccurrenceReason(draft.reason);
-    setOccurrenceItems(draft.items);
-    try {
-      const danfe = await findDanfeByNf(draft.invoiceNumber);
-      if (danfe) setOccurrenceDanfe(danfe);
-    } catch {
-      // A NF pode ser buscada novamente pelo usuario quando a conexao voltar.
-    }
-    setOccurrenceProductCode(draft.productCode);
-    setOccurrenceProductType(draft.productType);
-    setOccurrenceQuantityInput(draft.quantityInput);
+    await loadOccurrenceInvoice(draft.invoiceNumber, draft);
   }
 
   function closeOccurrenceBuilder() {
+    if (occurrenceWriteInFlight.current || occurrenceLookupInFlight.current) return;
+    setOccurrenceWriteError('');
     setIsOccurrenceBuilderOpen(false);
     resetOccurrenceBuilder();
   }
@@ -2709,6 +2814,7 @@ function ReturnsOccurrences() {
   }
 
   async function handleCreateOrEditOccurrence() {
+    if (occurrenceWriteInFlight.current || occurrenceLookupInFlight.current) return;
     if (!isOnline) {
       alert('Sem conexao no momento. O rascunho foi mantido neste aparelho; envie quando a internet voltar.');
       return;
@@ -2728,12 +2834,17 @@ function ReturnsOccurrences() {
       return;
     }
 
+    occurrenceWriteInFlight.current = true;
+    setIsSavingOccurrence(true);
+    setOccurrenceWriteError('');
     try {
       const payload = {
         invoice_number: String(occurrenceDanfe.invoice_number),
         reason: occurrenceReason,
         scope: occurrenceScope,
         items: occurrenceScope === 'items' ? occurrenceItems : [],
+        expected_version: occurrenceEditVersion,
+        company_id: occurrenceDanfe.company_id,
       };
 
       if (editingOccurrenceId) {
@@ -2743,30 +2854,49 @@ function ReturnsOccurrences() {
       }
 
       alert(editingOccurrenceId ? 'Ocorrencia atualizada com sucesso.' : 'Ocorrencia registrada com sucesso.');
-      if (!editingOccurrenceId) clearSavedOccurrenceDraft();
-      closeOccurrenceBuilder();
+      clearSavedOccurrenceDraft();
+      setIsOccurrenceBuilderOpen(false);
+      resetOccurrenceBuilder();
       await loadOccurrences();
     } catch (error) {
       console.error(error);
       if (handleAuthenticationError(error)) return;
+      setOccurrenceWriteError('Não foi possível confirmar o salvamento. O preenchimento foi mantido. Confira a lista antes de reenviar para evitar duplicidade.');
       if (axios.isAxiosError(error)) {
+        if (error.response?.status === 409) {
+          setOccurrenceWriteError(`${error.response.data?.error || 'Já existe uma ocorrência ou ela foi atualizada.'} Seu preenchimento continua visível. Confira os itens e busque a NF novamente para carregar o registro salvo.`);
+          return;
+        }
         alert(error.response?.data?.error || 'Erro ao salvar ocorrencia.');
       } else {
         alert('Erro ao salvar ocorrencia.');
       }
+    } finally {
+      occurrenceWriteInFlight.current = false;
+      setIsSavingOccurrence(false);
     }
   }
 
   async function startEditOccurrence(occurrence: IOccurrence) {
     if (!isOccurrencePendingForTransportadora(occurrence)) return;
-
+    resetOccurrenceBuilder();
     setIsOccurrenceBuilderOpen(true);
+    setOccurrenceNf(String(occurrence.invoice_number || ''));
+    await loadOccurrenceInvoice(String(occurrence.invoice_number));
+  }
+
+  function populateOccurrence(occurrence: IOccurrence) {
     setEditingOccurrenceId(occurrence.id);
+    setOccurrenceEditVersion(occurrence.edit_version);
     setOccurrenceNf(String(occurrence.invoice_number || ''));
     setOccurrenceReason((occurrence.reason || 'legacy_outros') as OccurrenceReasonValue);
     const scopeFromOccurrence = (occurrence.scope || 'items') as 'invoice_total' | 'items';
+    const savedItems = occurrence.items?.length ? occurrence.items : occurrence.product_id ? [{
+      product_id: occurrence.product_id, product_description: occurrence.product_description,
+      product_type: occurrence.product_type, quantity: occurrence.quantity,
+    }] : [];
     setOccurrenceItems(
-      (occurrence.items || [])
+      savedItems
         .map((item) => ({
           product_id: String(item.product_id || '').trim(),
           product_description: String(item.product_description || '').trim(),
@@ -2778,23 +2908,15 @@ function ReturnsOccurrences() {
     setOccurrenceProductCode(
       scopeFromOccurrence === 'invoice_total'
         ? OCCURRENCE_TOTAL_OPTION
-        : String(occurrence.items?.[0]?.product_id || '').trim() || OCCURRENCE_TOTAL_OPTION,
+        : String(savedItems[0]?.product_id || '').trim(),
     );
     setOccurrenceProductType(
       scopeFromOccurrence === 'invoice_total'
         ? ''
-        : normalizeProductType(occurrence.items?.[0]?.product_type) || '',
+        : normalizeProductType(savedItems[0]?.product_type) || '',
     );
     setOccurrenceQuantityInput('1');
 
-    try {
-      const data = await findDanfeByNf(String(occurrence.invoice_number));
-      if (data) {
-        setOccurrenceDanfe(data);
-      }
-    } catch (error) {
-      console.error(error);
-    }
   }
 
   async function handleResolveOccurrence() {
@@ -2857,6 +2979,7 @@ function ReturnsOccurrences() {
           driverName={driverName}
           vehiclePlate={batch.vehicle_plate}
           returnDate={batch.return_date}
+          observation={batch.observation}
           notes={batch.notes.map((note) => ({
             invoice_number: note.invoice_number,
             return_type: note.return_type,
@@ -2938,10 +3061,9 @@ function ReturnsOccurrences() {
       <Container className="operation-page">
         <PageContainer className="gap-0">
           <section className="mb-4 rounded-2xl border border-border bg-card p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-sky-600">Mar e Rio · operação de retorno</p>
-            <h1 className="mt-1 text-2xl font-black text-text">{activeTab === 'returns' ? 'Devoluções' : 'Ocorrências de carregamento'}</h1>
-            <p className="mt-2 text-sm text-muted">{activeTab === 'returns' ? 'Acompanhe os lotes, consulte a base e organize os produtos que vão retornar.' : 'Acompanhe e trate as divergências identificadas no carregamento.'}</p>
+            <WorkspaceHeader eyebrow="Mar e Rio · operação de retorno" title={activeTab === 'returns' ? 'Devoluções' : 'Ocorrências de carregamento'} description={activeTab === 'returns' ? 'Acompanhe os lotes, consulte a base e organize os produtos que vão retornar.' : 'Acompanhe e trate as divergências identificadas no carregamento.'} />
           </section>
+          {writeFeedback && <p role="status" className="mb-4 rounded-lg border border-border bg-card p-4 text-sm text-text">{writeFeedback}</p>}
           <TabsRow className="items-end gap-0">
             <Tabs className="w-auto">
               <button
@@ -3004,7 +3126,7 @@ function ReturnsOccurrences() {
                       aria-modal="true"
                       style={{ maxWidth: isReturnWizardMode && returnWizardStep <= 2 ? 800 : 1040 }}
                       aria-label={selectedBatch ? `Lote de devolucao ${selectedBatch.batch_code}` : 'Nova devolucao'}
-                      className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1040px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)]"
+                      className="fixed left-1/2 top-1/2 z-[1500] flex max-h-[94vh] w-[min(96vw,1040px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-3)] [&_button]:min-h-[44px] [&_select]:min-h-[44px] [&_select]:text-base [&_input:not([type=checkbox])]:min-h-[44px] [&_input:not([type=checkbox])]:text-base"
                     >
                       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 py-3 sm:px-5">
                         <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -3027,6 +3149,9 @@ function ReturnsOccurrences() {
                         />
                       </div>
                       <div ref={returnModalContentRef} className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                {isSavingBatch && <p role="status" className="mb-3 rounded-lg border border-border bg-card p-3 text-sm text-text">Salvando devolução. Aguarde sem fechar esta janela.</p>}
+                {batchWriteError && <p role="alert" className="mb-3 rounded-lg border semantic-panel-danger p-3 text-sm">{batchWriteError}</p>}
+                <fieldset disabled={isSavingBatch} className="min-w-0 border-0 p-0 disabled:opacity-70">
                 {selectedBatch && (
                   <TopActionBar className="mb-3 flex-wrap">
                     <button className="secondary" onClick={() => handleOpenBatchPdf(selectedBatch)} type="button">
@@ -3181,7 +3306,7 @@ function ReturnsOccurrences() {
                           placeholder="Digite o nome do motorista"
                         />
                         {isReturnDriverSuggestionsOpen ? (
-                          <div id="return-driver-suggestions" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                          <div id="return-driver-suggestions" role="listbox" className="mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-card py-1 shadow-lg">
                             {filteredReturnDriverOptions.length ? filteredReturnDriverOptions.map((option) => (
                               <button
                                 key={option.id}
@@ -3233,7 +3358,7 @@ function ReturnsOccurrences() {
                           placeholder="Digite a placa ou o veículo"
                         />
                         {isReturnCarSuggestionsOpen ? (
-                          <div id="return-car-suggestions" role="listbox" className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card py-1 shadow-lg">
+                          <div id="return-car-suggestions" role="listbox" className="mt-1 max-h-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-card py-1 shadow-lg">
                             {filteredReturnCarOptions.length ? filteredReturnCarOptions.map((option) => (
                               <button
                                 key={option.id}
@@ -3304,10 +3429,10 @@ function ReturnsOccurrences() {
                         : 'space-y-2'
                     }>
                     {isReturnWizardMode && returnWizardStep === 2 && (
-                      <div className="text-left">
-                        <h3 className="mt-2 text-base font-bold text-text">Localizar nota fiscal</h3>
-                        <p className="mt-1 max-w-[400px] text-xs leading-relaxed text-muted">
-                          Informe até 7 dígitos. Depois da busca, confira a ocorrência e avance para os produtos.
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-left">
+                        <h3 className="text-base font-bold text-text">Localizar nota fiscal</h3>
+                        <p className="text-[11px] leading-relaxed text-muted">
+                          Até 7 dígitos. Busque, confira a ocorrência e confirme.
                         </p>
                       </div>
                     )}
@@ -3315,7 +3440,7 @@ function ReturnsOccurrences() {
                       isReturnWizardMode && returnWizardStep === 2 ? 'justify-start' : ''
                     }`}>
                       <div className={`${isReturnWizardMode && returnWizardStep !== 2 ? 'hidden' : ''} min-w-0 ${
-                        isReturnWizardMode && returnWizardStep === 2 ? 'w-full' : 'md:w-[320px] md:shrink-0'
+                        isReturnWizardMode && returnWizardStep === 2 ? 'flex w-full flex-wrap items-center gap-2' : 'md:w-[320px] md:shrink-0'
                       }`}>
                         {returnType === 'sobra' ? (
                           <div className="rounded-md border border-border bg-card px-3 py-[11px] text-[0.82rem] text-muted">
@@ -3357,7 +3482,7 @@ function ReturnsOccurrences() {
                               handleChangeReturnType('sobra');
                               setReturnWizardStep(3);
                             }}
-                            className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-text transition hover:border-accent hover:bg-surface-2"
+                            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-text transition hover:border-accent hover:bg-surface-2"
                           >
                             <PackageCheck size={17} />
                             Registrar sobra sem NF
@@ -3415,19 +3540,19 @@ function ReturnsOccurrences() {
                     {(returnDanfe || returnType === 'sobra') && (
                     <>
                       {returnDanfe && returnType !== 'sobra' && (
-                        <InfoText style={{ marginTop: '12px' }}>
+                        <div className="mt-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm font-semibold text-text" role="status">
                           NF carregada: {returnDanfe.invoice_number} | Cliente: {returnDanfe.Customer.name_or_legal_entity}
-                        </InfoText>
+                        </div>
                       )}
-                      <div className={returnWizardStep === 2 ? 'flex flex-col gap-3 sm:flex-row sm:items-center' : ''}>
+                      <div className={returnWizardStep === 2 ? 'mt-2 flex flex-col overflow-hidden rounded-lg border border-border sm:flex-row sm:items-stretch' : ''}>
                         <div className="min-w-0 flex-1">
                       {returnDanfe && returnType !== 'sobra' && returnDataLookupLoading && (
-                        <div className="mt-3 rounded-lg border border-border bg-card px-3 py-3 text-sm text-muted">
+                        <div className="bg-card px-3 py-3 text-sm text-muted">
                           Consultando NF na base acumulada de devoluções...
                         </div>
                       )}
                       {returnDanfe && returnType !== 'sobra' && returnDataLookupError && (
-                        <div role="status" aria-live="polite" className="mt-3 rounded-lg border semantic-panel-warning px-3 py-3 text-sm">
+                        <div role="status" aria-live="polite" className="semantic-panel-warning px-3 py-3 text-sm">
                           {returnDataLookupError}
                         </div>
                       )}
@@ -3435,7 +3560,7 @@ function ReturnsOccurrences() {
                         <div
                           role="status" aria-live="polite"
                           data-testid={returnWizardStep === 3 ? 'return-base-compact-reminder' : 'return-base-lookup-result'}
-                          className={`mt-2 rounded-lg border px-3 py-2.5 text-sm ${
+                          className={`${returnWizardStep === 2 ? 'h-full' : 'mt-2 rounded-lg border'} px-3 py-2.5 text-sm ${
                           returnDataLookup.consolidated_status === 'approved'
                             ? 'semantic-panel-success'
                             : returnDataLookup.consolidated_status === 'registered_without_approval'
@@ -3495,11 +3620,11 @@ function ReturnsOccurrences() {
                         && !returnDataLookupLoading
                         && !returnNfCollectionLookupLoading
                         && (returnDataLookup || returnDataLookupError) && (
-                        <div className="shrink-0 sm:w-[180px]">
+                        <div className="flex shrink-0 sm:w-[180px]">
                           <button
                             type="button"
                             onClick={() => setReturnWizardStep(3)}
-                            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-accent-strong bg-accent px-3 py-2 text-sm font-bold text-white transition hover:bg-accent-strong [&_svg]:shrink-0"
+                            className="inline-flex min-h-11 w-full flex-1 items-center justify-center gap-2 border border-accent-strong bg-accent px-3 py-3 text-sm font-bold text-white transition hover:bg-accent-strong [&_svg]:shrink-0"
                           >
                             {returnDataLookup?.consolidated_status === 'not_found'
                               ? 'Ciente, continuar para tipo e produtos'
@@ -3578,10 +3703,13 @@ function ReturnsOccurrences() {
                               <InlineText>Produto</InlineText>
                               <select
                                 aria-label="Produto da devolucao parcial"
+                                aria-invalid={partialItemError?.field === 'product'}
+                                aria-describedby={partialItemError?.field === 'product' ? 'return-product-error' : undefined}
                                 value={partialProductCode}
                                 onChange={(event) => {
                                   const nextProductCode = event.target.value;
                                   setPartialProductCode(nextProductCode);
+                                  setPartialItemError(null);
                                 }}
                               >
                                 <option value="">Selecione</option>
@@ -3591,13 +3719,16 @@ function ReturnsOccurrences() {
                                   </option>
                                 ))}
                               </select>
+                              {partialItemError?.field === 'product' && <p id="return-product-error" role="alert" className="mt-1 text-sm text-danger">{partialItemError.message}</p>}
                             </div>
                             <div>
                               <InlineText>Tipo</InlineText>
                               <select
                                 aria-label="Unidade da devolucao parcial"
+                                aria-invalid={partialItemError?.field === 'unit'}
+                                aria-describedby={partialItemError?.field === 'unit' ? 'return-unit-error' : undefined}
                                 value={partialProductType}
-                                onChange={(event) => setPartialProductType(event.target.value)}
+                                onChange={(event) => { setPartialProductType(event.target.value); setPartialItemError(null); }}
                                 disabled={!partialProductCode}
                               >
                                 <option value="">Selecione</option>
@@ -3607,6 +3738,7 @@ function ReturnsOccurrences() {
                                   </option>
                                 ))}
                               </select>
+                              {partialItemError?.field === 'unit' && <p id="return-unit-error" role="alert" className="mt-1 text-sm text-danger">{partialItemError.message}</p>}
                             </div>
                             <div>
                               <InlineText>Quantidade</InlineText>
@@ -3614,8 +3746,12 @@ function ReturnsOccurrences() {
                                 type="text"
                                 inputMode="decimal"
                                 value={partialQuantityInput}
-                                onChange={(event) => setPartialQuantityInput(event.target.value)}
+                                aria-label="Quantidade da devolução parcial"
+                                aria-invalid={partialItemError?.field === 'quantity'}
+                                aria-describedby={partialItemError?.field === 'quantity' ? 'return-quantity-error' : undefined}
+                                onChange={(event) => { setPartialQuantityInput(event.target.value); setPartialItemError(null); }}
                               />
+                              {partialItemError?.field === 'quantity' && <p id="return-quantity-error" role="alert" className="mt-1 text-sm text-danger">{partialItemError.message}</p>}
                               {!!partialProductCode && (
                                 <InfoText>
                                   Limite da NF para o tipo selecionado: {selectedPartialMaxQty} | Restante para adicionar: {selectedPartialRemainingQty}
@@ -3976,22 +4112,24 @@ function ReturnsOccurrences() {
                       </SaveBatchButton>
                     )}
                   </ListHeaderRow>
+                  {isReturnWizardMode && <p className="my-3 rounded-lg border border-border bg-surface p-3 text-sm text-muted">Revise cada nota abaixo antes de salvar. Salvar o lote não confirma o envio para a Torre de Controle. Impressão e confirmação de envio são etapas separadas.</p>}
                   {selectedBatch ? (
                     !batchDraftNotes.length ? (
                       <InlineText>Nenhuma NF no lote selecionado.</InlineText>
                     ) : (
                       <List>
                         {batchDraftNotes.map((note) => (
-                          <li key={note.id}>
-                            <span>
+                          <li key={note.id} className="!block">
+                            <div className="min-w-0 flex-1">
                               <strong>{getNoteDisplayLabel(note)}</strong>
                               {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                               {` | Itens: ${note.items?.length || 0}`}
                               {note.return_type === 'sobra' && note.is_inversion ? ' | Inversao' : ''}
                               {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
-                            </span>
+                              <ReturnNoteReview label={getNoteDisplayLabel(note)} returnTypeLabel={getReturnTypeLabel(note.return_type)} items={note.items || []} changeStatusToReturned={note.change_status_to_returned} />
+                            </div>
                             {isSelectedBatchEditableByTransportadora && (
-                              <Actions>
+                              <Actions className="mt-3 justify-end">
                                 <button
                                   className="danger"
                                   onClick={() => handleRemoveNoteFromBatch(note.id)}
@@ -4011,8 +4149,8 @@ function ReturnsOccurrences() {
                     ) : (
                       <List>
                         {draftNotes.map((note) => (
-                          <li key={note.invoice_number}>
-                            <span>
+                          <li key={note.invoice_number} className="!block">
+                            <div className="min-w-0 flex-1">
                               <strong>{getNoteDisplayLabel(note)}</strong>
                               {` | Tipo: ${getReturnTypeLabel(note.return_type)}`}
                               {` | Itens: ${note.items.length}`}
@@ -4020,8 +4158,9 @@ function ReturnsOccurrences() {
                               {getNoteInversionSummary(note) ? ` | ${getNoteInversionSummary(note)}` : ''}
                               {note.items.some((item) => item.is_missing) ? ' | Possui faltante' : ''}
                               {note.items.some((item) => item.keep_in_stock) ? ' | Possui item para estoque' : ''}
-                            </span>
-                            <Actions>
+                              <ReturnNoteReview label={getNoteDisplayLabel(note)} returnTypeLabel={getReturnTypeLabel(note.return_type)} items={note.items} changeStatusToReturned={note.change_status_to_returned} />
+                            </div>
+                            <Actions className="mt-3 justify-end">
                               <button className="danger" onClick={() => removeDraftNf(note.invoice_number)} type="button">
                                 Remover NF
                               </button>
@@ -4043,6 +4182,26 @@ function ReturnsOccurrences() {
                       </button>
                     </div>
                   )}
+
+                  <div className="mt-4">
+                    <label className="mb-1 block text-sm font-bold text-text" htmlFor="return-pdf-observation">
+                      Observação do PDF (opcional)
+                    </label>
+                    <textarea
+                      id="return-pdf-observation"
+                      aria-label="Observação do PDF da devolução"
+                      value={returnObservation}
+                      onChange={(event) => setReturnObservation(event.target.value)}
+                      maxLength={1000}
+                      rows={4}
+                      disabled={Boolean(selectedBatch && !isSelectedBatchEditableByTransportadora)}
+                      placeholder="Escreva uma observação para aparecer abaixo da relação de NFs na segunda página."
+                      className="w-full resize-y rounded-md border border-border bg-card px-3 py-2 text-sm text-text disabled:cursor-not-allowed disabled:opacity-65"
+                    />
+                    <span className="mt-1 block text-right text-xs text-muted">
+                      {returnObservation.length}/1000 caracteres
+                    </span>
+                  </div>
 
                   {selectedBatch && !!selectedBatchAggregatedPreview.length && (
                     <>
@@ -4077,10 +4236,10 @@ function ReturnsOccurrences() {
                       </div>
 
                       {!!draftAggregatedItems.length && (
-                        <>
-                          <InlineText style={{ marginTop: '12px' }}>
-                            Pre-visualizacao dos produtos consolidados: {draftAggregatedItems.length}
-                          </InlineText>
+                        <details className="mt-3 rounded-lg border border-border bg-card p-3">
+                          <summary className="min-h-[44px] cursor-pointer text-sm font-semibold text-text">
+                            Ver produtos consolidados do lote ({draftAggregatedItems.length})
+                          </summary>
                           <List>
                             {draftAggregatedItems.map((item) => (
                               <li key={`draft-item-${getReturnItemKey(item)}`}>
@@ -4093,24 +4252,25 @@ function ReturnsOccurrences() {
                               </li>
                             ))}
                           </List>
-                        </>
+                        </details>
                       )}
 
                       <div className="mt-6 flex justify-end border-t border-border pt-5">
                         <button
                           className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-600 px-7 py-3 text-base font-bold text-white shadow-soft transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[280px]"
                           onClick={handleConcludeBatch}
-                          disabled={draftNotes.length === 0}
+                          disabled={draftNotes.length === 0 || isSavingBatch}
                           type="button"
                         >
                           <CheckCircle2 size={19} />
-                          Concluir devolucao
+                          {isSavingBatch ? 'Salvando devolução…' : 'Concluir devolucao'}
                         </button>
                       </div>
                     </>
                   )}
                   </div>
                 </Card>
+                </fieldset>
                       </div>
                     </div>
                   </>
@@ -4308,7 +4468,7 @@ function ReturnsOccurrences() {
             {isOccurrenceBuilderOpen && canManageOccurrenceStatus && (
               <>
                 <ModalOverlay onClick={closeOccurrenceBuilder} />
-                <ModalCard className="max-h-[88vh] w-[min(96vw,760px)] overflow-y-auto">
+                <ModalCard role="dialog" aria-modal="true" aria-label="Formulário de ocorrência" className="max-h-[88vh] w-[min(96vw,760px)] overflow-y-auto">
                   <button
                     type="button"
                     onClick={closeOccurrenceBuilder}
@@ -4319,6 +4479,11 @@ function ReturnsOccurrences() {
                     <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <h3 className="text-center">{editingOccurrenceId ? `Editar ocorrencia #${editingOccurrenceId}` : 'Registrar Ocorrencia'}</h3>
+                  {isSavingOccurrence && <p role="status" className="my-3 text-sm text-muted">Salvando ocorrência. Aguarde sem fechar esta janela.</p>}
+                  {isSearchingOccurrence && <p role="status" className="my-3 text-sm text-muted">Conferindo NF e ocorrências existentes…</p>}
+                  {occurrenceLookupNotice && <p role="status" className="my-3 rounded-lg border semantic-panel-warning p-3 text-sm">{occurrenceLookupNotice}</p>}
+                  {occurrenceWriteError && <p role="alert" className="my-3 rounded-lg border semantic-panel-danger p-3 text-sm">{occurrenceWriteError}</p>}
+                  <fieldset disabled={isSavingOccurrence || isSearchingOccurrence} className="min-w-0 border-0 p-0 disabled:opacity-70">
                   {!isOnline ? (
                     <div className="mt-3 rounded-md border semantic-panel-warning px-3 py-2 text-sm">
                       Sem conexão. Continue preenchendo: o rascunho fica salvo neste aparelho, mas o envio deve ser feito quando a internet voltar.
@@ -4330,7 +4495,13 @@ function ReturnsOccurrences() {
                         type="text"
                         inputMode="numeric"
                         value={occurrenceNf}
-                        onChange={(event) => setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 9))}
+                        onChange={(event) => {
+                          setOccurrenceNf(event.target.value.replace(/\D/g, '').slice(0, 9));
+                          setOccurrenceDanfe(null);
+                          setEditingOccurrenceId(null);
+                          setOccurrenceEditVersion(undefined);
+                          setOccurrenceLookupNotice('');
+                        }}
                         placeholder="Digite a NF"
                         maxLength={9}
                         onSearch={handleSearchOccurrenceNf}
@@ -4474,11 +4645,12 @@ function ReturnsOccurrences() {
 
                   <Actions style={{ marginTop: '12px' }}>
                     {occurrenceDanfe && (
-                      <button className="primary" onClick={handleCreateOrEditOccurrence} type="button" disabled={!isOnline}>
-                        {editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
+                      <button className="primary" onClick={handleCreateOrEditOccurrence} type="button" disabled={!isOnline || isSavingOccurrence || isSearchingOccurrence || !occurrenceDanfe}>
+                        {isSavingOccurrence ? 'Salvando ocorrência…' : editingOccurrenceId ? 'Salvar alteracoes' : 'Registrar ocorrencia'}
                       </button>
                     )}
                   </Actions>
+                  </fieldset>
                 </ModalCard>
               </>
             )}

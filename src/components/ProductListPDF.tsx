@@ -35,6 +35,7 @@ interface ProductListPDFProps {
   danfes?: IDanfe[];
   retainedReminders?: RetainedReminder[];
   occurrenceReminders?: OccurrenceReminder[];
+  reminderLookupWarning?: string;
   salmonSeparations?: SalmonSeparationRow[];
   prontoBoxes?: ProntoBoxRow[];
 }
@@ -451,6 +452,7 @@ const renderFirstPageExtras = ({
   danfes,
   retainedReminders,
   occurrenceReminders,
+  reminderLookupWarning,
   products,
   salmonSeparations,
   prontoBoxes,
@@ -471,12 +473,18 @@ const renderFirstPageExtras = ({
           <Text style={styles.inlineInfoCitiesText}>{`Cidades: ${tripCities.join(', ')}`}</Text>
         </View>
       ) : null}
+      {reminderLookupWarning ? (
+        <View style={styles.attentionCard}>
+          <Text style={styles.attentionTitle}>CONFERENCIA DE PENDENCIAS INCOMPLETA</Text>
+          <Text style={styles.attentionItemText}>{reminderLookupWarning}</Text>
+        </View>
+      ) : null}
       {retainedReminders?.length ? (
         <View style={styles.attentionCard}>
           <Text style={styles.attentionTitle}>ATENCAO: recolher canhotos retidos nesta rota</Text>
           {retainedReminders.map((reminder) => (
             <View
-              key={`${reminder.matchType}-${reminder.retainedInvoiceNumber}`}
+              key={`${reminder.companyId}-${reminder.matchType}-${reminder.retainedInvoiceNumber}`}
               style={styles.attentionItem}
             >
               <Text style={styles.attentionItemTitle}>
@@ -499,6 +507,12 @@ const renderFirstPageExtras = ({
                   </Text>
                 </>
               )}
+              {reminder.linkedOccurrences?.map(occurrence => (
+                <View key={occurrence.id} style={{ marginTop: 4, paddingLeft: 6, borderLeftWidth: 2, borderLeftColor: '#92400e' }}>
+                  <Text style={styles.attentionItemTitle}>{occurrence.instruction}</Text>
+                  <Text style={styles.attentionItemText}>{occurrence.itemSummary}</Text>
+                </View>
+              ))}
             </View>
           ))}
         </View>

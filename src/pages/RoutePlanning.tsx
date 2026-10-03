@@ -30,12 +30,14 @@ import { buildRetainedReminders, selectRetainedRowsForRoute } from '../utils/ret
 import { buildTripProductManifest } from '../utils/tripProductManifest';
 import { buildSalmonLoadList } from '../utils/salmonLoadList';
 import { buildOccurrenceReminders } from '../utils/occurrenceReminders';
+import { linkRetainedOccurrences } from '../utils/retainedOccurrenceReminders';
 import verifyToken from '../utils/verifyToken';
 import { handleAuthenticationError } from '../utils/authErrorHandler';
 import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import { API_URL } from '../data';
 import useRouteCatalog from '../hooks/useRouteCatalog';
+import useDialogFocus from '../hooks/useDialogFocus';
 import { routeByCity, normalizeRouteCity } from '../utils/routeCatalog';
 import { listReceiptBacklog } from '../services/receiptsService';
 import { ICar, IDanfe, IDriver, IOccurrence, IReceiptBacklogRow, IReturnBatch, ITrip, ITripNote } from '../types/types';
@@ -328,10 +330,13 @@ function RoutePlanning() {
   const [editTrip, setEditTrip] = useState<ITrip | null>(null);
   const [editNotes, setEditNotes] = useState<RoutingTripNote[]>([]);
   const [editSearch, setEditSearch] = useState<string>('');
+  const [editFeedback, setEditFeedback] = useState('');
+  const [editError, setEditError] = useState('');
+  const savingEditRef = useRef(false);
+  const editDialogRef = useDialogFocus(editTrip ? 'trip-edition' : '');
   const [availableDanfes, setAvailableDanfes] = useState<IDanfe[]>([]);
   const [routingPoolDanfes, setRoutingPoolDanfes] = useState<RouteLookupDanfe[]>([]);
   const [retainedContextRows, setRetainedContextRows] = useState<IReceiptBacklogRow[]>([]);
-  const [openOccurrenceContexts, setOpenOccurrenceContexts] = useState<IOccurrence[]>([]);
   const [selectedRoutingCity, setSelectedRoutingCity] = useState<string>('');
   const [isRoutingPoolLoading, setIsRoutingPoolLoading] = useState<boolean>(false);
   const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
@@ -407,6 +412,14 @@ function RoutePlanning() {
     () => editNotes.some((note) => !isMutableTripNoteStatus(note.status)),
     [editNotes],
   );
+  const editSummary = useMemo(() => {
+    const original = new Set((editTrip?.TripNotes || []).map(getTripNoteKey));
+    const next = new Set(editNotes.map(getTripNoteKey));
+    return {
+      added: editNotes.filter((note) => !original.has(getTripNoteKey(note))).length,
+      removed: (editTrip?.TripNotes || []).filter((note) => !next.has(getTripNoteKey(note))).length,
+    };
+  }, [editTrip, editNotes]);
 
   const sortedDisplayedTrips = useMemo(
     () => displayedTrips.slice().sort((a, b) => {
@@ -1049,21 +1062,6 @@ function RoutePlanning() {
   }, []);
 
   useEffect(() => {
-    const loadOpenOccurrenceContexts = async () => {
-      try {
-        const { data } = await axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
-          params: { workflow_status: 'pending_transportadora' },
-        });
-        setOpenOccurrenceContexts(Array.isArray(data) ? data : []);
-      } catch {
-        setOpenOccurrenceContexts([]);
-      }
-    };
-
-    void loadOpenOccurrenceContexts();
-  }, []);
-
-  useEffect(() => {
     if (selectedDriver === 'null' || selectedCar === 'null') {
       setAssignmentWarning('');
       return;
@@ -1371,13 +1369,6 @@ function RoutePlanning() {
       await axios.put(`${API_URL}/trips/remove-note/${assignment.tripId}`, {
         noteId: assignment.noteId,
       }, authConfig);
-      await axios.put(`${API_URL}/danfes/update-status`, {
-        danfes: [{
-          company_id: routingModalState.danfe.company_id,
-          invoice_number: routingModalState.danfe.invoice_number,
-          status: 'pending',
-        }],
-      }, authConfig);
 
       appendDanfeToRoute({
         ...routingModalState.danfe,
@@ -1471,9 +1462,8 @@ function RoutePlanning() {
         ));
 
         if (tripToUpdate?.id && matchingSavedNote?.id) {
-          await axios.put(`${API_URL}/trips/remove-note/${tripToUpdate.id}`, {
-            noteId: matchingSavedNote.id,
-          }, authConfig);
+          setCorrectedDeliveredInvoiceError('Esta NF já está salva na viagem. Seu vínculo de entrega será preservado; notas entregues não podem ser retiradas pela roteirização.');
+          return;
         }
 
         updateAddedNotes((notes) => notes.filter((note) => (
@@ -1721,25 +1711,25 @@ function RoutePlanning() {
       return;
     }
 
-    const nf = String(note.invoice_number);
+    const noteKey = getTripNoteKey(note);
     const noteId = note.id;
 
     if (tripToUpdate?.id && noteId) {
       setIsLoading(true);
       try {
         await axios.put(`${API_URL}/trips/remove-note/${tripToUpdate.id}`, { noteId }, authConfig);
-        await axios.put(`${API_URL}/danfes/update-status`, {
-          danfes: [{ invoice_number: nf, status: 'pending' }],
-        });
-        updateAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
+        updateAddedNotes((prev) => reindexTripNotes(prev.filter((row) => getTripNoteKey(row) !== noteKey)));
         await refreshRoutingPool(tripToUpdate.date);
+      } catch (error: any) {
+        if (handleAuthenticationError(error)) return;
+        alert(error?.response?.data?.error || 'Não foi possível confirmar a retirada. Atualize a viagem antes de tentar novamente.');
       } finally {
         setIsLoading(false);
       }
       return;
     }
 
-    updateAddedNotes((prev) => reindexTripNotes(prev.filter((note) => String(note.invoice_number) !== String(nf))));
+    updateAddedNotes((prev) => reindexTripNotes(prev.filter((row) => getTripNoteKey(row) !== noteKey)));
   };
 
   const syncTripNotesInPlace = useCallback(async (trip: ITrip, nextNotes: RoutingTripNote[]) => {
@@ -1756,20 +1746,14 @@ function RoutePlanning() {
     });
 
     if (notesToRemove.length > 0) {
-      if (!isConferenceOnly) {
-        await axios.put(`${API_URL}/danfes/update-status`, {
-          danfes: notesToRemove.map((note) => ({
-            company_id: note.company_id,
-            invoice_number: note.invoice_number,
-            status: 'pending',
-          })),
-        }, authConfig);
+      if (notesToRemove.some((note) => !note.id)) {
+        throw new Error('Atualize a viagem: há uma nota sem identificador de vínculo.');
       }
-
-      for (const note of notesToRemove) {
-        if (!note.id) continue;
-        await axios.put(`${API_URL}/trips/remove-note/${trip.id}`, { noteId: note.id }, authConfig);
-      }
+      // The backend validates all targets and removes them atomically, including
+      // invoice status. Never reset statuses separately or fall back to a loop.
+      await axios.put(`${API_URL}/trips/remove-note/${trip.id}`, {
+        noteIds: notesToRemove.map((note) => note.id),
+      }, authConfig);
     }
 
     if (notesToAdd.length > 0) {
@@ -1886,6 +1870,7 @@ function RoutePlanning() {
   };
 
   const updateEditNoteBoxQuantity = (note: ITripNote, value: string) => {
+    if (savingEditRef.current) return;
     if (!/^\d*$/.test(value)) return;
     const boxQuantity = value === '' ? null : Number(value);
     setEditNotes((current) => current.map((row) => (
@@ -2082,6 +2067,8 @@ function RoutePlanning() {
   };
 
   const startEditModeFromTrip = async (trip: ITrip) => {
+    setEditFeedback('');
+    setEditError('');
     setTab('routing');
     loadAssignmentFromTrip(trip);
     setEditTrip(trip);
@@ -2104,7 +2091,9 @@ function RoutePlanning() {
   };
 
   const addAvailableDanfeToEdit = (danfe: IDanfe) => {
-    setEditNotes((prev) => [
+    if (savingEditRef.current) return;
+    setEditFeedback(`NF ${danfe.invoice_number} incluída na prévia. Salve para vincular à viagem.`);
+    setEditNotes((prev) => prev.some((note) => getTripNoteKey(note) === getDanfeRouteKey(danfe)) ? prev : [
       ...prev,
       {
         company_id: danfe.company_id,
@@ -2121,57 +2110,62 @@ function RoutePlanning() {
     ]);
   };
 
-  const removeEditNote = (invoice: string) => {
-    const targetNote = editNotes.find((note) => String(note.invoice_number) === String(invoice));
-    if (targetNote && isMutableTripNoteStatus(targetNote.status) === false) {
-      alert('Notas em andamento ou finalizadas nao podem ser removidas da rota.');
+  const removeEditNote = (target: ITripNote) => {
+    if (savingEditRef.current) return;
+    const targetNote = editNotes.find((note) => getTripNoteKey(note) === getTripNoteKey(target));
+    if (!targetNote || !isMutableTripNoteStatus(targetNote.status)) {
       return;
     }
-
+    setEditFeedback(`NF ${target.invoice_number} retirada da prévia. O vínculo salvo só muda ao salvar.`);
     setEditNotes((prev) => prev
-      .filter((note) => String(note.invoice_number) !== String(invoice))
+      .filter((note) => getTripNoteKey(note) !== getTripNoteKey(target))
       .map((note, index) => ({ ...note, order: index + 1 })));
   };
 
   const saveTripEdition = async () => {
-    if (editTrip === null) return;
+    if (editTrip === null || savingEditRef.current) return;
     if (editNotes.length === 0) {
-      alert('A rota precisa ter ao menos uma nota.');
+      setEditError('A rota precisa ter ao menos uma nota.');
       return;
     }
 
     const prontoNoteWithoutBoxes = findProntoNoteWithoutBoxes(editNotes);
     if (prontoNoteWithoutBoxes) {
-      alert(`Informe a quantidade de caixas da NF ${prontoNoteWithoutBoxes.invoice_number} da PRONTO.`);
+      setEditError(`Informe a quantidade de caixas da NF ${prontoNoteWithoutBoxes.invoice_number} da PRONTO.`);
       return;
     }
 
     const assignmentChanged = hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar);
+    savingEditRef.current = true;
+    setEditError('');
     try {
       setIsSavingEdit(true);
 
-      await syncTripNotesInPlace(editTrip, sortTripNotesByOrder(editNotes));
+      let updatedTrip = await syncTripNotesInPlace(editTrip, sortTripNotesByOrder(editNotes));
       if (assignmentChanged) {
-        await axios.put<ITrip>(`${API_URL}/trips/${editTrip.id}/assignment`, {
+        const response = await axios.put<ITrip>(`${API_URL}/trips/${editTrip.id}/assignment`, {
           driver_id: Number(selectedDriver),
           car_id: Number(selectedCar),
         }, authConfig);
+        updatedTrip = response.data;
       }
 
+      loadAssignmentFromTrip(updatedTrip);
       alert('Rota atualizada com sucesso.');
       setEditTrip(null);
       setEditNotes([]);
-      const selectedDate = tripDateFilter ? toApiDate(tripDateFilter) : todayApiDate;
-      await Promise.all([
-        refreshTrips(selectedDate),
-        refreshRoutingPool(editTrip.date),
-      ]);
-      const refreshedToday = await fetchTripsByDate(todayApiDate);
-      setTodayTrips(refreshedToday);
+      try {
+        const selectedDate = tripDateFilter ? toApiDate(tripDateFilter) : todayApiDate;
+        await Promise.all([refreshTrips(selectedDate), refreshRoutingPool(editTrip.date)]);
+        setTodayTrips(await fetchTripsByDate(todayApiDate));
+      } catch {
+        alert('A rota foi salva, mas não foi possível atualizar todas as listas. Recarregue a página para conferir.');
+      }
     } catch (error: any) {
       if (handleAuthenticationError(error)) return;
-      alert(error?.response?.data?.error || 'Erro ao salvar edição da rota.');
+      setEditError(`${error?.response?.data?.error || 'Não foi possível concluir a edição.'} A prévia foi mantida. Algumas alterações podem já ter sido aplicadas; confira a viagem antes de tentar novamente.`);
     } finally {
+      savingEditRef.current = false;
       setIsSavingEdit(false);
     }
   };
@@ -2196,7 +2190,17 @@ function RoutePlanning() {
   };
 
   const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[]) => {
-    if (!tripDanfes.length || !retainedContextRows.length) return [];
+    if (!tripDanfes.length) return [];
+    const currentRetainedRows: IReceiptBacklogRow[] = [];
+    let total = 1;
+    while (currentRetainedRows.length < total) {
+      const page = await listReceiptBacklog({ queueType: 'retained', limit: 300, offset: currentRetainedRows.length });
+      if (!Array.isArray(page?.rows) || !Number.isFinite(Number(page.total))) throw new Error('Consulta de canhotos incompleta');
+      total = Number(page.total);
+      if (!page.rows.length && currentRetainedRows.length < total) throw new Error('Consulta de canhotos incompleta');
+      currentRetainedRows.push(...page.rows);
+    }
+    if (!currentRetainedRows.length) return [];
 
     const normalizeCustomerId = (value: unknown) => String(value || '')
       .trim()
@@ -2229,7 +2233,7 @@ function RoutePlanning() {
 
     const relevantRetainedRows = selectRetainedRowsForRoute({
       routeDanfes: tripDanfes,
-      retainedRows: retainedContextRows,
+      retainedRows: currentRetainedRows,
       sameDayCustomerIds,
     });
 
@@ -2244,7 +2248,7 @@ function RoutePlanning() {
 
     const retainedDanfes = await fetchDanfesByInvoiceNumbers(retainedInvoiceNumbersNeedingAddress);
     const retainedDanfesByInvoice = retainedDanfes.reduce<Map<string, IDanfe>>((accumulator, danfe) => {
-      accumulator.set(String(danfe.invoice_number || '').trim(), danfe);
+      accumulator.set(`${danfe.company_id || 'unknown'}::${String(danfe.invoice_number || '').trim()}`, danfe);
       return accumulator;
     }, new Map());
 
@@ -2304,8 +2308,17 @@ function RoutePlanning() {
         alert(`Edite a rota e informe a quantidade de caixas da NF ${missingProntoBoxes.invoiceNumber} antes de imprimir.`);
         return;
       }
-      const retainedReminders = await resolveRetainedRemindersForTrip(trip, validDanfes);
-      const occurrenceReminders = buildOccurrenceReminders(validDanfes, openOccurrenceContexts);
+      const [retainedResult, occurrencesResult] = await Promise.allSettled([
+        resolveRetainedRemindersForTrip(trip, validDanfes),
+        axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, { ...authConfig, params: { workflow_status: 'pending_transportadora' } }),
+      ]);
+      const occurrencesLoaded = occurrencesResult.status === 'fulfilled' && Array.isArray(occurrencesResult.value.data);
+      const freshOccurrences = occurrencesResult.status === 'fulfilled' && occurrencesLoaded ? occurrencesResult.value.data : [];
+      const retainedReminders = linkRetainedOccurrences(retainedResult.status === 'fulfilled' ? retainedResult.value : [], freshOccurrences);
+      const linkedIds = new Set(retainedReminders.flatMap(reminder => reminder.linkedOccurrences?.map(occurrence => occurrence.id) || []));
+      const occurrenceReminders = buildOccurrenceReminders(validDanfes, freshOccurrences).filter(reminder => !linkedIds.has(reminder.occurrenceId));
+      const reminderLookupWarning = retainedResult.status === 'rejected' || !occurrencesLoaded
+        ? 'Não foi possível conferir todos os canhotos retidos e ocorrências. Confirme as pendências com a operação antes da saída.' : undefined;
       const pdfBlob = await pdf(
         <ProductListPDF
           products={manifest.products}
@@ -2314,6 +2327,7 @@ function RoutePlanning() {
           danfes={validDanfes}
           retainedReminders={retainedReminders}
           occurrenceReminders={occurrenceReminders}
+          reminderLookupWarning={reminderLookupWarning}
           driver={trip.Driver.name}
           vehiclePlate={trip.Car?.license_plate}
           tripId={trip.id}
@@ -3546,12 +3560,22 @@ function RoutePlanning() {
         ) : null}
 
         {editTrip ? (
-          <div role="dialog" aria-modal="true" aria-label="Editar viagem" className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
-            <div className="max-h-[90dvh] w-full max-w-[980px] overflow-y-auto rounded-lg border border-border bg-surface p-4">
+          <div ref={editDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Editar viagem" aria-busy={isSavingEdit} className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/70 p-3">
+            <div className="max-h-[90dvh] w-full max-w-[980px] overflow-y-auto rounded-xl border border-border bg-surface p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-base font-semibold text-text">Editar rota #{editTrip.run_number || 1} | {editTrip.Driver.name}</h3>
-                <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm text-text">Fechar</button>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">Prévia da edição · ainda não salva</p>
+                  <h3 className="break-words text-base font-semibold text-text">{editTrip.Driver.name} · {editTrip.run_number || 1}ª saída</h3>
+                  <p className="text-sm text-muted">{formatDateBR(editTrip.date)} · {editTrip.Car.license_plate}</p>
+                </div>
+                <button type="button" disabled={isSavingEdit} onClick={() => setEditTrip(null)} className="min-h-[44px] shrink-0 rounded-md border border-border bg-surface-2 px-3 text-sm text-text disabled:opacity-50">Fechar</button>
               </div>
+              <div className="mb-3 rounded-lg border border-accent/30 bg-surface-2 p-3 text-sm text-text">
+                <p className="font-semibold">{editNotes.length} nota(s) na prévia · {editSummary.added} a incluir · {editSummary.removed} a retirar</p>
+                <p className="mt-1 text-muted">Adicionar ou remover aqui só prepara a alteração. Salvar atualiza esta viagem; não transfere notas de outra viagem.</p>
+                <p className="mt-1 text-muted">Fechar ou cancelar descarta esta prévia e volta à roteirização em modo edição.</p>
+              </div>
+              {editFeedback ? <p role="status" className="mb-3 text-sm text-text">{editFeedback}</p> : null}
 
               {editHasLockedNotes && hasTripAssignmentChanged(editTrip, selectedDriver, selectedCar) ? (
                 <div className="mb-3 rounded-md border border-amber-700 bg-amber-600 px-3 py-2 text-sm text-[#1f1300]">
@@ -3559,13 +3583,16 @@ function RoutePlanning() {
                 </div>
               ) : null}
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <fieldset disabled={isSavingEdit} className="grid min-w-0 gap-3 md:grid-cols-2">
+                <legend className="sr-only">Notas da prévia e notas disponíveis</legend>
                 <div>
-                  <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas atribuídas</p>
+                  <p className="mb-2 text-xs uppercase tracking-wide text-muted">Notas na prévia ({editNotes.length})</p>
+                  {editHasLockedNotes ? <p className="mb-2 text-xs text-muted">Notas em andamento ou finalizadas não podem ser removidas.</p> : null}
+                  {!editNotes.length ? <p className="py-3 text-sm text-muted">Nenhuma nota na prévia. Inclua ao menos uma para salvar.</p> : null}
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {editNotes.slice().sort((a, b) => a.order - b.order).map((note, index) => (
-                      <li key={`${note.invoice_number}-${index}`} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2' : 'semantic-panel-warning'}`}>
-                        <span className="min-w-0 flex-1 truncate text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name} | {getTripNoteStatusLabel(note.status)}</span>
+                      <li key={getTripNoteKey(note)} className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm ${isMutableTripNoteStatus(note.status) ? 'border-border bg-surface-2' : 'semantic-panel-warning'}`}>
+                        <span className="min-w-0 basis-full break-words text-text">{index + 1}. NF {note.invoice_number} | {note.customer_name}<small className="block text-muted">{note.company_code || (note.company_id ? `Empresa ${note.company_id}` : 'Empresa não informada')} · {getTripNoteStatusLabel(note.status)} · {(editTrip.TripNotes || []).some((saved) => getTripNoteKey(saved) === getTripNoteKey(note)) ? 'Já vinculada' : 'Nova inclusão'}</small></span>
                         {isProntoTripNote(note) ? (
                           <label className="inline-flex items-center gap-1 text-xs font-semibold text-text">
                             Caixas
@@ -3576,11 +3603,11 @@ function RoutePlanning() {
                               value={note.box_quantity ?? ''}
                               onChange={(event) => updateEditNoteBoxQuantity(note, event.target.value)}
                               aria-label={`Quantidade de caixas da NF ${note.invoice_number}`}
-                              className="h-8 w-16 rounded border border-border bg-card px-1 text-center text-sm text-text"
+                              className="h-11 w-20 rounded border border-border bg-card px-1 text-center text-sm text-text"
                             />
                           </label>
                         ) : null}
-                        <button type="button" className="rounded border border-rose-700 bg-rose-700 px-2 py-0.5 text-xs text-white transition hover:bg-rose-600 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note.invoice_number)}>Remover</button>
+                        <button type="button" aria-label={`Retirar NF ${note.invoice_number} da empresa ${note.company_id || 'não informada'} da prévia`} className="min-h-[44px] rounded border border-rose-700 bg-rose-700 px-3 text-xs text-white transition hover:bg-rose-600 disabled:opacity-45" disabled={!isMutableTripNoteStatus(note.status)} onClick={() => removeEditNote(note)}>Retirar da prévia</button>
                       </li>
                     ))}
                   </ul>
@@ -3591,21 +3618,23 @@ function RoutePlanning() {
                   {isAvailableDanfesLoading ? <p role="status" className="mb-2 text-sm text-muted">Carregando notas disponíveis...</p> : null}
                   {availableDanfesError ? <div role="alert" className="mb-2 text-sm text-danger">{availableDanfesError}<button type="button" onClick={() => void fetchAvailableForTrip(editTrip.date, editTrip.id)} className="ml-2 underline">Tentar novamente</button></div> : null}
                   {!isAvailableDanfesLoading && !availableDanfesError ? <p className="mb-2 text-xs text-muted">{filteredAvailableDanfes.length} nota(s) disponível(is)</p> : null}
-                  <input value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-10 w-full rounded-sm border border-border bg-card px-3 text-sm text-text" />
+                  <input aria-label="Filtrar notas disponíveis" value={editSearch} onChange={(event) => setEditSearch(event.target.value)} placeholder="Filtrar por NF, cliente ou cidade" className="mb-2 h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-text" />
+                  {!isAvailableDanfesLoading && !availableDanfesError && !filteredAvailableDanfes.length ? <p className="py-3 text-sm text-muted">{editSearch ? 'Nenhuma nota corresponde à busca.' : 'Nenhuma nota disponível para incluir.'}</p> : null}
                   <ul className="scrollbar-ui max-h-[320px] space-y-1 overflow-y-auto pr-1">
                     {filteredAvailableDanfes.map((danfe) => (
                       <li key={getDanfeRouteKey(danfe)} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm">
-                        <span className="min-w-0 break-words text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}<small className="block text-muted">{danfe.status === 'redelivery' ? 'Reentrega' : 'Pendente'} · Emissão {formatDateBR(danfe.invoice_date)}</small></span>
-                        <button type="button" className="rounded border border-sky-700 bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white transition hover:bg-sky-600" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
+                        <span className="min-w-0 break-words text-text">NF {danfe.invoice_number} | {danfe.Customer.name_or_legal_entity}<small className="block text-muted">{danfe.company?.code || (danfe.company_id ? `Empresa ${danfe.company_id}` : 'Empresa não informada')} · {danfe.status === 'redelivery' ? 'Reentrega' : 'Pendente'} · Emissão {formatDateBR(danfe.invoice_date)}</small></span>
+                        <button type="button" className="min-h-[44px] shrink-0 rounded border border-sky-700 bg-sky-700 px-3 text-xs font-semibold text-white transition hover:bg-sky-600" onClick={() => addAvailableDanfeToEdit(danfe)}>Adicionar</button>
                       </li>
                     ))}
                   </ul>
                 </div>
-              </div>
+              </fieldset>
 
-              <div className="mt-3 flex justify-end gap-2">
-                <button type="button" onClick={() => setEditTrip(null)} className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text">Cancelar</button>
-                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="rounded-md border border-accent-strong bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-70">
+              <div className="sticky bottom-0 mt-3 flex flex-wrap justify-end gap-2 border-t border-border bg-surface pt-3">
+                {editError ? <p role="alert" className="basis-full rounded-lg border border-danger p-3 text-sm text-danger">{editError}</p> : null}
+                <button type="button" disabled={isSavingEdit} onClick={() => setEditTrip(null)} className="min-h-[44px] rounded-md border border-border bg-surface-2 px-3 text-sm text-text disabled:opacity-50">Cancelar</button>
+                <button type="button" onClick={saveTripEdition} disabled={isSavingEdit} className="min-h-[44px] rounded-md border border-accent-strong bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong disabled:opacity-70">
                   {isSavingEdit ? 'Salvando...' : 'Salvar alterações'}
                 </button>
               </div>

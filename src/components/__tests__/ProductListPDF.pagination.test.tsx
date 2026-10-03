@@ -43,6 +43,21 @@ const countPdfPages = (buffer: Buffer) => (
 );
 
 describe('ProductListPDF - paginação', () => {
+  it('renderiza canhoto vinculado à falta e mantém paginação com muitos produtos', async () => {
+    const { linkRetainedOccurrences } = require('../../utils/retainedOccurrenceReminders');
+    const reminders = linkRetainedOccurrences([{
+      companyId: 1, matchType: 'customer', retainedInvoiceNumber: '1886686', retainedCustomerName: 'Cliente ficticio para validacao',
+      routeInvoiceNumbers: ['2000000'], city: 'Campinas', ageDays: 3, deliveryDate: '2026-09-30',
+    }], [{
+      id: 99, company_id: 1, invoice_number: '1886686', status: 'pending', reason: 'faltou_na_carga',
+      items: [{ product_id: 'TESTE01', product_description: 'PRODUTO FICTICIO PARA CONFERENCIA', product_type: 'KG', quantity: 2.5 }],
+    }]);
+    // PDF real para verificar quebra de página; sem consulta à API.
+    // eslint-disable-next-line testing-library/render-result-naming-convention
+    const pdfBuffer = await renderToBuffer(<ProductListPDF products={buildProducts(65)} danfes={buildDanfes(1)} retainedReminders={reminders} driver="Motorista ficticio" vehiclePlate="TEST000" tripDate="03/10/2026" />);
+    expect(countPdfPages(pdfBuffer)).toBeGreaterThan(1);
+    if (process.env.KP_PDF_PREVIEW) require('fs').writeFileSync(process.env.KP_PDF_PREVIEW, pdfBuffer);
+  }, 30000);
   it('numera continuamente as linhas mesmo quando existem varias empresas', () => {
     const groups = buildNumberedProductGroups([
       { company_name: 'EMPRESA A', code: 'A1', description: 'Produto A1', type: 'CX', quantity: 1 },

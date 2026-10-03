@@ -29,6 +29,11 @@ const buildDanfe = (overrides: Partial<IDanfe> = {}): IDanfe => ({
 });
 
 describe('buildRetainedReminders', () => {
+  it('não elimina canhotos de empresas diferentes com o mesmo número de NF', () => {
+    const base: IReceiptBacklogRow = { company_id: 1, queue_type: 'retained', nf_id: '1886686', invoice_number: '1886686', customer_id: 'CUST-1', status: 'PENDING' };
+    const reminders = buildRetainedReminders([buildDanfe()], [base, { ...base, company_id: 2 }]);
+    expect(reminders.map(item => item.companyId)).toEqual([1, 2]);
+  });
   it('gera alerta simples quando existe entrega do mesmo cliente na rota', () => {
     const routeDanfes: IDanfe[] = [
       buildDanfe({

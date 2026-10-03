@@ -1,6 +1,8 @@
 import { IDanfe, IReceiptBacklogRow } from '../types/types';
 
 export interface RetainedReminder {
+  companyId?: number;
+  linkedOccurrences?: Array<{ id: number; instruction: string; itemSummary: string }>;
   matchType: 'customer' | 'city';
   retainedInvoiceNumber: string;
   retainedCustomerName: string;
@@ -94,7 +96,8 @@ export function buildRetainedReminders(
 
   retainedRows.forEach((row) => {
     const retainedInvoiceNumber = normalizeText(row.invoice_number);
-    if (!retainedInvoiceNumber || seenInvoices.has(retainedInvoiceNumber)) return;
+    const invoiceKey = `${row.company_id || 'unknown'}::${retainedInvoiceNumber}`;
+    if (!retainedInvoiceNumber || seenInvoices.has(invoiceKey)) return;
 
     const customerId = normalizeCustomerId(row.customer_id);
     const routeInvoiceNumbers = customerId ? (routeInvoicesByCustomerId.get(customerId) || []) : [];
@@ -103,11 +106,12 @@ export function buildRetainedReminders(
 
     if (!routeInvoiceNumbers.length && !sameCity) return;
 
-    seenInvoices.add(retainedInvoiceNumber);
+    seenInvoices.add(invoiceKey);
 
     if (routeInvoiceNumbers.length) {
       reminders.push({
         matchType: 'customer',
+        companyId: row.company_id,
         retainedInvoiceNumber,
         retainedCustomerName: normalizeText(row.customer_name) || 'Cliente nao identificado',
         routeInvoiceNumbers,
@@ -118,9 +122,11 @@ export function buildRetainedReminders(
       return;
     }
 
-    const retainedDanfe = retainedDanfesByInvoice.get(retainedInvoiceNumber);
+    const retainedDanfe = retainedDanfesByInvoice.get(invoiceKey)
+      || (!row.company_id ? retainedDanfesByInvoice.get(retainedInvoiceNumber) : undefined);
     reminders.push({
       matchType: 'city',
+      companyId: row.company_id,
       retainedInvoiceNumber,
       retainedCustomerName: normalizeText(row.customer_name)
         || normalizeText(retainedDanfe?.Customer?.name_or_legal_entity)

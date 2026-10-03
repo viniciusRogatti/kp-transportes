@@ -183,6 +183,54 @@ describe('DeliveryMonitoring', () => {
     localStorage.clear();
   });
 
+  it('distingue falha inicial de uma lista vazia e permite recuperar a consulta', async () => {
+    const original = mockedAxios.get.getMockImplementation()!;
+    mockedAxios.get.mockRejectedValue(new Error('Falha sintética'));
+    render(<DeliveryMonitoring />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Os dados desta data estão indisponíveis');
+    expect(screen.queryByText('Nenhuma entrega para os filtros selecionados.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('google-map')).not.toBeInTheDocument();
+    mockedAxios.get.mockImplementation(original);
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('mantém a última consulta identificada como desatualizada quando a atualização falha', async () => {
+    render(<DeliveryMonitoring />);
+    const stop = await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' });
+    mockedAxios.get.mockRejectedValue(new Error('Falha sintética'));
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('última consulta bem-sucedida');
+    expect(stop).toBeInTheDocument();
+  });
+
+  it('não perde as entregas quando apenas o diagnóstico de endereços falha', async () => {
+    const original = mockedAxios.get.getMockImplementation()!;
+    mockedAxios.get.mockImplementation((url, config) => String(url).includes('/address-diagnostics')
+      ? Promise.reject(new Error('Diagnóstico indisponível')) : original(url, config));
+    render(<DeliveryMonitoring />);
+    expect(await screen.findByText(/O diagnóstico de endereços está indisponível/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('recusa resposta inválida e identifica devolução no resumo da viagem', async () => {
+    mockedAxios.get.mockResolvedValue({ data: {} } as never);
+    render(<DeliveryMonitoring />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    mockedAxios.get.mockImplementation((url, config) => {
+      const date = String(config?.params?.date);
+      return Promise.resolve({ data: String(url).includes('/address-diagnostics') ? buildDiagnostics(date) : buildOverview('returned', date) } as never);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    expect(await screen.findByLabelText('Situações da viagem 11')).toHaveTextContent('Devoluções/cancelamentos: 1');
+    expect(screen.getByText(/não taxa de entregas comprovadas/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Parada 1: NF 123456 • entrega devolvida' }));
+    expect(screen.getByLabelText('Detalhes da entrega NF 123456')).toHaveTextContent('Etapa calculada');
+    expect(screen.getByLabelText('Detalhes da entrega NF 123456')).toHaveTextContent('DEVOLVIDA');
+  });
+
   it('exibe o calendário completo fora do cartão de filtros', async () => {
     render(<DeliveryMonitoring />);
 

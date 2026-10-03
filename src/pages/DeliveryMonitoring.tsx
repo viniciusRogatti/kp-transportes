@@ -41,7 +41,7 @@ import {
 } from '../utils/alertReadState';
 import { COMPANY_LABELS, COMPANY_TAB_ORDER } from '../utils/companyTabs';
 import { normalizeDateForApi } from '../utils/dateDisplay';
-import { getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
+import { getOperationalStatusLabel, getSemanticToneClassName, normalizeOperationalStatus, SemanticTone } from '../utils/statusStyles';
 import { showConfirm } from '../utils/dialog';
 import { resolveAlert as resolveAlertById } from '../services/alertsService';
 import {
@@ -627,7 +627,9 @@ function DeliveryMonitoring() {
   const [selectedDriverStop, setSelectedDriverStop] = useState<SelectedDriverStop | null>(null);
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState('');
+  const [diagnosticsUnavailable, setDiagnosticsUnavailable] = useState(false);
   const [stopStatusUpdate, setStopStatusUpdate] = useState<StopStatusUpdateState | null>(null);
   const [stopStatusFeedback, setStopStatusFeedback] = useState<StopStatusFeedback | null>(null);
   const [cancelledReplacementDraft, setCancelledReplacementDraft] = useState<CancelledReplacementDraft | null>(null);
@@ -718,6 +720,10 @@ function DeliveryMonitoring() {
     const requestId = overviewRequestIdRef.current + 1;
     overviewRequestIdRef.current = requestId;
     setLoading(true);
+    setLoadError('');
+    setOverview((current) => current?.date === effectiveDate ? current : null);
+    setDiagnostics(null);
+    setDiagnosticsUnavailable(false);
     try {
       const overviewRequest = axios.get<MonitoringResponse>(`${API_URL}/api/delivery-monitoring`, {
         params: { date: effectiveDate },
@@ -726,11 +732,14 @@ function DeliveryMonitoring() {
         ? Promise.resolve(null)
         : axios.get<AddressDiagnosticsResponse>(`${API_URL}/api/delivery-monitoring/address-diagnostics`, {
           params: { date: effectiveDate },
-        });
+        }).catch(() => ({ data: null, failed: true }));
 
       const [overviewResponse, diagnosticsResponse] = await Promise.all([overviewRequest, diagnosticsRequest]);
       const overviewData = overviewResponse.data;
-      if (requestId !== overviewRequestIdRef.current || overviewData.date !== effectiveDate) return;
+      if (requestId !== overviewRequestIdRef.current) return;
+      if (!overviewData || overviewData.date !== effectiveDate || !Array.isArray(overviewData.deliveries) || !Array.isArray(overviewData.drivers)) {
+        throw new Error('Resposta de monitoramento inválida para a data consultada.');
+      }
 
       setOverview((current) => {
         const previousDeliveries = current?.deliveries || [];
@@ -742,9 +751,11 @@ function DeliveryMonitoring() {
         };
       });
       setDiagnostics(diagnosticsResponse?.data || null);
+      setDiagnosticsUnavailable(Boolean(diagnosticsResponse && 'failed' in diagnosticsResponse));
     } catch (error) {
       if (requestId !== overviewRequestIdRef.current) return;
       console.error('Falha ao carregar monitoramento de entregas.', error);
+      setLoadError('Não foi possível atualizar o monitoramento.');
     } finally {
       if (requestId === overviewRequestIdRef.current) setLoading(false);
     }
@@ -1218,10 +1229,10 @@ function DeliveryMonitoring() {
   const progressDriverCount = scopedDrivers.length;
   const mobileSummaryCards = useMemo(
     () => [
-      { label: 'Motoristas', value: progressDriverCount },
+      { label: 'Viagens com motorista', value: progressDriverCount },
       { label: 'Entregas', value: filteredSummary.total || 0 },
       { label: 'Em rota', value: (filteredSummary.on_the_way || 0) + (filteredSummary.on_site || 0) },
-      { label: 'Concluídas', value: filteredSummary.completed || 0 },
+      { label: 'Finalizadas na rota', value: filteredSummary.completed || 0 },
     ],
     [filteredSummary, progressDriverCount],
   );
@@ -1504,7 +1515,8 @@ function DeliveryMonitoring() {
       <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">Detalhes da entrega</p>
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <div className="col-span-2"><dt className="text-muted">Endereço de entrega</dt><dd className="mt-1 break-words font-semibold text-text">{[delivery.address, delivery.address_number].filter(Boolean).join(', ') || 'Não informado'}</dd><dd className="mt-1 text-muted">{[delivery.neighborhood, [delivery.city, delivery.state].filter(Boolean).join('/')].filter(Boolean).join(' · ')}</dd></div>
-        <div className="col-span-2 sm:col-span-4"><dt className="text-muted">Situação operacional</dt><dd className="mt-1 font-semibold text-text">{STAGE_LABELS[delivery.stage]}</dd></div>
+        <div><dt className="text-muted">Situação operacional</dt><dd className="mt-1 font-semibold text-text">{getOperationalStatusLabel(delivery.stop_status || delivery.danfe_status, 'Não informada')}</dd></div>
+        <div><dt className="text-muted">Etapa calculada</dt><dd className="mt-1 font-semibold text-text">{STAGE_LABELS[delivery.stage]}</dd></div>
         <div><dt className="text-muted">Motorista</dt><dd className="mt-1 font-semibold text-text">{delivery.driver_name || 'Não atribuído'}</dd></div>
         <div><dt className="text-muted">Viagem · parada</dt><dd className="mt-1 font-semibold text-text">{delivery.trip_id || '—'} · {delivery.sequence || '—'}</dd></div>
       </dl>
@@ -1517,7 +1529,7 @@ function DeliveryMonitoring() {
       <Container className="operation-page">
         <section
           aria-label="Resumo e filtros do monitoramento"
-          className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-gradient-to-r from-sky-500/10 via-surface to-surface p-4 shadow-soft sm:p-5"
+          className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1645,7 +1657,8 @@ function DeliveryMonitoring() {
               <button
                 type="button"
                 onClick={fetchOverview}
-                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text ${isMobileView ? 'flex-1' : ''}`}
+                disabled={loading}
+                className={`min-h-[44px] rounded-md border border-border bg-surface px-3 text-sm font-semibold text-text disabled:opacity-60 ${isMobileView ? 'flex-1' : ''}`}
               >
                 Atualizar
               </button>
@@ -1670,6 +1683,12 @@ function DeliveryMonitoring() {
             </div>
           </div>
 
+          <p className="mt-3 text-xs text-muted">Resumo da data e empresa selecionadas. O filtro de etapa refina a lista e o mapa; o progresso mostra a viagem completa nesse recorte.</p>
+          {loadError && <div role="alert" className="mt-3 rounded-lg border semantic-panel-danger p-3 text-sm">
+            <strong>{loadError}</strong>
+            <p className="mt-1">{overview ? 'Os dados abaixo são da última consulta bem-sucedida e podem estar desatualizados.' : 'Os dados desta data estão indisponíveis. Isso não significa ausência de entregas ou pendências.'} Use Atualizar para tentar novamente.</p>
+          </div>}
+          {diagnosticsUnavailable && <p role="status" className="mt-3 rounded-lg border border-border bg-surface p-3 text-sm text-muted">Entregas carregadas. O diagnóstico de endereços está indisponível nesta consulta.</p>}
           {isMobileView ? (
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
               {mobileSummaryCards.map((item) => (
@@ -1678,7 +1697,7 @@ function DeliveryMonitoring() {
                   className="rounded-lg border border-border bg-surface px-3 py-2"
                 >
                   <p className="text-[11px] uppercase tracking-wide text-muted">{item.label}</p>
-                  <p className="mt-1 text-base font-semibold text-text">{item.value}</p>
+                  <p className="mt-1 text-base font-semibold text-text">{overview ? item.value : '—'}</p>
                 </div>
               ))}
             </div>
@@ -1701,10 +1720,11 @@ function DeliveryMonitoring() {
             </>
           )}
 
-          {loading && isMobileView ? (
-            <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
+          {loading ? (
+            <p role="status" className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
           ) : null}
         </section>
+        {overview && overview.date === effectiveDate && <>
         <section className="order-2 mt-4 w-full rounded-2xl border border-border bg-surface p-4 shadow-soft">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
@@ -1725,13 +1745,15 @@ function DeliveryMonitoring() {
               ? 'Toque nas paradas para ver NF e cliente da rota selecionada.'
               : 'Clique no nome do motorista para destacar a rota no mapa. Clique em uma parada para ver NF e cliente.'}
           </p>
+          <p className="mb-3 rounded-lg border border-border bg-card p-3 text-xs text-muted">O percentual mede finalização na rota, não taxa de entregas comprovadas. Devoluções, cancelamentos e canhotos retidos também podem finalizar uma parada. A posição do motorista só aparece quando recebida; endereço de cliente não é rastreamento.</p>
+          {!progressDriverCount && <p role="status" className="mb-3 text-sm text-muted">Nenhuma viagem com motorista neste recorte. Notas sem motorista podem continuar na lista e nos indicadores.</p>}
           <div className="space-y-3">
             {groupedDrivers.map((group) => (
               <div key={group.code} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-surface-2 px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-text">{group.label}</p>
-                    <p className="text-xs text-muted">{`${group.drivers.length} motorista(s)`}</p>
+                    <p className="text-xs text-muted">{`${group.drivers.length} viagem(ns) com motorista`}</p>
                   </div>
                 </div>
                 {group.drivers.map((driver) => {
@@ -1861,7 +1883,7 @@ function DeliveryMonitoring() {
                             }}
                             title={stopTitle}
                             aria-label={stopTitle}
-                            className={`relative inline-flex h-7 w-7 shrink-0 items-center justify-center border px-0 text-[11px] font-semibold leading-none tabular-nums transition hover:brightness-105 first:border-l md:h-5 md:w-[22px] md:text-[10px] ${index > 0 ? 'border-l-0' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
+                            className={`relative inline-flex h-11 w-11 shrink-0 items-center justify-center border px-0 text-sm font-semibold leading-none tabular-nums transition hover:brightness-105 first:border-l md:h-7 md:w-7 md:text-xs ${index > 0 ? 'border-l-0' : ''} ${getDriverStopSegmentClassName(stop.visual, selectedStopSequence === stop.sequence)}`}
                             aria-pressed={selectedStopSequence === stop.sequence}
                           >
                             {stop.visual === 'completed' ? (
@@ -1904,6 +1926,17 @@ function DeliveryMonitoring() {
                     </div>
                   </div>
 
+                  <div aria-label={`Situações da viagem ${driver.trip_id}`} className="mt-2 flex flex-wrap gap-2 text-xs text-text">
+                    {([
+                      ['redelivery', 'Reentregas'],
+                      ['retained', 'Canhotos retidos'],
+                      ['pending_receipt', 'Fotos pendentes'],
+                      ['returned', 'Devoluções/cancelamentos'],
+                    ] as const).map(([visual, label]) => {
+                      const count = visualStops.filter((stop) => stop.visual === visual).length;
+                      return count ? <span key={visual} className="rounded-md border border-border bg-card px-2 py-1">{label}: <strong>{count}</strong></span> : null;
+                    })}
+                  </div>
                   {selectedStopSequence ? (
                     <div className="mt-2 rounded-xl border border-border bg-card p-3 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1916,7 +1949,7 @@ function DeliveryMonitoring() {
                         <span className="inline-flex rounded-md border border-border bg-surface px-2 py-1 text-text">
                           {selectedStopInvoiceNumber ? `NF ${selectedStopInvoiceNumber}` : 'NF nao identificada'}
                         </span>
-                        <span className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2 py-1 text-text">
+                        <span className="min-w-0 basis-full break-words rounded-md border border-border bg-surface px-2 py-1 text-text sm:flex-1 sm:basis-auto">
                           {selectedStopCustomerName || 'Cliente nao identificado'}
                         </span>
                       </div>
@@ -2060,7 +2093,7 @@ function DeliveryMonitoring() {
                 iconSize={11}
                 iconStrokeWidth={1.5}
               />
-              Motorista ao vivo
+              Posição recebida do motorista
             </span>
           </div>
 
@@ -2099,7 +2132,7 @@ function DeliveryMonitoring() {
               </thead>
               <tbody>
                 {listRows.map((row) => (
-                  <tr key={`list-${row.invoice_number}`} className="border-b border-border/60 hover:bg-surface-2">
+                  <tr key={`list-${resolveCompanyCode(row.company)}-${row.trip_id}-${row.sequence}-${row.invoice_number}`} className="border-b border-border/60 hover:bg-surface-2">
                     <td className="px-2 py-2 font-semibold">{row.invoice_number}</td>
                     <td className="px-2 py-2">{row.customer_name || '-'}</td>
                     <td className="px-2 py-2">
@@ -2110,8 +2143,9 @@ function DeliveryMonitoring() {
                           backgroundColor: `${STAGE_STYLE[row.stage].fill}22`,
                         }}
                       >
-                        {STAGE_LABELS[row.stage]}
+                        {getOperationalStatusLabel(row.stop_status || row.danfe_status, 'Não informado')}
                       </span>
+                      <span className="mt-1 block text-muted">Etapa: {STAGE_LABELS[row.stage]}</span>
                     </td>
                     <td className="px-2 py-2">{row.driver_name || '-'}</td>
                     <td className="px-2 py-2">{`${row.city || '-'}${row.state ? `/${row.state}` : ''}`}</td>
@@ -2127,6 +2161,7 @@ function DeliveryMonitoring() {
           </div>
         </section>
 
+        </>}
         <div
           className="fixed z-[1100]"
           style={{ right: alertWidgetPosition.x, bottom: alertWidgetPosition.y }}

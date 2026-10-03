@@ -32,6 +32,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
 import type { RealtimeNotification } from '../providers/RealtimeNotificationsProvider';
 import { logoutSession } from '../utils/logoutSession';
+import { brand } from '../config/brand';
 import { showConfirm } from '../utils/dialog';
 import {
   getRoutePermissions,
@@ -145,7 +146,7 @@ function Header() {
 
   const currentTitle = location.pathname.match(/^\/invoices\/[^/]+\/journey$/)
     ? 'Jornada da NF'
-    : routeTitles[location.pathname] || 'KP Transportes';
+    : routeTitles[location.pathname] || brand.name;
   const currentSection = location.pathname.startsWith('/control-tower') ? 'Torre de Controle' : 'Operação';
   const permission = String(localStorage.getItem('user_permission') || 'user').trim().toLowerCase();
   const permissionLabel = PERMISSION_LABELS[permission] || permission || 'Sem permissão';
@@ -269,11 +270,11 @@ function Header() {
         <div className="mb-3 flex items-center justify-between border-b border-border px-2 pb-3 pt-1">
           <div className={cn('flex items-center gap-2 overflow-hidden transition-all duration-300 ease-out', isSidebarCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100')}>
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-white">
-              <Truck className="h-5 w-5" />
+              {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} className="h-8 w-8 object-contain" /> : <Truck className="h-5 w-5" />}
             </span>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">KP Transportes</p>
-              <strong className="text-sm text-text">Sistema operacional</strong>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">{brand.name}</p>
+              <strong className="text-sm text-text">{brand.productName}</strong>
             </div>
           </div>
           <button
@@ -341,7 +342,7 @@ function Header() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0">
-              <p className="hidden truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:block">KP Transportes <span className="mx-1 text-border">/</span> {currentSection}</p>
+              <p className="hidden truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted sm:block">{brand.name} <span className="mx-1 text-border">/</span> {currentSection}</p>
               <h1 data-tutorial="app-page-title" className="line-clamp-2 text-xs font-bold leading-tight text-text sm:text-base lg:text-lg">{currentTitle}</h1>
             </div>
           </div>
@@ -513,7 +514,7 @@ function Header() {
       <aside
         className={cn(
           'app-shell-mobile-drawer fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border p-3 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
-          isMobileDrawerOpen ? 'translate-x-0' : '-translate-x-full',
+          isMobileDrawerOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
         )}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -524,6 +525,7 @@ function Header() {
           <button
             type="button"
             onClick={() => setIsMobileDrawerOpen(false)}
+            aria-label="Fechar menu"
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-card text-text"
           >
             <X className="h-4 w-4" />

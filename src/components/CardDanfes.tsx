@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { History, LoaderCircle, MapPinned, UserPlus } from 'lucide-react';
 import Badge from './ui/Badge';
@@ -19,7 +19,9 @@ import {
 } from '../utils/statusStyles';
 import { API_URL } from '../data';
 import { normalizeCityLabel, normalizeTextValue, sanitizeDanfeTextFields } from '../utils/textNormalization';
-import { resolveInvoiceScopedValue } from '../utils/invoiceContextKey';
+import { buildInvoiceContextKey, resolveInvoiceScopedValue } from '../utils/invoiceContextKey';
+import { COMPANY_LABELS, resolveDanfeCompanyCode } from '../utils/companyTabs';
+import useDialogFocus from '../hooks/useDialogFocus';
 
 interface CardDanfesProps {
   danfes: IDanfe[];
@@ -33,6 +35,8 @@ interface CardDanfesProps {
   onAssignDanfeToTrip?: (danfe: IDanfe, tripId: number) => Promise<void>;
   onOpenReturnBatch?: (batchCode: string, invoiceNumber: string) => void;
   allowStatusActions?: boolean;
+  conferenceMode?: boolean;
+  productSearch?: string;
 }
 
 type InvoiceSearchStatus = 'returned' | 'cancelled' | 'redelivery';
@@ -104,7 +108,12 @@ function CardDanfes({
   onAssignDanfeToTrip,
   onOpenReturnBatch,
   allowStatusActions = false,
+  conferenceMode = false,
+  productSearch = '',
 }: CardDanfesProps) {
+  const assignmentInFlight = useRef(false);
+  const statusInFlight = useRef(false);
+  const replacementInFlight = useRef(false);
   const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
   const [productsModalDanfe, setProductsModalDanfe] = useState<IDanfe | null>(null);
   const [replacementModalDanfe, setReplacementModalDanfe] = useState<IDanfe | null>(null);
@@ -124,6 +133,7 @@ function CardDanfes({
   const [statusReplacementReason, setStatusReplacementReason] = useState('Refaturada');
   const [statusUpdateError, setStatusUpdateError] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const dialogRef = useDialogFocus(productsModalDanfe ? 'products' : replacementModalDanfe ? 'replacement' : assignmentModalDanfe ? 'assignment' : statusModalDanfe ? 'status' : '');
 
   const filteredDanfes = useMemo(() => {
     if (!activeStatusFilter) return danfes;
@@ -148,6 +158,10 @@ function CardDanfes({
 
   function toggleFlip(key: string) {
     setFlippedCards((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (conferenceMode) requestAnimationFrame(() => {
+      const card = Array.from(document.querySelectorAll<HTMLElement>('[data-invoice-card-key]')).find((item) => item.dataset.invoiceCardKey === key);
+      card?.querySelector<HTMLButtonElement>(flippedCards[key] ? '[data-card-details]' : '[data-card-back]')?.focus({ preventScroll: true });
+    });
   }
 
   function openProductsModal(danfe: IDanfe) {
@@ -194,7 +208,8 @@ function CardDanfes({
   }, [isUpdatingStatus]);
 
   async function handleOperationalStatusUpdate() {
-    if (!statusModalDanfe) return;
+    if (!statusModalDanfe || statusInFlight.current) return;
+    statusInFlight.current = true;
 
     try {
       setIsUpdatingStatus(true);
@@ -241,6 +256,7 @@ function CardDanfes({
           || 'Nao foi possivel atualizar o status desta NF.',
       );
     } finally {
+      statusInFlight.current = false;
       setIsUpdatingStatus(false);
     }
   }
@@ -253,7 +269,7 @@ function CardDanfes({
   }, [isAssigningDanfe]);
 
   async function handleAssignDanfeToTrip() {
-    if (!assignmentModalDanfe || !onAssignDanfeToTrip) return;
+    if (!assignmentModalDanfe || !onAssignDanfeToTrip || assignmentInFlight.current) return;
 
     const tripId = Number(selectedTripId || 0);
     if (!Number.isFinite(tripId) || tripId <= 0) {
@@ -261,6 +277,7 @@ function CardDanfes({
       return;
     }
 
+    assignmentInFlight.current = true;
     try {
       setIsAssigningDanfe(true);
       setAssignmentError('');
@@ -272,6 +289,7 @@ function CardDanfes({
     } catch (error: any) {
       setAssignmentError(error?.response?.data?.error || error?.message || 'Nao foi possivel atribuir esta NF agora.');
     } finally {
+      assignmentInFlight.current = false;
       setIsAssigningDanfe(false);
     }
   }
@@ -285,7 +303,7 @@ function CardDanfes({
   }, [isLinkingReplacement]);
 
   async function handleLinkReplacementInvoice() {
-    if (!replacementModalDanfe) return;
+    if (!replacementModalDanfe || replacementInFlight.current) return;
 
     const replacementInvoiceNumber = String(replacementInvoiceInput || '').trim();
     if (!replacementInvoiceNumber) {
@@ -293,6 +311,7 @@ function CardDanfes({
       return;
     }
 
+    replacementInFlight.current = true;
     try {
       setIsLinkingReplacement(true);
       setReplacementError('');
@@ -329,6 +348,7 @@ function CardDanfes({
           || 'Nao foi possivel vincular a NF substituta agora.',
       );
     } finally {
+      replacementInFlight.current = false;
       setIsLinkingReplacement(false);
     }
   }
@@ -414,7 +434,10 @@ function CardDanfes({
       {filteredDanfes.length ? (
         <ContainerCards>
           {filteredDanfes.map((danfe) => {
-            const key = String(danfe.barcode || danfe.invoice_number);
+            const key = `${buildInvoiceContextKey(danfe.company_id, danfe.invoice_number)}:${danfe.barcode || ''}`;
+            const normalizeProduct = (value: unknown) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const productTerm = normalizeProduct(productSearch);
+            const matchingProducts = (danfe.DanfeProducts || []).filter((item) => !productTerm || normalizeProduct(item.Product?.code).includes(productTerm) || normalizeProduct(item.Product?.description).includes(productTerm));
             const isFlipped = Boolean(flippedCards[key]);
             const invoiceNumber = String(danfe.invoice_number);
             const invoiceContext = resolveInvoiceScopedValue(invoiceContextByNf, danfe) || null;
@@ -478,23 +501,43 @@ function CardDanfes({
               window.location.hash = `#/invoices/${encodeURIComponent(invoiceNumber)}/journey${query ? `?${query}` : ''}`;
             };
             return (
-              <div key={key} className="h-[380px] min-w-0 w-full [perspective:1200px]">
+              <div key={key} data-invoice-card-key={key} className={cn('min-w-0 w-full', conferenceMode ? 'invoice-conference-card' : 'h-[380px] [perspective:1200px]')}>
                 <div
                   className="relative h-full w-full transition-transform duration-500"
-                  style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none' }}
+                  style={conferenceMode ? undefined : { transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'none' }}
                 >
                   <CardsDanfe
                     data-testid={`danfe-card-${invoiceNumber}`}
                     className={cn(
                       'absolute inset-0 select-text overflow-hidden',
+                      conferenceMode && 'conference-face',
                       getOperationalStatusCardClassName(displayStatus),
                     )}
-                    style={{ backfaceVisibility: 'hidden' }}
+                    style={{ backfaceVisibility: 'hidden', visibility: isFlipped ? 'hidden' : 'visible' }}
+                    aria-hidden={isFlipped}
                   >
-                    <div className="mb-1 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-[10px] leading-tight">
-                      <h1 className="whitespace-nowrap text-[11px] font-semibold">{`NF ${danfe.invoice_number}`}</h1>
-                      <Badge
-                        tone={driverTone}
+                    {conferenceMode && (
+                      <div className="conference-meta text-muted" role="group" aria-label="Empresa, motorista e carga">
+                        <span>{COMPANY_LABELS[resolveDanfeCompanyCode(danfe)] || 'Empresa não informada'}</span>
+                        <span className="conference-driver" title={resolvedDriverName ? `Motorista: ${resolvedDriverName}` : undefined}>
+                          {isDriverLoading ? <><LoaderCircle className="h-3 w-3 shrink-0 animate-spin" />Carregando motorista...</>
+                            : hasDriverError ? 'Motorista indisponível'
+                              : resolvedDriverName ? <><span className="sr-only">Motorista: </span>{resolvedDriverName}</>
+                                : canAssignToTrip ? (
+                                  <button type="button" onClick={() => openAssignmentModal(danfe)}
+                                    className="conference-action-icon inline-flex w-11 items-center justify-center rounded-md border border-border bg-surface-2"
+                                    aria-label={`Atribuir NF ${danfe.invoice_number} a uma rota`} title="Sem motorista — atribuir a uma rota">
+                                    <UserPlus className="h-4 w-4" />
+                                  </button>
+                                ) : <span role="img" aria-label="Sem motorista" title="Sem motorista — atribuição indisponível"><UserPlus className="h-4 w-4" /></span>}
+                        </span>
+                        <span>{danfe.load_number ? `Carga ${danfe.load_number}` : 'Sem carga informada'}</span>
+                      </div>
+                    )}
+                    <div className={cn('mb-1 grid shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-[10px] leading-tight', conferenceMode && 'conference-heading')}>
+                      <h2 className={cn('whitespace-nowrap font-semibold', conferenceMode ? 'text-base' : 'text-[11px]')}>{`NF ${danfe.invoice_number}`}</h2>
+                      {!conferenceMode && <Badge
+                        tone={conferenceMode ? 'neutral' : driverTone}
                         className="flex h-7 w-fit min-w-0 max-w-full justify-self-center items-center justify-center gap-1 px-1.5 py-0 text-[10px] leading-tight"
                       >
                         {isDriverLoading ? <LoaderCircle className="h-3 w-3 shrink-0 animate-spin" /> : null}
@@ -511,21 +554,21 @@ function CardDanfes({
                           <button
                             type="button"
                             onClick={() => openAssignmentModal(danfe)}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current bg-surface-2 text-current transition hover:brightness-110"
+                            className="conference-action-icon inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-current bg-surface-2 text-current transition hover:brightness-110"
                             aria-label={`Atribuir NF ${danfe.invoice_number} a uma rota`}
                             title="Atribuir a uma rota"
                           >
                             <UserPlus className="h-3.5 w-3.5" />
                           </button>
                         ) : null}
-                      </Badge>
-                      <time className="whitespace-nowrap text-[10px] text-muted">{formatDateBR(danfe.invoice_date)}</time>
+                      </Badge>}
+                      <time className="whitespace-nowrap text-[10px] text-muted">{conferenceMode && <span className="conference-date-label">Emissão </span>}{formatDateBR(danfe.invoice_date)}</time>
                     </div>
                     <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
                       <div className="shrink-0">
-                        <h4 className="break-words text-sm font-semibold leading-tight">{customerName}</h4>
-                        <p className="break-words text-xs text-muted">{cityName}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <h4 className={cn('break-words font-semibold leading-snug', conferenceMode ? 'text-base' : 'text-sm') } title={customerName}>{customerName}</h4>
+                        <p className={cn('break-words text-xs text-muted', conferenceMode && 'conference-city')}>{cityName}{conferenceMode && danfe.Customer.state ? ` · ${danfe.Customer.state}` : ''}</p>
+                        <div className={cn('mt-1 flex flex-wrap items-center gap-1', conferenceMode && 'conference-status-actions')}>
                           <Badge tone={danfeStatusTone} className="h-auto px-2 py-0.5 text-[10px] leading-tight">
                             {danfeStatusLabel}
                           </Badge>
@@ -538,7 +581,7 @@ function CardDanfes({
                               title={`Abrir rota #${lastTripId} no monitoramento`}
                             >
                               <MapPinned className="h-3 w-3" />
-                              {`Rota #${lastTripId}`}
+                              {conferenceMode ? `Última rota #${lastTripId}` : `Rota #${lastTripId}`}
                             </button>
                           ) : null}
                           <button
@@ -619,38 +662,44 @@ function CardDanfes({
                         ) : null}
                       </div>
 
-                      <ContainerItems className="min-h-0 flex-1">
+                      <ContainerItems className={cn('min-h-0 flex-1', conferenceMode && 'conference-products')}>
                         <div className="flex shrink-0 items-center justify-between gap-2">
-                          <span className="text-[10px] font-semibold text-muted">Produtos ({danfe.DanfeProducts.length})</span>
-                          {danfe.DanfeProducts.length > 4 && (
+                          <span className={cn('font-semibold text-muted', conferenceMode ? 'text-xs' : 'text-[10px]')}>{productTerm ? `${matchingProducts.length} de ${danfe.DanfeProducts.length} itens correspondem` : `Produtos (${danfe.DanfeProducts.length})`}</span>
+                          {(danfe.DanfeProducts.length > 4 || productTerm) && (
                             <button type="button" onClick={() => openProductsModal(danfe)}
                               className="inline-flex h-6 shrink-0 items-center rounded border border-border px-1.5 text-[10px] font-semibold text-text-accent"
                               aria-label={`Abrir lista completa de produtos da NF ${danfe.invoice_number}`}>
-                              Ver todos
+                              {productTerm ? 'Todos os itens' : 'Ver todos'}
                             </button>
                           )}
                         </div>
-                        <DescriptionColumns className="shrink-0 pr-1">
+                        <DescriptionColumns className={cn('shrink-0 pr-1', conferenceMode && 'sr-only')}>
                           <span>Código</span><span>Descrição</span><span>Qtd</span>
                         </DescriptionColumns>
-                        <ItemsScrollArea aria-label={`Itens da NF ${danfe.invoice_number}`}>
-                          {danfe.DanfeProducts.map((item) => (
-                            <ListItems key={`${danfe.invoice_number}-${item.Product.code}`}>
-                              <li>{item.Product.code}</li>
-                              <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
-                              <li>{formatQuantity(item.quantity, item.type)}</li>
+                        <ItemsScrollArea tabIndex={0} aria-label={`Itens da NF ${danfe.invoice_number}`}>
+                          {matchingProducts.map((item, index) => (
+                            <ListItems key={`${key}-${item.Product.code}-${index}`} className={conferenceMode ? 'conference-product-row' : undefined}>
+                              {conferenceMode ? <>
+                                <li className="conference-product-description"><span>{normalizeTextValue(item.Product.description)}</span><small>Cód. {item.Product.code}</small></li>
+                                <li className="conference-product-quantity"><span className="sr-only">Quantidade</span>{formatQuantity(item.quantity, item.type || item.Product.type || 'unidade não informada')}</li>
+                              </> : <>
+                                <li>{item.Product.code}</li>
+                                <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
+                                <li>{formatQuantity(item.quantity, item.type || item.Product.type || 'unidade não informada')}</li>
+                              </>}
                             </ListItems>
                           ))}
                         </ItemsScrollArea>
                       </ContainerItems>
                     </div>
 
-                    <TotalQuantity className="mt-1 shrink-0 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1">
-                      <p className="min-w-0">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>
-                      <p>{`Peso bruto: ${grossWeightLabel}`}</p>
+                    <TotalQuantity className={cn('mt-1 shrink-0 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1', conferenceMode && 'conference-footer')}>
+                      {!conferenceMode && <p className="min-w-0">{`Quantidade Total: ${formatQuantity(danfe.total_quantity, 'UN')}`}</p>}
+                      <p>{conferenceMode ? <><span className="conference-weight-label">Peso bruto</span><strong>{grossWeightLabel}</strong></> : `Peso bruto: ${grossWeightLabel}`}</p>
                       <button
                         type="button"
                         onClick={() => toggleFlip(key)}
+                        data-card-details
                         className="inline-flex h-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                         aria-label={`Mostrar detalhes da NF ${danfe.invoice_number}`}
                       >
@@ -662,9 +711,11 @@ function CardDanfes({
                   <CardsDanfe
                     className={cn(
                       'absolute inset-0 select-text overflow-hidden',
+                      conferenceMode && 'conference-face conference-back',
                       getOperationalStatusCardClassName(displayStatus),
                     )}
-                    style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                    style={{ backfaceVisibility: 'hidden', transform: conferenceMode ? undefined : 'rotateY(180deg)', visibility: isFlipped ? 'visible' : 'hidden' }}
+                    aria-hidden={!isFlipped}
                   >
                     <TitleCard className="shrink-0">
                       <h1>{`NF ${danfe.invoice_number}`}</h1>
@@ -784,6 +835,7 @@ function CardDanfes({
                       <button
                         type="button"
                         onClick={() => toggleFlip(key)}
+                        data-card-back
                         className="inline-flex h-7 shrink-0 items-center rounded-md border border-border bg-surface-2 px-2 text-[11px] font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
                         aria-label={`Voltar para frente do card da NF ${danfe.invoice_number}`}
                       >
@@ -810,43 +862,52 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={closeProductsModal}
           />
-          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[680px] flex-col rounded-lg border border-border bg-card p-3 text-text shadow-[var(--shadow-3)]">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-base font-semibold">{`NF ${productsModalDanfe.invoice_number}`}</h3>
-                <p className="text-xs text-muted">
-                  {`${normalizeTextValue(productsModalDanfe.Customer?.name_or_legal_entity) || '-'} | ${normalizeCityLabel(productsModalDanfe.Customer?.city) || '-'}`}
-                </p>
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Produtos da NF ${productsModalDanfe.invoice_number}`} tabIndex={-1} data-card-dialog className="relative z-[1410] flex max-h-[90vh] w-full max-w-[860px] flex-col overflow-hidden rounded-xl border border-border bg-card text-text shadow-[var(--shadow-3)]">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Produtos da nota · {COMPANY_LABELS[resolveDanfeCompanyCode(productsModalDanfe)] || 'Empresa não informada'}</p>
+                <h3 className="mt-1 text-2xl font-bold tracking-tight">{`NF ${productsModalDanfe.invoice_number}`}</h3>
+                <p className="mt-2 break-words text-sm font-semibold sm:text-base">{normalizeTextValue(productsModalDanfe.Customer?.name_or_legal_entity) || 'Cliente não informado'}</p>
+                <p className="mt-1 text-xs text-muted">{normalizeCityLabel(productsModalDanfe.Customer?.city) || 'Cidade não informada'}{productsModalDanfe.Customer?.state ? ` · ${productsModalDanfe.Customer.state}` : ''}</p>
               </div>
               <button
                 type="button"
                 onClick={closeProductsModal}
-                className="inline-flex h-8 items-center rounded-md border border-border bg-surface-2 px-2 text-xs font-semibold text-text transition hover:border-accent/60 hover:text-text-accent"
+                className="inline-flex min-h-[44px] shrink-0 items-center rounded-lg border border-border bg-surface-2 px-3 text-sm font-semibold text-text transition hover:border-accent/60 hover:text-text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
               >
                 Fechar
               </button>
             </div>
 
-            <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border bg-surface-2 p-2">
-              <DescriptionColumns className="shrink-0 pr-1">
-                <span>Codigo</span>
-                <span>Descricao</span>
-                <span>Qtd</span>
-              </DescriptionColumns>
-              <div className="scrollbar-ui mt-1 min-h-0 flex-1 overflow-y-auto pr-1">
-                {productsModalDanfe.DanfeProducts.map((item) => (
-                  <ListItems key={`modal-${productsModalDanfe.invoice_number}-${item.Product.code}`}>
-                    <li>{item.Product.code}</li>
-                    <li title={normalizeTextValue(item.Product.description)}>{normalizeTextValue(item.Product.description)}</li>
-                    <li>{formatQuantity(item.quantity, item.type)}</li>
-                  </ListItems>
-                ))}
-              </div>
+            <div className="scrollbar-ui min-h-0 flex-1 overflow-y-auto overscroll-contain" tabIndex={0} role="region" aria-label="Lista completa de produtos">
+              <table className="w-full table-fixed border-collapse text-left text-sm">
+                <caption className="sr-only">Produtos e quantidades da NF {productsModalDanfe.invoice_number}</caption>
+                <thead className="sticky top-0 bg-surface-2 text-xs text-muted">
+                  <tr>
+                    <th scope="col" className="hidden w-28 px-4 py-3 sm:table-cell sm:pl-6">Código</th>
+                    <th scope="col" className="px-4 py-3">Produto</th>
+                    <th scope="col" className="w-28 px-4 py-3 text-right sm:w-36 sm:pr-6">Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productsModalDanfe.DanfeProducts.map((item, index) => (
+                    <tr key={`modal-${productsModalDanfe.invoice_number}-${item.Product.code}-${index}`} className="border-t border-border even:bg-surface/50 hover:bg-surface-2">
+                      <td className="hidden break-words px-4 py-3 align-top text-xs font-medium text-muted sm:table-cell sm:pl-6">{item.Product.code}</td>
+                      <td className="break-words px-4 py-3 align-top font-medium leading-relaxed">
+                        {normalizeTextValue(item.Product.description) || 'Descrição não informada'}
+                        <span className="mt-1 block text-xs font-normal text-muted sm:hidden">Cód. {item.Product.code}</span>
+                      </td>
+                      <td className="break-words px-4 py-3 text-right align-top font-bold tabular-nums sm:pr-6">{formatQuantity(item.quantity, item.type || item.Product.type || 'unidade não informada')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <p className="mt-2 text-xs font-medium text-muted">
-              {`Total de itens: ${productsModalDanfe.DanfeProducts.length}`}
-            </p>
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-3 text-xs text-muted sm:px-6">
+              <span className="font-semibold text-text">{`Total de itens: ${productsModalDanfe.DanfeProducts.length}`}</span>
+              <span>Quantidades e unidades conforme a NF</span>
+            </div>
           </div>
         </div>
       ) : null}
@@ -859,7 +920,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={() => closeReplacementModal()}
           />
-          <div className="relative z-[1420] flex w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Vincular NF substituta" tabIndex={-1} data-card-dialog className="relative z-[1420] flex max-h-[88vh] w-full max-w-[520px] flex-col overflow-y-auto rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-semibold">{`NF ${replacementModalDanfe.invoice_number}`}</h3>
@@ -931,7 +992,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={() => closeStatusModal()}
           />
-          <div className="relative z-[1435] flex max-h-[92vh] w-full max-w-[540px] flex-col overflow-y-auto rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Alterar status da NF" tabIndex={-1} data-card-dialog className="relative z-[1435] flex max-h-[92vh] w-full max-w-[540px] flex-col overflow-y-auto rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="text-base font-semibold">{`Alterar status da NF ${statusModalDanfe.invoice_number}`}</h3>
@@ -1031,7 +1092,7 @@ function CardDanfes({
             className="absolute inset-0 bg-slate-950/80"
             onClick={() => closeAssignmentModal()}
           />
-          <div className="relative z-[1410] flex max-h-[88vh] w-full max-w-[520px] flex-col rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={`Atribuir NF ${assignmentModalDanfe.invoice_number}`} tabIndex={-1} data-card-dialog className="relative z-[1410] flex max-h-[88vh] w-full max-w-[520px] flex-col overflow-y-auto rounded-lg border border-border bg-card p-4 text-text shadow-[var(--shadow-3)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">{`Atribuir NF ${assignmentModalDanfe.invoice_number}`}</h3>
@@ -1057,6 +1118,9 @@ function CardDanfes({
                   <button
                     key={`assign-trip-${trip.id}`}
                     type="button"
+                    aria-pressed={isSelected}
+                    disabled={isAssigningDanfe}
+                    aria-label={`Viagem #${trip.id} · ${trip.Driver?.name || `Motorista #${trip.driver_id}`}`}
                     onClick={() => setSelectedTripId(tripId)}
                     className={cn(
                       'w-full rounded-lg border px-3 py-2 text-left transition',

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react-dom/test-utils';
 import axios from 'axios';
 import CardDanfes from '../CardDanfes';
@@ -80,6 +80,51 @@ const CONTEXT_FIXTURE: Record<string, IInvoiceSearchContext> = {
 };
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+test('lista completa apresenta tabela acessível, descrições integrais e unidades', () => {
+  const danfe = buildDanfe('555', 'pending');
+  danfe.DanfeProducts = Array.from({ length: 5 }, (_, index) => ({
+    ...danfe.DanfeProducts[0], type: 'KG', quantity: 12.75,
+    Product: { ...danfe.DanfeProducts[0].Product, code: `P${index}`, description: `Descrição completa do produto ${index} para conferência` },
+  }));
+  render(<CardDanfes conferenceMode danfes={[danfe]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir lista completa de produtos da NF 555' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Produtos da NF 555' }));
+  const table = within(dialog.getByRole('table', { name: 'Produtos e quantidades da NF 555' }));
+  expect(table.getAllByRole('row')).toHaveLength(6);
+  expect(table.getByText('Descrição completa do produto 4 para conferência')).toBeInTheDocument();
+  expect(table.getAllByText('12,75 KG')).toHaveLength(5);
+  fireEvent.click(dialog.getByRole('button', { name: 'Fechar' }));
+  expect(screen.queryByRole('dialog', { name: 'Produtos da NF 555' })).not.toBeInTheDocument();
+});
+
+test('agrupa motorista e carga no topo do modo conferência sem ocultar falhas de consulta', () => {
+  const danfes = [buildDanfe('123456', 'assigned')];
+  const { rerender } = render(<CardDanfes conferenceMode danfes={danfes} invoiceContextByNf={CONTEXT_FIXTURE} />);
+  const metadata = within(screen.getByRole('group', { name: 'Empresa, motorista e carga' }));
+  expect(metadata.getByText('Joao da Silva')).toBeInTheDocument();
+  expect(metadata.getByText('Carga CARGA-10')).toBeInTheDocument();
+  rerender(<CardDanfes conferenceMode danfes={danfes} driverErrorByInvoice={{ '123456': true }} />);
+  expect(metadata.getByText('Motorista indisponível')).toBeInTheDocument();
+  expect(metadata.queryByRole('img', { name: 'Sem motorista' })).not.toBeInTheDocument();
+});
+
+test('bloqueia atribuição duplicada e mantém a viagem selecionada após falha', async () => {
+  let rejectAssignment!: (error: Error) => void;
+  const assign = jest.fn(() => new Promise<void>((_, reject) => { rejectAssignment = reject; }));
+  render(<CardDanfes conferenceMode danfes={[buildDanfe('777', 'pending')]} assignableTrips={[{ id: 77, Driver: { name: 'Motorista teste' }, TripNotes: [] } as any]} onAssignDanfeToTrip={assign} />);
+  expect(within(screen.getByRole('group', { name: 'Empresa, motorista e carga' })).getByRole('button', { name: 'Atribuir NF 777 a uma rota' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Atribuir NF 777 a uma rota' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Viagem #77 · Motorista teste' }));
+  const confirm = screen.getByRole('button', { name: 'Confirmar atribuição' });
+  fireEvent.click(confirm); fireEvent.click(confirm);
+  expect(assign).toHaveBeenCalledTimes(1);
+  expect(confirm).toBeDisabled();
+  await act(async () => rejectAssignment(new Error('Falha simulada')));
+  expect(screen.getByText('Falha simulada')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Viagem #77 · Motorista teste' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Confirmar atribuição' })).toBeEnabled();
+});
 
 describe('CardDanfes', () => {
   beforeEach(() => {

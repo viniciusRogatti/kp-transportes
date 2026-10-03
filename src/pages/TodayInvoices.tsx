@@ -7,7 +7,6 @@ import { ContainerDanfes, ContainerTodayInvoices } from "../style/TodayInvoices"
 import ScrollToTopButton from "../components/ScrollToTopButton";
 import TodayProductList from "../components/TodayProductList";
 import DanfeStatusLegend from "../components/DanfeStatusLegend";
-import CompanyTabs from "../components/CompanyTabs";
 import InvoiceFilters from '../components/invoices/InvoiceFilters';
 import RouteOverview from '../components/invoices/RouteOverview';
 import useRouteCatalog from '../hooks/useRouteCatalog';
@@ -18,7 +17,11 @@ import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
 import { pdf } from "@react-pdf/renderer";
-import { LoaderPrinting } from "../style/Loaders";
+import { PackageSearch, Printer, RefreshCw, X } from "lucide-react";
+import { WorkspaceButton, WorkspaceHeader, WorkspaceState } from "../components/ui/Workspace";
+import { currentOperationDate, readTodayInvoiceView, saveTodayInvoiceView, todayInvoiceViewKey } from "../utils/todayInvoiceView";
+import { brand } from "../config/brand";
+import "../style/invoiceWorkspace.css";
 
 import { createEmptyInvoiceListFilters, filterTodayInvoiceDanfes } from "../utils/danfeFilters";
 import { sanitizeDanfeTextFields } from "../utils/textNormalization";
@@ -27,15 +30,25 @@ import useInvoiceSearchContext from "../hooks/useInvoiceSearchContext";
 import { COMPANY_LABELS, COMPANY_TAB_ORDER, resolveDanfeCompanyCode } from "../utils/companyTabs";
 import { handleAuthenticationError } from "../utils/authErrorHandler";
 import { buildTodayInvoiceProductMatches, TodayInvoiceAssignment } from "../utils/todayInvoiceQuickSearch";
-import { getOperationalStatusLabel, getSemanticToneClassName } from "../utils/statusStyles";
+import { getDanfeLegendItem } from "../utils/statusStyles";
 
 function TodayInvoices() {
-  const [operationDate, setOperationDate] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()));
+  const [savedView] = useState(readTodayInvoiceView);
+  const [viewKey] = useState(todayInvoiceViewKey);
+  const [operationDate, setOperationDate] = useState(savedView.operationDate);
+  const [moreFilters, setMoreFilters] = useState(savedView.moreFilters);
+  const restoreScroll = useRef(true);
+  const scrollPosition = useRef(savedView.scrollY);
   const operationDateRef = useRef(operationDate);
   operationDateRef.current = operationDate;
   const dataRequest = useRef(0);
   const [loadError, setLoadError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [tripsError, setTripsError] = useState('');
+  const [printError, setPrintError] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const printInFlight = useRef(false);
+  const tripsRequest = useRef(0);
   const [dataDanfes, setDataDanfes] = useState<IDanfe[]>([]);
   const [todayTrips, setTodayTrips] = useState<ITrip[]>([]);
   const [driverByInvoice, setDriverByInvoice] = useState<Record<string, string>>({});
@@ -47,9 +60,8 @@ function TodayInvoices() {
     loadInvoiceContext,
     refreshInvoiceContext,
   } = useInvoiceSearchContext();
-  const [filters, setFilters] = useState(createEmptyInvoiceListFilters);
-  const [activeCompanyTab, setActiveCompanyTab] = useState<string>('all');
-  const [allTabCompanyFilter, setAllTabCompanyFilter] = useState<string>('all');
+  const [filters, setFilters] = useState(savedView.filters);
+  const [activeCompanyTab, setActiveCompanyTab] = useState<string>(savedView.company);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const navigate = useNavigate();
   const deferredFilters = useDeferredValue(filters);
@@ -60,32 +72,44 @@ function TodayInvoices() {
     .map((danfe) => [normalizeRouteCity(danfe.Customer.city), danfe.Customer.city])).values())
     .sort((a, b) => a.localeCompare(b, 'pt-BR')), [dataDanfes]);
 
+  const viewRef = useRef(savedView);
+  viewRef.current = { operationDate, filters, company: activeCompanyTab, moreFilters, scrollY: scrollPosition.current, savedOn: currentOperationDate() };
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const fetchToken = async () => {
-      if (token) {
-        const isValidToken = await verifyToken(token);
-        if (!isValidToken) {
-          navigate('/');
-        }
-      } else {
-        navigate('/');
-      }
-    } 
-    fetchToken();
-    loadTodayData();
+    const rememberPosition = () => { if (!restoreScroll.current) scrollPosition.current = window.scrollY; };
+    const save = () => saveTodayInvoiceView(viewKey, { ...viewRef.current, scrollY: scrollPosition.current });
+    window.addEventListener('scroll', rememberPosition, { passive: true });
+    window.addEventListener('pagehide', save);
+    return () => { save(); window.removeEventListener('scroll', rememberPosition); window.removeEventListener('pagehide', save); };
+  }, [viewKey]);
+  useEffect(() => {
+    if (loading || loadError || !restoreScroll.current) return;
+    const frame = requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollPosition.current, behavior: 'auto' });
+      restoreScroll.current = false;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, loadError]);
+  useEffect(() => {
+    let active = true;
+    const start = async () => {
+      const token = localStorage.getItem('token');
+      if (!token || !(await verifyToken(token))) { if (active) navigate('/'); return; }
+      if (active) void loadTodayData();
+    };
+    void start();
+    return () => { active = false; dataRequest.current += 1; tripsRequest.current += 1; };
+  // API context changes with the operation date; filter changes are local.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operationDate]);
 
   async function loadTodayData() {
     const request = ++dataRequest.current;
-    setLoading(true); setLoadError(''); setDataDanfes([]); setTodayTrips([]); setDriverByInvoice({}); setAssignmentByInvoice({});
+    setLoading(true); setLoadError(''); setTripsError(''); setPrintError(''); setFeedback(''); setDataDanfes([]); setTodayTrips([]); setDriverByInvoice({}); setAssignmentByInvoice({});
     try {
       const response = await axios.get(`${API_URL}/danfes`, { params: { operationDate } });
       if (request !== dataRequest.current) return;
-      const sanitizedRows = Array.isArray(response.data)
-        ? response.data.map((danfe) => sanitizeDanfeTextFields(danfe))
-        : [];
+      if (!Array.isArray(response.data)) throw new Error('Resposta de notas inválida.');
+      const sanitizedRows = response.data.map((danfe) => sanitizeDanfeTextFields(danfe));
       setDataDanfes(sanitizedRows);
       await Promise.all([
         loadTodayTrips(),
@@ -97,10 +121,13 @@ function TodayInvoices() {
   }
 
   const loadTodayTrips = useCallback(async () => {
+    const request = ++tripsRequest.current;
     try {
       const today = operationDate;
       const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
-      if (operationDateRef.current !== today) return [];
+      if (operationDateRef.current !== today || request !== tripsRequest.current) return [];
+      if (!Array.isArray(data)) throw new Error('Resposta de viagens inválida.');
+      setTripsError('');
       const map: Record<string, string> = {};
       const assignmentMap: Record<string, TodayInvoiceAssignment> = {};
       if (Array.isArray(data)) {
@@ -123,8 +150,8 @@ function TodayInvoices() {
       setAssignmentByInvoice(assignmentMap);
       return Array.isArray(data) ? data : [];
     } catch {
-      if (operationDateRef.current !== operationDate) return [];
-      setLoadError('Notas carregadas, mas não foi possível consultar as viagens. Atualize antes de atribuir.');
+      if (operationDateRef.current !== operationDate || request !== tripsRequest.current) return [];
+      setTripsError('As notas foram carregadas, mas as viagens estão indisponíveis. Atualize antes de atribuir uma nota.');
       setTodayTrips([]);
       setDriverByInvoice({});
       setAssignmentByInvoice({});
@@ -184,10 +211,10 @@ function TodayInvoices() {
   }, [dataDanfes]);
 
   const visibleDanfes = useMemo(() => {
-    const scopedCompanyCode = activeCompanyTab === 'all' ? allTabCompanyFilter : activeCompanyTab;
+    const scopedCompanyCode = activeCompanyTab;
     if (!scopedCompanyCode || scopedCompanyCode === 'all') return dataDanfes;
     return dataDanfes.filter((danfe) => resolveDanfeCompanyCode(danfe) === scopedCompanyCode);
-  }, [activeCompanyTab, allTabCompanyFilter, dataDanfes]);
+  }, [activeCompanyTab, dataDanfes]);
 
   const loadOptions = useMemo(
     () => Array.from(
@@ -224,16 +251,12 @@ function TodayInvoices() {
     if (filters.city.join(', ')) entries.push({ id: 'city', label: `Cidade: ${filters.city.join(', ')}`, onClear: () => clearFilter('city') });
     if (filters.route.length > 0) entries.push({ id: 'route', label: `Rota: ${filters.route.map((id) => routeCatalog.data?.routes.find((route) => route.id === id)?.name || 'Sem rota definida').join(', ')}`, onClear: () => clearFilter('route') });
     if (filters.driver.join(', ')) entries.push({ id: 'driver', label: `Motorista: ${filters.driver.join(', ')}`, onClear: () => clearFilter('driver') });
-    if (filters.status) entries.push({ id: 'status', label: `Status: ${filters.status}`, onClear: () => clearFilter('status') });
-    if (activeCompanyTab === 'all' && allTabCompanyFilter !== 'all') {
-      entries.push({
-        id: `company-${allTabCompanyFilter}`,
-        label: `Empresa: ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}`,
-        onClear: () => setAllTabCompanyFilter('all'),
-      });
+    if (filters.status) entries.push({ id: 'status', label: `Status: ${getDanfeLegendItem(filters.status)?.label || filters.status}`, onClear: () => clearFilter('status') });
+    if (activeCompanyTab !== 'all') {
+      entries.push({ id: 'company', label: `Empresa: ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}`, onClear: () => setActiveCompanyTab('all') });
     }
     return entries;
-  }, [activeCompanyTab, allTabCompanyFilter, clearFilter, filters, routeCatalog.data]);
+  }, [activeCompanyTab, clearFilter, filters, routeCatalog.data]);
 
   function updateFilter(key: keyof typeof filters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -249,26 +272,33 @@ function TodayInvoices() {
 
   function resetFilters() {
     setFilters(createEmptyInvoiceListFilters());
-    setAllTabCompanyFilter('all');
+    setActiveCompanyTab('all');
   }
 
   async function openPDFInNewTab() {
+    if (printInFlight.current || loading || loadError) return;
     const currentFilteredDanfes = filterTodayInvoiceDanfes(visibleDanfes, driverByInvoice, filters, invoiceContextByNf, routeMap);
-    const currentFilteredGroupedProducts = groupTodayInvoiceProducts(currentFilteredDanfes);
-    if (currentFilteredGroupedProducts.length === 0) return;
-
+    const products = groupTodayInvoiceProducts(currentFilteredDanfes);
+    if (!products.length) return;
+    const preview = window.open('', '_blank');
+    if (!preview) {
+      setPrintError('O navegador bloqueou a abertura da lista. Permita pop-ups para este site e tente novamente.');
+      return;
+    }
+    preview.opener = null;
+    printInFlight.current = true;
     setIsPrinting(true);
-
+    setPrintError('');
     try {
-      const blob = await pdf(<TodayProductList products={currentFilteredGroupedProducts} />).toBlob();
+      const blob = await pdf(<TodayProductList products={products} />).toBlob();
       const url = URL.createObjectURL(blob);
-
-      setTimeout(() => {
-        window.open(url);
-        setIsPrinting(false);
-      }, 3000);
-    } catch (error) {
-      console.error('Erro ao gerar lista de produtos:', error);
+      if (!preview.closed) preview.location.href = url;
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      preview.close();
+      setPrintError('Não foi possível gerar o PDF. Seus filtros foram mantidos. Tente novamente.');
+    } finally {
+      printInFlight.current = false;
       setIsPrinting(false);
     }
   }
@@ -344,7 +374,7 @@ function TodayInvoices() {
       )));
 
       void refreshInvoiceContext([updatedDanfe], { includeTripDriver: true });
-      window.alert(`NF ${danfe.invoice_number} atribuída à rota de ${targetTrip.Driver?.name || 'motorista selecionado'}.`);
+      setFeedback(`NF ${danfe.invoice_number} incluída na viagem #${targetTrip.id} de ${targetTrip.Driver?.name || 'motorista selecionado'}.`);
     } catch (error) {
       if (handleAuthenticationError(error)) {
         throw new Error('Sessão expirada. Faça login novamente.');
@@ -359,160 +389,84 @@ function TodayInvoices() {
     void refreshInvoiceContext([updated], { includeTripDriver: true });
   }
 
+  const filterCount = activeFilters.length + filters.loadNumbers.length;
+  const contextUnavailable = dataDanfes.some((danfe) => driverErrorByInvoice[buildInvoiceContextKey(danfe.company_id, danfe.invoice_number)]);
+  const isFiltering = filters !== deferredFilters;
+
   return (
     <ContainerTodayInvoices>
       <Header />
-      <Container className="operation-page">
-        <CompanyTabs activeTab={activeCompanyTab} onChange={setActiveCompanyTab} />
-        <section data-tutorial="today-filters" className="mb-3 w-full rounded-lg border border-border bg-surface p-3">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <div><h1 className="font-semibold text-text">Notas do dia</h1></div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="rounded border border-border bg-card px-3 py-2 text-sm text-text" onClick={resetFilters}>Limpar filtros</button>
-              <button type="button" disabled={!filteredDanfes.length || isPrinting} className="rounded bg-accent px-3 py-2 text-sm text-white disabled:opacity-50" onClick={openPDFInNewTab}>{isPrinting ? 'Gerando lista…' : 'Abrir lista de produtos'}</button>
-            </div>
-          </div>
-          <InvoiceFilters filters={filters} setFilters={setFilters} cities={cityOptions} drivers={driverOptions} loads={loadOptions} routes={routeCatalog.data?.routes || []}
-            leadingFields={<>
-              <label className="min-w-0 text-xs font-medium text-text">Data da operação
-                <input type="date" value={operationDate} onChange={(event) => { if (event.target.value) setOperationDate(event.target.value); }} className="mt-1 block h-9 w-full min-w-0 rounded-md border border-border bg-card px-2 text-text" />
+      <Container className="operation-page invoice-workspace">
+        <main className="invoice-workspace-content space-y-4">
+          <WorkspaceHeader eyebrow={brand.productName} title="Notas do dia" description="Encontre a nota, confira os produtos e acompanhe a operação.">
+            <WorkspaceButton onClick={() => void loadTodayData()} disabled={loading} aria-label="Atualizar notas">
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`} /> Atualizar
+            </WorkspaceButton>
+            <WorkspaceButton primary disabled={loading || Boolean(loadError) || !filteredDanfes.length || isPrinting} onClick={openPDFInNewTab}>
+              <Printer aria-hidden="true" className="h-4 w-4" /> {isPrinting ? 'Gerando PDF…' : 'Lista de produtos · PDF'}
+            </WorkspaceButton>
+          </WorkspaceHeader>
+          <section data-tutorial="today-filters" aria-label="Busca e filtros de notas" className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+            <InvoiceFilters filters={filters} setFilters={setFilters} cities={cityOptions} drivers={driverOptions} loads={loadOptions} routes={routeCatalog.data?.routes || []}
+              progressive expanded={moreFilters} onExpandedChange={setMoreFilters} leadingFields={<>
+              <label className="min-w-0 text-xs font-semibold text-muted">Data da operação
+                <input type="date" value={operationDate} onChange={(event) => { if (event.target.value) { restoreScroll.current = false; setOperationDate(event.target.value); } }} className="workspace-field mt-1 block" />
               </label>
-              {activeCompanyTab === 'all' ? <label className="min-w-0 text-xs font-medium text-text">Empresa
-                <select className="mt-1 block h-9 w-full rounded-md border border-border bg-card px-2 text-text" value={allTabCompanyFilter} onChange={(event) => setAllTabCompanyFilter(event.target.value)}>
-                  <option value="all">Todas</option>{companyOptions.map((code) => <option key={code} value={code}>{COMPANY_LABELS[code] || code}</option>)}
-                </select></label> : null}
+              <label className="min-w-0 text-xs font-semibold text-muted">Empresa atendida
+                <select className="workspace-field mt-1 block" value={activeCompanyTab} onChange={(event) => setActiveCompanyTab(event.target.value)}>
+                  <option value="all">Todas as empresas</option>
+                  {Array.from(new Set([...companyOptions, ...(activeCompanyTab === 'all' ? [] : [activeCompanyTab])])).map((code) => <option key={code} value={code}>{COMPANY_LABELS[code] || code}</option>)}
+                </select>
+              </label>
             </>} />
-        </section>
-        {loadError ? <p role="alert" className="mb-3 w-full rounded border p-3 text-sm semantic-panel-danger">{loadError} <button type="button" onClick={() => void loadTodayData()} className="underline">Atualizar operação</button></p> : null}
-        {loading ? <p role="status" className="mb-3 text-sm text-muted">Carregando operação…</p> : null}
-        <details className="mb-2 w-full rounded-lg border border-border bg-surface [&_section]:mb-0 [&_section]:border-0">
-          <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-text">Prévia de carga por rota <span className="ml-2 text-xs font-normal text-muted">Expandir para consultar</span></summary>
-        <RouteOverview danfes={filteredDanfes} availableCities={cityOptions} catalog={routeCatalog}
-          onSelectRoute={(id) => setFilters((old) => ({ ...old, route: old.route.includes(id) ? old.route.filter((value) => value !== id) : [...old.route, id] }))} />
-        </details>
-        <DanfeStatusLegend
-          activeStatusFilter={filters.status}
-          onChange={(value) => updateFilter('status', value)}
-          totalCount={visibleDanfes.length}
-          filteredCount={filteredDanfes.length}
-        />
-        {activeFilters.length + filters.loadNumbers.length > 0 ? <div data-tutorial="today-active-filters" className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full border border-border bg-surface px-3 py-1 text-text">
-            {activeFilters.length + filters.loadNumbers.length} filtro(s) ativo(s)
-          </span>
-          {activeFilters.map((filter) => (
-            <button
-              key={filter.id}
-              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
-              onClick={filter.onClear}
-            >
-              {filter.label} ×
-            </button>
-          ))}
-          {filters.loadNumbers.map((load) => (
-            <button
-              key={load}
-              className="rounded-full border border-border bg-surface px-2.5 py-1 text-muted hover:text-text"
-              onClick={() => clearLoadFilter(load)}
-            >
-              {`Carga: ${load}`} ×
-            </button>
-          ))}
-        </div> : null}
-        {filters.product.trim() ? (
-          <section className="mb-4 md:hidden" aria-live="polite">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-text">Produtos encontrados</h2>
-              <span className="rounded-full border border-border bg-surface px-2 py-1 text-xs text-muted">
-                {quickProductMatches.length} resultado(s)
-              </span>
-            </div>
-            {quickProductMatches.length ? (
-              <div className="space-y-2">
-                {quickProductMatches.map((row) => (
-                  <article key={row.key} className="rounded-lg border border-border bg-card p-3 shadow-soft">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <strong className="text-lg text-text">{row.productCode}</strong>
-                          <button
-                            type="button"
-                            onClick={() => void navigator.clipboard?.writeText(row.productCode)}
-                            className="rounded border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-muted"
-                          >
-                            Copiar código
-                          </button>
-                        </div>
-                        <p className="mt-1 text-sm text-text">{row.productDescription}</p>
-                      </div>
-                      <span className="shrink-0 rounded-md border semantic-solid-info px-2 py-1 text-base font-bold">
-                        {`${row.quantity} ${row.unit}`.trim()}
-                      </span>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded-md border border-border bg-surface-2 p-2">
-                        <span className="block text-muted">NF / Cliente</span>
-                        <strong className="block text-text">NF {row.invoiceNumber}</strong>
-                        <span className="line-clamp-2 text-text">{row.customerName}</span>
-                        <span className="block text-muted">{row.city}</span>
-                      </div>
-                      <div className="rounded-md border border-border bg-surface-2 p-2">
-                        <span className="block text-muted">Carga</span>
-                        <strong className="block text-text">{row.driverName}</strong>
-                        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getSemanticToneClassName(row.driverName === 'Sem motorista' ? 'warning' : 'success')}`}>
-                          {getOperationalStatusLabel(row.status)}
-                        </span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border semantic-panel-warning p-4 text-center text-sm">
-                Nenhum produto encontrado com os filtros atuais.
-              </div>
-            )}
+            <div hidden={!moreFilters}><DanfeStatusLegend activeStatusFilter={filters.status} onChange={(value) => updateFilter('status', value)} totalCount={visibleDanfes.length} filteredCount={filteredDanfes.length} /></div>
+            {filterCount > 0 && <div data-tutorial="today-active-filters" className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <span className="text-xs font-semibold text-muted">{filterCount} filtro(s) ativo(s)</span>
+              {activeFilters.map((filter) => <button key={filter.id} type="button" aria-label={`Remover filtro ${filter.label}`} className="workspace-button max-w-full !text-xs" onClick={filter.onClear}>
+                <span className="min-w-0 break-words">{filter.label}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              </button>)}
+              {filters.loadNumbers.map((load) => <button key={load} type="button" aria-label={`Remover carga ${load}`} className="workspace-button !text-xs" onClick={() => clearLoadFilter(load)}>Carga: {load}<X className="h-3.5 w-3.5" aria-hidden="true" /></button>)}
+              <WorkspaceButton onClick={resetFilters} className="!text-xs">Limpar todos os filtros</WorkspaceButton>
+            </div>}
           </section>
-        ) : null}
-        {dataDanfes.length === 0 ? (
-          <p>Nenhuma nota encontrada para a data operacional selecionada.</p>
-        ) : filteredDanfes.length === 0 ? (
-          <p>Nenhuma nota encontrada com os filtros atuais.</p>
-        ) : (
-          <ContainerDanfes data-tutorial="today-results">
-            { isPrinting ? (
-              <LoaderPrinting />
-            ) : (
-              <>
-                <div className="flex w-full flex-wrap items-center justify-between gap-1 text-sm">
-                <h2 className="font-semibold text-text">{`${filteredDanfes.length} Notas encontradas`}</h2>
-                <span className="text-sm text-muted">
-                  {activeCompanyTab === 'all'
-                    ? allTabCompanyFilter === 'all'
-                      ? 'Exibindo notas de todas as empresas.'
-                      : `Exibindo apenas ${COMPANY_LABELS[allTabCompanyFilter] || allTabCompanyFilter}.`
-                    : `Exibindo apenas ${COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}.`}
-                </span>
+          {feedback && <p role="status" className="rounded-xl border semantic-panel-success p-3 text-sm">{feedback}</p>}
+          {printError && <p role="alert" className="rounded-xl border semantic-panel-danger p-3 text-sm">{printError}</p>}
+          {(tripsError || contextUnavailable) && !loading && !loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border semantic-panel-warning p-3 text-sm">
+            <p className="max-w-2xl">{tripsError || 'Não foi possível confirmar o motorista e o histórico de algumas notas. Os filtros por motorista podem estar incompletos.'}</p>
+            <WorkspaceButton onClick={() => void loadTodayData()}>Tentar novamente</WorkspaceButton>
+          </div>}
+          {loading ? <WorkspaceState kind="loading" title="Carregando notas e viagens">Aguarde a consulta da operação selecionada.</WorkspaceState>
+            : loadError ? <WorkspaceState kind="error" title="Não foi possível carregar a operação" action={<WorkspaceButton onClick={() => void loadTodayData()}>Tentar novamente</WorkspaceButton>}>{loadError}</WorkspaceState>
+            : <>
+              <details className="w-full rounded-xl border border-border bg-card [&_section]:mb-0 [&_section]:border-0">
+                <summary className="min-h-[44px] cursor-pointer px-4 py-3 text-sm font-semibold text-text">Prévia de carga por rota <span className="ml-2 text-xs font-normal text-muted">Planejamento por cidade</span></summary>
+                <p className="px-4 pb-2 text-xs text-muted">Estimativa com as notas filtradas. Não representa atribuição a motorista.</p>
+                <RouteOverview danfes={filteredDanfes} availableCities={cityOptions} catalog={routeCatalog}
+                  onSelectRoute={(id) => setFilters((previous) => ({ ...previous, route: previous.route.includes(id) ? previous.route.filter((value) => value !== id) : [...previous.route, id] }))} />
+              </details>
+              <div aria-live="polite" aria-atomic="true" className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold text-text">{filteredDanfes.length} notas <span className="text-sm font-normal text-muted">de {visibleDanfes.length} na seleção</span></h2>
+                <span className="text-xs text-muted">{isFiltering ? 'Aplicando filtros…' : activeCompanyTab === 'all' ? 'Todas as empresas atendidas' : COMPANY_LABELS[activeCompanyTab] || activeCompanyTab}</span>
+              </div>
+              {filters.product.trim() && <div className="flex items-start gap-3 rounded-xl border semantic-panel-info p-3 text-sm">
+                <PackageSearch className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+                <div><strong>Conferência de produto: {filters.product.trim()}</strong>
+                  <p className="mt-1">{quickProductMatches.length} itens correspondentes em {filteredDanfes.length} notas. Cada nota mostra somente os produtos encontrados, com suas unidades.</p>
+                  <p className="mt-1 text-xs">O PDF mantém a lista completa de produtos das notas filtradas.</p>
                 </div>
-                <div className="w-full">
-                  <CardDanfes
-                    danfes={filteredDanfes}
-                    driverByInvoice={driverByInvoice}
-                    driverLoadingByInvoice={driverLoadingByInvoice}
-                    invoiceContextByNf={invoiceContextByNf}
-                    assignableTrips={assignableTrips}
-                    onAssignDanfeToTrip={handleAssignDanfeToTrip}
-                    onDanfeUpdated={handleDanfeUpdated}
+              </div>}
+              {dataDanfes.length === 0 ? <WorkspaceState kind="empty" title="Nenhuma nota nesta operação">Confira a data selecionada ou atualize após a importação dos XMLs.</WorkspaceState>
+                : filteredDanfes.length === 0 ? <WorkspaceState kind="empty" title="Nenhuma nota corresponde à busca" action={<WorkspaceButton onClick={resetFilters}>Limpar todos os filtros</WorkspaceButton>}>Experimente outro produto, cliente ou número de nota.</WorkspaceState>
+                : <ContainerDanfes data-tutorial="today-results" aria-busy={isFiltering}>
+                  <CardDanfes danfes={filteredDanfes} conferenceMode productSearch={deferredFilters.product}
+                    driverByInvoice={driverByInvoice} driverLoadingByInvoice={driverLoadingByInvoice} invoiceContextByNf={invoiceContextByNf}
+                    assignableTrips={tripsError ? [] : assignableTrips} onAssignDanfeToTrip={handleAssignDanfeToTrip} onDanfeUpdated={handleDanfeUpdated}
                     allowStatusActions={['admin', 'master', 'user', 'expedicao'].includes(localStorage.getItem('user_permission') || '')}
-                    driverErrorByInvoice={driverErrorByInvoice}
-                    showLegend={false}
-                  />
-                </div>
-              </>
-            )}
-          </ContainerDanfes>
-        )}
-        <ScrollToTopButton />
+                    driverErrorByInvoice={driverErrorByInvoice} showLegend={false} />
+                </ContainerDanfes>}
+            </>}
+          <ScrollToTopButton />
+        </main>
       </Container>
     </ContainerTodayInvoices>
   );

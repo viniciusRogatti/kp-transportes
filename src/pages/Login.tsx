@@ -38,6 +38,7 @@ import axios from 'axios';
 import { API_URL } from '../data';
 import { useNavigate } from 'react-router-dom';
 import verifyToken from '../utils/verifyToken';
+import { brand } from '../config/brand';
 import { getDefaultRouteByPermission } from '../utils/permissions';
 
 const CAPTCHA_REQUIRED_ERROR = 'Conclua a verificação de segurança para continuar.';
@@ -220,9 +221,9 @@ function Login() {
       <LoginCard>
         <HeroPanel>
           <div className="login-hero-topline">
-            <div className="login-wordmark login-wordmark-light" aria-label="KP Transportes">
-              <span className="login-monogram" aria-hidden="true">kp<span>.</span></span>
-              <span className="login-wordmark-name">TRANSPORTES<span>Conectando caminhos.</span></span>
+            <div className="login-wordmark login-wordmark-light" aria-label={brand.name}>
+              {brand.logoUrl ? <img src={brand.logoUrl} alt={brand.name} className="h-12 max-w-[160px] object-contain" /> : <span className="login-monogram" aria-hidden="true">{brand.shortName.toLowerCase()}<span>.</span></span>}
+              <span className="login-wordmark-name">{brand.wordmark}<span>{brand.tagline}</span></span>
             </div>
             <span className="login-edition" aria-hidden="true">EM MOVIMENTO</span>
           </div>
@@ -240,7 +241,7 @@ function Login() {
         </HeroPanel>
         <BoxLogin>
           <div className="login-access-topline">
-            <span className="login-platform-brand">KP<span> / </span>GESTÃO</span>
+            <span className="login-platform-brand">{brand.shortName}<span> / </span>GESTÃO</span>
             <span className="login-access-badge"><LockKeyhole aria-hidden="true" />Acesso corporativo</span>
           </div>
           <div className="login-access-content">
@@ -306,7 +307,7 @@ function Login() {
         </BoxLogin>
       </LoginCard>
       <footer className="login-page-footer">
-        <span>© {new Date().getFullYear()} KP Transportes</span>
+        <span>© {new Date().getFullYear()} {brand.name}</span>
         <span>Plataforma de gestão logística <span aria-hidden="true">·</span> v{APP_VERSION}</span>
       </footer>
     </Container>

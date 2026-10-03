@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
 import 'react-datepicker/dist/react-datepicker.css';
 import './tailwind.css';
+import { brand } from './config/brand';
+
+document.title = `${brand.name} · ${brand.productName}`;
 
 const queryClient = new QueryClient();
 

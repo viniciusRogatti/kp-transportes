@@ -1,6 +1,7 @@
 import { DeliveryStage } from './mapStyles';
 
 export type MonitoringDeliveryForMap = {
+  company_id?: number | null;
   invoice_number: string;
   customer_name: string;
   city: string;
@@ -82,6 +83,7 @@ export type GoogleDriverLocation = {
 
 const normalizeNumber = (value: unknown) => {
   if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
@@ -91,14 +93,16 @@ export const hasDeliveryCoordinates = (row: MonitoringDeliveryForMap) => {
   const latitude = normalizeNumber(row.geolocation.latitude);
   const longitude = normalizeNumber(row.geolocation.longitude);
   if (latitude === null || longitude === null) return false;
-  return !(latitude === 0 && longitude === 0);
+  return Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 && !(latitude === 0 && longitude === 0);
 };
+
+export const deliveryMapId = (row: Pick<MonitoringDeliveryForMap, 'company_id' | 'invoice_number'>) => `${row.company_id || 0}:${row.invoice_number}`;
 
 export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): GoogleDeliveryMapItem[] => {
   return rows
     .filter((row) => hasDeliveryCoordinates(row))
     .map((row) => ({
-      id: row.invoice_number,
+      id: deliveryMapId(row),
       lat: Number(row.geolocation.latitude),
       lng: Number(row.geolocation.longitude),
       status: row.stage,

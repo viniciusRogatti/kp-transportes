@@ -16,6 +16,7 @@ import { io, Socket } from 'socket.io-client';
 import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from '../components/maps/GoogleDeliveriesMap';
 import { MapMarkerPin } from '../components/maps/MapMarkerPin';
 import Header from '../components/Header';
+import { CustomerOperationsPanel } from './deliveryMonitoring/CustomerOperationsPanel';
 import { API_URL, COMPANY_LOCATION } from '../data';
 import { Container } from '../style/invoices';
 import {
@@ -26,6 +27,7 @@ import {
   STAGE_STYLE,
 } from './deliveryMonitoring/mapStyles';
 import {
+  deliveryMapId,
   toGoogleDeliveryMapItems,
   toGoogleDriverLocations,
 } from './deliveryMonitoring/googleMapAdapter';
@@ -53,6 +55,8 @@ import {
 
 type DeliveryRow = {
   company_id?: number | null;
+  customer_id?: string | null;
+  operational_locations?: { locations: { id: string; label: string }[]; selectedLocationId: string | null; locationSuggestion?: { explanation: string } | null };
   invoice_number: string;
   company?: {
     code: string;
@@ -463,6 +467,9 @@ const areSameCompany = (
 
 const areSameDeliveryRow = (left: DeliveryRow, right: DeliveryRow) => {
   return areSameCompany(left.company, right.company)
+    && left.company_id === right.company_id
+    && left.customer_id === right.customer_id
+    && JSON.stringify(left.operational_locations) === JSON.stringify(right.operational_locations)
     && left.invoice_number === right.invoice_number
     && left.customer_name === right.customer_name
     && left.city === right.city
@@ -563,9 +570,9 @@ const areSameDriverSummary = (left: DriverSummary, right: DriverSummary) => {
 
 const stabilizeRowsById = (nextRows: DeliveryRow[], prevRows: DeliveryRow[]) => {
   if (!prevRows.length) return nextRows;
-  const prevById = new Map(prevRows.map((row) => [row.invoice_number, row]));
+  const prevById = new Map(prevRows.map((row) => [`${row.company_id}:${row.invoice_number}`, row]));
   return nextRows.map((nextRow) => {
-    const prevRow = prevById.get(nextRow.invoice_number);
+    const prevRow = prevById.get(`${nextRow.company_id}:${nextRow.invoice_number}`);
     if (!prevRow) return nextRow;
     return areSameDeliveryRow(prevRow, nextRow) ? prevRow : nextRow;
   });
@@ -624,6 +631,7 @@ function DeliveryMonitoring() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(initialQueryRef.current.invoiceNumber);
+  const [selectedMapCompanyId, setSelectedMapCompanyId] = useState<number | null>(null);
   const [selectedDriverStop, setSelectedDriverStop] = useState<SelectedDriverStop | null>(null);
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
@@ -708,6 +716,7 @@ function DeliveryMonitoring() {
 
   useEffect(() => {
     setDate(monitoringQuery.date || getTodayMonitoringDate());
+    setSelectedMapCompanyId(null);
     setSelectedDeliveryInvoice(monitoringQuery.invoiceNumber);
   }, [monitoringQuery]);
 
@@ -1018,8 +1027,9 @@ function DeliveryMonitoring() {
   const selectedDelivery = useMemo(() => {
     if (!selectedDeliveryInvoice) return null;
     return companyFilteredDeliveries.find((row) => row.invoice_number === selectedDeliveryInvoice
+      && (selectedDriverStop || !selectedMapCompanyId || row.company_id === selectedMapCompanyId)
       && (!selectedDriverStop || (Number(row.trip_id) === selectedDriverStop.tripId && Number(row.sequence) === selectedDriverStop.sequence))) || null;
-  }, [companyFilteredDeliveries, selectedDeliveryInvoice, selectedDriverStop]);
+  }, [companyFilteredDeliveries, selectedDeliveryInvoice, selectedDriverStop, selectedMapCompanyId]);
 
   useEffect(() => {
     if (!selectedDeliveryInvoice) return;
@@ -1520,6 +1530,10 @@ function DeliveryMonitoring() {
         <div><dt className="text-muted">Motorista</dt><dd className="mt-1 font-semibold text-text">{delivery.driver_name || 'Não atribuído'}</dd></div>
         <div><dt className="text-muted">Viagem · parada</dt><dd className="mt-1 font-semibold text-text">{delivery.trip_id || '—'} · {delivery.sequence || '—'}</dd></div>
       </dl>
+      {delivery.operational_locations?.locationSuggestion ? <p className="mt-2 text-xs text-muted">{delivery.operational_locations.locationSuggestion.explanation}</p> : null}
+      {delivery.operational_locations?.locations.length ? <p className="mt-2 text-xs text-muted">Locais de entrega: {delivery.operational_locations.locations.map(point => `${point.label}${point.id === delivery.operational_locations?.selectedLocationId ? ' (no mapa)' : ''}`).join(' · ')}. Endereço fiscal preservado.</p> : null}
+      {delivery.geolocation.status === 'needs_selection' ? <p className="mt-2 text-xs text-muted">Há vários locais. Aguardando o motorista escolher o destino desta visita.</p> : null}
+      {delivery.company_id && delivery.customer_id ? <CustomerOperationsPanel key={`${delivery.company_id}:${delivery.customer_id}`} companyId={delivery.company_id} customerId={delivery.customer_id} /> : null}
     </div>
   );
 
@@ -2043,11 +2057,12 @@ function DeliveryMonitoring() {
               driverLocations={mapDriverLocations}
               companyMarker={companyMarker}
               selectedDriverId={selectedDriverId}
-              selectedDeliveryId={selectedDeliveryInvoice}
+              selectedDeliveryId={selectedDelivery ? deliveryMapId(selectedDelivery) : null}
               onMarkerClick={(deliveryId) => {
                 setSelectedDriverStop(null);
-                setSelectedDeliveryInvoice(deliveryId);
-                const delivery = filteredDeliveries.find((row) => row.invoice_number === deliveryId) || null;
+                const delivery = filteredDeliveries.find((row) => deliveryMapId(row) === deliveryId) || null;
+                setSelectedDeliveryInvoice(delivery?.invoice_number || null);
+                setSelectedMapCompanyId(delivery?.company_id || null);
                 if (delivery?.driver_id) {
                   setSelectedDriverId(Number(delivery.driver_id));
                 }
@@ -2185,7 +2200,7 @@ function DeliveryMonitoring() {
                       type="button"
                       onClick={() => {
                         if (alert.driver_id) setSelectedDriverId(alert.driver_id);
-                        if (alert.nf_number) setSelectedDeliveryInvoice(alert.nf_number);
+                        if (alert.nf_number) { setSelectedMapCompanyId(null); setSelectedDeliveryInvoice(alert.nf_number); }
                       }}
                       className="block w-full px-3 py-2 text-left transition hover:bg-white/35"
                     >

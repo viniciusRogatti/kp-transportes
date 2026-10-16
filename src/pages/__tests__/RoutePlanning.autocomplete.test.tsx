@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
 import { pdf } from '@react-pdf/renderer';
@@ -54,9 +54,9 @@ async function openEdition() {
   renderPage();
   fireEvent.click(await screen.findByRole('button', { name: 'Viagens' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Editar rota' }));
-  const dialog = await screen.findByRole('dialog', { name: 'Editar viagem' });
-  await within(dialog).findByRole('button', { name: 'Adicionar' });
-  return { dialog, trip };
+  await screen.findByText(/Modo edição: rota #77/);
+  expect(await screen.findAllByLabelText('Editar ordem da NF 123')).toHaveLength(2);
+  return { trip };
 }
 
 function formatTestDate() {
@@ -295,116 +295,46 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Viagens' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Editar rota' }));
-    expect(await screen.findByText(/NF 8888/)).toBeInTheDocument();
+    expect(await screen.findByText(/Modo edição: rota #77/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Editar viagem' })).not.toBeInTheDocument();
     expect(mockedAxios.get).toHaveBeenCalledWith(expect.stringMatching(/\/danfes$/), expect.objectContaining({ params: expect.objectContaining({ view: 'routing', includeRoutingBacklog: true }) }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByLabelText('Selecionar cidade')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Exibir' }));
+    expect(await screen.findByRole('option', { name: /Campinas · 1 nota/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Sair do modo edição/ }));
     expect(screen.queryByText(/Modo edição: rota/)).not.toBeInTheDocument();
   });
 
-  it('retira somente a empresa selecionada, mantém entregues bloqueadas e não grava a prévia', async () => {
-    const { dialog } = await openEdition();
-    const view = within(dialog);
-    expect(view.getByText(/ABC-1234/)).toBeInTheDocument();
-    expect(view.getByRole('button', { name: 'Retirar NF 456 da empresa 1 da prévia' })).toBeDisabled();
-    fireEvent.click(view.getByRole('button', { name: 'Retirar NF 123 da empresa 1 da prévia' }));
-    expect(view.queryByText(/Cliente Mar/)).not.toBeInTheDocument();
-    expect(view.getByText(/Cliente Pronto/)).toBeInTheDocument();
-    expect(view.getByText(/2 nota\(s\) na prévia · 0 a incluir · 1 a retirar/)).toBeInTheDocument();
-    expect(view.getByRole('status')).toHaveTextContent('retirada da prévia');
-    fireEvent.click(view.getByRole('button', { name: 'Adicionar' }));
-    expect(view.getByText(/3 nota\(s\) na prévia · 1 a incluir · 1 a retirar/)).toBeInTheDocument();
-    expect(view.queryByRole('button', { name: 'Adicionar' })).not.toBeInTheDocument();
-    expect(mockedAxios.put).not.toHaveBeenCalled();
-    fireEvent.click(view.getByRole('button', { name: 'Cancelar' }));
-    expect(screen.queryByRole('dialog', { name: 'Editar viagem' })).not.toBeInTheDocument();
-    expect(mockedAxios.put).not.toHaveBeenCalled();
-  });
-
-  it('bloqueia envio repetido e edição durante a gravação, preservando a prévia quando falha', async () => {
-    const { dialog } = await openEdition();
-    const view = within(dialog);
-    let rejectSave!: (error: Error) => void;
-    mockedAxios.put.mockImplementation(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
-    fireEvent.click(view.getByRole('button', { name: 'Adicionar' }));
-    const save = view.getByRole('button', { name: 'Salvar alterações' });
-    fireEvent.click(save);
-    fireEvent.click(save);
-    expect(mockedAxios.put).toHaveBeenCalledTimes(1);
-    expect(save).toBeDisabled();
-    expect(view.getByRole('button', { name: 'Fechar' })).toBeDisabled();
-    expect(view.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
-    expect(view.getByRole('textbox', { name: 'Filtrar notas disponíveis' })).toBeDisabled();
-    await act(async () => { rejectSave(new Error('Falha simulada')); });
-    expect(view.getByRole('alert')).toHaveTextContent('Algumas alterações podem já ter sido aplicadas');
-    expect(view.getByText(/1 a incluir · 0 a retirar/)).toBeInTheDocument();
-    expect(view.getByRole('button', { name: 'Salvar alterações' })).toBeEnabled();
-  });
-
-  it('informa busca vazia sem alterar as notas da prévia', async () => {
-    const { dialog } = await openEdition();
-    const view = within(dialog);
-    fireEvent.change(view.getByRole('textbox', { name: 'Filtrar notas disponíveis' }), { target: { value: 'inexistente' } });
-    expect(view.getByText('Nenhuma nota corresponde à busca.')).toBeInTheDocument();
-    expect(view.getByText(/3 nota\(s\) na prévia/)).toBeInTheDocument();
-  });
-
-  it('envia retiradas juntas sem reset de status separado e interrompe a edição se o backend recusar', async () => {
-    const { dialog } = await openEdition();
-    const view = within(dialog);
-    mockedAxios.put.mockRejectedValue({ response: { data: { error: 'A NF está em andamento.' } } });
-    fireEvent.click(view.getByRole('button', { name: 'Retirar NF 123 da empresa 1 da prévia' }));
-    fireEvent.click(view.getByRole('button', { name: 'Retirar NF 123 da empresa 2 da prévia' }));
-    fireEvent.click(view.getByRole('button', { name: 'Adicionar' }));
-    fireEvent.click(view.getByRole('button', { name: 'Salvar alterações' }));
-    expect(await view.findByRole('alert')).toHaveTextContent('A NF está em andamento.');
-    expect(mockedAxios.put).toHaveBeenCalledTimes(1);
-    expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringMatching(/\/trips\/remove-note\/77$/),
-      { noteIds: [11, 12] }, expect.objectContaining({ headers: expect.any(Object) }));
-    expect(view.getByText(/1 a incluir · 2 a retirar/)).toBeInTheDocument();
-  });
-
-  it('retira pela lista principal sem chamada extra de status e preserva a NF homônima', async () => {
-    const { dialog } = await openEdition();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
-    mockedAxios.put.mockResolvedValue({ data: { id: 11 } });
+  it('mostra os cards diretamente, mantém notas finalizadas bloqueadas e preserva a NF homônima no rascunho', async () => {
+    await openEdition();
     const list = within(screen.getByLabelText('Notas adicionadas à viagem'));
+    expect(list.getByText(/Cliente Mar/)).toBeInTheDocument();
+    expect(list.getByText(/Cliente Pronto/)).toBeInTheDocument();
+    expect(list.getAllByRole('button', { name: 'Remover' })[2]).toBeDisabled();
     fireEvent.click(list.getAllByRole('button', { name: 'Remover' })[0]);
     await waitFor(() => {
       const updatedList = within(screen.getByLabelText('Notas adicionadas à viagem'));
       expect(updatedList.queryByText(/Cliente Mar/)).not.toBeInTheDocument();
       expect(updatedList.getByText(/Cliente Pronto/)).toBeInTheDocument();
     });
-    expect(mockedAxios.put).toHaveBeenCalledTimes(1);
-    expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringMatching(/\/trips\/remove-note\/77$/),
-      { noteId: 11 }, expect.objectContaining({ headers: expect.any(Object) }));
+    expect(mockedAxios.put).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Sair do modo edição/ }));
+    expect(mockedAxios.put).not.toHaveBeenCalled();
   });
 
-  it('atualiza o rascunho após salvar e não apresenta falha de atualização como falha na gravação', async () => {
-    const { dialog, trip } = await openEdition();
-    const view = within(dialog);
-    let saved = false;
-    let savedReads = 0;
-    const originalGet = mockedAxios.get.getMockImplementation()!;
-    mockedAxios.put.mockImplementation(() => { saved = true; return Promise.resolve({ data: {} }); });
-    mockedAxios.get.mockImplementation((url: string, config?: any) => {
-      if (saved && url.includes('/trips/search/date/')) {
-        savedReads += 1;
-        if (savedReads > 2) return Promise.reject(new Error('Falha de atualização após salvar'));
-        return Promise.resolve({ data: [{ ...trip, TripNotes: [...trip.TripNotes,
-          { id: 14, company_id: 1, invoice_number: '999', customer_name: 'Cliente disponível', city: 'Campinas', order: 4, status: 'assigned', gross_weight: '15' },
-        ] }] });
-      }
-      return originalGet(url, config);
-    });
-    fireEvent.click(view.getByRole('button', { name: 'Adicionar' }));
-    fireEvent.click(view.getByRole('button', { name: 'Salvar alterações' }));
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar viagem' })).not.toBeInTheDocument());
-    expect(await screen.findByLabelText('Editar ordem da NF 999')).toBeInTheDocument();
-    expect(mockedAxios.put).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('Rota atualizada com sucesso.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Entendi' }));
-    expect(await screen.findByText(/A rota foi salva, mas não foi possível atualizar todas as listas/)).toBeInTheDocument();
+  it('envia juntas as retiradas do modo de edição somente ao atualizar a viagem', async () => {
+    await openEdition();
+    mockedAxios.put.mockResolvedValue({ data: {} });
+    const list = within(screen.getByLabelText('Notas adicionadas à viagem'));
+    fireEvent.click(list.getAllByRole('button', { name: 'Remover' })[0]);
+    fireEvent.click(within(screen.getByLabelText('Notas adicionadas à viagem')).getAllByRole('button', { name: 'Remover' })[0]);
+    expect(mockedAxios.put).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Não imprimir' }));
+
+    await waitFor(() => expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringMatching(/\/trips\/remove-note\/77$/),
+      { noteIds: [11, 12] }, expect.objectContaining({ headers: expect.any(Object) })));
   });
 
 });

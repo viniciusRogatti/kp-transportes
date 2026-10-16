@@ -828,7 +828,7 @@ function RoutePlanning() {
       assignment,
       activeReturn,
     });
-  }, [extractActiveReturnInfo, searchReturnBatchesByInvoiceNumber, searchTripsByInvoiceNumber]);
+  }, [extractActiveReturnInfo, searchReturnBatchesByInvoiceNumber, searchTripsByInvoiceNumber, tripToUpdate?.id]);
 
   const appendDanfeToRoute = useCallback((danfeData: RouteLookupDanfe) => {
     const sanitizedDanfe = sanitizeRouteLookupDanfe(danfeData);

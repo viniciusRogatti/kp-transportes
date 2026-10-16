@@ -93,6 +93,7 @@ export const getRoutePlanningStatusLabel = (status: unknown) => {
 export const findActiveAssignmentForInvoice = (
   trips: ITrip[] = [],
   invoiceNumber: string,
+  companyId?: number | null,
 ): RouteAssignmentInfo | null => {
   const normalizedInvoiceNumber = normalizeInvoiceNumber(invoiceNumber);
   if (!normalizedInvoiceNumber) return null;
@@ -100,6 +101,7 @@ export const findActiveAssignmentForInvoice = (
   const matchingTrip = trips.find((trip) => isRoutePlanningTripActive(trip)
     && (trip.TripNotes || []).some((note) => (
       normalizeInvoiceNumber(note.invoice_number) === normalizedInvoiceNumber
+      && (!companyId || Number(note.company_id) === Number(companyId))
       && !isRouteFinalStatus(note.status)
     )));
 
@@ -107,6 +109,7 @@ export const findActiveAssignmentForInvoice = (
 
   const matchingNote = (matchingTrip.TripNotes || []).find((note) => (
     normalizeInvoiceNumber(note.invoice_number) === normalizedInvoiceNumber
+      && (!companyId || Number(note.company_id) === Number(companyId))
     && !isRouteFinalStatus(note.status)
   ));
 
@@ -137,6 +140,16 @@ export const evaluateRoutePlanningDecision = ({
   const invoiceNumber = normalizeInvoiceNumber(danfe.invoice_number);
   const status = normalizeRoutePlanningStatus(danfe.status);
 
+  if (assignment && ['', 'pending', 'assigned'].includes(status)) {
+    return {
+      outcome: 'assignment_conflict',
+      reason: 'assigned_to_other_route',
+      title: `NF ${invoiceNumber} ja esta atribuida`,
+      message: `A NF ${invoiceNumber} ja foi atribuida a outra rota e precisa ser removida antes da reatribuicao.`,
+      assignment,
+    };
+  }
+
   if (canDanfeBeRoutedDirectly(status)) {
     return {
       outcome: 'allow',
@@ -149,16 +162,6 @@ export const evaluateRoutePlanningDecision = ({
   }
 
   if (status === 'assigned') {
-    if (assignment) {
-      return {
-        outcome: 'assignment_conflict',
-        reason: 'assigned_to_other_route',
-        title: `NF ${invoiceNumber} ja esta atribuida`,
-        message: `A NF ${invoiceNumber} ja foi atribuida a outra rota e precisa ser removida antes da reatribuicao.`,
-        assignment,
-      };
-    }
-
     return {
       outcome: 'allow',
       reason: 'stale_assignment',

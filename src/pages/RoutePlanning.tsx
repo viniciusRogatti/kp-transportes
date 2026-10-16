@@ -812,12 +812,12 @@ function RoutePlanning() {
     const normalizedStatus = normalizeRoutePlanningStatus(danfeData.status);
 
     const [tripRows, returnBatches] = await Promise.all([
-      normalizedStatus === 'assigned' ? searchTripsByInvoiceNumber(invoiceNumber, danfeData.company_id) : Promise.resolve([] as ITrip[]),
+      ['', 'pending', 'assigned'].includes(normalizedStatus) ? searchTripsByInvoiceNumber(invoiceNumber, danfeData.company_id) : Promise.resolve([] as ITrip[]),
       normalizedStatus === 'returned' ? searchReturnBatchesByInvoiceNumber(invoiceNumber) : Promise.resolve([] as IReturnBatch[]),
     ]);
 
-    const assignment = normalizedStatus === 'assigned'
-      ? findActiveAssignmentForInvoice(tripRows, invoiceNumber)
+    const assignment = ['', 'pending', 'assigned'].includes(normalizedStatus)
+      ? findActiveAssignmentForInvoice(tripRows.filter((trip) => Number(trip.id) !== Number(tripToUpdate?.id)), invoiceNumber, danfeData.company_id)
       : null;
     const activeReturn = normalizedStatus === 'returned'
       ? extractActiveReturnInfo(returnBatches, invoiceNumber)

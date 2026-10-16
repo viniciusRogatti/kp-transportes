@@ -59,6 +59,19 @@ function buildDanfe(overrides: Partial<IDanfe> = {}): IDanfe {
 }
 
 describe('routePlanningRules', () => {
+  it.each([1, 2, 3])('isola a atribuicao pela empresa %s e avisa mesmo com status pendente', (companyId) => {
+    const trips = [1, 2, 3].map((id) => buildTrip({
+      id,
+      TripNotes: [{ id: id * 10, company_id: id, invoice_number: '1722001', status: 'assigned', order: 1, city: 'Campinas', gross_weight: '10' }],
+    }));
+    const assignment = findActiveAssignmentForInvoice(trips, '1722001', companyId);
+    expect(assignment?.tripId).toBe(companyId);
+    for (const status of ['', 'pending', 'assigned']) {
+      expect(evaluateRoutePlanningDecision({ danfe: buildDanfe({ status }), assignment }).outcome).toBe('assignment_conflict');
+    }
+    expect(evaluateRoutePlanningDecision({ danfe: buildDanfe({ status: 'redelivery' }), assignment }).outcome).toBe('allow');
+  });
+
   it('libera NF pendente e NF de reentrega para roteirizacao', () => {
     const pendingDecision = evaluateRoutePlanningDecision({
       danfe: buildDanfe({

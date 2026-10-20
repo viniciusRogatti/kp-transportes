@@ -28,6 +28,20 @@ const bag = {
 } as ReceiptBag;
 
 describe('ConferencePanel por teclado', () => {
+  it('permite finalizar um malote vazio apos os documentos serem resolvidos em outro malote', async () => {
+    const onFinish = jest.fn();
+    render(<ConferencePanel
+      bag={{ ...bag, items: [], counts: { ...bag.counts, expected: 0, pending: 0 } }}
+      items={[]} selectedItem={null} itemFilter="all" itemSearch="" extraInvoice=""
+      error="" feedback="" mutating={false} onClose={jest.fn()} onSelect={jest.fn()}
+      onFilter={jest.fn()} onSearch={jest.fn()} onExtraChange={jest.fn()} onExtra={jest.fn()}
+      onMutate={jest.fn()} onMarkRemaining={jest.fn()} onFinish={onFinish}
+    />);
+    const dialog = await screen.findByRole('dialog', { name: 'Malote sem documentos pendentes' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Finalizar rota' }));
+    expect(onFinish).toHaveBeenCalledTimes(1);
+  });
+
   it('separa malotes pendentes, atrasados e conferidos nos filtros da lista', () => {
     const pending = { status: 'in_progress', is_overdue: false } as ReceiptBagListRow;
     const overduePending = { status: 'in_progress', is_overdue: true } as ReceiptBagListRow;

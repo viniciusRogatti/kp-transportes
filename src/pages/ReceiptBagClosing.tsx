@@ -944,8 +944,7 @@ export function ConferencePanel(props: ConferenceProps) {
   const [finishPromptOpen, setFinishPromptOpen] = useState(false);
   const [keyboardCandidateId, setKeyboardCandidateId] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const canFinish = bag.items.length > 0
-    && bag.items.every((item) => item.status !== 'pending')
+  const canFinish = bag.items.every((item) => item.status !== 'pending')
     && bag.items.every((item) => (
       !CLOSED_STATUSES.includes(item.status)
       || item.status === 'resolved_elsewhere'
@@ -1132,7 +1131,7 @@ function FinishConferenceDialog({ bag, mutating, onClose, onFinish }: {
       <section role="dialog" aria-modal="true" aria-labelledby="finish-conference-title" className="w-full max-w-md overflow-hidden rounded-2xl border border-emerald-500/50 bg-surface text-text shadow-2xl">
         <div className="border-b border-border semantic-panel-success p-5">
           <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-600 text-white"><PackageCheck className="h-6 w-6" /></span>
-          <h3 id="finish-conference-title" className="mt-3 text-xl font-black">Todos os canhotos foram conferidos</h3>
+          <h3 id="finish-conference-title" className="mt-3 text-xl font-black">{bag.items.length ? 'Todos os canhotos foram conferidos' : 'Malote sem documentos pendentes'}</h3>
           <p className="mt-1 text-sm text-muted">Finalize a rota #{bag.trip_id} para voltar à lista e escolher o próximo malote.</p>
         </div>
         <div className="grid grid-cols-3 gap-2 p-4 text-center text-xs">

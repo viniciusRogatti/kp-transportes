@@ -1,3 +1,4 @@
+import { locationChangeLabel, type CustomerLocationChange } from './deliveryMonitoring/locationChange';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import axios from 'axios';
 import { format, parseISO } from 'date-fns';
@@ -28,6 +29,7 @@ import {
 } from './deliveryMonitoring/mapStyles';
 import {
   deliveryMapId,
+  hasDeliveryCoordinates,
   toGoogleDeliveryMapItems,
   toGoogleDriverLocations,
 } from './deliveryMonitoring/googleMapAdapter';
@@ -54,6 +56,7 @@ import {
 } from './deliveryMonitoring/stopStatusActions';
 
 type DeliveryRow = {
+  location_change?: CustomerLocationChange | null;
   company_id?: number | null;
   customer_id?: string | null;
   operational_locations?: { locations: { id: string; label: string }[]; selectedLocationId: string | null; locationSuggestion?: { explanation: string } | null };
@@ -637,6 +640,7 @@ function DeliveryMonitoring() {
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState('');
+  const [locationNotice, setLocationNotice] = useState<{ invoice: string; companyId: number; tripId: number } | null>(null);
   const [diagnosticsUnavailable, setDiagnosticsUnavailable] = useState(false);
   const [stopStatusUpdate, setStopStatusUpdate] = useState<StopStatusUpdateState | null>(null);
   const [stopStatusFeedback, setStopStatusFeedback] = useState<StopStatusFeedback | null>(null);
@@ -826,7 +830,8 @@ function DeliveryMonitoring() {
       startFallbackPolling();
     });
 
-    socket.on('delivery_monitoring_status', () => {
+    socket.on('delivery_monitoring_status', (event: { type?: string; change_kind?: string; invoice_number?: string; invoice_company_id?: number; trip_id?: number } | undefined) => {
+      if (event?.type === 'customer_location_updated' && event.change_kind === 'confirmed' && event.invoice_number && Number(event.invoice_company_id) > 0 && Number(event.trip_id) > 0) setLocationNotice({ invoice: String(event.invoice_number), companyId: Number(event.invoice_company_id), tripId: Number(event.trip_id) });
       scheduleRefresh();
     });
     socket.on('delivery_monitoring_alert', () => {
@@ -1523,6 +1528,7 @@ function DeliveryMonitoring() {
   const renderDeliveryDetails = (delivery: DeliveryRow) => (
     <div aria-label={`Detalhes da entrega NF ${delivery.invoice_number}`} className="mt-3 rounded-xl border border-border semantic-panel-info p-3">
       <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted">Detalhes da entrega</p>
+      {delivery.location_change ? <div role="status" className="mb-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-text"><p className="font-semibold">Local atualizado pelo motorista</p><p>{locationChangeLabel(delivery.location_change)}</p><p>{delivery.location_change.label} · {hasDeliveryCoordinates(delivery) ? 'Pin na nova localização.' : 'Coordenadas indisponíveis para mostrar o pin.'} O endereço fiscal abaixo foi preservado.</p></div> : null}
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <div className="col-span-2"><dt className="text-muted">Endereço de entrega</dt><dd className="mt-1 break-words font-semibold text-text">{[delivery.address, delivery.address_number].filter(Boolean).join(', ') || 'Não informado'}</dd><dd className="mt-1 text-muted">{[delivery.neighborhood, [delivery.city, delivery.state].filter(Boolean).join('/')].filter(Boolean).join(' · ')}</dd></div>
         <div><dt className="text-muted">Situação operacional</dt><dd className="mt-1 font-semibold text-text">{getOperationalStatusLabel(delivery.stop_status || delivery.danfe_status, 'Não informada')}</dd></div>
@@ -1698,6 +1704,7 @@ function DeliveryMonitoring() {
           </div>
 
           <p className="mt-3 text-xs text-muted">Resumo da data e empresa selecionadas. O filtro de etapa refina a lista e o mapa; o progresso mostra a viagem completa nesse recorte.</p>
+          {locationNotice ? <div role="status" aria-live="polite" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-text"><p className="flex-1">Local de entrega atualizado pelo motorista · NF {locationNotice.invoice} · empresa {locationNotice.companyId} · viagem #{locationNotice.tripId}. Atualização recebida para consulta no mapa e nos detalhes.</p><button type="button" className="min-h-[44px] rounded-lg border border-border px-3" onClick={() => setLocationNotice(null)}>Dispensar aviso de localização</button></div> : null}
           {loadError && <div role="alert" className="mt-3 rounded-lg border semantic-panel-danger p-3 text-sm">
             <strong>{loadError}</strong>
             <p className="mt-1">{overview ? 'Os dados abaixo são da última consulta bem-sucedida e podem estar desatualizados.' : 'Os dados desta data estão indisponíveis. Isso não significa ausência de entregas ou pendências.'} Use Atualizar para tentar novamente.</p>
@@ -2110,6 +2117,7 @@ function DeliveryMonitoring() {
               />
               Posição recebida do motorista
             </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"><span className="rounded-full bg-blue-600 px-1.5 font-bold text-white">↻</span> Local atualizado pelo motorista</span>
           </div>
 
           <p className="mt-1 text-xs text-muted">
@@ -2149,7 +2157,7 @@ function DeliveryMonitoring() {
                 {listRows.map((row) => (
                   <tr key={`list-${resolveCompanyCode(row.company)}-${row.trip_id}-${row.sequence}-${row.invoice_number}`} className="border-b border-border/60 hover:bg-surface-2">
                     <td className="px-2 py-2 font-semibold">{row.invoice_number}</td>
-                    <td className="px-2 py-2">{row.customer_name || '-'}</td>
+                    <td className="px-2 py-2">{row.customer_name || '-'}{row.location_change ? <span title={locationChangeLabel(row.location_change)} className="mt-1 block text-xs font-semibold text-blue-600 dark:text-blue-400">↻ Local atualizado pelo motorista</span> : null}</td>
                     <td className="px-2 py-2">
                       <span
                         className="inline-flex rounded-full border px-2 py-0.5"

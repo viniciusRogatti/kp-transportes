@@ -1,7 +1,9 @@
+import type { CustomerLocationChange } from './locationChange';
 import { DeliveryStage } from './mapStyles';
 
 export type MonitoringDeliveryForMap = {
   company_id?: number | null;
+  location_change?: CustomerLocationChange | null;
   invoice_number: string;
   customer_name: string;
   city: string;
@@ -65,6 +67,7 @@ export type GoogleDeliveryMapItem = {
   state: string;
   zipCode: string;
   driverName: string | null;
+  locationChange?: CustomerLocationChange | null;
   lastUpdatedAt: string | null;
 };
 
@@ -120,6 +123,7 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
       zipCode: row.zip_code || '',
       driverName: row.driver_name,
       lastUpdatedAt: row.geolocation.last_geocoded_at || null,
+      locationChange: row.location_change || null,
     }));
 };
 

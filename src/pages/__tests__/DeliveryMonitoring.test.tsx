@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import DeliveryMonitoring from '../DeliveryMonitoring';
 import { showConfirm } from '../../utils/dialog';
 
 let mockLocationSearch = '';
+const mockSocketOn = jest.fn();
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -20,7 +21,7 @@ jest.mock('react-router', () => ({
 }));
 jest.mock('socket.io-client', () => ({
   io: () => ({
-    on: jest.fn(),
+    on: mockSocketOn,
     removeAllListeners: jest.fn(),
     disconnect: jest.fn(),
   }),
@@ -181,6 +182,34 @@ describe('DeliveryMonitoring', () => {
   afterEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+  });
+
+  it('preserva o endereço fiscal e sinaliza o local atualizado nos detalhes e após recarregar os dados', async () => {
+    const original = mockedAxios.get.getMockImplementation()!;
+    mockedAxios.get.mockImplementation((url, config) => {
+      if (String(url).includes('/address-diagnostics')) return original(url, config);
+      const overview = buildOverview('on_the_way', String((config as { params?: { date?: string } } | undefined)?.params?.date || '2026-03-23'));
+      const delivery = overview.deliveries[0] as typeof overview.deliveries[number] & { location_change?: object };
+      delivery.location_change = { locationId: '1001', label: 'Entrada correta', kind: 'sole', changedAt: '2026-10-22T12:00:00Z', driverId: 7, driverName: 'Jonathan Teste' };
+      return Promise.resolve({ data: overview } as never);
+    });
+    render(<DeliveryMonitoring />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' }));
+    expect(screen.getAllByText('Local atualizado pelo motorista').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Único local corrigido por Jonathan Teste/)).toBeInTheDocument();
+    expect(screen.getByText('Rua A, 100')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    await waitFor(() => expect(screen.getByText(/Único local corrigido por Jonathan Teste/)).toBeInTheDocument());
+  });
+
+  it('notifica uma alteração de local recebida no socket com identidade de empresa e viagem', async () => {
+    render(<DeliveryMonitoring />);
+    await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' });
+    const callback = mockSocketOn.mock.calls.find(call => call[0] === 'delivery_monitoring_status')![1];
+    act(() => callback({ type: 'customer_location_updated', change_kind: 'confirmed', invoice_number: '123456', invoice_company_id: 2, trip_id: 11 }));
+    expect(screen.getByText(/Local de entrega atualizado pelo motorista · NF 123456 · empresa 2 · viagem #11/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dispensar aviso de localização' }));
+    expect(screen.queryByText(/Local de entrega atualizado pelo motorista · NF/)).not.toBeInTheDocument();
   });
 
   it('distingue falha inicial de uma lista vazia e permite recuperar a consulta', async () => {

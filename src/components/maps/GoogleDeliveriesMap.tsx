@@ -1,3 +1,4 @@
+import { locationChangeLabel } from '../../pages/deliveryMonitoring/locationChange';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GoogleMap,
@@ -337,6 +338,7 @@ function GoogleDeliveriesMap({
                 y: Math.round(-height),
               })}
             >
+              <div className="relative">
               <MapMarkerPin
                 icon={Icon}
                 tone={markerTone}
@@ -346,7 +348,7 @@ function GoogleDeliveriesMap({
                 interactive
                 selected={isSelected}
                 dimmed={isDimmed}
-                title={`Selecionar entrega ${delivery.label}`}
+                title={`Selecionar entrega ${delivery.label}${delivery.locationChange ? ' · Local atualizado pelo motorista' : ''}`}
                 onClick={(event) => {
                   event.stopPropagation();
                   onMarkerClick(delivery.id);
@@ -367,6 +369,8 @@ function GoogleDeliveriesMap({
                   zIndex: isSelected ? 950 : isDimmed ? 120 : 500,
                 }}
               />
+              {delivery.locationChange ? <span aria-hidden="true" title={locationChangeLabel(delivery.locationChange)} className="pointer-events-none absolute -right-1 -top-1 rounded-full border-2 border-white bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">↻</span> : null}
+              </div>
             </OverlayViewF>
           );
         })}
@@ -473,6 +477,7 @@ function GoogleDeliveriesMap({
             <div className="space-y-0.5 text-xs" style={{ color: '#000000' }}>
               <div className="font-semibold">{openedInfoDelivery.label}</div>
               <div>{openedInfoDelivery.customerName}</div>
+              {openedInfoDelivery.locationChange ? <div className="rounded border border-blue-300 bg-blue-50 p-2"><strong>Local atualizado pelo motorista</strong><div>{openedInfoDelivery.locationChange.label}</div><div>{locationChangeLabel(openedInfoDelivery.locationChange)}</div><div>Pin no local operacional. Endereço fiscal preservado abaixo.</div></div> : null}
               <div>{`${openedInfoDelivery.address}, ${openedInfoDelivery.addressNumber}`}</div>
               <div>{`${openedInfoDelivery.neighborhood} • ${openedInfoDelivery.city}${openedInfoDelivery.state ? `/${openedInfoDelivery.state}` : ''}`}</div>
               {openedInfoDelivery.zipCode ? <div>{`CEP ${openedInfoDelivery.zipCode}`}</div> : null}

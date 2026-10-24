@@ -5,6 +5,8 @@ import {
   Navigation,
   Package,
   Truck,
+  RotateCcw,
+  FileClock,
   type LucideIcon,
 } from 'lucide-react';
 import type { MapMarkerPinTone } from '../../components/maps/MapMarkerPin';
@@ -17,8 +19,8 @@ import { type DeliveryStage } from './mapStyles';
 const DEFAULT_BORDER = '#0f172a';
 const DEFAULT_ICON_COLOR = '#111827';
 const DEFAULT_ICON_FILL = '#ffffff';
-const DRIVER_DIMMED_OPACITY = 0.95;
-const DELIVERY_DIMMED_OPACITY = 1;
+const DRIVER_OPACITY = 1;
+const DELIVERY_OPACITY = 0.9;
 
 const RETURN_STATUSES = new Set(['returned', 'redelivery', 'cancelled']);
 const RETAINED_STATUSES = new Set(['retained']);
@@ -70,23 +72,23 @@ export const getDeliveryMarkerStyleByStatus = (
 ): MapMarkerPinTone => {
   if (isReturnFlow(delivery)) {
     return {
-      backgroundColor: MARKER_COLOR.red,
+      backgroundColor: '#fecaca',
       borderColor: DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: DELIVERY_DIMMED_OPACITY,
-      shadowColor: 'rgba(239, 68, 68, 0.42)',
+      opacity: 0.34,
+      shadowColor: 'transparent',
     };
   }
 
   if (isRetainedFlow(delivery)) {
     return {
-      backgroundColor: MARKER_COLOR.orange,
+      backgroundColor: '#fed7aa',
       borderColor: DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: DELIVERY_DIMMED_OPACITY,
-      shadowColor: 'rgba(249, 115, 22, 0.38)',
+      opacity: 0.4,
+      shadowColor: 'transparent',
     };
   }
 
@@ -96,7 +98,7 @@ export const getDeliveryMarkerStyleByStatus = (
       borderColor: delivery.driverColor || DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: DELIVERY_DIMMED_OPACITY,
+      opacity: 1, haloColor: '#ffffff',
       shadowColor: 'rgba(250, 204, 21, 0.42)',
     };
   }
@@ -107,26 +109,26 @@ export const getDeliveryMarkerStyleByStatus = (
       borderColor: DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: DELIVERY_DIMMED_OPACITY,
+      opacity: 1, haloColor: '#ffffff',
       shadowColor: 'rgba(59, 130, 246, 0.35)',
     };
   }
 
   if (delivery.status === 'completed') {
     return {
-      backgroundColor: MARKER_COLOR.green,
+      backgroundColor: '#bbf7d0',
       borderColor: DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: 0.58,
-      shadowColor: 'rgba(34, 197, 94, 0.28)',
+      opacity: 0.32,
+      shadowColor: 'transparent',
     };
   }
 
   if (delivery.status === 'pending_receipt') {
     return {
       backgroundColor: '#bbf7d0', borderColor: '#16a34a', iconColor: '#166534', iconFill: 'transparent',
-      opacity: 0.62, shadowColor: 'rgba(34, 197, 94, 0.18)',
+      opacity: 0.4, shadowColor: 'transparent',
     };
   }
 
@@ -136,7 +138,7 @@ export const getDeliveryMarkerStyleByStatus = (
       borderColor: DEFAULT_BORDER,
       iconColor: DEFAULT_ICON_COLOR,
       iconFill: DEFAULT_ICON_FILL,
-      opacity: DELIVERY_DIMMED_OPACITY,
+      opacity: DELIVERY_OPACITY,
       shadowColor: 'rgba(15, 23, 42, 0.22)',
     };
   }
@@ -146,9 +148,22 @@ export const getDeliveryMarkerStyleByStatus = (
     borderColor: '#475569',
     iconColor: DEFAULT_ICON_COLOR,
     iconFill: DEFAULT_ICON_FILL,
-    opacity: DELIVERY_DIMMED_OPACITY,
+    opacity: DELIVERY_OPACITY,
     shadowColor: 'rgba(15, 23, 42, 0.18)',
   };
+};
+
+export const getDeliveryMarkerIcon = (delivery: DeliveryMarkerVisualInput): LucideIcon => {
+  if (isReturnFlow(delivery)) return RotateCcw;
+  if (isRetainedFlow(delivery)) return FileClock;
+  return DELIVERY_STAGE_ICONS[delivery.status];
+};
+
+// Operational priority controls size and stacking as well as color.
+export const getDeliveryMarkerPriority = (delivery: DeliveryMarkerVisualInput) => {
+  if (isReturnFlow(delivery) || isRetainedFlow(delivery) || delivery.status === 'completed' || delivery.status === 'pending_receipt') return { scale: 0.8, zIndex: 200 };
+  if (delivery.status === 'on_the_way' || delivery.status === 'on_site') return { scale: 1.25, zIndex: 700 };
+  return { scale: 1, zIndex: 450 };
 };
 
 export const getDriverMarkerStyle = (driver: Pick<GoogleDriverLocation, 'color' | 'attentionLevel'>): MapMarkerPinTone => {
@@ -159,14 +174,15 @@ export const getDriverMarkerStyle = (driver: Pick<GoogleDriverLocation, 'color' 
       : DEFAULT_BORDER;
 
   return {
-    backgroundColor: driver.color || '#475569',
-    borderColor: attentionBorder,
-    iconColor: DEFAULT_ICON_COLOR,
-    iconFill: DEFAULT_ICON_FILL,
-    opacity: DRIVER_DIMMED_OPACITY,
-    labelBorderColor: attentionBorder,
-    labelBackgroundColor: '#ffffff',
-    labelTextColor: '#334155',
+    backgroundColor: '#0f172a',
+    borderColor: driver.color || '#64748b',
+    haloColor: driver.attentionLevel === 'CRITICAL' || driver.attentionLevel === 'WARNING' ? attentionBorder : '#ffffff',
+    iconColor: '#ffffff',
+    iconFill: 'none',
+    opacity: DRIVER_OPACITY,
+    labelBorderColor: driver.color || '#64748b',
+    labelBackgroundColor: '#0f172a',
+    labelTextColor: '#ffffff',
     shadowColor: attentionBorder,
   };
 };

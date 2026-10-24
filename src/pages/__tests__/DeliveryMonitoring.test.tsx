@@ -184,6 +184,70 @@ describe('DeliveryMonitoring', () => {
     localStorage.clear();
   });
 
+  it('atualiza a ordem da barra pelo plano salvo no app e usa a identidade atual da parada', async () => {
+    let reordered = false;
+    mockedAxios.get.mockImplementation((url, config) => {
+      const date = String(config?.params?.date);
+      if (String(url).includes('/address-diagnostics')) return Promise.resolve({ data: buildDiagnostics(date) } as never);
+      const overview = buildOverview('on_the_way', date);
+      const first = { ...overview.deliveries[0], sequence: reordered ? 2 : 1 };
+      const second = { ...first, invoice_number: '654321', customer_name: 'Outro cliente', sequence: reordered ? 1 : 2 };
+      overview.deliveries = [first, second];
+      overview.summary.total = 2;
+      overview.drivers[0].total_deliveries = 2;
+      overview.drivers[0].stops = [
+        { note_id: 99, invoice_number: '123456', sequence: first.sequence, status: 'on_the_way' },
+        { note_id: 100, invoice_number: '654321', sequence: second.sequence, status: 'on_the_way' },
+      ];
+      return Promise.resolve({ data: overview } as never);
+    });
+    render(<DeliveryMonitoring />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' }));
+    expect(screen.getByRole('button', { name: 'Marcar devolucao da NF 123456' })).toBeInTheDocument();
+    const callback = mockSocketOn.mock.calls.find(call => call[0] === 'delivery_monitoring_status')![1];
+    reordered = true;
+    act(() => callback({ type: 'route_plan_saved', trip_id: 11 }));
+    expect(screen.queryByRole('button', { name: 'Marcar devolucao da NF 123456' })).not.toBeInTheDocument();
+    const newFirst = await screen.findByRole('button', { name: 'Parada 1: NF 654321 • motorista a caminho' });
+    expect(screen.getByRole('button', { name: 'Parada 2: NF 123456 • motorista a caminho' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' })).not.toBeInTheDocument();
+    fireEvent.click(newFirst);
+    fireEvent.click(screen.getByRole('button', { name: 'Marcar devolucao da NF 654321' }));
+    await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/driver-app/trip-stops/100/status'),
+      expect.objectContaining({ status: 'returned' }),
+    ));
+  });
+
+  it('solicita uma nova foto da parada exata sem alterar a entrega e mantém a identidade em retries', async () => {
+    localStorage.setItem('user_permission', 'admin');
+    let requested = false;
+    mockedAxios.get.mockImplementation((url, config) => {
+      const date = String(config?.params?.date);
+      if (String(url).includes('/address-diagnostics')) return Promise.resolve({ data: buildDiagnostics(date) } as never);
+      const overview = buildOverview('on_the_way', date);
+      return Promise.resolve({ data: { ...overview,
+        deliveries: [{ ...overview.deliveries[0], company_id: 2, stage: 'completed', stop_status: 'delivered', receipt_confirmed: !requested, receipt_retake: requested ? { id: 77, reason: 'Foto ilegível', requestedAt: '2026-10-23T18:00:00Z', requestedBy: 'Equipe teste' } : null }],
+        drivers: overview.drivers.map(driver => ({ ...driver, stops: driver.stops.map(stop => ({ ...stop, status: 'delivered' })) })),
+      } } as never);
+    });
+    mockedAxios.post.mockRejectedValueOnce(new Error('Resposta incerta'));
+    mockedAxios.post.mockImplementationOnce(async () => { requested = true; return { data: { accepted: true } } as never; });
+    render(<DeliveryMonitoring />);
+    fireEvent.click(await screen.findByRole('button', { name: /Parada 1: NF 123456/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Solicitar nova foto da NF 123456' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('A entrega será preservada');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar solicitação de nova foto' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível solicitar a foto');
+    const first = mockedAxios.post.mock.calls[0];
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar solicitação de nova foto' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockedAxios.post.mock.calls[1]).toEqual(first);
+    expect(first).toEqual([expect.stringContaining('/delivery-monitoring/trip-stops/99/receipt-retake'), expect.objectContaining({ tripId: 11, companyId: 2, reason: 'Foto ilegível', clientEventId: expect.any(String) })]);
+    expect(await screen.findByText('Nova foto solicitada ao motorista')).toBeInTheDocument();
+    expect(mockedAxios.post.mock.calls.every(([url]) => !String(url).endsWith('/status'))).toBe(true);
+  });
+
   it('preserva o endereço fiscal e sinaliza o local atualizado nos detalhes e após recarregar os dados', async () => {
     const original = mockedAxios.get.getMockImplementation()!;
     mockedAxios.get.mockImplementation((url, config) => {

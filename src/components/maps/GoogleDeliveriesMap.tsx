@@ -2,6 +2,7 @@ import { locationChangeLabel } from '../../pages/deliveryMonitoring/locationChan
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   GoogleMap,
+  CircleF,
   InfoWindowF,
   OverlayView,
   OverlayViewF,
@@ -17,10 +18,11 @@ import {
 import { MapMarkerPin } from './MapMarkerPin';
 import {
   COMPANY_MARKER_ICON,
-  DELIVERY_STAGE_ICONS,
   DRIVER_MARKER_ICON,
   getCompanyMarkerStyle,
   getDeliveryMarkerStyleByStatus,
+  getDeliveryMarkerPriority,
+  getDeliveryMarkerIcon,
   getDriverMarkerStyle,
 } from '../../pages/deliveryMonitoring/googleMarkerVisuals';
 
@@ -64,10 +66,10 @@ const MAP_MARKER_ICON_SCALE = 0.38;
 const MAP_MARKER_ICON_MIN_SIZE = 11;
 const MAP_MARKER_PIN_MIN_SIZE = 18;
 const MAP_MARKER_ICON_STROKE_WIDTH = 1.4;
-const DRIVER_MARKER_ICON_SCALE = 0.4;
-const DRIVER_MARKER_PIN_MIN_SIZE = 24;
+const DRIVER_MARKER_ICON_SCALE = 0.52;
+const DRIVER_MARKER_PIN_MIN_SIZE = 34;
 const DRIVER_MARKER_ICON_MIN_SIZE = 12;
-const DRIVER_MARKER_ICON_STROKE_WIDTH = 1.5;
+const DRIVER_MARKER_ICON_STROKE_WIDTH = 2;
 const COMPANY_MARKER_ICON_SCALE = 0.38;
 const COMPANY_MARKER_PIN_MIN_SIZE = 22;
 const COMPANY_MARKER_ICON_MIN_SIZE = 12;
@@ -321,16 +323,19 @@ function GoogleDeliveriesMap({
       >
         {deliveries.map((delivery) => {
           const zoom = map?.getZoom() || initialZoom;
-          const markerSize = Math.max(MAP_MARKER_PIN_MIN_SIZE, resolveMarkerSize(zoom));
+          const priority = getDeliveryMarkerPriority(delivery);
+          const markerSize = Math.max(15, Math.round(Math.max(MAP_MARKER_PIN_MIN_SIZE, resolveMarkerSize(zoom)) * priority.scale));
           const iconSize = Math.max(MAP_MARKER_ICON_MIN_SIZE, Math.round(markerSize * MAP_MARKER_ICON_SCALE));
-          const Icon = DELIVERY_STAGE_ICONS[delivery.status];
+          const Icon = getDeliveryMarkerIcon(delivery);
           const markerTone = getDeliveryMarkerStyleByStatus(delivery);
           const isDimmed = selectedDriverId !== null && Number(delivery.driverId) !== Number(selectedDriverId);
           const isSelected = selectedDeliveryId === delivery.id;
+          const zIndex = isSelected ? 1000 : isDimmed ? 100 : priority.zIndex;
 
           return (
             <OverlayViewF
               key={delivery.id}
+              zIndex={zIndex}
               position={{ lat: delivery.lat, lng: delivery.lng }}
               mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
               getPixelPositionOffset={(width, height) => ({
@@ -338,7 +343,7 @@ function GoogleDeliveriesMap({
                 y: Math.round(-height),
               })}
             >
-              <div className="relative">
+              <div className="relative" style={{ zIndex }}>
               <MapMarkerPin
                 icon={Icon}
                 tone={markerTone}
@@ -366,10 +371,10 @@ function GoogleDeliveriesMap({
                 style={{
                   cursor: 'pointer',
                   pointerEvents: 'auto',
-                  zIndex: isSelected ? 950 : isDimmed ? 120 : 500,
+                  zIndex,
                 }}
               />
-              {delivery.locationChange ? <span aria-hidden="true" title={locationChangeLabel(delivery.locationChange)} className="pointer-events-none absolute -right-1 -top-1 rounded-full border-2 border-white bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">↻</span> : null}
+              {delivery.locationChange ? <span aria-hidden="true" title={locationChangeLabel(delivery.locationChange)} style={{ opacity: isSelected ? 1 : (markerTone.opacity ?? 1) * (isDimmed ? 0.42 : 1) }} className="pointer-events-none absolute -right-1 -top-1 rounded-full border-2 border-white bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">↻</span> : null}
               </div>
             </OverlayViewF>
           );
@@ -387,6 +392,7 @@ function GoogleDeliveriesMap({
           return (
             <OverlayViewF
               key={companyMarker.id}
+              zIndex={350}
               position={{ lat: companyMarker.lat, lng: companyMarker.lng }}
               mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
               getPixelPositionOffset={(width, height) => ({
@@ -408,11 +414,16 @@ function GoogleDeliveriesMap({
           );
         })() : null}
 
+        {driverLocations.filter(driver => (selectedDriverId !== null && driver.driverId === selectedDriverId) || driver.id === openedInfoDriverId).map(driver => {
+          const radius = driver.accuracyMeters;
+          return typeof radius === 'number' && Number.isFinite(radius) && radius > 0 ? <CircleF key={`accuracy-${driver.id}`} center={{ lat: driver.lat, lng: driver.lng }} radius={radius} options={{ clickable: false, strokeColor: driver.color || '#2563eb', strokeOpacity: 0.5, strokeWeight: 1, fillColor: driver.color || '#2563eb', fillOpacity: 0.1 }} /> : null;
+        })}
+
         {driverLocations.map((driverLocation) => {
           const zoom = map?.getZoom() || initialZoom;
           const driverMarkerSize = Math.max(
             DRIVER_MARKER_PIN_MIN_SIZE,
-            Math.round(resolveMarkerSize(zoom) * 1.12),
+            Math.round(resolveMarkerSize(zoom) * 1.6),
           );
           const driverIconSize = Math.max(
             DRIVER_MARKER_ICON_MIN_SIZE,
@@ -425,15 +436,17 @@ function GoogleDeliveriesMap({
           return (
             <OverlayViewF
               key={driverLocation.id}
+              zIndex={isSelected ? 1200 : 1100}
               position={{ lat: driverLocation.lat, lng: driverLocation.lng }}
               mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
               getPixelPositionOffset={(width, height) => ({
                 x: Math.round(width / -2),
-                y: Math.round(-height),
+                y: Math.round(height / -2),
               })}
             >
               <MapMarkerPin
                 icon={DRIVER_MARKER_ICON}
+                shape="vehicle"
                 tone={driverTone}
                 size={driverMarkerSize}
                 iconSize={driverIconSize}
@@ -457,7 +470,7 @@ function GoogleDeliveriesMap({
                     onDriverMarkerClick?.(driverLocation.driverId);
                   }
                 }}
-                style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: isSelected ? 980 : 760 }}
+                style={{ cursor: 'pointer', pointerEvents: 'auto', zIndex: isSelected ? 1200 : 1100 }}
               />
             </OverlayViewF>
           );
@@ -470,7 +483,7 @@ function GoogleDeliveriesMap({
             options={{
               pixelOffset: new window.google.maps.Size(
                 0,
-                -Math.round(resolveMarkerSize(map?.getZoom() || initialZoom) * PIN_HEIGHT_RATIO),
+                -Math.round(resolveMarkerSize(map?.getZoom() || initialZoom) * getDeliveryMarkerPriority(openedInfoDelivery).scale * PIN_HEIGHT_RATIO),
               ),
             }}
           >
@@ -499,8 +512,10 @@ function GoogleDeliveriesMap({
                 ? `Última posição: ${new Date(openedInfoDriver.updatedAt).toLocaleString('pt-BR')}`
                 : 'Horário da posição indisponível'}</div>
               {openedInfoDriver.accuracyMeters !== null ? (
-                <div>{`Precisão aproximada: ${Math.round(openedInfoDriver.accuracyMeters)} m`}</div>
-              ) : null}
+                <div>{`Margem de precisão informada: ${Math.round(openedInfoDriver.accuracyMeters)} m`}</div>
+              ) : <div>Precisão não informada pelo aparelho.</div>}
+              {openedInfoDriver.accuracyMeters !== null && openedInfoDriver.accuracyMeters > 40 ? <div>GPS impreciso. A posição pode estar fora da rua; confira a área indicada no mapa.</div> : null}
+              <div>A posição recebida e sua margem não comprovam a rua percorrida.</div>
             </div>
           </InfoWindowF>
         ) : null}

@@ -38,6 +38,8 @@ import {
   DRIVER_MARKER_ICON,
   getDriverMarkerStyle,
   getLegendMarkerVisual,
+  getDeliveryMarkerIcon,
+  getDeliveryMarkerStyleByStatus,
 } from './deliveryMonitoring/googleMarkerVisuals';
 import {
   getReadAlertIds,
@@ -55,7 +57,10 @@ import {
   ManualStopStatus,
 } from './deliveryMonitoring/stopStatusActions';
 
+type ReceiptRetake = { id: number; reason: string; requestedAt: string; requestedBy: string | null };
 type DeliveryRow = {
+  receipt_confirmed?: boolean;
+  receipt_retake?: ReceiptRetake | null;
   location_change?: CustomerLocationChange | null;
   company_id?: number | null;
   customer_id?: string | null;
@@ -470,6 +475,8 @@ const areSameCompany = (
 
 const areSameDeliveryRow = (left: DeliveryRow, right: DeliveryRow) => {
   return areSameCompany(left.company, right.company)
+    && left.receipt_confirmed === right.receipt_confirmed
+    && JSON.stringify(left.receipt_retake) === JSON.stringify(right.receipt_retake)
     && left.company_id === right.company_id
     && left.customer_id === right.customer_id
     && JSON.stringify(left.operational_locations) === JSON.stringify(right.operational_locations)
@@ -567,6 +574,7 @@ const areSameDriverSummary = (left: DriverSummary, right: DriverSummary) => {
     && left.live_location?.longitude === right.live_location?.longitude
     && left.live_location?.accuracy_meters === right.live_location?.accuracy_meters
     && left.live_location?.updated_at === right.live_location?.updated_at
+    && JSON.stringify(left.stops || []) === JSON.stringify(right.stops || [])
     && areSameAlerts(left.alerts, right.alerts)
     && areSameHighlightedStops(left.highlighted_stops, right.highlighted_stops);
 };
@@ -635,6 +643,11 @@ function DeliveryMonitoring() {
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(initialQueryRef.current.invoiceNumber);
   const [selectedMapCompanyId, setSelectedMapCompanyId] = useState<number | null>(null);
+  const [retakeDraft, setRetakeDraft] = useState<{ stopId: number; tripId: number; companyId: number; invoice: string; clientEventId: string } | null>(null);
+  const [retakeReason, setRetakeReason] = useState('Foto ilegível');
+  const [retakeSaving, setRetakeSaving] = useState(false);
+  const [retakeError, setRetakeError] = useState('');
+  const retakeLock = useRef(false);
   const [selectedDriverStop, setSelectedDriverStop] = useState<SelectedDriverStop | null>(null);
   const [overview, setOverview] = useState<MonitoringResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<AddressDiagnosticsResponse | null>(null);
@@ -774,6 +787,16 @@ function DeliveryMonitoring() {
     }
   }, [effectiveDate, isMobileView]);
 
+  async function submitRetake() {
+    if (!retakeDraft || retakeLock.current || retakeReason.trim().length < 5) return;
+    retakeLock.current = true; setRetakeSaving(true); setRetakeError('');
+    try {
+      await axios.post(`${API_URL}/api/delivery-monitoring/trip-stops/${retakeDraft.stopId}/receipt-retake`, { tripId: retakeDraft.tripId, companyId: retakeDraft.companyId, reason: retakeReason.trim(), clientEventId: retakeDraft.clientEventId });
+      setRetakeDraft(null); await fetchOverview();
+    } catch (error) { setRetakeError(axios.isAxiosError(error) ? String(error.response?.data?.message || 'Não foi possível solicitar a foto. Tente novamente com esta mesma solicitação.') : 'Não foi possível solicitar a foto. Tente novamente.'); }
+    finally { retakeLock.current = false; setRetakeSaving(false); }
+  }
+
   const scheduleRefresh = useCallback(() => {
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
@@ -820,6 +843,7 @@ function DeliveryMonitoring() {
 
     socket.on('connect', () => {
       stopFallbackPolling();
+      scheduleRefresh();
     });
 
     socket.on('disconnect', () => {
@@ -832,6 +856,11 @@ function DeliveryMonitoring() {
 
     socket.on('delivery_monitoring_status', (event: { type?: string; change_kind?: string; invoice_number?: string; invoice_company_id?: number; trip_id?: number } | undefined) => {
       if (event?.type === 'customer_location_updated' && event.change_kind === 'confirmed' && event.invoice_number && Number(event.invoice_company_id) > 0 && Number(event.trip_id) > 0) setLocationNotice({ invoice: String(event.invoice_number), companyId: Number(event.invoice_company_id), tripId: Number(event.trip_id) });
+      if (event?.type === 'route_plan_saved') {
+        // Position is mutable: never leave actions targeting the old occupant of a segment.
+        setSelectedDriverStop(current => current?.tripId === Number(event.trip_id) ? null : current);
+        setCancelledReplacementDraft(current => current?.tripId === Number(event.trip_id) ? null : current);
+      }
       scheduleRefresh();
     });
     socket.on('delivery_monitoring_alert', () => {
@@ -1547,6 +1576,22 @@ function DeliveryMonitoring() {
     <div className="min-h-screen">
       <Header />
       <Container className="operation-page">
+      {retakeDraft ? <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4"><section role="dialog" aria-modal="true" aria-labelledby="retake-title" onKeyDown={event => {
+          if (event.key === 'Escape' && !retakeSaving) setRetakeDraft(null);
+          if (event.key === 'Tab') {
+            const fields = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('textarea:not(:disabled),button:not(:disabled)'));
+            const first = fields[0], last = fields[fields.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+          }
+        }} className="w-full max-w-md rounded-xl border border-border bg-surface p-5 text-text">
+        <h2 id="retake-title" className="text-lg font-bold">Solicitar nova foto · NF {retakeDraft.invoice}</h2>
+        <p className="my-3 text-sm">A entrega será preservada. O motorista receberá uma pendência para fotografar este canhoto novamente; a foto anterior continuará no histórico.</p>
+        <label className="block text-sm font-semibold">Motivo da nova foto<textarea autoFocus aria-label="Motivo da nova foto" maxLength={500} value={retakeReason} disabled={retakeSaving} onChange={event => setRetakeReason(event.target.value)} className="mt-1 min-h-[100px] w-full rounded border border-border bg-surface p-2 text-text" /></label>
+        {retakeError ? <p role="alert" className="my-2 text-sm text-red-700">{retakeError}</p> : null}
+        <div className="mt-4 flex gap-3"><button type="button" disabled={retakeSaving || retakeReason.trim().length < 5} onClick={() => void submitRetake()} className="min-h-[44px] rounded bg-amber-200 px-3 py-2 font-semibold text-amber-950 disabled:opacity-50">{retakeSaving ? 'Solicitando…' : 'Confirmar solicitação de nova foto'}</button><button type="button" disabled={retakeSaving} onClick={() => setRetakeDraft(null)} className="min-h-[44px] rounded border border-border px-3 py-2">Cancelar</button></div>
+      </section></div> : null}
+
         <section
           aria-label="Resumo e filtros do monitoramento"
           className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
@@ -1976,6 +2021,8 @@ function DeliveryMonitoring() {
                       </div>
 
                       {selectedStopDelivery ? renderDeliveryDetails(selectedStopDelivery) : <p className="mt-2 text-muted">Endereço indisponível para esta parada.</p>}
+                      {selectedStopDelivery?.receipt_retake ? <div role="status" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950"><strong>Nova foto solicitada ao motorista</strong><p>{selectedStopDelivery.receipt_retake.reason}</p><p>{selectedStopDelivery.receipt_retake.requestedBy || 'Equipe'} · {new Date(selectedStopDelivery.receipt_retake.requestedAt).toLocaleString('pt-BR')}</p></div> : null}
+                      {['admin', 'master', 'expedicao', 'conferente'].includes(String(localStorage.getItem('user_permission'))) && ['delivered', 'completed', 'delivered_pending_receipt', 'occurrence'].includes(selectedStopStatus) && selectedStopDelivery?.receipt_confirmed && selectedStopMeta?.note_id && selectedStopCompanyId ? <button type="button" className="mt-3 min-h-[44px] rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 font-semibold text-amber-950" onClick={() => { setRetakeDraft({ stopId: selectedStopMeta.note_id, tripId: driver.trip_id, companyId: selectedStopCompanyId, invoice: selectedStopInvoiceNumber || '', clientEventId: `retake:${(globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random().toString(16).slice(2)}`)}` }); setRetakeReason('Foto ilegível'); setRetakeError(''); }}>Solicitar nova foto da NF {selectedStopInvoiceNumber}</button> : null}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                           Acoes da parada
@@ -2108,10 +2155,15 @@ function DeliveryMonitoring() {
               );
             })}
             <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
+              <MapMarkerPin icon={getDeliveryMarkerIcon({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} tone={getDeliveryMarkerStyleByStatus({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} size={18} iconSize={11} />
+              Devolução / reentrega
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
               <MapMarkerPin
                 icon={DRIVER_MARKER_ICON}
+                shape="vehicle"
                 tone={getDriverMarkerStyle({ color: '#2563eb', attentionLevel: null })}
-                size={20}
+                size={26}
                 iconSize={11}
                 iconStrokeWidth={1.5}
               />
@@ -2121,7 +2173,7 @@ function DeliveryMonitoring() {
           </div>
 
           <p className="mt-1 text-xs text-muted">
-            Clique em uma nota para ver o endereço. Clique em um motorista para ver quando a posição foi recebida e focar sua rota.
+            Motoristas aparecem em círculos; entregas em pins. A caminho e no local têm maior destaque; finalizadas, devoluções e reentregas ficam mais discretas. Clique em uma nota para ver o endereço. Clique em um motorista para ver quando a posição foi recebida e focar sua rota.
           </p>
 
           <div className="mt-2 text-xs text-muted">

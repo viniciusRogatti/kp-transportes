@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { pdf } from '@react-pdf/renderer';
 import {
   AlertTriangle,
-  ArrowRight,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,

@@ -5,6 +5,7 @@ import { showConfirm } from '../../utils/dialog';
 
 let mockLocationSearch = '';
 const mockSocketOn = jest.fn();
+const mockMapProps = jest.fn();
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -27,7 +28,7 @@ jest.mock('socket.io-client', () => ({
   }),
 }));
 jest.mock('../../components/Header', () => () => <div>Header</div>);
-jest.mock('../../components/maps/GoogleDeliveriesMap', () => () => <div data-testid="google-map" />);
+jest.mock('../../components/maps/GoogleDeliveriesMap', () => (props: unknown) => { mockMapProps(props); return <div data-testid="google-map" />; });
 jest.mock('../../components/maps/MapMarkerPin', () => ({
   MapMarkerPin: () => <div data-testid="marker-pin" />,
 }));
@@ -42,7 +43,7 @@ jest.mock('../../utils/dialog', () => ({
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 const mockedShowConfirm = showConfirm as jest.MockedFunction<typeof showConfirm>;
 
-type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained' | 'assigned';
+type MonitoringStatus = 'on_the_way' | 'returned' | 'redelivery' | 'retained' | 'assigned' | 'delivered';
 
 const buildOverview = (status: MonitoringStatus, date = '2026-03-23') => ({
   date,
@@ -182,6 +183,29 @@ describe('DeliveryMonitoring', () => {
   afterEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+  });
+
+  it('reflete a confirmação do bot no mapa, parada e contador sem recarregar a página', async () => {
+    let delivered = false;
+    mockedAxios.get.mockImplementation((url, config) => {
+      const date = String(config?.params?.date);
+      if (String(url).includes('/address-diagnostics')) return Promise.resolve({ data: buildDiagnostics(date) } as never);
+      const overview = buildOverview(delivered ? 'delivered' : 'on_the_way', date);
+      Object.assign(overview.deliveries[0].geolocation, { latitude: -22.9, longitude: -47.1, status: 'geocoded' });
+      return Promise.resolve({ data: overview } as never);
+    });
+    render(<DeliveryMonitoring />);
+    await screen.findByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' });
+    expect(screen.getByText('Finalizadas').parentElement?.querySelector('strong')).toHaveTextContent('0');
+    delivered = true;
+    const statusEvent = mockSocketOn.mock.calls.find(call => call[0] === 'delivery_monitoring_status')![1];
+    act(() => statusEvent({ type: 'status_changed', invoice_number: '123456', invoice_company_id: 1, trip_id: 11 }));
+    await waitFor(() => expect(screen.getByText('Finalizadas').parentElement?.querySelector('strong')).toHaveTextContent('1'));
+    expect(screen.queryByRole('button', { name: 'Parada 1: NF 123456 • motorista a caminho' })).not.toBeInTheDocument();
+    expect(mockMapProps.mock.calls[mockMapProps.mock.calls.length - 1][0].deliveries).toEqual([
+      expect.objectContaining({ status: 'completed', stopStatus: 'delivered', danfeStatus: 'delivered' }),
+    ]);
+    expect(mockedAxios.post).not.toHaveBeenCalled();
   });
 
   it('atualiza a ordem da barra pelo plano salvo no app e usa a identidade atual da parada', async () => {

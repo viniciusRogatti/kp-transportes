@@ -1,3 +1,4 @@
+import { applyApiReadTimeout } from './utils/apiReadTimeout';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import GlobalAlertHost from './components/ui/GlobalAlertHost';
@@ -82,6 +83,7 @@ function App() {
     syncAuthorizationHeader();
 
     const requestInterceptorId = axios.interceptors.request.use((config) => {
+      applyApiReadTimeout(config);
       const currentToken = localStorage.getItem('token');
       const headers = config.headers ?? {};
       const explicitAuthorization = headers.Authorization || headers.authorization;

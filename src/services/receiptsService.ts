@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import {
   IDriver,
   IReceiptUploadResponse,
@@ -35,10 +35,10 @@ const toQueryParams = (filters: ReceiptListFilters = {}) => {
   return params;
 };
 
-export async function listReceiptBacklog(filters: ReceiptListFilters = {}): Promise<IReceiptBacklogResponse> {
+export async function listReceiptBacklog(filters: ReceiptListFilters = {}, request: Pick<AxiosRequestConfig, 'signal' | 'timeout'> = {}): Promise<IReceiptBacklogResponse> {
   const params = toQueryParams(filters);
   const suffix = params.toString();
-  const { data } = await axios.get<IReceiptBacklogResponse>(`${API_URL}/api/receipts/backlog${suffix ? `?${suffix}` : ''}`, getAuthConfig());
+  const { data } = await axios.get<IReceiptBacklogResponse>(`${API_URL}/api/receipts/backlog${suffix ? `?${suffix}` : ''}`, { ...getAuthConfig(), ...request });
   return data;
 }
 

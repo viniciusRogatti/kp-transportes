@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
+import useBodyScrollLock from './useBodyScrollLock';
 
 /** Focus containment, scroll locking and return-to-trigger for one active dialog. */
 export default function useDialogFocus(activeDialog: string) {
+  useBodyScrollLock(Boolean(activeDialog));
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!activeDialog) return;
     const trigger = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
     const controls = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || [])
       .filter((item) => !item.closest('[hidden]'));
     const frame = requestAnimationFrame(() => (controls()[0] || dialogRef.current)?.focus());
@@ -24,7 +24,6 @@ export default function useDialogFocus(activeDialog: string) {
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', trap);
-      document.body.style.overflow = overflow;
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
   }, [activeDialog]);

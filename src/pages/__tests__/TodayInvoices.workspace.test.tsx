@@ -162,3 +162,38 @@ test('informa bloqueio de pop-up sem apagar notas ou filtros', async () => {
   expect(screen.getByRole('alert')).toHaveTextContent('bloqueou a abertura');
   expect(screen.getAllByTestId('danfe-card-123')).toHaveLength(2);
 });
+
+test('mostra notas enquanto viagens e histórico ainda estão pendentes', async () => {
+  let finishTrips!: (value: any) => void;
+  let finishContext!: () => void;
+  const trips = new Promise((resolve) => { finishTrips = resolve; });
+  const context = new Promise<void>((resolve) => { finishContext = resolve; });
+  jest.requireMock('../../hooks/useInvoiceSearchContext').default().loadInvoiceContext.mockReturnValueOnce(context);
+  get.mockImplementation((url: string) => url.endsWith('/danfes') ? Promise.resolve({ data: notes }) : trips);
+  renderPage();
+  expect(await waitForNotes()).toHaveLength(2);
+  expect(screen.getByText('Notas carregadas. Consultando viagens, motoristas e histórico…')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Atribuir NF/ })).not.toBeInTheDocument();
+  await act(async () => { finishTrips({ data: [] }); finishContext(); });
+  expect(screen.queryByText('Notas carregadas. Consultando viagens, motoristas e histórico…')).not.toBeInTheDocument();
+});
+
+test('retornar à aba não duplica consultas simultâneas por foco e visibilidade', async () => {
+  const listen = jest.spyOn(window, 'addEventListener');
+  renderPage();
+  await waitForNotes();
+  await act(async () => {});
+  await waitFor(() => expect(listen.mock.calls.map(([event]) => event)).toContain('focus'));
+  let finishTrips!: (value: any) => void;
+  const trips = new Promise((resolve) => { finishTrips = resolve; });
+  get.mockClear();
+  get.mockImplementation(() => trips);
+  act(() => {
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(get).toHaveBeenCalledTimes(1);
+  await act(async () => { finishTrips({ data: [] }); });
+  listen.mockRestore();
+});

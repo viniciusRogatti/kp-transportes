@@ -13,6 +13,7 @@ import useRouteCatalog from '../hooks/useRouteCatalog';
 import { normalizeRouteCity, routeByCity } from '../utils/routeCatalog';
 import { buildInvoiceContextKey } from '../utils/invoiceContextKey';
 import { API_URL } from "../data";
+import { API_READ_TIMEOUT_MS } from '../utils/apiReadTimeout';
 import { Container } from "../style/invoices";
 import verifyToken from "../utils/verifyToken";
 import { useNavigate } from "react-router";
@@ -45,6 +46,7 @@ function TodayInvoices() {
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [tripsError, setTripsError] = useState('');
+  const [tripsLoading, setTripsLoading] = useState(false);
   const [printError, setPrintError] = useState('');
   const [feedback, setFeedback] = useState('');
   const printInFlight = useRef(false);
@@ -106,12 +108,13 @@ function TodayInvoices() {
     const request = ++dataRequest.current;
     setLoading(true); setLoadError(''); setTripsError(''); setPrintError(''); setFeedback(''); setDataDanfes([]); setTodayTrips([]); setDriverByInvoice({}); setAssignmentByInvoice({});
     try {
-      const response = await axios.get(`${API_URL}/danfes`, { params: { operationDate } });
+      const response = await axios.get(`${API_URL}/danfes`, { params: { operationDate }, timeout: API_READ_TIMEOUT_MS });
       if (request !== dataRequest.current) return;
       if (!Array.isArray(response.data)) throw new Error('Resposta de notas inválida.');
       const sanitizedRows = response.data.map((danfe) => sanitizeDanfeTextFields(danfe));
       setDataDanfes(sanitizedRows);
-      await Promise.all([
+      // Show the invoices as soon as they arrive. Context has its own loading/error state.
+      void Promise.allSettled([
         loadTodayTrips(),
         loadInvoiceContext(sanitizedRows, { includeTripDriver: true }),
       ]);
@@ -122,9 +125,10 @@ function TodayInvoices() {
 
   const loadTodayTrips = useCallback(async () => {
     const request = ++tripsRequest.current;
+    setTripsLoading(true);
     try {
       const today = operationDate;
-      const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`);
+      const { data } = await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${today}`, { timeout: API_READ_TIMEOUT_MS });
       if (operationDateRef.current !== today || request !== tripsRequest.current) return [];
       if (!Array.isArray(data)) throw new Error('Resposta de viagens inválida.');
       setTripsError('');
@@ -156,17 +160,24 @@ function TodayInvoices() {
       setDriverByInvoice({});
       setAssignmentByInvoice({});
       return [];
+    } finally {
+      if (request === tripsRequest.current) setTripsLoading(false);
     }
   }, [operationDate]);
 
   useEffect(() => {
     if (!dataDanfes.length) return undefined;
 
-    const refreshVisibleInvoiceContext = () => {
-      void Promise.all([
-        loadTodayTrips(),
-        refreshInvoiceContext(dataDanfes, { includeTripDriver: true }),
-      ]);
+    let refreshInFlight = false;
+    const refreshVisibleInvoiceContext = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await Promise.allSettled([
+          loadTodayTrips(),
+          refreshInvoiceContext(dataDanfes, { includeTripDriver: true }),
+        ]);
+      } finally { refreshInFlight = false; }
     };
 
     const handleWindowFocus = () => {
@@ -390,6 +401,7 @@ function TodayInvoices() {
   }
 
   const filterCount = activeFilters.length + filters.loadNumbers.length;
+  const contextLoading = tripsLoading || dataDanfes.some((danfe) => driverLoadingByInvoice[buildInvoiceContextKey(danfe.company_id, danfe.invoice_number)]);
   const contextUnavailable = dataDanfes.some((danfe) => driverErrorByInvoice[buildInvoiceContextKey(danfe.company_id, danfe.invoice_number)]);
   const isFiltering = filters !== deferredFilters;
 
@@ -431,6 +443,7 @@ function TodayInvoices() {
           </section>
           {feedback && <p role="status" className="rounded-xl border semantic-panel-success p-3 text-sm">{feedback}</p>}
           {printError && <p role="alert" className="rounded-xl border semantic-panel-danger p-3 text-sm">{printError}</p>}
+          {contextLoading && !loading && !loadError && <p role="status" className="rounded-xl border semantic-panel-info p-3 text-sm">Notas carregadas. Consultando viagens, motoristas e histórico…</p>}
           {(tripsError || contextUnavailable) && !loading && !loadError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border semantic-panel-warning p-3 text-sm">
             <p className="max-w-2xl">{tripsError || 'Não foi possível confirmar o motorista e o histórico de algumas notas. Os filtros por motorista podem estar incompletos.'}</p>
             <WorkspaceButton onClick={() => void loadTodayData()}>Tentar novamente</WorkspaceButton>
@@ -456,11 +469,12 @@ function TodayInvoices() {
                 </div>
               </div>}
               {dataDanfes.length === 0 ? <WorkspaceState kind="empty" title="Nenhuma nota nesta operação">Confira a data selecionada ou atualize após a importação dos XMLs.</WorkspaceState>
+                : filteredDanfes.length === 0 && contextLoading ? <WorkspaceState kind="loading" title="Atualizando contexto das notas">Aguarde a conferência de viagens e histórico para concluir os filtros.</WorkspaceState>
                 : filteredDanfes.length === 0 ? <WorkspaceState kind="empty" title="Nenhuma nota corresponde à busca" action={<WorkspaceButton onClick={resetFilters}>Limpar todos os filtros</WorkspaceButton>}>Experimente outro produto, cliente ou número de nota.</WorkspaceState>
                 : <ContainerDanfes data-tutorial="today-results" aria-busy={isFiltering}>
                   <CardDanfes danfes={filteredDanfes} conferenceMode productSearch={deferredFilters.product}
                     driverByInvoice={driverByInvoice} driverLoadingByInvoice={driverLoadingByInvoice} invoiceContextByNf={invoiceContextByNf}
-                    assignableTrips={tripsError ? [] : assignableTrips} onAssignDanfeToTrip={handleAssignDanfeToTrip} onDanfeUpdated={handleDanfeUpdated}
+                    assignableTrips={tripsError || contextLoading ? [] : assignableTrips} onAssignDanfeToTrip={handleAssignDanfeToTrip} onDanfeUpdated={handleDanfeUpdated}
                     allowStatusActions={['admin', 'master', 'user', 'expedicao'].includes(localStorage.getItem('user_permission') || '')}
                     driverErrorByInvoice={driverErrorByInvoice} showLegend={false} />
                 </ContainerDanfes>}

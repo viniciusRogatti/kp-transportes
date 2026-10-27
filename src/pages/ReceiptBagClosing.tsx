@@ -1,3 +1,4 @@
+import useBodyScrollLock from '../hooks/useBodyScrollLock';
 import axios from 'axios';
 import {
   AlertCircle,
@@ -24,6 +25,7 @@ import { Container } from '../style/invoices';
 import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import verifyToken from '../utils/verifyToken';
+import { startVisiblePolling } from '../utils/visiblePolling';
 import {
   ReceiptBag,
   ReceiptBagApiError,
@@ -227,17 +229,20 @@ function ReceiptBagClosing() {
 
   useEffect(() => {
     void loadList();
-    const interval = window.setInterval(() => void loadList(true), 20000);
-    return () => window.clearInterval(interval);
+    return startVisiblePolling(() => loadList(true), 20000);
   }, [loadList]);
 
   const activeBagId = activeBag?.id || null;
   useEffect(() => {
     if (!activeBagId) return undefined;
-    const interval = window.setInterval(async () => {
-      try { setActiveBag(await getReceiptBagClosing(activeBagId)); } catch { /* atualização silenciosa */ }
+    let disposed = false;
+    const stop = startVisiblePolling(async () => {
+      try {
+        const bag = await getReceiptBagClosing(activeBagId);
+        if (!disposed) setActiveBag(bag);
+      } catch { /* Preserve the last confirmed view on a failed refresh. */ }
     }, 12000);
-    return () => window.clearInterval(interval);
+    return () => { disposed = true; stop(); };
   }, [activeBagId]);
 
   const visibleRows = useMemo(() => {
@@ -390,12 +395,7 @@ function ReceiptBagClosing() {
     } finally { setMutating(false); }
   }, [activeBag, loadList, mutating]);
 
-  useEffect(() => {
-    if (!activeBag) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [activeBag]);
+  useBodyScrollLock(Boolean(activeBag));
 
   const openHistoricalRouteSelection = useCallback(async (invoiceNumber: string, routeDate = '') => {
     if (!activeBag) return;

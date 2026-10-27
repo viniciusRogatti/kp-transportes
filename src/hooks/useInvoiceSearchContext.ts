@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import axios from 'axios';
 import { API_URL } from '../data';
+import { API_READ_TIMEOUT_MS } from '../utils/apiReadTimeout';
 import { IDanfe, IInvoiceSearchContext } from '../types/types';
 import { buildInvoiceContextKey } from '../utils/invoiceContextKey';
 
@@ -31,14 +32,17 @@ export default function useInvoiceSearchContext() {
       try {
         const { data } = await axios.post<Record<string, IInvoiceSearchContext>>(`${API_URL}/danfes/search-context`, {
           invoices: batch.map(([, danfe]) => ({ company_id: Number(danfe.company_id) || null, invoice_number: String(danfe.invoice_number).trim() })),
-        });
-        const accepted = batch.filter(([key]) => requestByKey.current[key] === request && data?.[key]);
+        }, { timeout: API_READ_TIMEOUT_MS });
+        const currentBatch = batch.filter(([key]) => requestByKey.current[key] === request);
+        const accepted = currentBatch.filter(([key]) => data?.[key]);
         accepted.forEach(([key]) => { loadedAt.current[key] = Date.now(); });
         setContexts((old) => ({ ...old, ...Object.fromEntries(accepted.map(([key]) => [key, data[key]])) }));
-        setErrors((old) => ({ ...old, ...Object.fromEntries(batch.filter(([key]) => requestByKey.current[key] === request)
+        setErrors((old) => ({ ...old, ...Object.fromEntries(currentBatch
           .map(([key]) => [key, !data?.[key]])) }));
       } catch {
-        setErrors((old) => ({ ...old, ...Object.fromEntries(batch.filter(([key]) => requestByKey.current[key] === request).map(([key]) => [key, true])) }));
+        // Capture before finally clears requestByKey; React may apply this updater later.
+        const failed = batch.filter(([key]) => requestByKey.current[key] === request);
+        setErrors((old) => ({ ...old, ...Object.fromEntries(failed.map(([key]) => [key, true])) }));
       } finally {
         const finished = batch.filter(([key]) => requestByKey.current[key] === request);
         finished.forEach(([key]) => { delete requestByKey.current[key]; });

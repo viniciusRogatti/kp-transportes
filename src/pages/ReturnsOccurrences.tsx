@@ -1,3 +1,4 @@
+import useBodyScrollLock from '../hooks/useBodyScrollLock';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import axios from 'axios';
@@ -677,14 +678,7 @@ function ReturnsOccurrences() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!returnModalOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [returnModalOpen]);
+  useBodyScrollLock(returnModalOpen);
 
   useEffect(() => {
     if (!returnModalOpen || !isReturnWizardMode) return;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import axios from 'axios';
 import { pdf } from '@react-pdf/renderer';
@@ -109,6 +109,125 @@ describe('RoutePlanning - autocomplete de atribuicao', () => {
       URL.revokeObjectURL = revokeUrl;
     }
   });
+  it('reordena notas de empresas distintas em paralelo e aguarda confirmação antes do sucesso', async () => {
+    const { trip } = await openEdition();
+    const pending: Array<() => void> = [];
+    mockedAxios.put.mockImplementation((url: string, payload?: any) => new Promise((resolve) => {
+      pending.push(() => {
+        const note = trip.TripNotes.find((row) => url.endsWith(`/${row.id}`));
+        if (note) note.order = payload.newOrder;
+        resolve({ data: note });
+      });
+    }));
+    const order = screen.getAllByLabelText('Editar ordem da NF 123')[0];
+    fireEvent.change(order, { target: { value: '2' } });
+    fireEvent.blur(order);
+    fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Não imprimir' }));
+    await waitFor(() => expect(mockedAxios.put).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('Rota atualizada com sucesso.')).not.toBeInTheDocument();
+    expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringMatching(/change-order\/11$/), { newOrder: 2 }, expect.any(Object));
+    expect(mockedAxios.put).toHaveBeenCalledWith(expect.stringMatching(/change-order\/12$/), { newOrder: 1 }, expect.any(Object));
+    await act(async () => { pending.forEach((finish) => finish()); });
+    expect(await screen.findByText('Rota atualizada com sucesso.')).toBeInTheDocument();
+  });
+
+  it('libera a tela após salvar e distingue erro de PDF de erro no salvamento', async () => {
+    await openEdition();
+    const originalGet = mockedAxios.get.getMockImplementation()!;
+    let rejectPdf!: (reason: Error) => void;
+    const pdfData = new Promise((_, reject) => { rejectPdf = reject; });
+    mockedAxios.get.mockImplementation((url: string, config?: any) => (
+      url.includes('/danfes/batch') ? pdfData as any : originalGet(url, config)
+    ));
+    const open = jest.spyOn(window, 'open').mockReturnValue(null);
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Enviar e imprimir' }));
+      expect(await screen.findByText('Rota atualizada com sucesso.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Viagens' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Entendi' }));
+      expect(screen.getByText('Gerando PDF...')).toBeInTheDocument();
+      await act(async () => { rejectPdf(new Error('offline')); });
+      expect(await screen.findByText(/A viagem foi salva, mas não foi possível gerar o PDF/)).toBeInTheDocument();
+      expect(screen.queryByText('Erro ao enviar a viagem.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Gerando PDF...')).not.toBeInTheDocument();
+      // No note changed: no redundant reorder write.
+      expect(mockedAxios.put).not.toHaveBeenCalled();
+    } finally { open.mockRestore(); }
+  });
+
+  it('interrompe lembretes demorados e imprime aviso sem bloquear a página', async () => {
+    const trip = { id: 88, date: formatTestDate(), Driver: { name: 'Motorista teste' }, Car: { license_plate: 'TEST000' }, TripNotes: [{ invoice_number: '2000000', company_id: 1, customer_id: 'C1' }] };
+    const danfe = { invoice_number: '2000000', company_id: 1, customer_id: 'C1', Customer: { name_or_legal_entity: 'Cliente teste', city: 'Campinas' }, DanfeProducts: [] };
+    let requestSignal: AbortSignal | undefined;
+    mockedAxios.get.mockImplementation((url: string, config?: any) => {
+      if (url.includes('/trips/search/date/')) return Promise.resolve({ data: [trip] });
+      if (url.includes('/danfes/batch')) return Promise.resolve({ data: [danfe] });
+      if (url.includes('/api/receipts/backlog') && config?.signal) {
+        requestSignal = config.signal;
+        return new Promise((_, reject) => config.signal.addEventListener('abort', () => reject(new Error('cancelado')), { once: true }));
+      }
+      return Promise.resolve({ data: [] });
+    });
+    const createUrl = URL.createObjectURL;
+    const revokeUrl = URL.revokeObjectURL;
+    URL.createObjectURL = jest.fn(() => 'blob:preview');
+    URL.revokeObjectURL = jest.fn();
+    const open = jest.spyOn(window, 'open').mockReturnValue(null);
+    (pdf as jest.Mock).mockClear();
+    (pdf as jest.Mock).mockReturnValue({ toBlob: jest.fn().mockResolvedValue(new Blob()) });
+    try {
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Viagens' }));
+      const print = await screen.findByRole('button', { name: 'Imprimir produtos' });
+      jest.useFakeTimers();
+      await act(async () => { fireEvent.click(print); });
+      expect(requestSignal).toBeDefined();
+      expect(print).toBeDisabled();
+      await act(async () => { jest.advanceTimersByTime(12000); });
+      expect(requestSignal?.aborted).toBe(true);
+      expect(pdf).toHaveBeenCalledTimes(1);
+      expect((pdf as jest.Mock).mock.calls[0][0].props.reminderLookupWarning).toContain('Não foi possível conferir');
+      expect(print).toBeEnabled();
+    } finally {
+      jest.useRealTimers();
+      open.mockRestore();
+      URL.createObjectURL = createUrl;
+      URL.revokeObjectURL = revokeUrl;
+    }
+  });
+
+  it('usa os clientes das paradas sem baixar novamente os produtos de todas as viagens', async () => {
+    const trip = { id: 88, date: formatTestDate(), Driver: { name: 'Motorista teste' }, Car: { license_plate: 'TEST000' }, TripNotes: [{ invoice_number: '2000000', company_id: 1, customer_id: 'C1' }] };
+    const danfe = { invoice_number: '2000000', company_id: 1, customer_id: 'C1', Customer: { name_or_legal_entity: 'Cliente teste', city: 'Campinas' }, DanfeProducts: [] };
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/trips/search/date/')) return Promise.resolve({ data: [trip] });
+      if (url.includes('/danfes/batch')) return Promise.resolve({ data: [danfe] });
+      if (url.includes('/api/receipts/backlog')) return Promise.resolve({ data: { total: 1, rows: [{ company_id: 1, invoice_number: '100', customer_id: 'C1', city: 'Campinas' }] } });
+      return Promise.resolve({ data: [] });
+    });
+    const createUrl = URL.createObjectURL;
+    const revokeUrl = URL.revokeObjectURL;
+    URL.createObjectURL = jest.fn(() => 'blob:preview');
+    URL.revokeObjectURL = jest.fn();
+    const open = jest.spyOn(window, 'open').mockReturnValue(null);
+    (pdf as jest.Mock).mockClear();
+    (pdf as jest.Mock).mockReturnValue({ toBlob: jest.fn().mockResolvedValue(new Blob()) });
+    try {
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Viagens' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Imprimir produtos' }));
+      await waitFor(() => expect(pdf).toHaveBeenCalledTimes(1));
+      expect(mockedAxios.get.mock.calls.filter(([url]) => url.includes('/danfes/batch'))).toHaveLength(1);
+      expect((pdf as jest.Mock).mock.calls[0][0].props.retainedReminders).toHaveLength(1);
+    } finally {
+      open.mockRestore();
+      URL.createObjectURL = createUrl;
+      URL.revokeObjectURL = revokeUrl;
+    }
+  });
+
   beforeEach(() => {
     mockedAxios.get.mockReset();
     mockedAxios.post.mockReset();

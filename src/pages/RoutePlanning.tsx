@@ -1,3 +1,6 @@
+import { forEachInBatches } from '../utils/forEachInBatches';
+import { API_READ_TIMEOUT_MS } from '../utils/apiReadTimeout';
+import useBodyScrollLock from '../hooks/useBodyScrollLock';
 import { useCallback, useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -317,6 +320,7 @@ function RoutePlanning() {
   const [tripDriverSearch, setTripDriverSearch] = useState<string>('');
   const [tripPlateSearch, setTripPlateSearch] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTripsLoading, setIsTripsLoading] = useState<boolean>(false);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
   const [tripToUpdate, setTripToUpdate] = useState<ITrip | null>(null);
@@ -419,16 +423,7 @@ function RoutePlanning() {
     return activeTodayTrips.filter((trip) => Number(trip.id) !== Number(tripToUpdate.id));
   }, [activeTodayTrips, tripToUpdate]);
 
-  useEffect(() => {
-    if (activeTab !== 'routing') return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [activeTab]);
+  useBodyScrollLock(activeTab === 'routing');
 
   const routingActiveTripsExcludingCurrent = useMemo(() => {
     if (tripToUpdate === null) return activeTodayTrips;
@@ -636,7 +631,7 @@ function RoutePlanning() {
   }, [lastScannedInvoice]);
 
   const fetchTripsByDate = useCallback(async (date: string) => {
-    const response = await axios.get(`${API_URL}/trips/search/date/${date}`);
+    const response = await axios.get(`${API_URL}/trips/search/date/${date}`, { timeout: API_READ_TIMEOUT_MS });
     return response.data as ITrip[];
   }, []);
 
@@ -1737,13 +1732,17 @@ function RoutePlanning() {
     const desiredOrderByInvoice = new Map(nextNotes.map((note, index) => [getTripNoteKey(note), index + 1]));
     const reorderedNotes = sortTripNotesByOrder(refreshedNotes);
 
-    for (const note of reorderedNotes) {
+    const orderChanges = reorderedNotes.filter((note) => {
       const desiredOrder = desiredOrderByInvoice.get(getTripNoteKey(note));
-      if (!note.id || !desiredOrder || Number(note.order) === desiredOrder) continue;
-      await axios.put(`${API_URL}/trips/change-order/${note.id}`, { newOrder: desiredOrder }, authConfig);
-    }
+      return note.id && desiredOrder && Number(note.order) !== desiredOrder;
+    });
+    // These writes affect distinct note IDs; additions/removals remain sequential.
+    await forEachInBatches(orderChanges, (note) => axios.put(
+      `${API_URL}/trips/change-order/${note.id}`,
+      { newOrder: desiredOrderByInvoice.get(getTripNoteKey(note)) }, authConfig,
+    ));
 
-    const finalTrips = await fetchTripsByDate(trip.date);
+    const finalTrips = orderChanges.length ? await fetchTripsByDate(trip.date) : refreshedTrips;
     const finalTrip = finalTrips.find((candidate) => Number(candidate.id) === Number(trip.id));
     if (!finalTrip) {
       throw new Error('Rota nao encontrada apos reordenar as notas.');
@@ -1863,6 +1862,7 @@ function RoutePlanning() {
   };
 
   const requestTripSubmission = () => {
+    if (isSubmitting || isPrinting) return;
     const total = sortedNotes.reduce((sum, note) => sum + Number(note.gross_weight || 0), 0);
 
     if (selectedDriver === 'null' || selectedCar === 'null' || sortedNotes.length === 0) {
@@ -1905,6 +1905,7 @@ function RoutePlanning() {
     const assignmentChanged = hasTripAssignmentChanged(tripToUpdate, selectedDriver, selectedCar);
 
     try {
+      setIsSubmitting(true);
       setIsLoading(true);
 
       if (isUpdating && tripToUpdate) {
@@ -1917,17 +1918,12 @@ function RoutePlanning() {
           updatedTrip = data;
         }
 
-        if (shouldPrintProducts) {
-          await printTripProducts(updatedTrip, pdfPreviewWindow);
-        }
-
         alert('Rota atualizada com sucesso.');
         loadAssignmentFromTrip(updatedTrip);
         setShowAssignmentFields(false);
-        await Promise.all([
-          refreshTrips(todayApiDate),
-          refreshRoutingPool(updatedTrip.date, updatedTrip),
-        ]);
+        setRouteSubmissionPrompt(null);
+        setIsLoading(false);
+        await finishSavedTrip(updatedTrip, shouldPrintProducts, pdfPreviewWindow, true);
         return;
       }
 
@@ -1960,10 +1956,6 @@ function RoutePlanning() {
       }, authConfig);
 
       const savedTrip = createResponse?.data as ITrip | undefined;
-      if (shouldPrintProducts && savedTrip?.id) {
-        await printTripProducts(savedTrip, pdfPreviewWindow);
-      }
-
       alert(isUpdating ? 'Rota atualizada com sucesso.' : 'Viagem criada com sucesso.');
       setSelectedDriver('null');
       setSelectedCar('null');
@@ -1972,10 +1964,9 @@ function RoutePlanning() {
       setIsUpdating(false);
       setTripToUpdate(null);
       setIsSecondRunMode(false);
-      await Promise.all([
-        refreshTrips(todayApiDate),
-        refreshRoutingPool(todayApiDate),
-      ]);
+      setRouteSubmissionPrompt(null);
+      setIsLoading(false);
+      if (savedTrip?.id) await finishSavedTrip(savedTrip, shouldPrintProducts, pdfPreviewWindow, false);
     } catch (error: any) {
       if (handleAuthenticationError(error)) return;
       if (pdfPreviewWindow && !pdfPreviewWindow.closed) pdfPreviewWindow.close();
@@ -1983,7 +1974,37 @@ function RoutePlanning() {
     } finally {
       setRouteSubmissionPrompt(null);
       setIsLoading(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const finishSavedTrip = async (trip: ITrip, shouldPrint: boolean, previewWindow: Window | null, editing: boolean) => {
+    await Promise.all([
+      (async () => {
+        if (!shouldPrint) return;
+        try {
+          await printTripProducts(trip, previewWindow);
+        } catch (error) {
+          if (previewWindow && !previewWindow.closed) previewWindow.close();
+          if (!handleAuthenticationError(error)) {
+            alert('A viagem foi salva, mas não foi possível gerar o PDF. Tente imprimir novamente na aba Viagens.');
+          }
+        }
+      })(),
+      (async () => {
+        try {
+          await Promise.all([
+            refreshTrips(todayApiDate),
+            // Editing already refreshes the pool through the tripToUpdate effect.
+            ...(editing ? [] : [refreshRoutingPool(todayApiDate)]),
+          ]);
+        } catch (error) {
+          if (!handleAuthenticationError(error)) {
+            alert('A viagem foi salva, mas não foi possível atualizar a lista de viagens. Consulte novamente a aba Viagens.');
+          }
+        }
+      })(),
+    ]);
   };
 
   const startEditModeFromTrip = (trip: ITrip) => {
@@ -2009,11 +2030,13 @@ function RoutePlanning() {
     return fetchDanfesByInvoiceNumbers((trip.TripNotes || []).map((note) => String(note.invoice_number || '')));
   };
 
-  const fetchDanfesByInvoiceNumbers = async (invoiceNumbers: string[]) => {
+  const fetchDanfesByInvoiceNumbers = async (invoiceNumbers: string[], signal?: AbortSignal) => {
     const uniqueInvoices = Array.from(new Set(invoiceNumbers.map((invoiceNumber) => String(invoiceNumber || '').trim()).filter(Boolean)));
     if (!uniqueInvoices.length) return [];
 
     const response = await axios.get<IDanfe[]>(`${API_URL}/danfes/batch`, {
+      timeout: API_READ_TIMEOUT_MS,
+      signal,
       params: {
         invoices: uniqueInvoices.join(','),
       },
@@ -2024,12 +2047,13 @@ function RoutePlanning() {
       : [];
   };
 
-  const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[]) => {
+  const resolveRetainedRemindersForTrip = async (trip: ITrip, tripDanfes: IDanfe[], signal: AbortSignal) => {
     if (!tripDanfes.length) return [];
     const currentRetainedRows: IReceiptBacklogRow[] = [];
     let total = 1;
     while (currentRetainedRows.length < total) {
-      const page = await listReceiptBacklog({ queueType: 'retained', limit: 300, offset: currentRetainedRows.length });
+      if (signal.aborted) throw new Error('Tempo de consulta de canhotos excedido');
+      const page = await listReceiptBacklog({ queueType: 'retained', limit: 300, offset: currentRetainedRows.length }, { signal, timeout: API_READ_TIMEOUT_MS });
       if (!Array.isArray(page?.rows) || !Number.isFinite(Number(page.total))) throw new Error('Consulta de canhotos incompleta');
       total = Number(page.total);
       if (!page.rows.length && currentRetainedRows.length < total) throw new Error('Consulta de canhotos incompleta');
@@ -2044,25 +2068,26 @@ function RoutePlanning() {
 
     const sameDayTrips = trip.date === todayApiDate && todayTrips.length
       ? Array.from(new Map(
-        [trip, ...todayTrips].map((dayTrip) => [Number(dayTrip.id), dayTrip]),
+        [...todayTrips, trip].map((dayTrip) => [Number(dayTrip.id), dayTrip]),
       ).values())
-      : await fetchTripsByDate(trip.date);
+      : (await axios.get<ITrip[]>(`${API_URL}/trips/search/date/${trip.date}`, { signal, timeout: API_READ_TIMEOUT_MS })).data;
     const sameDayInvoices = Array.from(new Set(
       sameDayTrips
         .flatMap((dayTrip) => dayTrip.TripNotes || [])
+        .filter((note) => !String(note.customer_id || '').trim())
         .map((note) => String(note.invoice_number || '').trim())
         .filter(Boolean),
     ));
     const sameDayTripDanfes = sameDayInvoices.length
-      ? await fetchDanfesByInvoiceNumbers(sameDayInvoices)
+      ? await fetchDanfesByInvoiceNumbers(sameDayInvoices, signal)
       : [];
     const sameDayCustomerIds = new Set([
       ...sameDayTrips
         .flatMap((dayTrip) => dayTrip.TripNotes || [])
-        .map((note) => String(note.customer_id || '').trim())
+        .map((note) => normalizeCustomerId(note.customer_id))
         .filter(Boolean),
       ...sameDayTripDanfes
-        .map((danfe) => String(danfe.customer_id || '').trim())
+        .map((danfe) => normalizeCustomerId(danfe.customer_id))
         .filter(Boolean),
     ]);
 
@@ -2081,7 +2106,7 @@ function RoutePlanning() {
       })
       .map((row) => row.invoice_number);
 
-    const retainedDanfes = await fetchDanfesByInvoiceNumbers(retainedInvoiceNumbersNeedingAddress);
+    const retainedDanfes = await fetchDanfesByInvoiceNumbers(retainedInvoiceNumbersNeedingAddress, signal);
     const retainedDanfesByInvoice = retainedDanfes.reduce<Map<string, IDanfe>>((accumulator, danfe) => {
       accumulator.set(`${danfe.company_id || 'unknown'}::${String(danfe.invoice_number || '').trim()}`, danfe);
       return accumulator;
@@ -2143,10 +2168,17 @@ function RoutePlanning() {
         alert(`Edite a rota e informe a quantidade de caixas da NF ${missingProntoBoxes.invoiceNumber} antes de imprimir.`);
         return;
       }
+      // One deadline for all supplemental lookups, including paginated receipts.
+      // Incomplete lookups must be explicit on the PDF, never silently empty.
+      const reminderController = new AbortController();
+      const reminderDeadline = window.setTimeout(() => reminderController.abort(), 12000);
       const [retainedResult, occurrencesResult] = await Promise.allSettled([
-        resolveRetainedRemindersForTrip(trip, validDanfes),
-        axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, { ...authConfig, params: { workflow_status: 'pending_transportadora' } }),
-      ]);
+        resolveRetainedRemindersForTrip(trip, validDanfes, reminderController.signal),
+        axios.get<IOccurrence[]>(`${API_URL}/occurrences/search`, {
+          ...authConfig, signal: reminderController.signal, timeout: 12000,
+          params: { workflow_status: 'pending_transportadora' },
+        }),
+      ]).finally(() => window.clearTimeout(reminderDeadline));
       const occurrencesLoaded = occurrencesResult.status === 'fulfilled' && Array.isArray(occurrencesResult.value.data);
       const freshOccurrences = occurrencesResult.status === 'fulfilled' && occurrencesLoaded ? occurrencesResult.value.data : [];
       const retainedReminders = linkRetainedOccurrences(retainedResult.status === 'fulfilled' ? retainedResult.value : [], freshOccurrences);
@@ -2197,6 +2229,17 @@ function RoutePlanning() {
       attachPdfToWindow(pdfBlob, previewWindow);
     } finally {
       setIsPrinting(false);
+    }
+  };
+
+  const printListedTrip = async (trip: ITrip, products: boolean) => {
+    const previewWindow = openPdfTargetWindow();
+    try {
+      if (products) await printTripProducts(trip, previewWindow);
+      else await printTripDeliveries(trip, previewWindow);
+    } catch (error) {
+      if (previewWindow && !previewWindow.closed) previewWindow.close();
+      if (!handleAuthenticationError(error)) alert('Não foi possível gerar o PDF. Tente imprimir novamente.');
     }
   };
 
@@ -2379,10 +2422,10 @@ function RoutePlanning() {
               <>
                 <div className="hidden items-center gap-1 md:flex">
                   <button type="button" onClick={toggleSecondRun} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/70 bg-warning px-2.5 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª' : '2ª saída'}</button>
-                  <button type="button" onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
+                  <button type="button" disabled={isSubmitting || isPrinting} onClick={requestTripSubmission} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent-strong bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar' : 'Enviar'}</button>
                 </div>
 
-                <button type="button" onClick={requestTripSubmission} className="inline-flex items-center gap-2 rounded-lg semantic-solid-info px-3 py-2 text-sm font-bold md:hidden"><Send className="h-4 w-4" />{isUpdating ? 'Salvar viagem' : 'Criar viagem'}</button>
+                <button type="button" disabled={isSubmitting || isPrinting} onClick={requestTripSubmission} className="inline-flex items-center gap-2 rounded-lg semantic-solid-info px-3 py-2 text-sm font-bold md:hidden"><Send className="h-4 w-4" />{isUpdating ? 'Salvar viagem' : 'Criar viagem'}</button>
                 <div className="relative md:hidden">
                   <button type="button" onClick={() => setIsMobileToolbarOpen((prev) => !prev)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-text">
                     <MoreVertical className="h-4 w-4" />
@@ -2390,7 +2433,7 @@ function RoutePlanning() {
                   {isMobileToolbarOpen ? (
                     <div className="absolute right-0 top-10 z-20 w-52 rounded-md border border-border bg-surface p-2 shadow-[var(--shadow-3)]">
                       <button type="button" onClick={() => { toggleSecondRun(); setIsMobileToolbarOpen(false); }} className="mb-1 flex h-9 w-full items-center gap-2 rounded-md border border-warning/70 bg-warning px-2 text-xs font-semibold text-slate-950 hover:bg-warning/90"><Route className="h-4 w-4" />{isSecondRunMode ? 'Cancelar 2ª saída' : 'Segunda saída'}</button>
-                      <button type="button" onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-accent-strong bg-accent px-2 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
+                      <button type="button" disabled={isSubmitting || isPrinting} onClick={() => { requestTripSubmission(); setIsMobileToolbarOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded-md border border-accent-strong bg-accent px-2 text-xs font-semibold text-white hover:bg-accent-strong"><Send className="h-4 w-4" />{isUpdating ? 'Atualizar viagem' : 'Enviar viagem'}</button>
                     </div>
                   ) : null}
                 </div>
@@ -2897,8 +2940,8 @@ function RoutePlanning() {
                         <div className="mt-2 flex flex-wrap gap-2">
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => setDetailsTrip(trip)}>Ver detalhes</button>
                           <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => exportTripNotesTxt(trip)}>Baixar TXT</button>
-                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripProducts(trip)}>Imprimir produtos</button>
-                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" onClick={() => printTripDeliveries(trip)}>Imprimir entregas</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" disabled={isPrinting} onClick={() => void printListedTrip(trip, true)}>Imprimir produtos</button>
+                          <button type="button" className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text" disabled={isPrinting} onClick={() => void printListedTrip(trip, false)}>Imprimir entregas</button>
                           <IconButton
                             icon={Pencil}
                             label="Editar rota"

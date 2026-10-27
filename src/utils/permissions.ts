@@ -17,7 +17,8 @@ export const ROUTE_PERMISSIONS: Record<string, readonly string[]> = {
   '/alerts': USER_ALLOWED_PERMISSIONS,
   '/route-learning': ['admin', 'master', 'expedicao'],
   '/delivery-monitoring': [...USER_ALLOWED_PERMISSIONS, CONTROL_TOWER_PERMISSION],
-  '/daily-operation-closing': TRANSPORT_INTERNAL_PERMISSIONS,
+  // Suspenso pelo responsável em 24/10/2026. O menu e o acesso direto usam esta regra.
+  '/daily-operation-closing': [],
   '/receipt-bag-closing': TRANSPORT_INTERNAL_PERMISSIONS,
   '/products': USER_ALLOWED_PERMISSIONS,
   '/routePlanning': TRANSPORT_INTERNAL_PERMISSIONS,

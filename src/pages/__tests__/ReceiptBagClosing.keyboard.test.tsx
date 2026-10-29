@@ -221,7 +221,7 @@ describe('ConferencePanel por teclado', () => {
     expect(within(finishDialog).getByRole('button', { name: 'Finalizar rota' })).toBeEnabled();
   });
 
-  it('abre a finalização quando os extras de outros malotes tiveram presença confirmada', async () => {
+  it('abre a finalização quando os extras de outros malotes têm presença e foto confirmadas', async () => {
     const confirmedItem = {
       ...item,
       status: 'confirmed',
@@ -236,8 +236,8 @@ describe('ConferencePanel por teclado', () => {
       confirmed_bag_id: bag.id,
       is_extra: true,
       is_suggested_extra: false,
-      has_receipt_photo: false,
-      has_whatsapp_photo: false,
+      has_receipt_photo: true,
+      has_whatsapp_photo: true,
     } as ReceiptBagItem));
 
     render(

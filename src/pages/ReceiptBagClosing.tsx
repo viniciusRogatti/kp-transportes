@@ -4,6 +4,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
+  Camera,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -25,7 +26,11 @@ import { Container } from '../style/invoices';
 import { showAlert, showConfirm } from '../utils/dialog';
 import { formatDateBR, formatDateTimeBR } from '../utils/dateDisplay';
 import verifyToken from '../utils/verifyToken';
-import { startVisiblePolling } from '../utils/visiblePolling';
+import { useRealtimeNotifications } from '../providers/RealtimeNotificationsProvider';
+import MissingPhotoPanel from '../components/receiptBags/MissingPhotoPanel';
+import useReceiptPhotoPendencies from '../hooks/useReceiptPhotoPendencies';
+import useReceiptPhotoLeaveGuard from '../hooks/useReceiptPhotoLeaveGuard';
+import { canonicalReceiptInvoice, mergeBagIntoList, missingPhotosInBag, photoEntryFromBag } from '../utils/receiptPhotoPendencies';
 import {
   ReceiptBag,
   ReceiptBagApiError,
@@ -47,7 +52,7 @@ import {
 } from '../services/receiptBagClosingService';
 
 export type ViewFilter = 'pending' | 'overdue' | 'completed' | 'all';
-type ItemFilter = 'all' | 'pending' | 'confirmed' | 'absent' | 'exceptions';
+type ItemFilter = 'all' | 'pending' | 'confirmed' | 'absent' | 'exceptions' | 'missing_photo';
 
 export const matchesBagViewFilter = (row: ReceiptBagListRow, filter: ViewFilter) => {
   if (filter === 'all') return true;
@@ -90,7 +95,6 @@ const EXEMPT_STATUSES = ['returned', 'retained', 'redelivery', 'cancelled', 'wai
 // Uma reentrega pode ter sido registrada por engano. Se o canhoto fisico
 // chegou no malote, a conferencia precisa conseguir corrigir o item para presente.
 const NON_CONFIRMABLE_STATUSES = ['returned', 'retained', 'cancelled', 'waived'];
-const DELIVERY_STATUSES = ['delivered', 'completed'];
 
 const errorPayload = (error: unknown): ReceiptBagApiError => (
   axios.isAxiosError(error) ? (error.response?.data || {}) as ReceiptBagApiError : {}
@@ -132,7 +136,7 @@ function BagBadge({ status }: { status: ReceiptBagStatus }) {
 }
 
 function SummaryCard({ label, value, icon, tone = '' }: {
-  label: string; value: number; icon: JSX.Element; tone?: 'red' | 'amber' | 'green' | '';
+  label: string; value: number | string; icon: JSX.Element; tone?: 'red' | 'amber' | 'green' | '';
 }) {
   const toneClass = tone === 'red' ? 'border-l-[color:var(--semantic-danger-border)]'
     : tone === 'amber' ? 'border-l-[color:var(--semantic-warning-border)]'
@@ -170,7 +174,7 @@ function FinishingBagOverlay() {
           <p className="text-xs font-black uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">Finalizando rota</p>
           <h2 className="mt-2 text-xl font-black text-text">Estamos fechando este malote</h2>
           <p className="mt-3 text-sm leading-6 text-muted">
-            Pode organizar os canhotos e já preparar o próximo malote. Estamos dando baixa nos registros e voltamos à lista em instantes.
+            Aguarde a confirmação do fechamento antes de encaminhar os canhotos. Estamos conferindo os registros e as fotos.
           </p>
           <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-2 text-xs font-bold text-sky-800 dark:bg-sky-950 dark:text-sky-200">
             <RefreshCcw className="h-3.5 w-3.5 animate-spin" />Conferindo os últimos dados
@@ -203,6 +207,44 @@ function ReceiptBagClosing() {
   const [historicalRouteDate, setHistoricalRouteDate] = useState('');
   const [historicalReasonNotes, setHistoricalReasonNotes] = useState('');
   const [loadingHistoricalRoutes, setLoadingHistoricalRoutes] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [photoSyncFailed, setPhotoSyncFailed] = useState(false);
+  const listRequest = useRef(0);
+  const { items: photoPendencies, synced_at: photoSyncedAt, storageError: photoStorageError,
+    rememberBag, rememberAttempt, forgetAttempt, acceptList, getRevision } = useReceiptPhotoPendencies();
+  useReceiptPhotoLeaveGuard(photoPendencies.length);
+  const { subscribeToStatusUpdates } = useRealtimeNotifications();
+  const photoPendenciesRef = useRef(photoPendencies);
+  photoPendenciesRef.current = photoPendencies;
+  const updatingRef = useRef(false);
+  updatingRef.current = mutating;
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const relatedBagReads = useRef(new Set<number>());
+  const acceptBag = useCallback((bag: ReceiptBag) => {
+    // Ao receber um extra, a origem também mudou. Revalida só os malotes
+    // realmente afetados que já estão na lista, sem varredura de todas as rotas.
+    const origins = new Set(bag.items.filter(item => item.confirmed_bag_id === bag.id
+      && item.origin_bag_id !== bag.id && CLOSED_STATUSES.includes(item.status)
+      && dataRef.current?.rows.some(row => row.bag_id === item.origin_bag_id)
+      && dataRef.current?.pending_items.some(previous => previous.bag_id === item.origin_bag_id
+        && previous.company_id === item.company_id
+        && canonicalReceiptInvoice(previous.invoice_number) === canonicalReceiptInvoice(item.invoice_number)))
+      .map(item => item.origin_bag_id));
+    rememberBag(bag);
+    setData(current => mergeBagIntoList(current, bag));
+    void (async () => { for (const id of Array.from(origins)) {
+      if (relatedBagReads.current.has(id)) continue;
+      relatedBagReads.current.add(id);
+      const revision = getRevision();
+      try {
+        const origin = await getReceiptBagClosing(id);
+        if (revision !== getRevision()) continue;
+        rememberBag(origin); setData(current => mergeBagIntoList(current, origin));
+      } catch { setPhotoSyncFailed(true); }
+      finally { relatedBagReads.current.delete(id); }
+    } })();
+  }, [rememberBag, getRevision]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -216,34 +258,111 @@ function ReceiptBagClosing() {
   }, [navigate]);
 
   const loadList = useCallback(async (silent = false) => {
+    const request = ++listRequest.current;
+    const revision = getRevision();
     if (!silent) setLoading(true);
     if (!silent) setError('');
     try {
-      setData(await listReceiptBagClosings(date));
+      const response = await listReceiptBagClosings(date);
+      if (request !== listRequest.current || revision !== getRevision()) return;
+      if (!response.summary || !Array.isArray(response.rows) || !Array.isArray(response.pending_items)) throw new Error('A consulta dos malotes veio incompleta. Tente atualizar novamente.');
+      setData(response);
+      acceptList(response, revision);
+      setPhotoSyncFailed(!Array.isArray(response.missing_photo_items));
     } catch (requestError) {
+      if (request !== listRequest.current) return;
+      setPhotoSyncFailed(true);
       if (!silent) setError(errorMessage(requestError, 'Não foi possível carregar os malotes.'));
     } finally {
-      if (!silent) setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
-  }, [date]);
+  }, [date, acceptList, getRevision]);
+
+  useEffect(() => {
+    const onOnline = () => { setOnline(true); };
+    const onOffline = () => setOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => { window.removeEventListener('online', onOnline); window.removeEventListener('offline', onOffline); };
+  }, []);
 
   useEffect(() => {
     void loadList();
-    return startVisiblePolling(() => loadList(true), 20000);
   }, [loadList]);
 
   const activeBagId = activeBag?.id || null;
+  const activeBagIdRef = useRef(activeBagId);
+  activeBagIdRef.current = activeBagId;
+  const refreshActiveBag = useCallback(async () => {
+    if (!activeBagId) return;
+    const revision = getRevision();
+    try {
+      const bag = await getReceiptBagClosing(activeBagId);
+      if (activeBagIdRef.current !== activeBagId || revision !== getRevision()) return;
+      setActiveBag(bag); acceptBag(bag); setPhotoSyncFailed(false);
+    } catch { if (activeBagIdRef.current === activeBagId) setPhotoSyncFailed(true); }
+  }, [activeBagId, getRevision, acceptBag]);
   useEffect(() => {
-    if (!activeBagId) return undefined;
+    const pendingBags = new Set<number>();
+    const inFlight = new Set<number>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
-    const stop = startVisiblePolling(async () => {
+    const flush = async () => {
+      timer = undefined;
+      if (updatingRef.current) { timer = setTimeout(() => void flush(), 500); return; }
+      const ids = Array.from(pendingBags); pendingBags.clear();
+      for (const id of ids) {
+        if (inFlight.has(id)) { pendingBags.add(id); continue; }
+        inFlight.add(id);
+        const revision = getRevision();
+        try {
+          const bag = await getReceiptBagClosing(id);
+          if (disposed || revision !== getRevision()) { if (!disposed) pendingBags.add(id); continue; }
+          acceptBag(bag); setPhotoSyncFailed(false);
+          if (activeBagIdRef.current === id) setActiveBag(bag);
+        } catch { if (!disposed) setPhotoSyncFailed(true); }
+        finally { inFlight.delete(id); }
+      }
+      if (!disposed && pendingBags.size && !timer) timer = setTimeout(() => void flush(), 500);
+    };
+    const schedule = (ids: number[]) => {
+      ids.forEach(id => pendingBags.add(id));
+      if (pendingBags.size && !timer) timer = setTimeout(() => void flush(), 500);
+    };
+    const unsubscribe = subscribeToStatusUpdates(event => {
+      const reconnect = event.type === 'realtime_reconnected';
+      const relevant = event.type
+        ? ['receipt_status_updated', 'receipt_retake_resolved', 'receipt_bag_item_changed'].includes(event.type)
+        : event.kind === 'receipt_posted' || ['assigned', 'delivered', 'completed', 'returned', 'retained', 'redelivery', 'cancelled'].includes(event.status || '');
+      if (!reconnect && !relevant) return; // GPS, notificações e roteiros planejados não consultam malotes.
+      const matches = photoPendenciesRef.current.filter(item => reconnect || (event.invoice_number
+        && canonicalReceiptInvoice(item.invoice_number) === canonicalReceiptInvoice(event.invoice_number)
+        && (!event.invoice_company_id || item.company_id === Number(event.invoice_company_id)))
+        || (!event.invoice_number && event.trip_id === item.trip_id));
+      schedule(matches.map(item => item.bag_id));
+    });
+    const onOnline = () => schedule(photoPendenciesRef.current.map(item => item.bag_id));
+    window.addEventListener('online', onOnline);
+    return () => { disposed = true; if (timer) clearTimeout(timer); unsubscribe(); window.removeEventListener('online', onOnline); };
+  }, [subscribeToStatusUpdates, getRevision, acceptBag]);
+
+  const verifyPendingPhotos = useCallback(async () => {
+    if (!navigator.onLine || updatingRef.current) return;
+    const ids = Array.from(new Set(photoPendenciesRef.current.map(item => item.bag_id)));
+    if (!ids.length) { await loadList(); return; }
+    setLoading(true);
+    let failed = false;
+    for (const id of ids) {
+      const revision = getRevision();
       try {
-        const bag = await getReceiptBagClosing(activeBagId);
-        if (!disposed) setActiveBag(bag);
-      } catch { /* Preserve the last confirmed view on a failed refresh. */ }
-    }, 12000);
-    return () => { disposed = true; stop(); };
-  }, [activeBagId]);
+        const bag = await getReceiptBagClosing(id);
+        if (revision !== getRevision()) { failed = true; continue; }
+        acceptBag(bag);
+        if (activeBagIdRef.current === id) setActiveBag(bag);
+      } catch { failed = true; }
+    }
+    setPhotoSyncFailed(failed); setLoading(false);
+  }, [acceptBag, getRevision, loadList]);
 
   const visibleRows = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
@@ -265,10 +384,12 @@ function ReceiptBagClosing() {
 
   const visibleItems = useMemo(() => {
     const term = itemSearch.trim().toLocaleLowerCase('pt-BR');
+    const withoutPhotoIds = new Set(activeBag ? missingPhotosInBag(activeBag).map(item => item.id) : []);
     return (activeBag?.items || []).filter((item) => {
       const matchesFilter = itemFilter === 'all'
         || (itemFilter === 'pending' && item.status === 'pending')
         || (itemFilter === 'confirmed' && CLOSED_STATUSES.includes(item.status))
+        || (itemFilter === 'missing_photo' && withoutPhotoIds.has(item.id))
         || (itemFilter === 'absent' && item.status === 'absent')
         || (itemFilter === 'exceptions' && EXEMPT_STATUSES.includes(item.status));
       return matchesFilter && (!term || [item.invoice_number, item.customer_name, item.city]
@@ -283,11 +404,12 @@ function ReceiptBagClosing() {
   }, [activeBag, itemFilter, itemSearch]);
   const selectedItem = activeBag?.items.find((item) => item.id === selectedItemId) || null;
 
-  const applyBag = (bag: ReceiptBag, message: string) => {
+  const applyBag = useCallback((bag: ReceiptBag, message: string) => {
     setActiveBag(bag);
+    acceptBag(bag);
     setFeedback(message);
     window.setTimeout(() => setFeedback(''), 2500);
-  };
+  }, [acceptBag]);
 
   const confirmLooseReceipt = async (item: ReceiptBagPendingItem) => {
     if (mutating || !['pending', 'absent'].includes(item.status)) return;
@@ -298,12 +420,14 @@ function ReceiptBagClosing() {
     )) return;
     setMutating(true);
     setError('');
+    rememberAttempt(item);
     try {
-      await updateReceiptBagItem(item.bag_id, item.item_id, 'confirm');
+      const confirmedBag = await updateReceiptBagItem(item.bag_id, item.item_id, 'confirm');
+      acceptBag(confirmedBag);
       setLooseReceiptSearch('');
       setFeedback(`NF ${item.invoice_number} localizada.${item.has_whatsapp_photo ? '' : ' O malote aguardará a postagem da foto no grupo.'}`);
-      await loadList(true);
     } catch (requestError) {
+      if (axios.isAxiosError(requestError) && requestError.response && requestError.response.status < 500) forgetAttempt(item.bag_id, item.invoice_number);
       setError(errorMessage(requestError, 'Não foi possível confirmar o canhoto avulso.'));
     } finally {
       setMutating(false);
@@ -318,6 +442,7 @@ function ReceiptBagClosing() {
     try {
       const bag = await getReceiptBagClosing(item.bag_id);
       setActiveBag(bag);
+      acceptBag(bag);
       setSelectedItemId(item.item_id);
       setItemFilter('all');
       setItemSearch('');
@@ -334,6 +459,7 @@ function ReceiptBagClosing() {
         ? await startReceiptBagClosing(row.trip_id)
         : await getReceiptBagClosing(row.bag_id as number);
       setActiveBag(bag);
+      acceptBag(bag);
       setSelectedItemId(null);
       setItemFilter('all');
     } catch (requestError) {
@@ -363,6 +489,7 @@ function ReceiptBagClosing() {
     )) return false;
     setMutating(true);
     setError('');
+    if (action === 'confirm') rememberAttempt(photoEntryFromBag(activeBag, item));
     try {
       const bag = await updateReceiptBagItem(activeBag.id, item.id, action, { forceTransfer });
       const recoveredOrigin = action === 'confirm'
@@ -373,10 +500,10 @@ function ReceiptBagClosing() {
         : action === 'absent' ? `NF ${item.invoice_number} marcada como ausente.`
           : `Devolução da NF ${item.invoice_number} registrada.`);
       setSelectedItemId(null);
-      void loadList(true);
       if (recoveredOrigin) await showRecoveredReceiptAlert(item.invoice_number, recoveredOrigin);
       return true;
     } catch (requestError) {
+      if (action === 'confirm' && axios.isAxiosError(requestError) && requestError.response && requestError.response.status < 500) forgetAttempt(activeBag.id, item.invoice_number);
       const payload = errorPayload(requestError);
       if (payload.code === 'RECEIPT_ALREADY_CONFIRMED' && !forceTransfer) {
         const correction = await showConfirm(
@@ -393,9 +520,25 @@ function ReceiptBagClosing() {
       } else setError(errorMessage(requestError, 'Não foi possível atualizar o canhoto.'));
       return false;
     } finally { setMutating(false); }
-  }, [activeBag, loadList, mutating]);
+  }, [activeBag, mutating, rememberAttempt, forgetAttempt, applyBag]);
 
   useBodyScrollLock(Boolean(activeBag));
+
+  const confirmExtra = useCallback(async (invoice: string, options: Parameters<typeof addExtraReceiptBagInvoice>[2] = {}) => {
+    if (!activeBag) throw new Error('Abra a conferência antes de incluir a NF.');
+    rememberAttempt({ item_id: 0, bag_id: activeBag.id, trip_id: activeBag.trip_id,
+      company_id: 0, invoice_number: invoice, customer_name: null, city: null,
+      status: 'pending', has_whatsapp_photo: false, operation_date: activeBag.operation_date,
+      driver: activeBag.driver, company: null });
+    try {
+      const bag = await addExtraReceiptBagInvoice(activeBag.id, invoice, options);
+      acceptBag(bag);
+      return bag;
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError) && requestError.response && requestError.response.status < 500) forgetAttempt(activeBag.id, invoice);
+      throw requestError;
+    }
+  }, [activeBag, rememberAttempt, acceptBag, forgetAttempt]);
 
   const openHistoricalRouteSelection = useCallback(async (invoiceNumber: string, routeDate = '') => {
     if (!activeBag) return;
@@ -419,13 +562,12 @@ function ReceiptBagClosing() {
     setMutating(true);
     setError('');
     try {
-      const bag = await addExtraReceiptBagInvoice(activeBag.id, invoice, { forceTransfer });
+      const bag = await confirmExtra(invoice, { forceTransfer });
       const recoveredOrigin = getRecoveredReceiptOrigin(bag, { invoiceNumber: invoice });
       applyBag(bag, recoveredOrigin
         ? `NF ${invoice} recuperada de outro malote.`
         : `NF ${invoice} adicionada neste malote.`);
       setExtraInvoice('');
-      void loadList(true);
       if (recoveredOrigin) await showRecoveredReceiptAlert(invoice, recoveredOrigin);
     } catch (requestError) {
       const payload = errorPayload(requestError);
@@ -449,7 +591,7 @@ function ReceiptBagClosing() {
         return;
       } else setError(errorMessage(requestError, 'Não foi possível adicionar a NF.'));
     } finally { setMutating(false); }
-  }, [activeBag, extraInvoice, loadList, mutating, openHistoricalRouteSelection]);
+  }, [activeBag, extraInvoice, mutating, openHistoricalRouteSelection, confirmExtra, applyBag]);
 
   const confirmHistoricalRoute = async () => {
     if (!activeBag || !historicalRoutes || !selectedHistoricalTripId || mutating) return;
@@ -466,7 +608,7 @@ function ReceiptBagClosing() {
     setMutating(true);
     setError('');
     try {
-      const bag = await addExtraReceiptBagInvoice(activeBag.id, historicalRoutes.invoice.invoice_number, {
+      const bag = await confirmExtra(historicalRoutes.invoice.invoice_number, {
         historicalTripId: route.id,
         reasonNotes: historicalReasonNotes,
       });
@@ -476,7 +618,6 @@ function ReceiptBagClosing() {
       setHistoricalRouteDate('');
       setHistoricalReasonNotes('');
       setExtraInvoice('');
-      void loadList(true);
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível vincular a NF à rota histórica.'));
     } finally {
@@ -494,7 +635,7 @@ function ReceiptBagClosing() {
     setMutating(true);
     setError('');
     try {
-      const bag = await addExtraReceiptBagInvoice(activeBag.id, historicalRoutes.invoice.invoice_number, {
+      const bag = await confirmExtra(historicalRoutes.invoice.invoice_number, {
         allowUnrouted: true,
       });
       applyBag(bag, `NF ${historicalRoutes.invoice.invoice_number} registrada no malote sem alterar a entrega.`);
@@ -503,7 +644,6 @@ function ReceiptBagClosing() {
       setHistoricalRouteDate('');
       setHistoricalReasonNotes('');
       setExtraInvoice('');
-      void loadList(true);
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível registrar a NF no malote.'));
     } finally {
@@ -520,7 +660,6 @@ function ReceiptBagClosing() {
     setMutating(true);
     try {
       applyBag(await markRemainingReceiptBagItemsAbsent(activeBag.id), 'Canhotos restantes marcados como ausentes.');
-      void loadList(true);
     } catch (requestError) {
       setError(errorMessage(requestError, 'Não foi possível atualizar os canhotos.'));
     } finally { setMutating(false); }
@@ -528,10 +667,20 @@ function ReceiptBagClosing() {
 
   const finish = async () => {
     if (!activeBag || mutating) return;
+    if (!online) { setError('Sem conexão. Aguarde a verificação das fotos antes de finalizar.'); return; }
     setMutating(true);
     setError('');
     try {
-      let bag = activeBag;
+      let bag = await getReceiptBagClosing(activeBag.id);
+      setActiveBag(bag);
+      acceptBag(bag);
+      const withoutPhotos = missingPhotosInBag(bag);
+      if (withoutPhotos.length) {
+        setItemFilter('missing_photo');
+        setItemSearch('');
+        setError(`Publique as fotos antes de finalizar: NF ${withoutPhotos.map(item => item.invoice_number).join(', ')}.`);
+        return;
+      }
       if (bag.counts.pending) {
         setMutating(false);
         if (!await showConfirm(
@@ -543,7 +692,7 @@ function ReceiptBagClosing() {
       }
       setIsFinishing(true);
       const finishedBag = await finishReceiptBagClosing(bag.id);
-      await loadList(true);
+      acceptBag(finishedBag);
       setActiveBag(null);
       setSelectedItemId(null);
       setItemSearch('');
@@ -560,15 +709,21 @@ function ReceiptBagClosing() {
     }
   };
 
-  const closeBag = useCallback(() => {
+  const closeBag = useCallback(async () => {
+    if (mutating || isFinishing) return;
+    const count = activeBag ? Math.max(missingPhotosInBag(activeBag).length,
+      photoPendencies.filter(item => item.bag_id === activeBag.id).length) : 0;
+    if (count && !await showConfirm(
+      `Ainda há ${count} canhoto(s) presente(s) sem foto ou com confirmação a verificar nesta rota.\n\nPublique as fotos antes de encaminhar os documentos. A pendência continuará destacada na página principal.`,
+      { title: 'Fotos pendentes nesta conferência', confirmLabel: 'Voltar à lista com alerta', cancelLabel: 'Continuar conferindo', tone: 'danger' },
+    )) return;
     setActiveBag(null);
     setSelectedItemId(null);
     setItemSearch('');
     setExtraInvoice('');
     setHistoricalRoutes(null);
     setError('');
-    void loadList(true);
-  }, [loadList]);
+  }, [activeBag, photoPendencies, mutating, isFinishing]);
 
   useEffect(() => {
     if (!activeBag) return undefined;
@@ -579,7 +734,7 @@ function ReceiptBagClosing() {
         setHistoricalRoutes(null);
         return;
       }
-      if (event.key === 'Escape' && !typing) return closeBag();
+      if (event.key === 'Escape' && !typing) { void closeBag(); return; }
       if (typing || !selectedItem || mutating) return;
       if (event.key === 'Enter') { event.preventDefault(); void mutateItem(selectedItem, 'confirm'); }
       else if (event.key.toLowerCase() === 'a') { event.preventDefault(); void mutateItem(selectedItem, 'absent'); }
@@ -621,13 +776,17 @@ function ReceiptBagClosing() {
           {feedback && !activeBag ? <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400 bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"><CheckCircle2 className="h-5 w-5" />{feedback}</div> : null}
 
           <section className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-3 lg:grid-cols-6">
-            <SummaryCard label="Malotes" value={data?.summary.bags || 0} icon={<PackageCheck className="h-5 w-5" />} />
-            <SummaryCard label="Esperados" value={data?.summary.expected || 0} icon={<ClipboardCheck className="h-5 w-5" />} />
-            <SummaryCard label="Conferidos" value={data?.summary.confirmed || 0} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
-            <SummaryCard label="Canhotos pendentes" value={data?.summary.pending_receipts || 0} icon={<AlertCircle className="h-5 w-5" />} tone="amber" />
-            <SummaryCard label="Malotes atrasados" value={data?.summary.overdue_bags || 0} icon={<Clock3 className="h-5 w-5" />} tone="red" />
-            <SummaryCard label="Divergentes" value={data?.summary.divergent_bags || 0} icon={<Undo2 className="h-5 w-5" />} tone="amber" />
+            <SummaryCard label="Malotes" value={data?.summary.bags ?? '—'} icon={<PackageCheck className="h-5 w-5" />} />
+            <SummaryCard label="Esperados" value={data?.summary.expected ?? '—'} icon={<ClipboardCheck className="h-5 w-5" />} />
+            <SummaryCard label="Conferidos" value={data?.summary.confirmed ?? '—'} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
+            <SummaryCard label="Canhotos pendentes" value={data?.summary.pending_receipts ?? '—'} icon={<AlertCircle className="h-5 w-5" />} tone="amber" />
+            <SummaryCard label="Malotes atrasados" value={data?.summary.overdue_bags ?? '—'} icon={<Clock3 className="h-5 w-5" />} tone="red" />
+            <SummaryCard label="Divergentes" value={data?.summary.divergent_bags ?? '—'} icon={<Undo2 className="h-5 w-5" />} tone="amber" />
           </section>
+
+          <MissingPhotoPanel items={photoPendencies} offline={!online} failed={photoSyncFailed}
+            loading={loading} syncedAt={photoSyncedAt} storageError={photoStorageError} disabled={mutating}
+            onRefresh={() => void verifyPendingPhotos()} onOpen={(item) => void openAbsentReceipt(item)} />
 
           <section className="mt-3 shrink-0 rounded-2xl border border-border bg-card p-3 shadow-sm">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
@@ -686,7 +845,10 @@ function ReceiptBagClosing() {
           extraInvoice={extraInvoice}
           error={error}
           feedback={feedback}
-          mutating={mutating}
+          mutating={mutating || !online}
+          offline={!online}
+          syncFailed={photoSyncFailed}
+          onRefreshPhotos={() => void refreshActiveBag()}
           onClose={closeBag}
           onSelect={setSelectedItemId}
           onFilter={setItemFilter}
@@ -927,6 +1089,9 @@ type ConferenceProps = {
   error: string;
   feedback: string;
   mutating: boolean;
+  offline?: boolean;
+  syncFailed?: boolean;
+  onRefreshPhotos?: () => void;
   onClose: () => void;
   onSelect: (id: number) => void;
   onFilter: (filter: ItemFilter) => void;
@@ -944,13 +1109,10 @@ export function ConferencePanel(props: ConferenceProps) {
   const [finishPromptOpen, setFinishPromptOpen] = useState(false);
   const [keyboardCandidateId, setKeyboardCandidateId] = useState<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const withoutPhotos = missingPhotosInBag(bag);
   const canFinish = bag.items.every((item) => item.status !== 'pending')
-    && bag.items.every((item) => (
-      !CLOSED_STATUSES.includes(item.status)
-      || item.status === 'resolved_elsewhere'
-      || item.has_whatsapp_photo
-    ))
-    && bag.status !== 'completed';
+    && withoutPhotos.length === 0
+    && bag.status !== 'completed' && !props.offline;
 
   useEffect(() => {
     setFinishPromptOpen(canFinish);
@@ -1008,11 +1170,23 @@ export function ConferencePanel(props: ConferenceProps) {
             <CountPill className="bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100">{bag.counts.absent} ausentes</CountPill></div>
             <button type="button" onClick={() => setSummaryOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 font-bold hover:bg-muted/40"><ClipboardCheck className="h-4 w-4" />Resumo</button>
             {bag.counts.pending ? <button type="button" disabled={props.mutating} onClick={props.onMarkRemaining} className="h-9 rounded-lg border border-red-400 px-3 font-bold text-red-700 hover:bg-red-50 disabled:opacity-40 dark:text-red-200 dark:hover:bg-red-950">Ausentar restantes</button> : null}
-            {canFinish ? <button type="button" disabled={props.mutating} onClick={() => setFinishPromptOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />Finalizar rota</button> : null}
+            {canFinish || withoutPhotos.length ? <button type="button" disabled={props.mutating || !canFinish} title={withoutPhotos.length ? 'Publique as fotos dos canhotos presentes antes de finalizar.' : undefined} onClick={() => setFinishPromptOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 font-black text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"><PackageCheck className="h-4 w-4" />Finalizar rota</button> : null}
             <button type="button" onClick={props.onClose} className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-muted/40" aria-label="Fechar"><X className="h-4 w-4" /></button>
           </div>
         </div>
       </header>
+
+      {withoutPhotos.length ? <section aria-label="Fotos pendentes nesta rota" className="mx-2 mt-2 shrink-0 rounded-xl border-2 semantic-panel-danger p-3 sm:mx-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-2 font-black"><Camera className="h-5 w-5 shrink-0" />{withoutPhotos.length} presente(s) sem foto</p>
+          {props.onRefreshPhotos ? <button type="button" disabled={props.mutating || props.offline} onClick={props.onRefreshPhotos} className="min-h-[44px] rounded-lg border border-current px-3 py-2 text-xs font-black disabled:opacity-50">Verificar fotos</button> : null}
+        </div>
+        <p className="mt-1 text-xs font-bold">Publique as fotos no grupo agora, antes de encaminhar os documentos. O malote não pode ser finalizado sem elas.</p>
+        <div className="scrollbar-ui mt-2 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">{withoutPhotos.map(item => <button type="button" key={item.id}
+          onClick={() => { props.onFilter('missing_photo'); props.onSearch(item.invoice_number); props.onSelect(item.id); }}
+          className="min-h-[44px] rounded-lg border border-current bg-card px-3 py-2 text-xs font-black text-text">NF {item.invoice_number}</button>)}</div>
+      </section> : null}
+      {props.offline || props.syncFailed ? <p role="status" className="mx-2 mt-2 shrink-0 rounded-lg border semantic-panel-warning p-3 text-xs font-bold sm:mx-3">{props.offline ? 'Sem conexão.' : 'Não foi possível atualizar as fotos.'} As pendências continuam visíveis. Aguarde a verificação antes de encaminhar os canhotos.</p> : null}
 
       <div className="mx-auto h-10 w-full max-w-[1800px] shrink-0 px-2 pt-1 sm:px-3" aria-live="polite">
         {props.error ? (
@@ -1050,7 +1224,7 @@ export function ConferencePanel(props: ConferenceProps) {
               </div>
               <div className="flex flex-col gap-2 xl:items-end">
                 <div className="flex flex-wrap gap-2">
-                {([['all', 'Todas'], ['pending', 'Aguardando'], ['confirmed', 'Conferidas'], ['absent', 'Ausentes'], ['exceptions', 'Sem necessidade']] as Array<[ItemFilter, string]>).map(([key, label]) => (
+                {([['all', 'Todas'], ['pending', 'Aguardando'], ['confirmed', 'Conferidas'], ['missing_photo', `Presentes sem foto (${withoutPhotos.length})`], ['absent', 'Ausentes'], ['exceptions', 'Sem necessidade']] as Array<[ItemFilter, string]>).map(([key, label]) => (
                   <FilterButton key={key} active={props.itemFilter === key} onClick={() => props.onFilter(key)}>{label}</FilterButton>
                 ))}
                 </div>
@@ -1059,7 +1233,7 @@ export function ConferencePanel(props: ConferenceProps) {
             </div>
           </div>
           <div className="scrollbar-ui min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain p-2.5 pr-1.5">
-            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id || item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !NON_CONFIRMABLE_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
+            {items.map((item) => <ItemRow key={item.id} item={item} selected={item.id === selectedItem?.id} mutating={props.mutating} allowAbsent={item.origin_bag_id === bag.id || item.confirmed_bag_id === bag.id || item.is_suggested_extra} onSelect={() => props.onSelect(item.id)} onConfirm={() => !NON_CONFIRMABLE_STATUSES.includes(item.status) && props.onMutate(item, 'confirm')} onMutate={props.onMutate} />)}
             {!items.length ? <EmptyState text="Nenhuma NF encontrada neste filtro." /> : null}
           </div>
         </section>
@@ -1084,8 +1258,7 @@ function ItemRow({ item, selected, mutating, allowAbsent, onSelect, onConfirm, o
 }) {
   const config = ITEM_STATUS[item.status];
   const suggestionDiffers = item.suggested_driver_id && item.suggested_driver_id !== item.expected_driver_id;
-  const hasReceiptPhoto = item.has_whatsapp_photo
-    || DELIVERY_STATUSES.includes(String(item.operational_status || '').toLowerCase());
+  const hasReceiptPhoto = item.has_whatsapp_photo === true;
   return (
     <div role="button" tabIndex={0} onClick={onSelect} onDoubleClick={onConfirm} onKeyDown={(event) => event.key === 'Enter' && onSelect()} className={`w-full cursor-pointer rounded-lg border px-2.5 py-2 text-left transition ${selected ? 'ring-2 ring-sky-500 ring-offset-1 ring-offset-surface' : ''} ${config.row}`}>
       <div className="flex items-center gap-2">

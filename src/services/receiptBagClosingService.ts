@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '../data';
+import { API_READ_TIMEOUT_MS } from '../utils/apiReadTimeout';
 
 export type ReceiptBagStatus = 'not_started' | 'in_progress' | 'completed' | 'completed_with_pending';
 export type ReceiptBagItemStatus =
@@ -46,6 +47,8 @@ export type ReceiptBagPendingItem = {
   city: string | null;
   status: ReceiptBagItemStatus;
   has_whatsapp_photo: boolean;
+  receipt_photo_required?: boolean;
+  confirmed_at?: string | null;
   absence_reported_in_suggested_bag?: boolean;
   operation_date: string;
   driver: { id: number; name: string } | null;
@@ -54,6 +57,7 @@ export type ReceiptBagPendingItem = {
 
 export type ReceiptBagItem = {
   id: number;
+  company_id?: number;
   origin_bag_id: number;
   confirmed_bag_id: number | null;
   trip_note_id: number | null;
@@ -75,6 +79,7 @@ export type ReceiptBagItem = {
   suggestion_sender_phone: string | null;
   has_receipt_photo: boolean;
   has_whatsapp_photo: boolean;
+  receipt_photo_required?: boolean;
   receipt_photo_posted_at: string | null;
   confirmed_at: string | null;
   absent_at: string | null;
@@ -124,6 +129,7 @@ export type ReceiptBagListResponse = {
     divergent_bags: number;
   };
   pending_items: ReceiptBagPendingItem[];
+  missing_photo_items?: ReceiptBagPendingItem[];
   rows: ReceiptBagListRow[];
 };
 
@@ -148,6 +154,7 @@ export type HistoricalReceiptRoutesResponse = {
     city: string | null;
     has_receipt_photo: boolean;
     has_whatsapp_photo: boolean;
+  receipt_photo_required?: boolean;
   };
   bag: {
     id: number;
@@ -177,7 +184,7 @@ export type ReceiptBagApiError = {
 
 const authConfig = () => {
   const token = localStorage.getItem('token');
-  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  return { timeout: API_READ_TIMEOUT_MS, ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}) };
 };
 
 const baseUrl = `${API_URL}/api/receipt-bag-closings`;

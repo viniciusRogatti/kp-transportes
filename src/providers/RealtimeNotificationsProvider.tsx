@@ -36,7 +36,10 @@ type NotificationsApiResponse = {
   unreadCount?: unknown;
 };
 
+export type ReceiptStatusUpdate = { type?: string; invoice_number?: string; invoice_company_id?: number;
+  trip_id?: number; status?: string; kind?: string };
 type RealtimeNotificationsContextValue = {
+  subscribeToStatusUpdates: (listener: (event: ReceiptStatusUpdate) => void) => () => void;
   notifications: RealtimeNotification[];
   unreadCount: number;
   connected: boolean;
@@ -59,6 +62,7 @@ const SOCKET_EVENT_NAME = 'notification:new';
 const ALERT_SOCKET_EVENT_NAME = 'delivery_monitoring_alert';
 
 const RealtimeNotificationsContext = createContext<RealtimeNotificationsContextValue>({
+  subscribeToStatusUpdates: () => () => {},
   notifications: [],
   unreadCount: 0,
   connected: false,
@@ -166,6 +170,11 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
   const [lastReceivedAt, setLastReceivedAt] = useState<string | null>(null);
   const [lastAlertUpdateAt, setLastAlertUpdateAt] = useState<string | null>(null);
 
+  const statusListeners = useRef(new Set<(event: ReceiptStatusUpdate) => void>());
+  const subscribeToStatusUpdates = useCallback((listener: (event: ReceiptStatusUpdate) => void) => {
+    statusListeners.current.add(listener);
+    return () => { statusListeners.current.delete(listener); };
+  }, []);
   const socketRef = useRef<Socket | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const pollStarterTimeoutRef = useRef<number | null>(null);
@@ -422,6 +431,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
 
       socket.on('connect', async () => {
         setConnected(true);
+        statusListeners.current.forEach(listener => listener({ type: 'realtime_reconnected' }));
         stopFallbackPolling();
 
         await loadNotifications({
@@ -473,6 +483,10 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
         updateLastReceivedAt(normalized.updatedAt);
       });
 
+      socket.on('delivery_monitoring_status', (event: ReceiptStatusUpdate) => {
+        if (event && typeof event === 'object') statusListeners.current.forEach(listener => listener(event));
+      });
+
       socket.on(ALERT_SOCKET_EVENT_NAME, (rawPayload: any) => {
         const emittedAt = String(rawPayload?.emitted_at || new Date().toISOString());
         setLastAlertUpdateAt(emittedAt);
@@ -490,6 +504,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
   }, [token, loadNotifications, startFallbackPolling, stopFallbackPolling, stopResolutionRefresh, teardownSocket, updateLastReceivedAt]);
 
   const contextValue = useMemo<RealtimeNotificationsContextValue>(() => ({
+    subscribeToStatusUpdates,
     notifications,
     unreadCount,
     connected,
@@ -499,7 +514,7 @@ function RealtimeNotificationsProvider({ token, children }: RealtimeNotification
     markAsRead,
     markAllAsRead,
     resolveNotification,
-  }), [notifications, unreadCount, connected, lastReceivedAt, lastAlertUpdateAt, refreshNotifications, markAsRead, markAllAsRead, resolveNotification]);
+  }), [subscribeToStatusUpdates, notifications, unreadCount, connected, lastReceivedAt, lastAlertUpdateAt, refreshNotifications, markAsRead, markAllAsRead, resolveNotification]);
 
   return (
     <RealtimeNotificationsContext.Provider value={contextValue}>

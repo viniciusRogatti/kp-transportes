@@ -16,6 +16,7 @@ export const ROUTE_PERMISSIONS: Record<string, readonly string[]> = {
   '/operational-pendencies': USER_ALLOWED_PERMISSIONS,
   '/alerts': USER_ALLOWED_PERMISSIONS,
   '/route-learning': ['admin', 'master', 'expedicao'],
+  '/astro-training': ['admin', 'master', 'expedicao'],
   '/delivery-monitoring': [...USER_ALLOWED_PERMISSIONS, CONTROL_TOWER_PERMISSION],
   // Suspenso pelo responsável em 24/10/2026. O menu e o acesso direto usam esta regra.
   '/daily-operation-closing': [],
@@ -56,3 +57,7 @@ export const getDefaultRouteByPermission = (permissionRaw: string) => {
 
   return '/';
 };
+
+// Presentation guard only. The API validates Rogatti's immutable user ID (63) and company (1).
+export const canAccessAstroTraining = (permission: string, username: string, companyId: string) =>
+  getRoutePermissions('/astro-training').includes(permission) && username.trim().toLowerCase() === 'rogatti' && companyId === '1';

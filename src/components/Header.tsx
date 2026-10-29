@@ -36,6 +36,7 @@ import { brand } from '../config/brand';
 import { showConfirm } from '../utils/dialog';
 import {
   getRoutePermissions,
+  canAccessAstroTraining,
 } from '../utils/permissions';
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 import TutorialHelpButton from '../tutorial/TutorialHelpButton';
@@ -88,6 +89,7 @@ const navItems: NavItem[] = [
   { to: '/customers', label: 'Clientes', shortLabel: 'Clientes', icon: <Users className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/customers')] },
   { to: '/routePlanning', label: 'Roteirização', shortLabel: 'Rotas', icon: <Route className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/routePlanning')] },
   { to: '/route-learning', label: 'Aprendizado de rotas', shortLabel: 'Aprendizado', icon: <Route className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/route-learning')] },
+  { to: '/astro-training', label: 'Treinamento do Astro', shortLabel: 'Astro', icon: <Route className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/astro-training')] },
   { to: '/delivery-monitoring', label: 'Monitoramento', shortLabel: 'Monitor', icon: <MapPinned className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/delivery-monitoring')] },
   { to: '/daily-operation-closing', label: 'Fechamento Diário', shortLabel: 'Fechamento', icon: <FileText className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/daily-operation-closing')] },
   { to: '/receipt-bag-closing', label: 'Fechamento de Canhotos', shortLabel: 'Canhotos', icon: <PackageCheck className="h-4 w-4" />, allowedPermissions: [...getRoutePermissions('/receipt-bag-closing')] },
@@ -109,6 +111,7 @@ const routeTitles: Record<string, string> = {
   '/customers': 'Clientes',
   '/routePlanning': 'Roteirização',
   '/route-learning': 'Aprendizado de rotas',
+  '/astro-training': 'Treinamento do Astro',
   '/delivery-monitoring': 'Monitoramento de Entregas',
   '/daily-operation-closing': 'Fechamento Diário da Operação',
   '/receipt-bag-closing': 'Fechamento de Canhotos',
@@ -163,7 +166,7 @@ function Header() {
   const unreadNotificationClass = isLightTheme
     ? 'semantic-panel-info hover:bg-sky-100'
     : 'semantic-panel-info hover:bg-[#163654]';
-  const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission));
+  const visibleNavItems = navItems.filter((item) => item.allowedPermissions.includes(permission) && (item.to !== '/astro-training' || canAccessAstroTraining(permission, localStorage.getItem('user_login') || '', localStorage.getItem('company_id') || '')));
 
   useEffect(() => {
     document.body.classList.add('with-app-shell');

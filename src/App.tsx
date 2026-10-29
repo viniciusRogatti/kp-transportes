@@ -6,6 +6,7 @@ import useAppVersionAutoRefresh from './hooks/useAppVersionAutoRefresh';
 import { RealtimeNotificationsProvider } from './providers/RealtimeNotificationsProvider';
 import {
   getDefaultRouteByPermission,
+  canAccessAstroTraining,
   getRoutePermissions,
 } from './utils/permissions';
 import axios from 'axios';
@@ -32,6 +33,7 @@ const UserSessions = lazy(() => import('./pages/UserSessions'));
 const WhatsappBotConnection = lazy(() => import('./pages/WhatsappBotConnection'));
 const AlertsPage = lazy(() => import('./pages/Alerts'));
 const RouteLearning = lazy(() => import('./pages/RouteLearning'));
+const AstroTraining = lazy(() => import('./pages/AstroTraining'));
 const DeliveryMonitoring = lazy(() => import('./pages/DeliveryMonitoring'));
 const OperationalPendencies = lazy(() => import('./pages/OperationalPendencies'));
 const CteManagement = lazy(() => import('./pages/CteManagement'));
@@ -46,7 +48,7 @@ function RouteFallback() {
   );
 }
 
-function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: string[]; children: JSX.Element }) {
+function ProtectedRoute({ allowedPermissions, children, trainingOwnerOnly = false }: { allowedPermissions: string[]; children: JSX.Element; trainingOwnerOnly?: boolean }) {
   const token = localStorage.getItem('token');
   const permission = localStorage.getItem('user_permission') || '';
 
@@ -54,7 +56,7 @@ function ProtectedRoute({ allowedPermissions, children }: { allowedPermissions: 
     return <Navigate to="/" replace />;
   }
 
-  if (!allowedPermissions.includes(permission)) {
+  if (!allowedPermissions.includes(permission) || (trainingOwnerOnly && !canAccessAstroTraining(permission, localStorage.getItem('user_login') || '', localStorage.getItem('company_id') || ''))) {
     return <Navigate to={getDefaultRouteByPermission(permission)} replace />;
   }
 
@@ -147,6 +149,7 @@ function App() {
           <Route path="/operational-pendencies" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/operational-pendencies')]}><OperationalPendencies /></ProtectedRoute>} />
           <Route path="/alerts" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/alerts')]}><AlertsPage /></ProtectedRoute>} />
           <Route path="/route-learning" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/route-learning')]}><RouteLearning /></ProtectedRoute>} />
+          <Route path="/astro-training" element={<ProtectedRoute trainingOwnerOnly allowedPermissions={[...getRoutePermissions('/astro-training')]}><AstroTraining /></ProtectedRoute>} />
           <Route path="/delivery-monitoring" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/delivery-monitoring')]}><DeliveryMonitoring /></ProtectedRoute>} />
           <Route path="/daily-operation-closing" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/daily-operation-closing')]}><DailyOperationClosing /></ProtectedRoute>} />
           <Route path="/receipt-bag-closing" element={<ProtectedRoute allowedPermissions={[...getRoutePermissions('/receipt-bag-closing')]}><ReceiptBagClosing /></ProtectedRoute>} />

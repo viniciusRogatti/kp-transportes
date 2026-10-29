@@ -205,3 +205,12 @@ VITE_GOOGLE_MAPS_API_KEY=...
 - O sistema é adequado para implantação por empresa, com configuração de usuários, motoristas, veículos, regras de grupos de WhatsApp e treinamento inicial.
 - Integrações externas, desenvolvimento sob medida, volume extraordinário de armazenamento e serviços de mapas podem ser contratados conforme a necessidade da operação.
 - Recursos dependentes de integração — como localização em tempo real e WhatsApp — precisam ser configurados no ambiente do cliente.
+
+
+### Treinamento do Astro — 28/10/2026
+
+Nova página `/#/astro-training`, no menu **Treinamento do Astro**, exclusiva da conta Rogatti (master). Outras contas, inclusive administradores, são bloqueadas no menu/rota e na API. Usa a sessão do sistema e a base `/astro-training` já usada pelo APK interno. Permite buscar viagem, ordenar NFs pela foto, conferir sequência digitada, excluir/recolocar notas, separar/reagrupar, salvar revisões e consultar exemplos paginados. A viagem operacional é preservada. Rascunhos ficam neste navegador, separados por conta/empresa/viagem; exemplos salvos ficam na API.
+
+Decisão do responsável em 29/10/2026: a página é o fluxo de cadastro e revisão dos exemplos. O APK interno de treinamento não será mais usado; seu código fica preservado como referência. As regras de rascunho da página estão em `src/features/astroTraining/draft.ts`; as suítes da página, rascunho e contrato HTTP fazem parte de `npm run test:critical`. Exemplos já salvos permanecem na mesma API. Rascunhos não enviados do celular não são transferidos automaticamente ao navegador. O aplicativo operacional dos motoristas continua separado.
+
+O painel **Onde reforçar o treinamento** analisa viagens por período/ID e mostra clientes/locais com referência, sem sequência ou com identidade/local a conferir. Simula uma próxima viagem em data escolhida, com o mesmo motorista e a mesma composição. Consulta sob demanda, paginada, sem alterar a operação. Não representa percentual de acerto nem cobertura de todos os clientes da empresa.

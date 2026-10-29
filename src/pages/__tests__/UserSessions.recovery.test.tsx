@@ -52,3 +52,13 @@ test('cancelar a confirmação não inicia recuperação', async () => {
   await waitFor(() => expect(confirm).toHaveBeenCalled());
   expect(api.post).not.toHaveBeenCalled();
 });
+
+test('o filtro de horarios oferece apenas operadores do painel', async () => {
+  api.get.mockImplementation(async (url) => ({ data: String(url).endsWith('/users') ? [
+    { id: 1, name: 'Operador Teste', username: 'operador', permission: 'expedicao' },
+    { id: 2, name: 'Motorista Teste', username: 'motorista', permission: 'driver' },
+  ] : [] }));
+  await openPage();
+  expect(await screen.findByRole('option', { name: /Operador Teste/ })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Motorista Teste/ })).not.toBeInTheDocument();
+});

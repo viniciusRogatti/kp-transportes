@@ -170,7 +170,7 @@ function UserSessions() {
           user_group: selectedUserGroup,
         },
       });
-      const safeRows = Array.isArray(data) ? data : [];
+      const safeRows = Array.isArray(data) ? data.filter((row: any) => row.permission !== 'driver') : [];
       setUsers(safeRows.map((row: any) => ({
         id: Number(row.id),
         name: String(row.name || ''),

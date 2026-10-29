@@ -22,7 +22,7 @@ const readSnapshot = (key: string | null): Snapshot => {
     && item.has_whatsapp_photo === false && typeof item.invoice_number === 'string' && item.invoice_number.length > 0
     && typeof item.operation_date === 'string'
   ))) throw new Error('Lista salva inválida');
-  return parsed;
+  return { ...parsed, items: uniquePhotoPendencies(parsed.items) };
 };
 
 export default function useReceiptPhotoPendencies() {

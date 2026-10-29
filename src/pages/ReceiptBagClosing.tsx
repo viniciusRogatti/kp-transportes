@@ -269,6 +269,21 @@ function ReceiptBagClosing() {
       setData(response);
       acceptList(response, revision);
       setPhotoSyncFailed(!Array.isArray(response.missing_photo_items));
+      // Pendências salvas de malotes já encerrados podem não vir no recorte.
+      // Verifica apenas esses IDs uma vez nesta consulta, sem intervalo/polling.
+      if (Array.isArray(response.missing_photo_items)) {
+        const returnedIds = new Set(response.rows.map(row => row.bag_id));
+        const savedIds = Array.from(new Set(photoPendenciesRef.current
+          .filter(item => !returnedIds.has(item.bag_id)).map(item => item.bag_id)));
+        for (const bagId of savedIds) {
+          const pendingRevision = getRevision();
+          try {
+            const bag = await getReceiptBagClosing(bagId);
+            if (request !== listRequest.current || pendingRevision !== getRevision()) continue;
+            acceptBag(bag);
+          } catch { if (request === listRequest.current) setPhotoSyncFailed(true); }
+        }
+      }
     } catch (requestError) {
       if (request !== listRequest.current) return;
       setPhotoSyncFailed(true);
@@ -276,7 +291,7 @@ function ReceiptBagClosing() {
     } finally {
       if (request === listRequest.current) setLoading(false);
     }
-  }, [date, acceptList, getRevision]);
+  }, [date, acceptList, getRevision, acceptBag]);
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); };

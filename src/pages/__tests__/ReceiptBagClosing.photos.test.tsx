@@ -3,7 +3,7 @@ import { HashRouter, MemoryRouter, Route, Routes, useLocation, useNavigate } fro
 import ReceiptBagClosing, { ConferencePanel } from '../ReceiptBagClosing';
 import useReceiptPhotoPendencies from '../../hooks/useReceiptPhotoPendencies';
 import useReceiptPhotoLeaveGuard from '../../hooks/useReceiptPhotoLeaveGuard';
-import { missingPhotosInBag, photoEntryFromBag } from '../../utils/receiptPhotoPendencies';
+import { missingPhotosInBag, photoEntryFromBag, uniquePhotoPendencies } from '../../utils/receiptPhotoPendencies';
 import * as api from '../../services/receiptBagClosingService';
 import type { ReceiptBag, ReceiptBagItem, ReceiptBagListResponse } from '../../services/receiptBagClosingService';
 import type { ReceiptStatusUpdate } from '../../providers/RealtimeNotificationsProvider';
@@ -252,10 +252,10 @@ test('pagina parada nao consulta em intervalos nem ao ganhar foco; somente event
   } finally { jest.useRealTimers(); }
 });
 
-test('verificar fotos consulta apenas malotes salvos e remove dispensa Vitalmar mesmo fora do recorte', async () => {
+test('verificar fotos consulta apenas malotes salvos e remove dispensa Vitalmar', async () => {
   const cached = photoEntryFromBag(bag, item);
   localStorage.setItem('kp-receipt-photos-v1:1:operacao', JSON.stringify({ version: 1, items: [cached], synced_at: null, saved_at: null }));
-  list.mockResolvedValue({ ...response([]), rows: [] });
+  list.mockResolvedValue(response([cached]));
   getBag.mockResolvedValue({ ...bag, items: [{ ...item, receipt_photo_required: false }] });
   render(<MemoryRouter><ReceiptBagClosing /></MemoryRouter>);
   const panel = await screen.findByRole('region', { name: /Presentes sem foto/ });
@@ -263,4 +263,37 @@ test('verificar fotos consulta apenas malotes salvos e remove dispensa Vitalmar 
   fireEvent.click(within(panel).getByRole('button', { name: /Verificar fotos/ }));
   await waitFor(() => expect(panel).not.toHaveTextContent('NF 123'));
   expect(getBag).toHaveBeenCalledTimes(1); expect(list).toHaveBeenCalledTimes(1);
+});
+
+
+test('restaura as duas NFs uma vez cada quando o cache antigo repete o mesmo item sem empresa', () => {
+  const notes = ['86293', '86291'].map((invoice_number, index) => photoEntryFromBag(bag, { ...item, id: index + 1, invoice_number }));
+  const copies = [...notes.map(note => ({ ...note, company_id: 0 })), ...notes];
+  localStorage.setItem('kp-receipt-photos-v1:1:operacao', JSON.stringify({ version: 1, items: copies, saved_at: null, synced_at: null }));
+  const { result } = renderHook(() => useReceiptPhotoPendencies());
+  expect(result.current.items.map(note => note.invoice_number)).toEqual(['86293', '86291']);
+  expect(result.current.items.every(note => note.company_id === 2)).toBe(true);
+  expect(uniquePhotoPendencies([...notes, ...notes.map(note => ({ ...note, company_id: 0 }))])).toEqual(notes);
+});
+
+test('não confunde NFs homônimas de empresas distintas; rascunho sem identidade só é substituído se não for ambíguo', () => {
+  const known = photoEntryFromBag(bag, item);
+  const otherCompany = { ...known, item_id: 2, company_id: 3 };
+  const unknown = { ...known, item_id: 0, company_id: 0, confirmation_uncertain: true };
+  expect(uniquePhotoPendencies([unknown, known])).toEqual([known]);
+  expect(uniquePhotoPendencies([unknown, known, otherCompany])).toHaveLength(3);
+  expect(uniquePhotoPendencies([unknown, { ...known, status: 'pending' }])).toHaveLength(2);
+  expect(uniquePhotoPendencies([known, otherCompany]).map(note => note.company_id)).toEqual([2, 3]);
+});
+
+test('verifica uma vez o malote salvo fora da lista e remove Vitalmar dispensada sem polling', async () => {
+  const cached = photoEntryFromBag(bag, item);
+  localStorage.setItem('kp-receipt-photos-v1:1:operacao', JSON.stringify({ version: 1, items: [cached], saved_at: null, synced_at: null }));
+  list.mockResolvedValue({ ...response([]), rows: [] });
+  getBag.mockResolvedValue({ ...bag, items: [{ ...item, receipt_photo_required: false }] });
+  render(<MemoryRouter><ReceiptBagClosing /></MemoryRouter>);
+  const panel = await screen.findByRole('region', { name: /Presentes sem foto/ });
+  await waitFor(() => expect(getBag).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(panel).not.toHaveTextContent('NF 123'));
+  expect(getBag).toHaveBeenCalledWith(10); expect(list).toHaveBeenCalledTimes(1);
 });

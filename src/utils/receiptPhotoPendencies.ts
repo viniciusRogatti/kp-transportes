@@ -2,7 +2,9 @@ import type { ReceiptBag, ReceiptBagItem, ReceiptBagPendingItem, ReceiptBagListR
 
 export type MissingReceiptPhoto = ReceiptBagPendingItem & { confirmation_uncertain?: boolean; needs_refresh?: boolean };
 export const canonicalReceiptInvoice = (value: string) => value.trim().replace(/^0+(?=\d)/, '');
-export const receiptPhotoKey = (item: MissingReceiptPhoto) => `${item.bag_id}:${item.company_id}:${canonicalReceiptInvoice(item.invoice_number)}`;
+// O ID do item é estável mesmo quando uma resposta antiga não informou a empresa.
+export const receiptPhotoKey = (item: MissingReceiptPhoto) => item.item_id > 0 ? `item:${item.item_id}`
+  : `draft:${item.bag_id}:${item.company_id}:${canonicalReceiptInvoice(item.invoice_number)}`;
 
 export const isPresentWithoutPhoto = (item: ReceiptBagItem, bagId: number) => item.receipt_photo_required !== false && item.has_whatsapp_photo !== true
   && (!item.confirmed_bag_id || item.confirmed_bag_id === bagId)
@@ -20,9 +22,27 @@ export const photoEntryFromBag = (bag: ReceiptBag, item: ReceiptBagItem): Missin
   company: item.company_id === bag.company?.id ? bag.company : null,
 });
 
-export const uniquePhotoPendencies = (items: MissingReceiptPhoto[]) => Array.from(
-  new Map(items.map(item => [receiptPhotoKey(item), item])).values(),
-);
+export const uniquePhotoPendencies = (items: MissingReceiptPhoto[]) => {
+  const byItem = new Map<string, MissingReceiptPhoto>();
+  for (const item of items) {
+    const key = receiptPhotoKey(item);
+    const previous = byItem.get(key);
+    // Não deixe uma cópia legada sem empresa sobrescrever a identidade confirmada.
+    if (previous && previous.company_id > 0 && !previous.confirmation_uncertain
+      && (item.company_id <= 0 || item.confirmation_uncertain)) continue;
+    byItem.set(key, item);
+  }
+  const rows = Array.from(byItem.values());
+  const documentKey = (item: MissingReceiptPhoto) => `${item.bag_id}:${canonicalReceiptInvoice(item.invoice_number)}`;
+  const knownCount = new Map<string, number>();
+  for (const item of rows) {
+    if (item.company_id <= 0 || item.confirmation_uncertain || !['confirmed', 'recovered', 'resolved_elsewhere'].includes(item.status)) continue;
+    const key = documentKey(item);
+    knownCount.set(key, (knownCount.get(key) || 0) + 1);
+  }
+  // Só substitui o rascunho sem identidade se há um único documento confirmado possível.
+  return rows.filter(item => item.company_id > 0 || knownCount.get(documentKey(item)) !== 1);
+};
 
 export const reconcileBagPhotoPendencies = (items: MissingReceiptPhoto[], bag: ReceiptBag) => uniquePhotoPendencies([
   ...items.filter(item => item.bag_id !== bag.id),

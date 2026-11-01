@@ -3,6 +3,7 @@ import {
   type KeyboardEventHandler,
   type MouseEventHandler,
 } from 'react';
+import type { DriverLabelLayout } from '../../pages/deliveryMonitoring/driverLabelLayout';
 import { type LucideIcon } from 'lucide-react';
 
 export type MapMarkerPinTone = {
@@ -26,11 +27,13 @@ type MapMarkerPinProps = {
   shape?: 'pin' | 'vehicle';
   iconStrokeWidth?: number;
   label?: string | null;
+  labelLayout?: DriverLabelLayout;
   title?: string;
   className?: string;
   interactive?: boolean;
   selected?: boolean;
   dimmed?: boolean;
+  compact?: boolean;
   style?: CSSProperties;
   onClick?: MouseEventHandler<HTMLDivElement>;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
@@ -49,27 +52,31 @@ export function MapMarkerPin({
   iconStrokeWidth = 1.5,
   shape = 'pin',
   label = null,
+  labelLayout,
   title,
   className,
   interactive = false,
   selected = false,
   dimmed = false,
+  compact = false,
   style,
   onClick,
   onKeyDown,
 }: MapMarkerPinProps) {
   const vehicle = shape === 'vehicle';
   const markerHeight = vehicle ? size : Math.round(size * 1.35);
-  const iconBoxSize = Math.max(16, Math.round(size * 0.5));
+  const iconBoxSize = Math.max(iconSize, Math.round(size * 0.5));
   const wrapperStyle: CSSProperties = {
     position: 'relative',
     width: `${size}px`,
     height: `${markerHeight}px`,
     overflow: 'visible',
     opacity: selected ? 1 : Math.max(0.14, (tone.opacity ?? 1) * (dimmed ? (vehicle ? 0.72 : 0.42) : 1)),
-    transform: selected ? 'translateY(-1px) scale(1.08)' : 'scale(1)',
+    transform: selected && !compact ? 'translateY(-1px) scale(1.08)' : 'scale(1)',
     transition: 'transform 140ms ease, opacity 140ms ease, filter 140ms ease',
-    filter: selected
+    filter: compact
+      ? selected ? 'drop-shadow(0 0 2px rgba(15, 23, 42, 0.6))' : 'none'
+      : selected
       ? `drop-shadow(0 0 10px ${tone.shadowColor || 'rgba(15, 23, 42, 0.25)'}) drop-shadow(0 12px 20px rgba(15, 23, 42, 0.22))`
       : tone.shadowColor === 'transparent' ? 'none' : `drop-shadow(0 3px 5px ${tone.shadowColor || 'rgba(15, 23, 42, 0.18)'})`,
     ...style,
@@ -86,6 +93,13 @@ export function MapMarkerPin({
       onKeyDown={onKeyDown}
       style={wrapperStyle}
     >
+      {label && labelLayout ? <svg aria-hidden="true" width={size} height={markerHeight}
+        style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}>
+        <line x1={size / 2} y1={markerHeight / 2}
+          x2={size / 2 + (labelLayout.x > 0 ? labelLayout.x : labelLayout.x + labelLayout.width)}
+          y2={markerHeight / 2 + labelLayout.y + labelLayout.height / 2}
+          stroke={tone.borderColor} strokeWidth={1} />
+      </svg> : null}
       <svg
         viewBox={`0 0 ${PIN_VIEW_BOX_WIDTH} ${vehicle ? 40 : PIN_VIEW_BOX_HEIGHT}`}
         width={size}
@@ -94,7 +108,7 @@ export function MapMarkerPin({
         style={{ display: 'block', overflow: 'visible' }}
       >
         {vehicle ? <>
-          <circle cx="20" cy="20" r="17" fill={tone.backgroundColor} stroke={tone.haloColor || '#ffffff'} strokeWidth="7" />
+          <circle cx="20" cy="20" r="17" fill={tone.backgroundColor} stroke={tone.haloColor || '#ffffff'} strokeWidth={compact ? 5 : 7} />
           <circle cx="20" cy="20" r="17" fill={tone.backgroundColor} stroke={tone.borderColor} strokeWidth="3" />
         </> : <>
           {tone.haloColor ? <path d={PIN_PATH} fill="none" stroke={tone.haloColor} strokeWidth="6" strokeLinejoin="round" /> : null}
@@ -127,22 +141,35 @@ export function MapMarkerPin({
 
       {label ? (
         <div
+          data-map-driver-label={vehicle ? 'true' : undefined}
           style={{
             position: 'absolute',
             left: '50%',
-            top: `calc(100% + 4px)`,
+            top: `calc(100% + ${compact ? 2 : 4}px)`,
             transform: 'translateX(-50%)',
             borderRadius: '999px',
             border: `1px solid ${tone.labelBorderColor || tone.borderColor}`,
             backgroundColor: tone.labelBackgroundColor || '#ffffff',
             color: tone.labelTextColor || '#334155',
-            padding: vehicle ? '4px 10px' : '2px 8px',
-            fontSize: vehicle ? '12px' : '10px',
+            padding: vehicle && !compact ? '4px 10px' : '2px 6px',
+            fontSize: vehicle && !compact ? '12px' : '10px',
             fontWeight: 700,
             lineHeight: 1.1,
             whiteSpace: 'nowrap',
+            maxWidth: compact ? '110px' : undefined,
+            overflow: compact ? 'hidden' : undefined,
+            textOverflow: compact ? 'ellipsis' : undefined,
             boxShadow: '0 2px 8px rgba(15, 23, 42, 0.12)',
             pointerEvents: 'none',
+            ...(labelLayout ? {
+              left: size / 2 + labelLayout.x, top: markerHeight / 2 + labelLayout.y,
+              width: labelLayout.width, height: labelLayout.height, maxWidth: 'none',
+              transform: 'none', borderRadius: 5, padding: '0 5px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'Arial, sans-serif', fontSize: labelLayout.fontSize, fontWeight: 600,
+              boxShadow: selected ? '0 1px 4px rgba(15, 23, 42, 0.2)' : 'none',
+              overflow: 'visible', pointerEvents: interactive ? 'auto' : 'none',
+            } as CSSProperties : {}),
           }}
         >
           {label}

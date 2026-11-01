@@ -4,7 +4,7 @@ import ThemeToggleButton from '../ThemeToggleButton';
 
 beforeEach(() => window.localStorage.clear());
 
-test('farol acompanha o tema, inclusive após cliques rápidos e remontagem de página', () => {
+test('botão acompanha o tema, inclusive após cliques rápidos e remontagem de página', () => {
   const view = render(<ThemeProvider><ThemeToggleButton iconOnly /></ThemeProvider>);
   const button = screen.getByRole('switch', { name: 'Ativar tema claro' });
   expect(button).toHaveAttribute('aria-checked', 'false');
@@ -17,7 +17,7 @@ test('farol acompanha o tema, inclusive após cliques rápidos e remontagem de p
   view.unmount();
   render(<ThemeProvider><ThemeToggleButton iconOnly /></ThemeProvider>);
   expect(screen.getByRole('switch', { name: 'Ativar tema escuro' })).toHaveAttribute('aria-checked', 'true');
-  expect(screen.getByText('Tema claro ativo, farol aceso')).toBeInTheDocument();
+  expect(screen.getByText('Tema claro ativo')).toBeInTheDocument();
 });
 
 test('instâncias de desktop e menu refletem o mesmo tema', () => {

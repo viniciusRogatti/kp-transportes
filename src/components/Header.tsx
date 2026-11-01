@@ -41,6 +41,7 @@ import {
 import { buildIncorrectReceiptUrl } from '../utils/missingReceiptNotification';
 import TutorialHelpButton from '../tutorial/TutorialHelpButton';
 import { formatDateTimeBR } from '../utils/dateDisplay';
+import useBodyScrollLock from '../hooks/useBodyScrollLock';
 
 type NavItem = {
   to: string;
@@ -144,6 +145,7 @@ function Header() {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [quickSearch, setQuickSearch] = useState('');
+  useBodyScrollLock(isMobileDrawerOpen);
   const desktopSidebarRef = useRef<HTMLElement | null>(null);
   const topbarRef = useRef<HTMLElement | null>(null);
   const notificationPanelRef = useRef<HTMLDivElement | null>(null);
@@ -184,6 +186,24 @@ function Header() {
   useEffect(() => {
     setIsMobileDrawerOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMobileDrawerOpen) return;
+
+    const handleResize = () => {
+      if (window.innerWidth >= 768) setIsMobileDrawerOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMobileDrawerOpen(false);
+    };
+
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMobileDrawerOpen]);
 
   useEffect(() => {
     const handleClickOutsideShell = (event: MouseEvent) => {
@@ -343,6 +363,8 @@ function Header() {
               onClick={() => setIsMobileDrawerOpen(true)}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-text md:hidden"
               aria-label="Abrir menu"
+              aria-expanded={isMobileDrawerOpen}
+              aria-controls="mobile-navigation-drawer"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -511,18 +533,20 @@ function Header() {
       <div
         onClick={() => setIsMobileDrawerOpen(false)}
         className={cn(
-          'fixed inset-0 z-[1190] bg-black/55 transition-opacity duration-300 ease-out md:hidden',
+          'fixed inset-0 z-[1190] touch-none bg-black/55 transition-opacity duration-300 ease-out md:hidden',
           isMobileDrawerOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
 
       <aside
+        id="mobile-navigation-drawer"
+        aria-label="Menu de navegação"
         className={cn(
-          'app-shell-mobile-drawer fixed left-0 top-0 z-[1200] h-dvh w-[min(85vw,320px)] border-r border-border p-3 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
+          'app-shell-mobile-drawer fixed left-0 top-0 z-[1200] flex h-dvh w-[min(85vw,320px)] flex-col overflow-hidden overscroll-none border-r border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden',
           isMobileDrawerOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
         )}
       >
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted">Menu</p>
             <h2 className="text-base font-semibold text-text">Navegação</h2>
@@ -539,7 +563,7 @@ function Header() {
 
         <ThemeToggleButton className="mb-3 w-full justify-center" />
 
-        <nav data-tutorial="app-navigation" className="scrollbar-ui space-y-1 overflow-auto pb-3">
+        <nav data-tutorial="app-navigation" aria-label="Navegação principal no celular" className="scrollbar-ui min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-y-contain pb-3">
           {visibleNavItems.map((item) => {
             const isActive = location.pathname === item.to;
             return (
@@ -570,7 +594,7 @@ function Header() {
         <button
           type="button"
           onClick={handleLogout}
-          className="mt-2 inline-flex h-10 w-full items-center justify-center rounded-md border border-danger/70 bg-transparent text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white"
+          className="mt-2 inline-flex h-10 w-full shrink-0 items-center justify-center rounded-md border border-danger/70 bg-transparent text-sm font-semibold text-danger transition-colors hover:bg-danger hover:text-white"
         >
           Sair
         </button>

@@ -1,3 +1,4 @@
+import { driverFirstName, driverMarkerMetrics, layoutDriverLabels } from '../../pages/deliveryMonitoring/driverLabelLayout';
 import { locationChangeLabel } from '../../pages/deliveryMonitoring/locationChange';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -53,6 +54,8 @@ type GoogleDeliveriesMapProps = {
   driverLocations?: GoogleDriverLocation[];
   companyMarker?: GoogleCompanyMarker | null;
   selectedDriverId: number | null;
+  focusRequestId?: number;
+  driverZoomRequestId?: number;
   selectedDeliveryId: string | null;
   onMarkerClick: (deliveryId: string) => void;
   onDriverMarkerClick?: (driverId: number | null) => void;
@@ -63,13 +66,11 @@ const mapContainerStyle = { width: '100%', height: '100%' };
 const MAP_MIN_ZOOM = 4;
 const MAP_MAX_ZOOM = 20;
 const MAP_MARKER_ICON_SCALE = 0.38;
-const MAP_MARKER_ICON_MIN_SIZE = 11;
-const MAP_MARKER_PIN_MIN_SIZE = 18;
+const MAP_MARKER_ICON_MIN_SIZE = 7;
 const MAP_MARKER_ICON_STROKE_WIDTH = 1.4;
 const DRIVER_MARKER_ICON_SCALE = 0.52;
-const DRIVER_MARKER_PIN_MIN_SIZE = 34;
-const DRIVER_MARKER_ICON_MIN_SIZE = 12;
-const DRIVER_MARKER_ICON_STROKE_WIDTH = 2;
+const DRIVER_MARKER_ICON_MIN_SIZE = 10;
+const DRIVER_MARKER_ICON_STROKE_WIDTH = 1.8;
 const COMPANY_MARKER_ICON_SCALE = 0.38;
 const COMPANY_MARKER_PIN_MIN_SIZE = 22;
 const COMPANY_MARKER_ICON_MIN_SIZE = 12;
@@ -77,12 +78,14 @@ const COMPANY_MARKER_ICON_STROKE_WIDTH = 1.4;
 const PIN_HEIGHT_RATIO = 1.35;
 
 const resolveMarkerSize = (zoom: number) => {
-  if (zoom <= 7) return 18;
-  if (zoom <= 10) return 20;
-  if (zoom <= 12) return 22;
-  if (zoom <= 14) return 25;
-  return 28;
+  if (zoom <= 8) return 11;
+  if (zoom <= 10) return 13;
+  if (zoom <= 12) return 15;
+  if (zoom <= 14) return 17;
+  return 20;
 };
+
+const resolveDriverMarkerSize = (zoom: number) => driverMarkerMetrics(zoom).size;
 
 function GoogleDeliveriesMap({
   apiKey,
@@ -93,17 +96,21 @@ function GoogleDeliveriesMap({
   driverLocations = [],
   companyMarker = null,
   selectedDriverId,
+  focusRequestId = 0,
+  driverZoomRequestId = 0,
   selectedDeliveryId,
   onMarkerClick,
   onDriverMarkerClick,
   onMapBoundsChange,
 }: GoogleDeliveriesMapProps) {
   const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [zoom, setZoom] = useState(initialZoom);
   const [openedInfoDeliveryId, setOpenedInfoDeliveryId] = useState<string | null>(null);
   const [openedInfoDriverId, setOpenedInfoDriverId] = useState<string | null>(null);
   const hasFittedBoundsRef = useRef(false);
   const activeDatasetKeyRef = useRef<string>(datasetKey);
-  const activeSelectedDriverIdRef = useRef<number | null>(selectedDriverId);
+  const activeFocusRef = useRef<string | null>(null);
+  const activeZoomRequestRef = useRef(driverZoomRequestId);
   const fitControlContainerRef = useRef<HTMLDivElement | null>(null);
   const fitControlButtonRef = useRef<HTMLButtonElement | null>(null);
   const fitControlListenerRef = useRef<(() => void) | null>(null);
@@ -113,6 +120,15 @@ function GoogleDeliveriesMap({
     id: 'google-deliveries-map-script',
     googleMapsApiKey: apiKey,
   });
+
+  const driverLabels = useMemo(() => {
+    const context = typeof CanvasRenderingContext2D !== 'undefined'
+      ? document.createElement('canvas').getContext('2d') : null;
+    return layoutDriverLabels(driverLocations, zoom, context ? (text, fontSize) => {
+      context.font = `600 ${fontSize}px Arial`;
+      return context.measureText(text).width;
+    } : undefined);
+  }, [driverLocations, zoom]);
 
   const openedInfoDelivery = useMemo(() => {
     if (!openedInfoDeliveryId) return null;
@@ -140,6 +156,11 @@ function GoogleDeliveriesMap({
     if (driverLocations.some((driverLocation) => driverLocation.id === openedInfoDriverId)) return;
     setOpenedInfoDriverId(null);
   }, [driverLocations, openedInfoDriverId]);
+
+  useEffect(() => {
+    setOpenedInfoDriverId(current => driverLocations.some(driver =>
+      driver.id === current && driver.driverId === selectedDriverId) ? current : null);
+  }, [driverLocations, selectedDriverId]);
 
   const mapOptions = useMemo<google.maps.MapOptions>(() => ({
     // Keep the base map unstyled so the custom pins sit on top of the stock Google roadmap look.
@@ -213,10 +234,37 @@ function GoogleDeliveriesMap({
   }, [deliveries, driverLocations, fitBoundsToMapItems, map]);
 
   useEffect(() => {
-    if (!map || activeSelectedDriverIdRef.current === selectedDriverId) return;
-    activeSelectedDriverIdRef.current = selectedDriverId;
-    fitBoundsToMapItems();
-  }, [fitBoundsToMapItems, map, selectedDriverId]);
+    if (!map) return;
+    const focusKey = `${datasetKey}:${selectedDriverId}:${focusRequestId}`;
+    if (activeFocusRef.current === focusKey) return;
+    if (selectedDriverId === null) {
+      activeFocusRef.current = focusKey;
+      fitBoundsToMapItems();
+      return;
+    }
+    const driver = driverLocations.filter(location => location.driverId === selectedDriverId)
+      .sort((a, b) => Date.parse(b.updatedAt || '') - Date.parse(a.updatedAt || ''))[0];
+    if (!driver) return; // Never substitute a customer's pin for a missing GPS reading.
+    activeFocusRef.current = focusKey;
+    const points = [...deliveries, ...driverLocations];
+    const latDelta = Math.max(0.002, ...points.map(point => Math.abs(point.lat - driver.lat)));
+    const lngDelta = Math.max(0.002, ...points.map(point => Math.abs(point.lng - driver.lng)));
+    const bounds = new window.google.maps.LatLngBounds();
+    bounds.extend({ lat: driver.lat - latDelta, lng: driver.lng - lngDelta });
+    bounds.extend({ lat: driver.lat + latDelta, lng: driver.lng + lngDelta });
+    // Symmetric bounds keep the chosen driver centered and the entire fleet in view.
+    map.fitBounds(bounds, 52);
+    if ((map.getZoom() || 0) > 15) map.setZoom(15);
+  }, [datasetKey, deliveries, driverLocations, fitBoundsToMapItems, focusRequestId, map, selectedDriverId]);
+
+  useEffect(() => {
+    if (!map || activeZoomRequestRef.current === driverZoomRequestId) return;
+    activeZoomRequestRef.current = driverZoomRequestId;
+    const driver = driverLocations.find(location => location.driverId === selectedDriverId);
+    if (!driver) return;
+    map.setCenter({ lat: driver.lat, lng: driver.lng });
+    map.setZoom(Math.max(14, map.getZoom() || 0));
+  }, [driverLocations, driverZoomRequestId, map, selectedDriverId]);
 
   const handleManualFitBounds = useCallback(() => {
     fitBoundsToMapItems();
@@ -236,7 +284,7 @@ function GoogleDeliveriesMap({
 
     const controlButton = document.createElement('button');
     controlButton.type = 'button';
-    controlButton.textContent = 'Enquadrar mapa';
+    controlButton.textContent = 'Enquadrar todos';
     controlButton.style.backgroundColor = '#fff';
     controlButton.style.border = '1px solid rgba(15, 23, 42, 0.25)';
     controlButton.style.borderRadius = '4px';
@@ -312,6 +360,7 @@ function GoogleDeliveriesMap({
         onLoad={(instance) => {
           instance.setCenter(center);
           instance.setZoom(initialZoom);
+          setZoom(instance.getZoom() ?? initialZoom);
           setMap(instance);
         }}
         onUnmount={() => setMap(null)}
@@ -320,17 +369,19 @@ function GoogleDeliveriesMap({
           setOpenedInfoDriverId(null);
         }}
         onIdle={emitBoundsChange}
+        onZoomChanged={() => {
+          const nextZoom = map?.getZoom();
+          if (typeof nextZoom === 'number') setZoom(current => current === nextZoom ? current : nextZoom);
+        }}
       >
         {deliveries.map((delivery) => {
-          const zoom = map?.getZoom() || initialZoom;
           const priority = getDeliveryMarkerPriority(delivery);
-          const markerSize = Math.max(15, Math.round(Math.max(MAP_MARKER_PIN_MIN_SIZE, resolveMarkerSize(zoom)) * priority.scale));
+          const markerSize = Math.max(10, Math.round(resolveMarkerSize(zoom) * priority.scale));
           const iconSize = Math.max(MAP_MARKER_ICON_MIN_SIZE, Math.round(markerSize * MAP_MARKER_ICON_SCALE));
           const Icon = getDeliveryMarkerIcon(delivery);
           const markerTone = getDeliveryMarkerStyleByStatus(delivery);
-          const isDimmed = selectedDriverId !== null && Number(delivery.driverId) !== Number(selectedDriverId);
           const isSelected = selectedDeliveryId === delivery.id;
-          const zIndex = isSelected ? 1000 : isDimmed ? 100 : priority.zIndex;
+          const zIndex = isSelected ? 1000 : priority.zIndex;
 
           return (
             <OverlayViewF
@@ -351,8 +402,8 @@ function GoogleDeliveriesMap({
                 iconSize={iconSize}
                 iconStrokeWidth={MAP_MARKER_ICON_STROKE_WIDTH}
                 interactive
+                compact
                 selected={isSelected}
-                dimmed={isDimmed}
                 title={`Selecionar entrega ${delivery.label}${delivery.locationChange ? ' · Local atualizado pelo motorista' : ''}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -374,14 +425,13 @@ function GoogleDeliveriesMap({
                   zIndex,
                 }}
               />
-              {delivery.locationChange ? <span aria-hidden="true" title={locationChangeLabel(delivery.locationChange)} style={{ opacity: isSelected ? 1 : (markerTone.opacity ?? 1) * (isDimmed ? 0.42 : 1) }} className="pointer-events-none absolute -right-1 -top-1 rounded-full border-2 border-white bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">↻</span> : null}
+              {delivery.locationChange ? <span aria-hidden="true" title={locationChangeLabel(delivery.locationChange)} style={{ opacity: isSelected ? 1 : (markerTone.opacity ?? 1) }} className="pointer-events-none absolute -right-1 -top-1 rounded-full border-2 border-white bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">↻</span> : null}
               </div>
             </OverlayViewF>
           );
         })}
 
         {companyMarker ? (() => {
-          const zoom = map?.getZoom() || initialZoom;
           const companyMarkerSize = Math.max(
             COMPANY_MARKER_PIN_MIN_SIZE,
             Math.round(resolveMarkerSize(zoom) * 0.96),
@@ -420,18 +470,16 @@ function GoogleDeliveriesMap({
         })}
 
         {driverLocations.map((driverLocation) => {
-          const zoom = map?.getZoom() || initialZoom;
-          const driverMarkerSize = Math.max(
-            DRIVER_MARKER_PIN_MIN_SIZE,
-            Math.round(resolveMarkerSize(zoom) * 1.6),
-          );
+          const driverMarkerSize = resolveDriverMarkerSize(zoom);
           const driverIconSize = Math.max(
             DRIVER_MARKER_ICON_MIN_SIZE,
             Math.round(driverMarkerSize * DRIVER_MARKER_ICON_SCALE),
           );
           const isSelected = selectedDriverId !== null && Number(driverLocation.driverId) === Number(selectedDriverId);
-          const isDimmed = selectedDriverId !== null && Number(driverLocation.driverId) !== Number(selectedDriverId);
-          const driverTone = getDriverMarkerStyle(driverLocation);
+          const driverTone = { ...getDriverMarkerStyle(driverLocation),
+            labelBackgroundColor: isSelected ? '#0f172a' : '#ffffff',
+            labelTextColor: isSelected ? '#ffffff' : '#0f172a',
+          };
 
           return (
             <OverlayViewF
@@ -447,14 +495,15 @@ function GoogleDeliveriesMap({
               <MapMarkerPin
                 icon={DRIVER_MARKER_ICON}
                 shape="vehicle"
+                compact
                 tone={driverTone}
                 size={driverMarkerSize}
                 iconSize={driverIconSize}
                 iconStrokeWidth={DRIVER_MARKER_ICON_STROKE_WIDTH}
-                label={driverLocation.driverName}
+                label={driverFirstName(driverLocation.driverName)}
+                labelLayout={driverLabels.get(driverLocation.id)}
                 interactive
                 selected={isSelected}
-                dimmed={isDimmed}
                 title={`Ver localização de ${driverLocation.driverName}`}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -483,7 +532,7 @@ function GoogleDeliveriesMap({
             options={{
               pixelOffset: new window.google.maps.Size(
                 0,
-                -Math.round(resolveMarkerSize(map?.getZoom() || initialZoom) * getDeliveryMarkerPriority(openedInfoDelivery).scale * PIN_HEIGHT_RATIO),
+                -Math.round(Math.max(10, Math.round(resolveMarkerSize(zoom) * getDeliveryMarkerPriority(openedInfoDelivery).scale)) * PIN_HEIGHT_RATIO),
               ),
             }}
           >
@@ -504,7 +553,7 @@ function GoogleDeliveriesMap({
           <InfoWindowF
             position={{ lat: openedInfoDriver.lat, lng: openedInfoDriver.lng }}
             onCloseClick={() => setOpenedInfoDriverId(null)}
-            options={{ pixelOffset: new window.google.maps.Size(0, -44) }}
+            options={{ pixelOffset: new window.google.maps.Size(0, -Math.ceil(resolveDriverMarkerSize(zoom) / 2)) }}
           >
             <div className="space-y-0.5 text-xs" style={{ color: '#000000' }}>
               <div className="font-semibold">{openedInfoDriver.driverName}</div>

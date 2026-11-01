@@ -18,7 +18,7 @@ test('restores contrast when inspecting a completed delivery without hiding it i
   const tone = getDeliveryMarkerStyleByStatus({ status: 'completed', stopStatus: 'delivered', danfeStatus: 'delivered', driverId: 7, driverColor: '#f97316' });
   const { rerender } = render(<MapMarkerPin icon={Check} tone={tone} size={18} iconSize={11} interactive title="Entrega concluída" />);
   const marker = screen.getByRole('button', { name: 'Entrega concluída' });
-  expect(marker).toHaveStyle({ opacity: 0.32 });
+  expect(marker).toHaveStyle({ opacity: 0.65 });
   expect(marker.querySelector('svg path')).toBeInTheDocument();
   rerender(<MapMarkerPin icon={Check} tone={tone} size={18} iconSize={11} interactive title="Entrega concluída" selected dimmed />);
   expect(marker).toHaveStyle({ opacity: 1 });

@@ -128,7 +128,7 @@ export const toGoogleDeliveryMapItems = (rows: MonitoringDeliveryForMap[]): Goog
 };
 
 export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): GoogleDriverLocation[] => {
-  return drivers
+  const locations = drivers
     .filter((driver) => hasDeliveryCoordinates({
       invoice_number: `driver-${driver.trip_id}`,
       customer_name: '',
@@ -155,4 +155,13 @@ export const toGoogleDriverLocations = (drivers: MonitoringDriverForMap[]): Goog
       updatedAt: driver.live_location?.updated_at || null,
       accuracyMeters: normalizeNumber(driver.live_location?.accuracy_meters),
     }));
+  // Multiple runs must not create two simultaneous trucks for the same person.
+  const latest = new Map<string, GoogleDriverLocation>();
+  locations.sort((a, b) => (Date.parse(b.updatedAt || '') || 0) - (Date.parse(a.updatedAt || '') || 0)
+    || b.id.localeCompare(a.id, 'en', { numeric: true }));
+  locations.forEach(location => {
+    const key = location.driverId ? String(location.driverId) : location.id;
+    if (!latest.has(key)) latest.set(key, location);
+  });
+  return Array.from(latest.values());
 };

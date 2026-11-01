@@ -144,6 +144,41 @@ const buildDiagnostics = (date = '2026-03-23') => ({
 });
 
 describe('DeliveryMonitoring', () => {
+  it('keeps the fleet and both companies on the map when selecting a circle, with details below', async () => {
+    mockedAxios.get.mockImplementation((url, config) => {
+      const date = String(config?.params?.date);
+      if (String(url).includes('/address-diagnostics')) return Promise.resolve({ data: buildDiagnostics(date) } as never);
+      const overview = buildOverview('on_the_way', date);
+      const first = { ...overview.deliveries[0], company_id: 1, geolocation: { ...overview.deliveries[0].geolocation, latitude: -22.9, longitude: -47.1 } };
+      const deliveries = [first, { ...first, company_id: 2, company: { code: 'pronto', name: 'Pronto' }, driver_id: 8, driver_name: 'Outro motorista', trip_id: 12, driver_color: '#2563eb' },
+        { ...first, invoice_number: '123457', stage: 'completed', stop_status: 'delivered', danfe_status: 'delivered', sequence: 2 }];
+      overview.drivers = [{ ...overview.drivers[0], total_deliveries: 2, completed_deliveries: 1 }, { ...overview.drivers[0], trip_id: 12, driver_id: 8, driver_name: 'Outro motorista', color: '#2563eb' }];
+      return Promise.resolve({ data: { ...overview, deliveries, drivers: overview.drivers.map(driver => ({ ...driver, live_location: { latitude: -22.91, longitude: -47.11, updated_at: '2026-10-30T12:00:00Z' } })) } } as never);
+    });
+    render(<DeliveryMonitoring />);
+    const circle = await screen.findByRole('button', { name: /Centralizar Motorista Teste/ });
+    const before = mockMapProps.mock.calls.slice(-1)[0][0];
+    expect(before.deliveries).toHaveLength(3); expect(before.driverLocations).toHaveLength(2);
+    expect(before.deliveries.map((row: { driverColor: string }) => row.driverColor)).toEqual(['#2563EB', '#EA580C', '#2563EB']);
+    expect(before.driverLocations.map((row: { color: string }) => row.color)).toEqual(['#EA580C', '#2563EB']);
+    expect(circle.querySelector('circle[stroke="#2563EB"]')).toBeInTheDocument();
+    fireEvent.click(circle);
+    const selected = mockMapProps.mock.calls.slice(-1)[0][0];
+    expect(selected.selectedDriverId).toBe(7);
+    expect(selected.deliveries).toEqual(before.deliveries); expect(selected.driverLocations).toEqual(before.driverLocations);
+    expect(new Set(selected.deliveries.map((row: { id: string }) => row.id)).size).toBe(3);
+    expect(screen.getByRole('region', { name: 'Motoristas no mapa' }).compareDocumentPosition(screen.getByRole('region', { name: 'Mapa operacional' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Mapa operacional' }).compareDocumentPosition(screen.getByRole('region', { name: 'Progresso detalhado por motorista' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const previousRequest = selected.focusRequestId;
+    fireEvent.click(circle);
+    expect(mockMapProps.mock.calls.slice(-1)[0][0].focusRequestId).toBeGreaterThan(previousRequest);
+    expect(screen.getByText(/Última posição recebida:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Aproximar motorista' }));
+    expect(mockMapProps.mock.calls.slice(-1)[0][0].driverZoomRequestId).toBe(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar seleção' }));
+    expect(mockMapProps.mock.calls.slice(-1)[0][0].selectedDriverId).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Aproximar motorista' })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     mockLocationSearch = '';
     let currentStatus: MonitoringStatus = 'on_the_way';

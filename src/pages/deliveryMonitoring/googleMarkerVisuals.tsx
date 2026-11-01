@@ -40,7 +40,7 @@ export const DELIVERY_STAGE_ICONS: Record<DeliveryStage, LucideIcon> = {
   assigned: Package,
   on_the_way: Navigation,
   on_site: MapPin,
-  pending_receipt: Check,
+  pending_receipt: FileClock,
   completed: Check,
 };
 
@@ -70,6 +70,20 @@ const isRetainedFlow = (delivery: DeliveryMarkerVisualInput) => {
 export const getDeliveryMarkerStyleByStatus = (
   delivery: DeliveryMarkerVisualInput,
 ): MapMarkerPinTone => {
+  if (delivery.driverId && delivery.driverColor) {
+    const color = delivery.driverColor;
+    const hex = color.replace('#', '');
+    const luminance = hex.length === 6 ? (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) / 1000 : 180;
+    const final = isReturnFlow(delivery) || isRetainedFlow(delivery) || ['completed', 'pending_receipt'].includes(delivery.status);
+    const active = ['on_the_way', 'on_site'].includes(delivery.status);
+    return {
+      backgroundColor: color, borderColor: DEFAULT_BORDER,
+      iconColor: luminance > 155 ? '#111827' : '#ffffff', iconFill: 'none',
+      opacity: final ? 0.65 : active ? 1 : DELIVERY_OPACITY,
+      haloColor: active ? '#ffffff' : undefined,
+      shadowColor: final ? 'transparent' : 'rgba(15, 23, 42, 0.25)',
+    };
+  }
   if (isReturnFlow(delivery)) {
     return {
       backgroundColor: '#fecaca',

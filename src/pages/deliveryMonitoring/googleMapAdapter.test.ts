@@ -1,4 +1,4 @@
-import { toGoogleDeliveryMapItems } from './googleMapAdapter';
+import { toGoogleDeliveryMapItems, toGoogleDriverLocations } from './googleMapAdapter';
 const row = { invoice_number: '123', customer_name: 'Cliente', city: '', neighborhood: '', stage: 'assigned' as const, driver_id: null, driver_name: null, driver_color: '', geolocation: { latitude: -22.9, longitude: -47.1 } };
 test('keeps equal invoice numbers from different companies as distinct markers', () => {
   expect(toGoogleDeliveryMapItems([{ ...row, company_id: 1 }, { ...row, company_id: 2 }]).map(item => item.id)).toEqual(['1:123', '2:123']);
@@ -12,4 +12,16 @@ test('uses the new operational coordinates and carries the audit metadata withou
   const markers = toGoogleDeliveryMapItems([{ ...row, company_id: 1, location_change: change, geolocation: { latitude: -22.91, longitude: -47.11 } }, { ...row, company_id: 2 }]);
   expect(markers[0]).toMatchObject({ id: '1:123', lat: -22.91, lng: -47.11, locationChange: change });
   expect(markers[1].locationChange).toBeNull();
+});
+
+test('uses only the latest received position per driver across multiple runs', () => {
+  const base = { trip_id: 10, driver_id: 7, driver_name: 'Jonathan', color: '#2563EB', highlighted_stops: [], live_location: { latitude: -22.9, longitude: -47.1, updated_at: '2026-10-30T12:00:00Z' } };
+  const positions = toGoogleDriverLocations([
+    base,
+    { ...base, trip_id: 11, live_location: { ...base.live_location, latitude: -22.91, updated_at: '2026-10-30T13:00:00Z' } },
+    { ...base, trip_id: 12, driver_id: 8, live_location: { ...base.live_location, latitude: -22.8 } },
+  ]);
+  expect(positions).toHaveLength(2);
+  expect(positions.find(position => position.driverId === 7)?.lat).toBe(-22.91);
+  expect(toGoogleDriverLocations([{ ...base, live_location: null }])).toEqual([]);
 });

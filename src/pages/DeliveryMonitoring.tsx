@@ -1,5 +1,5 @@
 import { locationChangeLabel, type CustomerLocationChange } from './deliveryMonitoring/locationChange';
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import axios from 'axios';
 import { format, parseISO } from 'date-fns';
 import {
@@ -18,6 +18,9 @@ import GoogleDeliveriesMap, { GoogleCompanyMarker, GoogleMapBoundsPayload } from
 import { MapMarkerPin } from '../components/maps/MapMarkerPin';
 import Header from '../components/Header';
 import { CustomerOperationsPanel } from './deliveryMonitoring/CustomerOperationsPanel';
+import { DriverProgressStrip, progressPercentage } from './deliveryMonitoring/DriverProgressStrip';
+import { applyMonitoringDriverColors } from './deliveryMonitoring/driverColors';
+import './deliveryMonitoring/monitoringLayout.css';
 import { API_URL, COMPANY_LOCATION } from '../data';
 import { Container } from '../style/invoices';
 import {
@@ -96,6 +99,8 @@ type DeliveryRow = {
 };
 
 type DriverSummary = {
+  color_order?: number | null;
+  color_slot?: number | null;
   trip_id: number;
   company?: {
     code: string;
@@ -250,7 +255,7 @@ const resolveGoogleMapsApiKey = () => {
 
 const COMPANY_MARKER_ADDRESS = 'Av. Ricardo Bassoli Cezare, 3666 - Jardim Itatinga';
 const MOBILE_MONITORING_BREAKPOINT = 768;
-const DEFAULT_COMPANY_FILTER = 'mar_e_rio';
+const DEFAULT_COMPANY_FILTER = 'all';
 const SOCKET_FALLBACK_POLL_MS = 120000;
 
 const getTodayMonitoringDate = () => format(new Date(), 'yyyy-MM-dd');
@@ -555,6 +560,8 @@ const areSameDriverSummary = (left: DriverSummary, right: DriverSummary) => {
     && left.progress_pct === right.progress_pct
     && left.stage === right.stage
     && left.color === right.color
+    && left.color_order === right.color_order
+    && left.color_slot === right.color_slot
     && left.current_status === right.current_status
     && left.current_invoice_number === right.current_invoice_number
     && left.last_status_changed_at === right.last_status_changed_at
@@ -641,6 +648,12 @@ function DeliveryMonitoring() {
   const [companyFilter, setCompanyFilter] = useState<CompanyFilterOption>(DEFAULT_COMPANY_FILTER);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
+  const [mapFocusRequest, setMapFocusRequest] = useState(0);
+  const [driverZoomRequest, setDriverZoomRequest] = useState(0);
+  const mapFrameRef = useRef<HTMLDivElement | null>(null);
+  const monitoringHeaderRef = useRef<HTMLElement | null>(null);
+  const driverStripRef = useRef<HTMLDivElement | null>(null);
+  const [mapHeight, setMapHeight] = useState<number | undefined>();
   const [selectedDeliveryInvoice, setSelectedDeliveryInvoice] = useState<string | null>(initialQueryRef.current.invoiceNumber);
   const [selectedMapCompanyId, setSelectedMapCompanyId] = useState<number | null>(null);
   const [retakeDraft, setRetakeDraft] = useState<{ stopId: number; tripId: number; companyId: number; invoice: string; clientEventId: string } | null>(null);
@@ -766,14 +779,15 @@ function DeliveryMonitoring() {
       if (!overviewData || overviewData.date !== effectiveDate || !Array.isArray(overviewData.deliveries) || !Array.isArray(overviewData.drivers)) {
         throw new Error('Resposta de monitoramento inválida para a data consultada.');
       }
+      const coloredOverview = applyMonitoringDriverColors(overviewData);
 
       setOverview((current) => {
         const previousDeliveries = current?.deliveries || [];
         const previousDrivers = current?.drivers || [];
         return {
-          ...overviewData,
-          deliveries: stabilizeRowsById(overviewData.deliveries || [], previousDeliveries),
-          drivers: stabilizeDriversById(overviewData.drivers || [], previousDrivers),
+          ...coloredOverview,
+          deliveries: stabilizeRowsById(coloredOverview.deliveries, previousDeliveries),
+          drivers: stabilizeDriversById(coloredOverview.drivers, previousDrivers),
         };
       });
       setDiagnostics(diagnosticsResponse?.data || null);
@@ -1094,23 +1108,34 @@ function DeliveryMonitoring() {
     [companyFilteredDeliveries],
   );
 
-  const mapDeliveries = useMemo(() => {
-    const driverScopedDeliveries = selectedDriverId
-      ? filteredDeliveries.filter((row) => Number(row.driver_id || 0) === Number(selectedDriverId))
-      : filteredDeliveries;
-
-    return toGoogleDeliveryMapItems(driverScopedDeliveries);
-  }, [filteredDeliveries, selectedDriverId]);
+  const mapDeliveries = useMemo(() => toGoogleDeliveryMapItems(filteredDeliveries), [filteredDeliveries]);
   const mapDriverLocations = useMemo(() => {
-    const driverScopedLocations = selectedDriverId
-      ? drivers.filter((driver) => (
-        Number(driver.driver_id || 0) === Number(selectedDriverId)
-        && companyFilteredTripIds.has(Number(driver.trip_id))
-      ))
-      : drivers.filter((driver) => companyFilteredTripIds.has(Number(driver.trip_id)));
-
+    const driverScopedLocations = drivers.filter((driver) => companyFilteredTripIds.has(Number(driver.trip_id)));
     return toGoogleDriverLocations(driverScopedLocations);
-  }, [companyFilteredTripIds, drivers, selectedDriverId]);
+  }, [companyFilteredTripIds, drivers]);
+
+  useEffect(() => {
+    const frame = mapFrameRef.current;
+    if (!frame) return;
+    const resize = () => {
+      const documentTop = frame.getBoundingClientRect().top + window.scrollY;
+      const next = Math.max(isMobileView ? 360 : 480, Math.floor(window.innerHeight - documentTop - 16));
+      setMapHeight(current => current === next ? current : next);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
+    [monitoringHeaderRef.current, driverStripRef.current, frame.parentElement].forEach(element => { if (element) observer?.observe(element); });
+    return () => { window.removeEventListener('resize', resize); observer?.disconnect(); };
+  }, [overview?.date, selectedDriverId, isMobileView, mapDriverLocations.length]);
+
+  const focusDriver = useCallback((driverId: number) => {
+    setSelectedDriverId(driverId);
+    setSelectedDriverStop(null);
+    setSelectedDeliveryInvoice(null);
+    setSelectedMapCompanyId(null);
+    setMapFocusRequest(value => value + 1);
+  }, []);
 
   const listRows = useMemo(() => {
     const driverScopedRows = selectedDriverId
@@ -1221,7 +1246,7 @@ function DeliveryMonitoring() {
           : sortedRows[0]?.company || baseDriver.company || null,
         total_deliveries: totalDeliveries,
         completed_deliveries: completedDeliveries,
-        progress_pct: totalDeliveries > 0 ? Math.round((completedDeliveries / totalDeliveries) * 100) : 0,
+        progress_pct: progressPercentage(completedDeliveries, totalDeliveries),
         stage: scopedStage,
         stops: (baseDriver.stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
         highlighted_stops: (baseDriver.highlighted_stops || []).filter((stop) => scopedSequenceSet.has(Number(stop.sequence || 0))),
@@ -1241,6 +1266,9 @@ function DeliveryMonitoring() {
         return String(left.driver_name || '').localeCompare(String(right.driver_name || ''));
       });
   }, [companyFilteredDeliveries, companyFilter, drivers]);
+  const selectedMapDriver = scopedDrivers.find(driver => driver.driver_id === selectedDriverId);
+  const selectedDriverPosition = mapDriverLocations.find(driver => driver.driverId === selectedDriverId);
+  const uniqueDriverCount = new Set(scopedDrivers.map(driver => driver.driver_id).filter(Boolean)).size;
   const groupedDrivers = useMemo(() => {
     if (companyFilter === 'all') {
       return [{
@@ -1593,13 +1621,14 @@ function DeliveryMonitoring() {
       </section></div> : null}
 
         <section
+          ref={monitoringHeaderRef}
           aria-label="Resumo e filtros do monitoramento"
-          className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-card p-4 shadow-soft sm:p-5"
+          className="order-1 relative z-10 w-full overflow-visible rounded-2xl border border-border bg-card p-3 shadow-soft"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="grid h-11 w-11 place-items-center rounded-xl border border-sky-500/25 bg-surface-2 text-sky-500"><Target className="h-6 w-6" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Controle da operação</p><h2 className="text-xl font-bold tracking-tight text-text">Monitoramento de Entregas</h2></div>
+                <span className="hidden h-11 w-11 place-items-center rounded-xl border border-sky-500/25 bg-surface-2 text-sky-500 md:grid"><Target className="h-6 w-6" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Torre de controle</p><h2 className="text-lg font-bold tracking-tight text-text sm:text-xl">Monitoramento de Entregas</h2></div>
                 {!isMobileView ? (
                   <span className="rounded-full border border-border bg-surface-2 px-2 py-1 text-xs text-muted">
                     Atualizado em {overview?.generated_at ? new Date(overview.generated_at).toLocaleTimeString('pt-BR') : '--:--'}
@@ -1618,11 +1647,6 @@ function DeliveryMonitoring() {
                 </div>
               ) : null}
 
-              {isMobileView ? (
-                <p className="mt-2 text-xs text-muted">
-                  Exibindo apenas as rotas do dia atual com foco no progresso de cada motorista.
-                </p>
-              ) : null}
             </div>
 
             <button
@@ -1660,7 +1684,7 @@ function DeliveryMonitoring() {
             </button>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 md:mt-3 md:flex-row md:flex-wrap md:items-end">
+          <div className="monitoring-compact-filters mt-2">
             {!isMobileView ? (
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Data
@@ -1692,12 +1716,12 @@ function DeliveryMonitoring() {
                 />
               </label>
             ) : null}
-            <label className={`flex flex-col gap-1 text-xs text-muted ${isMobileView ? 'w-full' : ''}`}>
+            <label className={`flex flex-col gap-1 text-xs text-muted `}>
               Empresa
               <select
                 value={companyFilter}
                 onChange={(event) => setCompanyFilter(event.target.value)}
-                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm text-text ${isMobileView ? 'w-full' : ''}`}
+                className={`h-9 rounded-md border border-border bg-surface px-3 text-sm text-text `}
               >
                 <option value="all">Todas</option>
                 {availableCompanies.map((company) => (
@@ -1718,7 +1742,7 @@ function DeliveryMonitoring() {
                 ))}
               </select>
             </label>
-            <div className={`flex gap-2 ${isMobileView ? 'w-full' : 'flex-wrap'}`}>
+            <div className={`flex gap-2 flex-wrap`}>
               <button
                 type="button"
                 onClick={fetchOverview}
@@ -1748,13 +1772,141 @@ function DeliveryMonitoring() {
             </div>
           </div>
 
-          <p className="mt-3 text-xs text-muted">Resumo da data e empresa selecionadas. O filtro de etapa refina a lista e o mapa; o progresso mostra a viagem completa nesse recorte.</p>
           {locationNotice ? <div role="status" aria-live="polite" className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-text"><p className="flex-1">Local de entrega atualizado pelo motorista · NF {locationNotice.invoice} · empresa {locationNotice.companyId} · viagem #{locationNotice.tripId}. Atualização recebida para consulta no mapa e nos detalhes.</p><button type="button" className="min-h-[44px] rounded-lg border border-border px-3" onClick={() => setLocationNotice(null)}>Dispensar aviso de localização</button></div> : null}
           {loadError && <div role="alert" className="mt-3 rounded-lg border semantic-panel-danger p-3 text-sm">
             <strong>{loadError}</strong>
             <p className="mt-1">{overview ? 'Os dados abaixo são da última consulta bem-sucedida e podem estar desatualizados.' : 'Os dados desta data estão indisponíveis. Isso não significa ausência de entregas ou pendências.'} Use Atualizar para tentar novamente.</p>
           </div>}
           {diagnosticsUnavailable && <p role="status" className="mt-3 rounded-lg border border-border bg-surface p-3 text-sm text-muted">Entregas carregadas. O diagnóstico de endereços está indisponível nesta consulta.</p>}
+          {loading ? (
+            <p role="status" className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
+          ) : null}
+        </section>
+        {overview && overview.date === effectiveDate && <>
+        <div ref={driverStripRef} className="order-2 mt-3 w-full">
+          <DriverProgressStrip drivers={scopedDrivers} selectedDriverId={selectedDriverId} onSelect={focusDriver} />
+        </div>
+
+        <section aria-label="Mapa operacional" className="order-3 mt-2 w-full rounded-2xl border border-border bg-surface p-3 shadow-soft sm:p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
+              <p className="text-xs text-muted">Selecione um motorista no mapa para ver sua última posição.</p>
+            </div>
+            <div className="monitoring-map-status" aria-label="Cobertura do mapa">
+              <span><strong>{mapDeliveries.length}</strong> notas no mapa</span>
+              <span><strong>{mapDriverLocations.filter(driver => driver.driverId).length} / {uniqueDriverCount}</strong> motoristas com posição</span>
+            </div>
+          </div>
+
+          {selectedDelivery && !selectedDriverStop ? <div className="mb-3"><h4 className="text-sm font-semibold text-text">NF {selectedDelivery.invoice_number} · {selectedDelivery.customer_name}</h4>{renderDeliveryDetails(selectedDelivery)}</div> : null}
+          {selectedDriverId ? <div className="monitoring-selection" style={{ '--driver-color': selectedMapDriver?.color } as CSSProperties}>
+              <span className="monitoring-driver-color" aria-hidden="true" />
+              <div className="monitoring-selection-copy" role="status">
+                <strong>{selectedMapDriver?.driver_name || 'Motorista selecionado'}</strong>
+                <p>{selectedDriverPosition ? selectedDriverPosition.updatedAt
+                  ? `Última posição recebida: ${new Date(selectedDriverPosition.updatedAt).toLocaleString('pt-BR')}`
+                  : 'Posição recebida · horário não informado'
+                  : 'Sem posição recebida neste recorte. As entregas continuam visíveis.'}</p>
+              </div>
+              {selectedDriverPosition ? <button type="button" onClick={() => setDriverZoomRequest(value => value + 1)}>Aproximar motorista</button> : null}
+              <button type="button" onClick={() => {
+                setSelectedDriverId(null);
+                setSelectedDriverStop(null);
+                setSelectedDeliveryInvoice(null);
+                setSelectedMapCompanyId(null);
+              }}>Limpar seleção</button>
+            </div> : null}
+          {!mapDriverLocations.length ? <p className="mb-3 rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">Sem localização de motoristas recebida neste recorte. Acompanhe as paradas e os status; o mapa exibirá posições quando o ASTRO enviar dados.</p> : null}
+          <div ref={mapFrameRef} style={{ height: mapHeight }} className="monitoring-map-frame relative overflow-hidden rounded-lg border border-border">
+            <GoogleDeliveriesMap
+              apiKey={googleMapsApiKey}
+              center={mapInitialCenter}
+              initialZoom={10}
+              datasetKey={mapDatasetKey}
+              deliveries={mapDeliveries}
+              driverLocations={mapDriverLocations}
+              companyMarker={companyMarker}
+              selectedDriverId={selectedDriverId}
+              focusRequestId={mapFocusRequest}
+              driverZoomRequestId={driverZoomRequest}
+              selectedDeliveryId={selectedDelivery ? deliveryMapId(selectedDelivery) : null}
+              onMarkerClick={(deliveryId) => {
+                setSelectedDriverStop(null);
+                const delivery = filteredDeliveries.find((row) => deliveryMapId(row) === deliveryId) || null;
+                setSelectedDeliveryInvoice(delivery?.invoice_number || null);
+                setSelectedMapCompanyId(delivery?.company_id || null);
+                if (delivery?.driver_id) {
+                  setSelectedDriverId(Number(delivery.driver_id));
+                }
+              }}
+              onDriverMarkerClick={(driverId) => {
+                if (!driverId) return;
+                focusDriver(Number(driverId));
+              }}
+              onMapBoundsChange={setMapViewport}
+            />
+
+
+          </div>
+
+          <p className="mt-2 text-xs text-muted">Nome e cor identificam o motorista. Caminhões e nomes se ajustam ao zoom; as linhas ligam as etiquetas às posições recebidas. Sem motorista: cinza.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {STAGE_ORDER.map((stage) => {
+              const Icon = DELIVERY_STAGE_ICONS[stage];
+              const markerTone = { ...getLegendMarkerVisual(stage), backgroundColor: '#e2e8f0', borderColor: '#475569', iconColor: '#111827' };
+              return (
+                <span
+                  key={`legend-map-${stage}`}
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
+                >
+                  <span className="inline-flex items-center justify-center">
+                    <MapMarkerPin
+                      icon={Icon}
+                      tone={markerTone}
+                      size={20}
+                      iconSize={11}
+                      iconStrokeWidth={1.4}
+                    />
+                  </span>
+                  {STAGE_LABELS[stage]}
+                </span>
+              );
+            })}
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
+              <MapMarkerPin icon={getDeliveryMarkerIcon({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} tone={getDeliveryMarkerStyleByStatus({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} size={18} iconSize={11} />
+              Devolução / reentrega
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
+              <MapMarkerPin
+                icon={DRIVER_MARKER_ICON}
+                shape="vehicle"
+                tone={getDriverMarkerStyle({ color: '#2563eb', attentionLevel: null })}
+                size={26}
+                iconSize={11}
+                iconStrokeWidth={1.5}
+              />
+              Posição recebida do motorista
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"><span className="rounded-full bg-blue-600 px-1.5 font-bold text-white">↻</span> Local atualizado pelo motorista</span>
+          </div>
+
+          <p className="mt-1 text-xs text-muted">
+            Motoristas aparecem em círculos; entregas em pins. O símbolo da entrega indica a etapa. A caminho e no local têm maior destaque; finalizadas, devoluções e reentregas ficam mais discretas. Clique em uma nota para ver o endereço. Clique em um motorista para ver quando a posição foi recebida e focar sua rota.
+          </p>
+
+          <div className="mt-2 text-xs text-muted">
+            Zoom atual: {mapViewport?.zoom || '--'}
+          </div>
+
+          {loading ? (
+            <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
+          ) : null}
+        </section>
+
+        <section aria-label="Indicadores e diagnóstico" className="order-4 mt-4 w-full rounded-2xl border border-border bg-surface p-3 shadow-soft">
+          <h3 className="text-sm font-semibold text-text">Resumo da operação</h3>
+          <p className="mt-2 text-xs text-muted">Resumo da data e empresa selecionadas. O filtro de etapa refina a lista e o mapa; o progresso mostra a viagem completa nesse recorte.</p>
           {isMobileView ? (
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
               {mobileSummaryCards.map((item) => (
@@ -1786,12 +1938,9 @@ function DeliveryMonitoring() {
             </>
           )}
 
-          {loading ? (
-            <p role="status" className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
-          ) : null}
         </section>
-        {overview && overview.date === effectiveDate && <>
-        <section className="order-2 mt-4 w-full rounded-2xl border border-border bg-surface p-4 shadow-soft">
+
+        <section aria-label="Progresso detalhado por motorista" className="order-5 mt-4 w-full rounded-2xl border border-border bg-surface p-4 shadow-soft">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Progresso por motorista</h3>
             <button
@@ -1882,10 +2031,7 @@ function DeliveryMonitoring() {
                   <div className="flex flex-col gap-2 md:gap-1.5 lg:flex-row lg:items-center">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!canHighlight) return;
-                        setSelectedDriverId(isActive ? null : numericDriverId);
-                      }}
+                      onClick={() => { if (canHighlight) focusDriver(numericDriverId); }}
                       disabled={!canHighlight}
                       className={`flex min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-1 text-left transition md:py-0.5 lg:min-w-[250px] lg:max-w-[320px] ${canHighlight
                         ? 'hover:bg-surface-2'
@@ -2087,105 +2233,7 @@ function DeliveryMonitoring() {
           </div>
         </section>
 
-        <section className="order-3 mt-4 w-full rounded-2xl border border-border bg-surface p-3 shadow-soft sm:p-4">
-          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-text">Mapa operacional</h3>
-              <p className="text-xs text-muted">Endereços das entregas e posições recebidas do ASTRO.</p>
-            </div>
-            <div className="flex flex-wrap gap-1.5 text-xs">
-              <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDeliveries.length} notas`}</span>
-              <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-text">{`${mapDriverLocations.length} motoristas localizados`}</span>
-            </div>
-          </div>
-
-          {selectedDelivery && !selectedDriverStop ? <div className="mb-3"><h4 className="text-sm font-semibold text-text">NF {selectedDelivery.invoice_number} · {selectedDelivery.customer_name}</h4>{renderDeliveryDetails(selectedDelivery)}</div> : null}
-          {!mapDriverLocations.length ? <p className="mb-3 rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted">Sem localização de motoristas recebida neste recorte. Acompanhe as paradas e os status; o mapa exibirá posições quando o ASTRO enviar dados.</p> : null}
-          <div className="relative h-[62vh] min-h-[390px] overflow-hidden rounded-lg border border-border md:h-[calc(100vh-280px)] md:min-h-[520px]">
-            <GoogleDeliveriesMap
-              apiKey={googleMapsApiKey}
-              center={mapInitialCenter}
-              initialZoom={10}
-              datasetKey={mapDatasetKey}
-              deliveries={mapDeliveries}
-              driverLocations={mapDriverLocations}
-              companyMarker={companyMarker}
-              selectedDriverId={selectedDriverId}
-              selectedDeliveryId={selectedDelivery ? deliveryMapId(selectedDelivery) : null}
-              onMarkerClick={(deliveryId) => {
-                setSelectedDriverStop(null);
-                const delivery = filteredDeliveries.find((row) => deliveryMapId(row) === deliveryId) || null;
-                setSelectedDeliveryInvoice(delivery?.invoice_number || null);
-                setSelectedMapCompanyId(delivery?.company_id || null);
-                if (delivery?.driver_id) {
-                  setSelectedDriverId(Number(delivery.driver_id));
-                }
-              }}
-              onDriverMarkerClick={(driverId) => {
-                if (!driverId) return;
-                setSelectedDriverId(Number(driverId));
-                setSelectedDeliveryInvoice(null);
-              }}
-              onMapBoundsChange={setMapViewport}
-            />
-
-
-          </div>
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            {STAGE_ORDER.map((stage) => {
-              const Icon = DELIVERY_STAGE_ICONS[stage];
-              const markerTone = getLegendMarkerVisual(stage);
-              return (
-                <span
-                  key={`legend-map-${stage}`}
-                  className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"
-                >
-                  <span className="inline-flex items-center justify-center">
-                    <MapMarkerPin
-                      icon={Icon}
-                      tone={markerTone}
-                      size={20}
-                      iconSize={11}
-                      iconStrokeWidth={1.4}
-                    />
-                  </span>
-                  {STAGE_LABELS[stage]}
-                </span>
-              );
-            })}
-            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
-              <MapMarkerPin icon={getDeliveryMarkerIcon({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} tone={getDeliveryMarkerStyleByStatus({ status: 'completed', stopStatus: 'redelivery', danfeStatus: null, driverId: null, driverColor: null })} size={18} iconSize={11} />
-              Devolução / reentrega
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text">
-              <MapMarkerPin
-                icon={DRIVER_MARKER_ICON}
-                shape="vehicle"
-                tone={getDriverMarkerStyle({ color: '#2563eb', attentionLevel: null })}
-                size={26}
-                iconSize={11}
-                iconStrokeWidth={1.5}
-              />
-              Posição recebida do motorista
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-1 text-xs text-text"><span className="rounded-full bg-blue-600 px-1.5 font-bold text-white">↻</span> Local atualizado pelo motorista</span>
-          </div>
-
-          <p className="mt-1 text-xs text-muted">
-            Motoristas aparecem em círculos; entregas em pins. A caminho e no local têm maior destaque; finalizadas, devoluções e reentregas ficam mais discretas. Clique em uma nota para ver o endereço. Clique em um motorista para ver quando a posição foi recebida e focar sua rota.
-          </p>
-
-          <div className="mt-2 text-xs text-muted">
-            Zoom atual: {mapViewport?.zoom || '--'}
-          </div>
-
-          {loading ? (
-            <p className="mt-2 text-xs text-muted">Atualizando monitoramento...</p>
-          ) : null}
-        </section>
-
-        <section className="order-4 mt-4 hidden w-full rounded-2xl border border-border bg-surface p-4 shadow-soft md:block">
+        <section className="order-6 mt-4 hidden w-full rounded-2xl border border-border bg-surface p-4 shadow-soft md:block">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-text">Lista de entregas</h3>
             <span className="text-xs text-muted">

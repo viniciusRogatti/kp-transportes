@@ -19,7 +19,8 @@ test('prioritizes active destinations above pending and resolved deliveries at e
 test.each(['returned', 'redelivery', 'cancelled', 'retained', 'delivered_pending_receipt'])('keeps %s discreet without losing its status color', status => {
   const input = delivery(status === 'delivered_pending_receipt' ? 'pending_receipt' : 'completed', status);
   expect(getDeliveryMarkerPriority(input).zIndex).toBeLessThan(getDeliveryMarkerPriority(delivery('assigned')).zIndex);
-  expect(getDeliveryMarkerStyleByStatus(input).opacity).toBeLessThan(0.5);
+  expect(getDeliveryMarkerStyleByStatus(input).opacity).toBeLessThan(getDeliveryMarkerStyleByStatus(delivery('assigned')).opacity!);
+  expect(getDeliveryMarkerStyleByStatus(input).opacity).toBeGreaterThan(0.5);
 });
 
 test('distinguishes the truck from deliveries and preserves driver color and attention', () => {
@@ -30,6 +31,11 @@ test('distinguishes the truck from deliveries and preserves driver color and att
 });
 
 test('does not present returns as delivered checkmarks', () => {
+  expect(getDeliveryMarkerIcon(delivery('pending_receipt'))).not.toBe(getDeliveryMarkerIcon(delivery('completed')));
   expect(getDeliveryMarkerIcon(delivery('completed', 'redelivery'))).not.toBe(getDeliveryMarkerIcon(delivery('completed', 'delivered')));
   expect(getDeliveryMarkerIcon(delivery('completed', 'returned'))).toBe(getDeliveryMarkerIcon(delivery('completed', 'redelivery')));
+});
+
+test.each(['assigned', 'on_the_way', 'on_site', 'completed', 'pending_receipt'] as const)('retains driver identity color at stage %s', status => {
+  expect(getDeliveryMarkerStyleByStatus({ ...delivery(status), driverColor: '#EA580C' }).backgroundColor).toBe('#EA580C');
 });

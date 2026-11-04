@@ -8,6 +8,13 @@ import { canAccessAstroTraining } from '../../utils/permissions';
 jest.mock('../../components/Header', () => () => null);
 jest.mock('../../features/astroTraining/api', () => ({ ...jest.requireActual('../../features/astroTraining/api'), trainingApi: { trip: jest.fn(), list: jest.fn(), save: jest.fn() } }));
 const api = trainingApi as jest.Mocked<typeof trainingApi>;
+const originalCrypto = Object.getOwnPropertyDescriptor(window, 'crypto');
+const mockCrypto = { randomUUID: jest.fn() };
+beforeAll(() => Object.defineProperty(window, 'crypto', { configurable: true, value: mockCrypto }));
+afterAll(() => {
+  if (originalCrypto) Object.defineProperty(window, 'crypto', originalCrypto);
+  else Reflect.deleteProperty(window, 'crypto');
+});
 const trip: TrainingTrip = {
   trip: { id: 128, companyId: 1, driverId: 3, driverName: 'Motorista fictício', operationDate: '2026-10-28' },
   sourceRevision: 'revision-1', example: null,
@@ -20,7 +27,8 @@ const trip: TrainingTrip = {
 beforeEach(() => {
   jest.resetAllMocks(); localStorage.clear();
   localStorage.setItem('user_login', 'Rogatti'); localStorage.setItem('company_id', '1');
-  Object.defineProperty(window, 'crypto', { configurable: true, value: { randomUUID: jest.fn().mockReturnValue('request-test-1') } });
+  // Mantém a mesma referência de crypto usada pelo componente entre os testes.
+  mockCrypto.randomUUID.mockReturnValue('request-test-1');
   api.trip.mockResolvedValue(trip); api.save.mockResolvedValue({ accepted: true, version: 1, exampleId: 7 });
   api.list.mockResolvedValue({ items: [], nextCursor: null });
 });

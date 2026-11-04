@@ -619,7 +619,7 @@ function ReturnDataRegistry() {
                           className="grid w-full gap-2 text-left md:grid-cols-[120px_110px_minmax(160px,1fr)_150px_140px_32px] md:items-center"
                           aria-expanded={expanded}
                         >
-                          <strong className="text-sm text-text">ID {occurrence.source_occurrence_id}</strong>
+                          <strong className="break-all text-sm text-text">ID {occurrence.source_occurrence_id}</strong>
                           <span className="text-sm font-semibold text-text">NF {occurrence.invoice_number}</span>
                           <span className="truncate text-sm text-muted">{occurrence.customer_name || '-'}</span>
                           <span className="text-xs text-muted">{RETURN_TYPE_LABELS[occurrence.internal_return_type || occurrence.effective_return_type] || occurrence.effective_return_type}</span>
@@ -645,7 +645,7 @@ function ReturnDataRegistry() {
                                   ({RETURN_VALUE_SOURCE_LABELS[occurrence.return_value_source]})
                                 </small>
                               </span>
-                              <span><strong>Valor total da NF:</strong> {currencyFormatter.format(Number(occurrence.invoice_total_value || 0))}</span>
+                              <span><strong>Valor total da NF:</strong> {occurrence.invoice_total_value == null ? 'Não informado' : currencyFormatter.format(occurrence.invoice_total_value)}</span>
                               <span><strong>Lote:</strong> {occurrence.linked_batch_code || 'Sem lote vinculado'}</span>
                               <span><strong>Primeira importação:</strong> {formatDateTime(occurrence.first_seen_at)}</span>
                               <span><strong>Última atualização:</strong> {formatDateTime(occurrence.last_seen_at)}</span>
@@ -754,7 +754,7 @@ function ReturnDataRegistry() {
                 <div>
                   <h2 className="text-base font-bold text-text">Importar planilha</h2>
                   <p className="mt-1 text-xs text-muted">
-                    Aceita XLSX de até 10 MB. Primeiro revise a pré-visualização; nenhum dado é salvo antes da confirmação.
+                    Aceita XLSX de até 10 MB. Use o relatório exportado pela transportadora, que é o padrão atual; o modelo antigo com ID também é aceito. Primeiro revise a pré-visualização; nenhum dado é salvo antes da confirmação.
                   </p>
                 </div>
                 {!canImport ? (
@@ -792,6 +792,13 @@ function ReturnDataRegistry() {
                       </div>
                     ) : (
                       <>
+                        {importPreview.format === 'carrier' ? (
+                          <p className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted">
+                            Relatório da transportadora sem ID. As ocorrências são identificadas pela NF, emissão e data/hora da ocorrência.
+                            O total da NF e a transportadora não são informados neste modelo. Confira se o arquivo pertence à KP Transportes.
+                            {' '}A coluna Valor é preservada por item; seu significado ainda precisa ser confirmado para calcular o valor devolvido.
+                          </p>
+                        ) : null}
                         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                           {[
                             ['Linhas', importPreview.total_rows],
@@ -799,6 +806,7 @@ function ReturnDataRegistry() {
                             ['Novas', importPreview.created_occurrences],
                             ['Atualizadas', importPreview.updated_occurrences],
                             ['Sem alteração', importPreview.unchanged_occurrences],
+                            ['Ignoradas (já na base)', importPreview.skipped_occurrences],
                             ['Aprovadas', importPreview.approved_count],
                             ['Reprovadas', importPreview.rejected_count],
                             ['Inválidas', importPreview.invalid_occurrences],
@@ -809,6 +817,17 @@ function ReturnDataRegistry() {
                             </div>
                           ))}
                         </div>
+                        {Boolean(importPreview.skipped_occurrences) ? (
+                          <div className="rounded-md border border-border bg-card px-3 py-2 text-sm">
+                            <p>{importPreview.skipped_occurrences} ocorrência(s) serão ignoradas porque a NF já consta na base em outro modelo. Os registros existentes serão preservados.</p>
+                            <p className="mt-1 break-words text-xs text-muted">NFs: {importPreview.skipped_invoices?.join(', ')}</p>
+                            {importPreview.importable_occurrences === 0 ? (
+                              <p className="mt-2 font-semibold">Todas as ocorrências já constam na base. Não é necessário importar novamente.</p>
+                            ) : (
+                              <p className="mt-2 font-semibold">{importPreview.importable_occurrences} ocorrência(s) disponíveis para confirmar.</p>
+                            )}
+                          </div>
+                        ) : null}
                         <p className="text-xs text-muted">
                           Período de emissão encontrado: {importPreview.detected_start_date || '-'} até {importPreview.detected_end_date || '-'}
                         </p>
@@ -822,6 +841,7 @@ function ReturnDataRegistry() {
                                   <th className="px-2 py-1.5">Cliente</th>
                                   <th className="px-2 py-1.5">Status</th>
                                   <th className="px-2 py-1.5">Itens</th>
+                                  <th className="px-2 py-1.5">Importação</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -832,6 +852,7 @@ function ReturnDataRegistry() {
                                     <td className="px-2 py-1.5">{occurrence.customer_name || '-'}</td>
                                     <td className="px-2 py-1.5">{APPROVAL_LABELS[occurrence.approval_status]}</td>
                                     <td className="px-2 py-1.5">{occurrence.items_count}</td>
+                                    <td className="px-2 py-1.5">{occurrence.skipped ? 'Ignorada · já na base' : 'Disponível'}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -842,6 +863,9 @@ function ReturnDataRegistry() {
                           <div className="rounded-md border semantic-panel-warning px-3 py-2 text-sm">
                             <strong>{importPreview.errors_count || 0} erro(s) e {importPreview.warnings_count || 0} alerta(s).</strong>
                             <button type="button" onClick={downloadIssues} className="ml-2 underline">Baixar relatório</button>
+                            {importPreview.errors?.slice(0, 5).map((issue, index) => (
+                              <p key={`${issue.code}-${index}`} className="mt-1">{issue.message}</p>
+                            ))}
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 rounded-md border semantic-panel-success px-3 py-2 text-sm">
@@ -855,7 +879,7 @@ function ReturnDataRegistry() {
                           </div>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" disabled={importing || !importPreview.total_occurrences || importPreview.carrier_mismatch || Boolean(importPreview.errors_count)} onClick={() => void handleConfirmImport()} className="h-10 rounded-md bg-success px-4 text-sm font-semibold text-white disabled:opacity-45">
+                          <button type="button" disabled={importing || !(importPreview.importable_occurrences ?? importPreview.total_occurrences) || importPreview.carrier_mismatch || Boolean(importPreview.errors_count)} onClick={() => void handleConfirmImport()} className="h-10 rounded-md bg-success px-4 text-sm font-semibold text-white disabled:opacity-45">
                             {importing ? 'Importando...' : 'Confirmar importação'}
                           </button>
                           <button type="button" disabled={importing} onClick={() => { setImportPreview(null); setSelectedFile(null); }} className="h-10 rounded-md border border-border px-4 text-sm font-semibold text-muted">
@@ -874,36 +898,43 @@ function ReturnDataRegistry() {
                   <p className="mt-4 text-sm text-muted">Nenhuma importação confirmada.</p>
                 ) : (
                   <div className="mt-3 space-y-2">
-                    {imports.map((item) => (
-                      <article key={item.id} className="rounded-md border border-border bg-surface p-3 text-xs">
-                        <div className="flex items-start justify-between gap-2">
-                          <strong className="break-all text-sm text-text">{item.original_file_name}</strong>
-                          <span className={`rounded-full px-2 py-0.5 font-semibold ${item.import_status === 'reverted' ? 'semantic-panel-warning' : 'semantic-panel-success'}`}>
-                            {item.import_status === 'reverted' ? 'Desfeita' : 'Confirmada'}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-muted">{formatDateTime(item.imported_at)} · {item.imported_by_username || 'Usuário não informado'}</p>
-                        <p className="mt-2 text-muted">
-                          {item.total_occurrences} ocorrência(s) · {item.created_occurrences} nova(s) · {item.updated_occurrences} atualizada(s) · {item.unchanged_occurrences} ignorada(s)
-                        </p>
-                        {item.import_status === 'reverted' ? (
-                          <p className="mt-2 rounded border border-border px-2 py-1 text-muted">
-                            Desfeita em {formatDateTime(item.reverted_at)} por {item.reverted_by_username || 'administrador'}
-                            {item.reversal_reason ? ` · ${item.reversal_reason}` : ''}
+                    {imports.map((item) => {
+                      const fileOccurrences = item.summary_json?.total_occurrences ?? item.total_occurrences;
+                      const skippedOccurrences = item.summary_json?.skipped_occurrences ?? 0;
+                      return (
+                        <article key={item.id} className="rounded-md border border-border bg-surface p-3 text-xs">
+                          <div className="flex items-start justify-between gap-2">
+                            <strong className="break-all text-sm text-text">{item.original_file_name}</strong>
+                            <span className={`rounded-full px-2 py-0.5 font-semibold ${item.import_status === 'reverted' ? 'semantic-panel-warning' : 'semantic-panel-success'}`}>
+                              {item.import_status === 'reverted' ? 'Desfeita' : 'Confirmada'}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-muted">{formatDateTime(item.imported_at)} · {item.imported_by_username || 'Usuário não informado'}</p>
+                          <p className="mt-2 text-muted">
+                            {fileOccurrences} ocorrência(s) na planilha · {item.total_occurrences} processada(s)
                           </p>
-                        ) : null}
-                        {canReverseImport && item.id === latestConfirmedImportId ? (
-                          <button
-                            type="button"
-                            disabled={loadingReversalImpact}
-                            onClick={() => void openReversalImpact(item)}
-                            className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-danger px-3 text-xs font-semibold text-danger disabled:opacity-50"
-                          >
-                            <Trash2 size={14} /> {loadingReversalImpact ? 'Analisando...' : 'Analisar exclusão'}
-                          </button>
-                        ) : null}
-                      </article>
-                    ))}
+                          <p className="mt-1 text-muted">
+                            {item.created_occurrences} nova(s) · {item.updated_occurrences} atualizada(s) · {item.unchanged_occurrences} sem alteração · {skippedOccurrences} ignorada(s) por já constarem em outro modelo
+                          </p>
+                          {item.import_status === 'reverted' ? (
+                            <p className="mt-2 rounded border border-border px-2 py-1 text-muted">
+                              Desfeita em {formatDateTime(item.reverted_at)} por {item.reverted_by_username || 'administrador'}
+                              {item.reversal_reason ? ` · ${item.reversal_reason}` : ''}
+                            </p>
+                          ) : null}
+                          {canReverseImport && item.id === latestConfirmedImportId ? (
+                            <button
+                              type="button"
+                              disabled={loadingReversalImpact}
+                              onClick={() => void openReversalImpact(item)}
+                              className="mt-3 inline-flex h-9 items-center gap-2 rounded-md border border-danger px-3 text-xs font-semibold text-danger disabled:opacity-50"
+                            >
+                              <Trash2 size={14} /> {loadingReversalImpact ? 'Analisando...' : 'Analisar exclusão'}
+                            </button>
+                          ) : null}
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
               </section>

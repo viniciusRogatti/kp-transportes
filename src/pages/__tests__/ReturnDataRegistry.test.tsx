@@ -165,6 +165,94 @@ describe('ReturnDataRegistry', () => {
     expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeDisabled();
   });
 
+  it('ignora NFs do modelo antigo e permite confirmar as novas sem alerta de formato', async () => {
+    mockedAxios.post.mockResolvedValueOnce({
+      data: {
+        duplicate_file: false,
+        format: 'carrier',
+        file_sha256: 'hash-sem-id',
+        total_occurrences: 20,
+        created_occurrences: 14,
+        skipped_occurrences: 6,
+        skipped_invoices: ['1234'],
+        importable_occurrences: 14,
+        warnings_count: 0,
+        errors_count: 0,
+      },
+    });
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /importações/i }));
+    fireEvent.change(screen.getByLabelText('Planilha da base de devoluções'), {
+      target: { files: [new File(['xlsx'], 'transportadora.xlsx')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pré-visualizar/i }));
+
+    expect(await screen.findByText(/As ocorrências são identificadas pela NF/)).toHaveTextContent('seu significado ainda precisa ser confirmado');
+    expect(screen.getByText(/6 ocorrência\(s\) serão ignoradas/)).toBeInTheDocument();
+    expect(screen.getByText('NFs: 1234')).toBeInTheDocument();
+    expect(screen.getByText(/14 ocorrência\(s\) disponíveis para confirmar/)).toBeInTheDocument();
+    expect(screen.queryByText(/erro\(s\) e .*alerta\(s\)/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeEnabled();
+    mockedAxios.post.mockResolvedValueOnce({ data: { message: 'Base atualizada. 6 ocorrências ignoradas.' } });
+    fireEvent.click(screen.getByRole('button', { name: /confirmar importação/i }));
+    expect(await screen.findByText('Base atualizada. 6 ocorrências ignoradas.')).toBeInTheDocument();
+    expect(mockedAxios.post).toHaveBeenLastCalledWith(expect.stringContaining('/imports/confirm'), expect.any(FormData));
+  });
+
+  it('explica que não há nada a importar quando todas as NFs já constam no outro modelo', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: {
+      duplicate_file: false, format: 'carrier', file_sha256: 'todas-existentes',
+      total_occurrences: 6, skipped_occurrences: 6, skipped_invoices: ['1234'],
+      importable_occurrences: 0, errors_count: 0, warnings_count: 0,
+    } });
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /importações/i }));
+    fireEvent.change(screen.getByLabelText('Planilha da base de devoluções'), {
+      target: { files: [new File(['xlsx'], 'existentes.xlsx')] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pré-visualizar/i }));
+    expect(await screen.findByText(/Todas as ocorrências já constam na base. Não é necessário importar novamente/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /confirmar importação/i })).toBeDisabled();
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('mostra total da NF ausente sem inventar valor zero', async () => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/occurrences/overview')) return Promise.resolve({ data: overview });
+      if (url.endsWith('/return-data/imports')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: { rows: [{
+        id: 1, source_occurrence_id: 'TR-TESTE', invoice_number: '1234',
+        invoice_total_value: null, calculated_return_value: null, return_value_source: 'unavailable',
+        approval_status: 'approved', effective_return_type: 'unclassified', inferred_return_type: 'unclassified', items: [],
+      }], total: 1, page: 1, total_pages: 1 } });
+    });
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /ocorrências/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /ID TR-TESTE/i }));
+    expect(screen.getByText('Não informado')).toBeInTheDocument();
+    expect(screen.queryByText('R$ 0,00')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { name: 'planilha com seis ocorrências ignoradas', processed: 14, created: 14, unchanged: 0, summary: { total_occurrences: 20, skipped_occurrences: 6 }, fileTotal: 20, skipped: 6 },
+    { name: 'reimportação com ocorrências sem alteração', processed: 14, created: 0, unchanged: 14, summary: { total_occurrences: 20, skipped_occurrences: 6 }, fileTotal: 20, skipped: 6 },
+    { name: 'importação antiga sem resumo', processed: 3, created: 0, unchanged: 3, summary: null, fileTotal: 3, skipped: 0 },
+  ])('distingue total da planilha, processadas, sem alteração e ignoradas no histórico: $name', async ({ processed, created, unchanged, summary, fileTotal, skipped }) => {
+    mockedAxios.get.mockImplementation((url: string) => {
+      if (url.includes('/occurrences/overview')) return Promise.resolve({ data: overview });
+      if (url.endsWith('/return-data/imports')) return Promise.resolve({ data: [{
+        id: 12, original_file_name: 'transportadora.xlsx', import_status: 'confirmed',
+        total_occurrences: processed, created_occurrences: created, updated_occurrences: 0,
+        unchanged_occurrences: unchanged, summary_json: summary,
+      }] });
+      return Promise.resolve({ data: {} });
+    });
+    render(<ReturnDataRegistry />);
+    fireEvent.click(await screen.findByRole('button', { name: /importações/i }));
+    expect(await screen.findByText(`${fileTotal} ocorrência(s) na planilha · ${processed} processada(s)`)).toBeInTheDocument();
+    expect(screen.getByText(`${created} nova(s) · 0 atualizada(s) · ${unchanged} sem alteração · ${skipped} ignorada(s) por já constarem em outro modelo`)).toBeInTheDocument();
+  });
+
   it('mostra ocorrências fora de lote e exige confirmação para desfazer', async () => {
     const imported = {
       id: 9,

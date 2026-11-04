@@ -103,6 +103,7 @@ export type ReturnDataImportIssue = {
 };
 
 export type ReturnDataImportPreview = {
+  format?: 'legacy' | 'carrier';
   duplicate_file: boolean;
   message?: string;
   file_name?: string;
@@ -119,6 +120,9 @@ export type ReturnDataImportPreview = {
   created_occurrences?: number;
   updated_occurrences?: number;
   unchanged_occurrences?: number;
+  skipped_occurrences?: number;
+  skipped_invoices?: string[];
+  importable_occurrences?: number;
   invalid_occurrences?: number;
   warnings_count?: number;
   errors_count?: number;
@@ -128,6 +132,7 @@ export type ReturnDataImportPreview = {
   other_carriers?: string[];
   formulas_count?: number;
   warnings?: ReturnDataImportIssue[];
+  information?: ReturnDataImportIssue[];
   errors?: ReturnDataImportIssue[];
   carrier_mismatch?: boolean;
   expected_carrier?: string;
@@ -138,6 +143,7 @@ export type ReturnDataImportPreview = {
     customer_name: string | null;
     return_reason_category: string;
     items_count: number;
+    skipped?: boolean;
   }>;
 };
 
